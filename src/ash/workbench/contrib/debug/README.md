@@ -70,9 +70,10 @@ session, directory or Project IDs. The frontend submits identity-based edits via
 capability and renderer protocol client. Source IDs/columns, enabled state,
 conditions, function log messages, persistent data metadata, ordered Watch
 expressions and exception selections survive reload. A revision conflict preserves
-the saved target and the local draft; it is reported instead of overwriting another
-window. Other windows read revisioned snapshots; no mutation is replayed after a
-lost connection. Shutdown joins pending writes before releasing the connection.
+the saved definitions and the local draft. Shutdown waits for active writes, then
+offers to retry, discard the remaining draft, or keep the window open. Retry reads
+the latest revision and submits the local edits only when their definitions do not
+overlap changes saved by another window. Reconnection refreshes clean snapshots.
 
 The legacy `memento/debug.workspace` v1/v2 decoder runs only at workspace opening.
 Rust imports into an absent or equal target and records a digest in the same

@@ -6,8 +6,9 @@ import { installTestElementHeights } from '../../../../../editor/test/browser/ed
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { AppServerConnectionStoppedError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { DebugStorage } from '../../common/debugStorage.js';
-import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, ShutdownVetoError } from '../../../../services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
+import { IDialogService, type IActionPromptOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
@@ -2590,9 +2591,10 @@ function createDebugServiceInstance(services: InstantiationService): DebugServic
 	return services.createInstance(DebugService);
 }
 
-function debugStorageFixture(owner: DisposableStore, backend: IDebugAdapterProcessService | undefined, storage: IStorageService, workspace: IWorkspaceContextService, log: ILogService = new NullLoggerService()) {
+function debugStorageFixture(owner: DisposableStore, backend: IDebugAdapterProcessService | undefined, storage: IStorageService, workspace: IWorkspaceContextService, log: ILogService = new NullLoggerService(), dialogs: Pick<IDialogService, 'prompt'> = { prompt: async () => assert.fail('Unexpected shutdown prompt') }) {
 	const services = owner.add(new InstantiationService(new ServiceCollection([IDebugAdapterProcessService, backend], [IStorageService, storage], [IWorkspaceContextService, workspace], [ILogService, log])));
 	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTestLifecycle, undefined));
+	services.registerInstance(IDialogService, dialogs as IDialogService);
 	return { client: owner.add(services.createInstance(DebugStorage)), lifecycle: services.get(ILifecycleService) };
 }
 
@@ -2751,6 +2753,101 @@ test('Debug workspace shutdown waits for the Rust acknowledgement of pending edi
 	} finally { await released.complete(undefined); }
 	await shutdown;
 	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['last edit']);
+});
+
+test('Debug workspace close waits for a conflict, preserves the draft on cancel and closes after discard', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	let prompts = 0;
+	const dialogs = {
+		async prompt<T>(options: IActionPromptOptions<T>) {
+			assert.deepEqual(options.buttons.map(button => button.label), ['重试保存', '放弃调试修改']);
+			assert.equal(options.cancelButton, '保持窗口打开');
+			return ++prompts === 1 ? {} : { result: await options.buttons[1]!.run({}) };
+		},
+	};
+	const { client, lifecycle } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')), undefined, dialogs);
+	await client.whenReady();
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'saved in another window' }]);
+	const entered = new DeferredPromise<void>();
+	const released = new DeferredPromise<void>();
+	const write = processes.editWorkspaceState.bind(processes);
+	let attempts = 0;
+	processes.editWorkspaceState = async (...args) => {
+		attempts++;
+		void entered.complete();
+		await released.p;
+		return write(...args);
+	};
+	client.storeState({ ...client.state, watchExpressions: ['local draft'] });
+	await entered.p;
+	const closed = assert.rejects(lifecycle.shutdown('windowClose'), ShutdownVetoError);
+	try {
+		await Promise.resolve();
+		assert.equal(prompts, 0);
+	} finally { await released.complete(); }
+	await closed;
+	assert.equal(prompts, 1);
+	assert.deepEqual(client.state.watchExpressions, ['local draft']);
+	await lifecycle.shutdown('windowClose');
+	assert.equal(prompts, 2);
+	assert.equal(attempts, 1);
+	assert.deepEqual(client.state.watchExpressions, ['saved in another window']);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['saved in another window']);
+});
+
+test('Debug workspace quit retries every draft edit on the latest nonoverlapping revision', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	let prompts = 0;
+	const dialogs = {
+		async prompt<T>(options: IActionPromptOptions<T>) {
+			assert.equal(++prompts, 1);
+			return { result: await options.buttons[0]!.run({}) };
+		},
+	};
+	const { client, lifecycle } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')), undefined, dialogs);
+	await client.whenReady();
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'saved in another window' }]);
+	client.storeState({ ...client.state, watchExpressions: ['before conflict'] });
+	await assert.rejects(client.whenReady(), /changed in another window/);
+	client.storeState({ ...client.state, watchExpressions: ['before conflict', 'after conflict'] });
+	await lifecycle.shutdown('quit');
+	await client.whenReady();
+	const expected = ['saved in another window', 'before conflict', 'after conflict'];
+	assert.deepEqual(client.state.watchExpressions, expected);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, expected);
+});
+
+test('Debug workspace quit keeps a draft when retry would remove another window’s breakpoint', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	let prompts = 0;
+	const dialogs = {
+		async prompt<T>(options: IActionPromptOptions<T>) {
+			prompts++;
+			if (prompts === 1) return { result: await options.buttons[0]!.run({}) };
+			assert.match(options.detail ?? '', /overlap with changes from another window/);
+			return prompts === 2 ? {} : { result: await options.buttons[1]!.run({}) };
+		},
+	};
+	const { client, lifecycle } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')), undefined, dialogs);
+	await client.whenReady();
+	const point = { id: 'first', resource: 'file:///workspace/main.ts', lineNumber: 4, enabled: true };
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'source', point }]);
+	client.storeState(client.state, [{ kind: 'clearBreakpoints' }]);
+	await assert.rejects(client.whenReady(), /changed in another window/);
+	await assert.rejects(lifecycle.shutdown('quit'), ShutdownVetoError);
+	assert.equal(prompts, 2);
+	assert.deepEqual(client.state.breakpoints, []);
+	await lifecycle.shutdown('quit');
+	assert.equal(prompts, 3);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.breakpoints, [point]);
 });
 
 test('Debug workspace switching fences migration cleanup and queued writes to their captured workspace', async () => {

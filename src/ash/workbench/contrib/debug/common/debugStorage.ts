@@ -1,10 +1,12 @@
 import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { AppServerConnectionStoppedError } from '../../../../platform/agentHost/common/appServerError.js';
+import { getErrorMessage } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IDebugAdapterProcessService, type DebugWorkspaceState, type DebugWorkspaceSnapshot, type DebugWorkspaceEdit } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -34,11 +36,14 @@ const LEGACY_KEY = 'memento/debug.workspace';
 const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 2, breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [], exceptionBreakpoints: {} });
 interface WorkspaceRead {
 	readonly id: string;
+	readonly name: string;
+	readonly legacy: string | undefined;
+	readonly initialState: PersistedDebugState;
+	readonly draft: DebugWorkspaceEdit[][];
 	state: PersistedDebugState;
 	snapshot: DebugWorkspaceSnapshot | undefined;
 	queue: Promise<void>;
-	edits: number;
-	blocked: boolean;
+	failure: { readonly error: unknown; readonly latest?: DebugWorkspaceSnapshot; } | undefined;
 	pending: number;
 }
 
@@ -49,7 +54,7 @@ export class DebugStorage extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<PersistedDebugState>());
 	readonly onDidChangeState = this.changeEmitter.event;
 	private current: WorkspaceRead;
-	private readonly contexts = new Set<WorkspaceRead>();
+	private readonly contexts = new Map<string, WorkspaceRead>();
 	private connectionGeneration = 0;
 
 	constructor(
@@ -58,6 +63,7 @@ export class DebugStorage extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ILogService private readonly log: ILogService,
 		@ILifecycleService lifecycle: ILifecycleService,
+		@IDialogService private readonly dialogs: IDialogService,
 	) {
 		super();
 		try { this.current = this.openWorkspace(); } catch (error) { this.dispose(); throw error; }
@@ -65,59 +71,82 @@ export class DebugStorage extends Disposable {
 			if (this.current.id === workspace.getWorkspace().id) return;
 			const previous = this.current;
 			this.current = this.openWorkspace();
-			if (previous.pending === 0) this.contexts.delete(previous);
+			this.releaseIdleWorkspace(previous);
 			this.changeEmitter.fire(this.current.state);
 		}));
 		this._register(backend?.onConnectionState(state => {
 			this.connectionGeneration++;
 			if (state === 'ready') { void this.reload().catch(error => this.report(error)); }
 		}) ?? Disposable.None);
+		this._register(lifecycle.onBeforeShutdown(event => {
+			if (event.reason === 'pageHide' || ![...this.contexts.values()].some(context => context.draft.length > 0)) return;
+			event.veto(this.resolveDraftsBeforeShutdown(), 'debug workspace changes');
+		}));
 		this._register(lifecycle.onWillShutdown(event => {
-			if ([...this.contexts].some(context => context.pending > 0)) event.join(() => this.flush(), localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts].every(context => context.pending === 0));
+			if (!this.backend) return;
+			event.join(async () => {
+				await this.flushWrites();
+				// A participant may have edited definitions after the veto phase.
+				const unsaved = [...this.contexts.values()].find(context => context.draft.length > 0);
+				if (unsaved && event.reason !== 'pageHide') throw unsaved.failure?.error ?? new Error(this.unsavedMessage(unsaved));
+			}, localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts.values()].every(context => context.pending === 0 && (event.reason === 'pageHide' || context.draft.length === 0)));
 		}));
 	}
 
 	get state(): PersistedDebugState { return this.current.state; }
-	whenReady(): Promise<void> { return this.current.queue; }
+	async whenReady(): Promise<void> {
+		const current = this.current;
+		await current.queue;
+		if (current.failure) throw current.failure.error;
+	}
 
 	storeState(state: PersistedDebugState, commands: readonly DebugWorkspaceEdit[] = []): void {
 		const current = this.current;
 		const edits = [...changes(domainState(current.state), domainState(state)), ...commands];
 		if (!edits.length) return;
 		if (!this.backend) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
-		if (current.blocked) throw new Error(localize('debug.workspaceBlocked', 'Resolve the debug workspace storage conflict before editing.'));
 		current.state = state;
-		const version = ++current.edits;
+		current.draft.push(edits);
+		if (!current.failure) this.enqueueWrite(current, () => this.writeNext(current));
+	}
+
+	private enqueueWrite(current: WorkspaceRead, operation: () => Promise<void>): void {
+		// The ordering queue always settles. Only the draft owns unacknowledged edits.
 		current.pending++;
-		current.queue = current.queue.then(async () => {
-			if (current.blocked || !this.backend || !current.snapshot) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
-			const result = await this.backend.editWorkspaceState(current.id, current.snapshot.revision, edits);
-			if (result.status === 'conflict') {
-				current.blocked = true;
-				throw new Error(localize('debug.workspaceConflict', 'Debug workspace definitions changed in another window. Local edits were retained; reopen the workspace to load the saved definitions.'));
-			}
-			current.snapshot = result.snapshot;
+		current.queue = current.queue.then(operation).catch(error => this.fail(current, error)).finally(() => {
 			current.pending--;
-			if (current.pending === 0 && this.current !== current) this.contexts.delete(current);
-			if (version === current.edits) {
-				const updated = fromDomain(result.snapshot.state);
-				const changed = changes(domainState(current.state), domainState(updated)).length > 0;
-				current.state = updated;
-				if (changed && !this.isDisposed && this.current === current) this.changeEmitter.fire(current.state);
-			}
+			this.releaseIdleWorkspace(current);
 		});
-		void current.queue.catch(error => { current.blocked = true; this.report(error); });
+	}
+
+	private async writeNext(current: WorkspaceRead): Promise<void> {
+		const edits = current.draft[0];
+		if (!edits || current.failure) return;
+		if (!this.backend || !current.snapshot) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
+		const result = await this.backend.editWorkspaceState(current.id, current.snapshot.revision, edits);
+		if (result.status === 'conflict') {
+			this.fail(current, new Error(localize('debug.workspaceConflict', 'Debug workspace definitions changed in another window. Local edits were retained.')), result.snapshot);
+			return;
+		}
+		current.snapshot = result.snapshot;
+		current.draft.shift();
+		if (current.draft.length === 0) {
+			const updated = fromDomain(result.snapshot.state);
+			const changed = changes(domainState(current.state), domainState(updated)).length > 0;
+			current.state = updated;
+			if (changed && !this.isDisposed && this.current === current) this.changeEmitter.fire(updated);
+		}
 	}
 
 	/** Poll a complete revisioned snapshot only while no local work is pending.
 	 * Reads never replay writes after a lost connection. */
 	async reload(): Promise<void> {
 		const current = this.current;
-		if (!this.backend || current.blocked) return;
+		if (!this.backend || current.failure) return;
 		const queue = current.queue;
 		await queue;
 		const generation = this.connectionGeneration;
-		if (await this.backend.getConnectionState() !== 'ready' || this.isDisposed || this.current !== current || queue !== current.queue || generation !== this.connectionGeneration) { return; }
+		if (current.failure || await this.backend.getConnectionState() !== 'ready' || this.isDisposed || this.current !== current || queue !== current.queue || generation !== this.connectionGeneration) { return; }
 		let result;
 		try {
 			result = await this.backend.readWorkspaceState(current.id);
@@ -133,39 +162,110 @@ export class DebugStorage extends Disposable {
 		this.changeEmitter.fire(current.state);
 	}
 
-	private async flush(): Promise<void> {
+	private async flushWrites(): Promise<void> {
 		// Include edits appended while an earlier write was awaiting its reply.
-		while ([...this.contexts].some(context => context.pending > 0)) {
-			await Promise.all([...this.contexts].filter(context => context.pending > 0).map(context => context.queue));
+		while (true) {
+			const writes = [...this.contexts.values()].filter(context => context.pending > 0).map(context => context.queue);
+			if (!writes.length) return;
+			await Promise.all(writes);
 		}
 	}
 
+	private async resolveDraftsBeforeShutdown(): Promise<boolean> {
+		while (true) {
+			await this.flushWrites();
+			const current = [...this.contexts.values()].find(context => context.draft.length > 0);
+			if (!current) return false;
+			const choice = await this.dialogs.prompt<'retry' | 'discard'>({
+				severity: DialogSeverity.Warning,
+				message: this.unsavedMessage(current),
+				detail: current.failure ? getErrorMessage(current.failure.error) : undefined,
+				buttons: [
+					{ label: localize('debug.retryWorkspaceSave', 'Retry Save'), run: () => 'retry' },
+					{ label: localize('debug.discardWorkspaceDraft', 'Discard Debug Changes'), run: () => 'discard' },
+				],
+				cancelButton: localize('debug.keepWindowOpen', 'Keep Window Open'),
+			});
+			if (choice.result === undefined) return true;
+			if (choice.result === 'retry') this.enqueueWrite(current, () => this.retry(current));
+			else this.discard(current);
+		}
+	}
+
+	private async retry(current: WorkspaceRead): Promise<void> {
+		if (!this.backend) return;
+		if (current.snapshot) {
+			const { snapshot } = await this.backend.readWorkspaceState(current.id);
+			const externalEdits = changes(current.snapshot.state, snapshot.state);
+			if (overlaps(current.draft, externalEdits)) {
+				this.fail(current, new Error(localize('debug.workspaceOverlappingEdits', 'Local edits overlap with changes from another window. The draft was retained.')), snapshot);
+				return;
+			}
+			current.snapshot = snapshot;
+			current.failure = undefined;
+		} else {
+			current.failure = undefined;
+			await this.readInitialSnapshot(current);
+		}
+		while (current.draft.length && !current.failure) await this.writeNext(current);
+	}
+
+	private discard(current: WorkspaceRead): void {
+		current.draft.length = 0;
+		current.snapshot = current.failure?.latest ?? current.snapshot;
+		if (current.snapshot) current.failure = undefined;
+		current.state = current.snapshot ? fromDomain(current.snapshot.state) : current.initialState;
+		if (this.current === current && !this.isDisposed) this.changeEmitter.fire(current.state);
+		this.releaseIdleWorkspace(current);
+	}
+
 	private openWorkspace(): WorkspaceRead {
-		const id = this.workspace.getWorkspace().id;
+		const { id, name, folders } = this.workspace.getWorkspace();
+		const retained = this.contexts.get(id);
+		if (retained) return retained;
 		const legacy = this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE);
 		const decoded: unknown = legacy === undefined ? undefined : JSON.parse(legacy);
 		const state = decoded === undefined || decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0 ? EMPTY_STATE : parsePersistedDebugState(decoded);
-		const current: WorkspaceRead = { id, state, snapshot: undefined, queue: Promise.resolve(), edits: 0, blocked: false, pending: 0 };
+		const current: WorkspaceRead = { id, name: name ?? folders[0]?.name ?? id, initialState: state, legacy, draft: [], state, snapshot: undefined, queue: Promise.resolve(), failure: undefined, pending: 0 };
 		// An explicitly unavailable host may display legacy values, but cannot
 		// migrate them or own pending writes to the backend document.
 		if (!this.backend) return current;
-		current.queue = Promise.resolve().then(async () => {
-			const result = await this.backend!.readWorkspaceState(id, legacy === undefined ? undefined : domainState(state));
-			if (result.status === 'conflict') { current.blocked = true; throw new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.')); }
-			current.snapshot = result.snapshot;
-			// Cleanup belongs to the captured storage scope and exact source.
-			// A later workspace or externally changed Memento must remain intact.
-			if (!this.isDisposed && this.current === current && legacy !== undefined && this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE) === legacy) {
-				this.storage.remove(LEGACY_KEY, StorageScope.WORKSPACE);
-			}
-			if (!current.edits) {
-				current.state = fromDomain(result.snapshot.state);
-				if (!this.isDisposed && this.current === current) this.changeEmitter.fire(current.state);
-			}
-		});
-		void current.queue.catch(error => { current.blocked = true; this.report(error); });
-		this.contexts.add(current);
+		current.queue = Promise.resolve().then(() => this.readInitialSnapshot(current)).catch(error => this.fail(current, error));
+		this.contexts.set(id, current);
 		return current;
+	}
+
+	private async readInitialSnapshot(current: WorkspaceRead): Promise<void> {
+		const { id, initialState, legacy } = current;
+		const result = await this.backend!.readWorkspaceState(id, legacy === undefined ? undefined : domainState(initialState));
+		if (result.status === 'conflict') {
+			this.fail(current, new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.')), result.snapshot);
+			return;
+		}
+		current.snapshot = result.snapshot;
+		// Cleanup belongs to the captured storage scope and exact source.
+		if (!this.isDisposed && this.current === current && legacy !== undefined && this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE) === legacy) {
+			this.storage.remove(LEGACY_KEY, StorageScope.WORKSPACE);
+		}
+		if (current.draft.length === 0) {
+			current.state = fromDomain(result.snapshot.state);
+			if (!this.isDisposed && this.current === current) this.changeEmitter.fire(current.state);
+		}
+	}
+
+	private releaseIdleWorkspace(current: WorkspaceRead): void {
+		if (current.pending === 0 && current.draft.length === 0 && this.current !== current && this.contexts.get(current.id) === current) {
+			this.contexts.delete(current.id);
+		}
+	}
+
+	private unsavedMessage(current: WorkspaceRead): string {
+		return localize('debug.workspaceUnsaved', "There are unsaved debug changes in '{0}'.", current.name);
+	}
+
+	private fail(current: WorkspaceRead, error: unknown, latest?: DebugWorkspaceSnapshot): void {
+		current.failure = { error, latest: latest ?? current.failure?.latest };
+		this.report(error);
 	}
 
 	private report(error: unknown): void { this.log.error('debug.storage', localize('debug.workspaceStorageFailed', 'Debug workspace storage failed.'), error); }
@@ -198,6 +298,30 @@ function changes(before: DebugWorkspaceState, after: DebugWorkspaceState): Debug
 	for (const expression of after.watchExpressions) if (!before.watchExpressions.includes(expression)) edits.push({ kind: 'addWatch', expression });
 	for (const [adapterType, filters] of Object.entries(after.exceptionBreakpoints)) if (different(before.exceptionBreakpoints[adapterType], filters)) edits.push({ kind: 'exceptions', adapterType, filters });
 	return edits;
+}
+
+function definitionKeys(edit: DebugWorkspaceEdit): readonly string[] {
+	switch (edit.kind) {
+		case 'source':
+		case 'function':
+		case 'data': return [`breakpoint:${edit.point.id}`];
+		case 'remove': return edit.ids.map(id => `breakpoint:${id}`);
+		case 'addWatch':
+		case 'removeWatch': return [`watch:${edit.expression}`];
+		case 'exceptions': return [`exceptions:${edit.adapterType}`];
+		case 'clearBreakpoints':
+		case 'setEnabled': return [];
+	}
+}
+
+function overlaps(draft: readonly (readonly DebugWorkspaceEdit[])[], externalEdits: readonly DebugWorkspaceEdit[]): boolean {
+	const changed = new Set(externalEdits.flatMap(definitionKeys));
+	const breakpointsChanged = [...changed].some(key => key.startsWith('breakpoint:'));
+	return draft.some(batch => batch.some(edit => {
+		// Bulk commands would also touch breakpoints added by the other window.
+		if (edit.kind === 'clearBreakpoints' || edit.kind === 'setEnabled') return breakpointsChanged;
+		return definitionKeys(edit).some(key => changed.has(key));
+	}));
 }
 
 function parsePersistedDebugState(value: unknown): PersistedDebugState {
