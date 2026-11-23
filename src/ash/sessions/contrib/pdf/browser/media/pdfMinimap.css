@@ -19,17 +19,29 @@
 	cursor: pointer;
 }
 
+.ash-sessions-pdf-thumbnails .ash-list-row.selected {
+	--ash-list-style-list-active-selection-background: transparent;
+	--ash-list-style-list-active-selection-foreground: currentColor;
+	--ash-list-style-list-inactive-selection-background: transparent;
+}
+
 .ash-sessions-pdf-thumbnails .ash-list-row > img {
 	display: block;
 	flex: none;
+	box-sizing: border-box;
 	max-inline-size: 100%;
 	/* Keep the page and its number together inside the virtual row. */
 	max-block-size: calc(
 		100% - var(--ash-pdf-thumbnail-number-height) -
 			var(--ash-pdf-thumbnail-gap)
 	);
-	outline: var(--ash-strokeThickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
 	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+}
+
+.ash-sessions-pdf-thumbnails .ash-list-row.selected > img {
+	border-color: var(--ash-accent-foreground);
 }
 
 .ash-sessions-pdf-thumbnails .ash-list-row > img:not([src]) {
@@ -41,16 +53,19 @@
 	font-variant-numeric: tabular-nums;
 }
 
-.ash-sessions-pdf-thumbnails .ash-list:focus-visible > .ash-list-row.focused {
+.ash-sessions-pdf-thumbnails
+	.ash-list:focus-visible
+	> .ash-list-row.focused
+	> img,
+.ash-sessions-pdf-thumbnails
+	.ash-list:focus-visible
+	> .ash-list-row.focused
+	> img:not([src])
+	+ .ash-sessions-pdf-thumbnail-number {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-:is(.hc-black, .hc-light) .ash-sessions-pdf-thumbnails .ash-list-row.selected {
-	box-shadow: inset 0 0 0 var(--ash-strokeThickness) var(--ash-contrastBorder);
+	outline-offset: var(--ash-spacing-size20);
 }
 
 :is(.hc-black, .hc-light) .ash-sessions-pdf-thumbnails .ash-list-row > img {
-	outline-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

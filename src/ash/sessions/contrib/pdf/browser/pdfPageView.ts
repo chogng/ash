@@ -54,10 +54,15 @@ export class PdfPageView extends Disposable {
 		const data = bytes.buffer instanceof ArrayBuffer ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) : bytes.slice();
 		const url = URL.createObjectURL(new Blob([data], { type: 'image/png' }));
 		const image = h(this.domNode.ownerDocument, 'img', { properties: { src: url, draggable: false }, attributes: { alt: '', 'aria-hidden': 'true' } });
-		const raster = toDisposable(() => { image.removeAttribute('src'); URL.revokeObjectURL(url); });
+		const raster = toDisposable(() => {
+			// Clearing src on an evicted image can register a Chromium viewport listener
+			// after the image leaves the document, retaining the detached page and text layer.
+			image.remove();
+			URL.revokeObjectURL(url);
+		});
 		this.decoding.value = raster;
 		try {
-			// Removing the source can leave Chromium's decode pending. Eviction must release the render queue.
+			// Eviction must release the render queue even while Chromium is still decoding.
 			const decoded = image.decode();
 			await (signal ? raceCancellationError(decoded, signal) : decoded);
 		} catch (error) {

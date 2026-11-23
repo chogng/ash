@@ -617,15 +617,19 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.pageInput.value = String(number);
 		this.updateControls();
 		try {
-			// A first turn starts immediately. A burst replaces its pending turn before
-			// starting another PDFium helper that the next key press would cancel.
-			if (replacesPageTurn) { await this.pageTurnDelay.trigger(() => undefined); }
+			// Keep coalescing repeated input. Continuous navigation can take over the
+			// viewport's existing renders, so it needs a shorter settling interval.
+			if (replacesPageTurn) {
+				await this.pageTurnDelay.trigger(() => undefined, this.continuous ? 40 : undefined);
+			}
 			// Only the latest request may start once the previous render has released its buffer.
 			await this.pagePaint;
 			if (signal.aborted) { return; }
 			const outlineTop = typeof scrollTarget === 'number' ? scrollTarget : undefined;
-			const paint = this.continuous && (number !== this.displayedPage?.page || outlineTop !== undefined) && !refinement
-				? this.continuous.reveal(number, outlineTop).then(view => { if (!signal.aborted) { this.activatePage(view); } })
+			const continuous = this.continuous;
+			const revealInContinuousView = !refinement && (number !== previous || replacesPageTurn || outlineTop !== undefined);
+			const paint = continuous && revealInContinuousView
+				? continuous.reveal(number, outlineTop, signal).then(view => { if (!signal.aborted) { this.activatePage(view); } })
 				: this.paint(undefined, number, dimension, signal);
 			this.pagePaint = paint.catch(() => undefined);
 			await paint;

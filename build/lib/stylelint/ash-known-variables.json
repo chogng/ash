@@ -486,6 +486,8 @@
 		"--ash-model-picker-position",
 		"--ash-notifications-top",
 		"--ash-pane-header-height",
+		"--ash-pdf-thumbnail-gap",
+		"--ash-pdf-thumbnail-number-height",
 		"--ash-pinned-background",
 		"--ash-pinned-border",
 		"--ash-pinned-contrastBorder",

@@ -1,6 +1,7 @@
 import { getWindow } from '../../../../base/browser/dom.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { ListView } from '../../../../base/browser/ui/list/listView.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import { localize } from '../../../../nls.js';
@@ -38,7 +39,7 @@ export class PdfContinuousView extends Disposable {
 	private defaultSize: PageSize;
 	private readonly numbers: readonly number[];
 	private readonly notify: AnimationFrameScheduler;
-	private pendingLoads = 0;
+	private loading: PageEntry | undefined;
 	private zoom: PdfZoom = 'page';
 	private width = 0;
 	private height = 0;
@@ -76,6 +77,7 @@ export class PdfContinuousView extends Disposable {
 			onDidRemoveRow: row => {
 				const entry = this.rows.get(row);
 				if (entry) { entry.mounted = false; }
+				this.rows.delete(row);
 			},
 		}));
 		this.domNode = this.list.domNode;
@@ -130,7 +132,7 @@ export class PdfContinuousView extends Disposable {
 		}
 		// Keep the same six-page offscreen budget across both nearby and distant reversals.
 		for (let index = 0; index < retained.length - maxRetainedPages; index++) { this.disposeEntry(retained[index]); }
-		if (next && !this.pendingLoads) {
+		if (next && !this.loading) {
 			const entry = next;
 			void this.load(entry).catch(error => {
 				if (!entry.controller.signal.aborted) { this.options.onError(error); }
@@ -146,7 +148,7 @@ export class PdfContinuousView extends Disposable {
 
 	private load(entry: PageEntry): Promise<PdfPageView> {
 		if (entry.ready) { return entry.ready; }
-		this.pendingLoads++;
+		this.loading = entry;
 		const { number, view, controller: { signal } } = entry;
 		entry.ready = this.options.loadPage(number, signal).then(async ({ page, bytes }) => {
 			signal.throwIfAborted();
@@ -160,7 +162,7 @@ export class PdfContinuousView extends Disposable {
 			view.domNode.setAttribute('aria-busy', 'false');
 			return view;
 		}).finally(() => {
-			this.pendingLoads--;
+			if (this.loading === entry) { this.loading = undefined; }
 			if (!this.isDisposed) { this.notify.schedule(); }
 		});
 		return entry.ready;
@@ -228,13 +230,22 @@ export class PdfContinuousView extends Disposable {
 		});
 	}
 
-	public async reveal(number: number, top?: number): Promise<PdfPageView> {
+	public async reveal(number: number, top?: number, signal?: AbortSignal): Promise<PdfPageView> {
+		signal?.throwIfAborted();
 		this.revealing = number;
 		try {
 			this.list.reveal(number - 1, 0);
 			const entry = this.entries.get(number);
 			if (!entry) { throw new Error('PDF page is outside the reading viewport'); }
-			const view = await this.load(entry);
+			const loading = this.loading;
+			if (!entry.ready && loading && loading !== entry) {
+				// The document serializes renders, so a stale prefetch would delay this jump.
+				this.disposeEntry(loading);
+				if (loading.mounted) { this.list.rerender(loading.number - 1); }
+			}
+			const ready = this.load(entry);
+			const view = await (signal ? raceCancellationError(ready, signal) : ready);
+			signal?.throwIfAborted();
 			if (this.revealing === number) {
 				if (top === undefined) {
 					this.list.reveal(number - 1, 0);
