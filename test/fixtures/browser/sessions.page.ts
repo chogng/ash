@@ -252,6 +252,7 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 		window.addEventListener('pagehide', () => registrations.dispose(), { once: true });
 		const resource = URI.parse('fixture-project:/report.pdf');
 		const content = new TextEncoder().encode('Fixture PDF');
+		const image = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
 		const id = 'pdf-project';
 		projects.set(id, {
 			id, name: 'PDF project', description: '', revision: 1, archived: false, sessionCount: 0, sessionIds: [],
@@ -276,10 +277,10 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 					page: async page => ({
 						page, pageCount: 1, revision: 0, sha256: '', width: 1, height: 1, widthPoints: 1, heightPoints: 1,
 						text: 'Fixture PDF', textTruncated: false, characters: [], annotations: [], annotationsTruncated: false,
-						imageSize: 0, imageSha256: '', fileSize: content.length,
+						imageSize: image.length, imageSha256: '', fileSize: content.length,
 					}),
-					image: async () => new Uint8Array(),
-					export: async () => { throw new Error('Unexpected export of a read-only fixture'); },
+					image: async () => image,
+					export: async () => { throw new Error('Unexpected export of the preview fixture'); },
 					dispose() { }, [Symbol.dispose]() { },
 				}),
 			},

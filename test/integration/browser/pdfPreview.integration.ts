@@ -2,7 +2,7 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
-import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
@@ -107,6 +107,16 @@ const client = new AppServerProtocolClient(new Transport());
 await client.connect();
 services.registerInstance(IPdfService, new AppServerPdfService(client));
 const resource = URI.file('/fixture/review.pdf');
+const reviewCopy = URI.file('/fixture/review-copy.pdf');
+const unexpectedDialog = async (): Promise<never> => { throw new Error('Unexpected file dialog'); };
+services.registerInstance(IFileDialogService, {
+	pickFolderAndOpen: unexpectedDialog,
+	pickWorkspaceAndOpen: unexpectedDialog,
+	pickFileToSave: unexpectedDialog,
+	showSaveConfirm: unexpectedDialog,
+	showOpenDialog: unexpectedDialog,
+	showSaveDialog: async () => reviewCopy,
+});
 await memory.createDirectory(URI.file('/fixture'));
 const original = new Uint8Array(await (await fetch('/__aspdf_bytes')).arrayBuffer());
 await memory.writeFile(resource, original, { create: true, overwrite: false });
@@ -122,7 +132,9 @@ const pdfTest = {
 	async open(readOnly = false, name = 'review.pdf') {
 		pane?.dispose();
 		const target = URI.file(`/fixture/${name}`);
-		if (name !== 'review.pdf') { await memory.writeFile(target, original, { create: true, overwrite: true }); }
+		if (target.path !== resource.path && target.path !== reviewCopy.path) {
+			await memory.writeFile(target, original, { create: true, overwrite: true });
+		}
 		const input = { resource: target, readOnly };
 		const descriptor = EditorPanes.getEditorPane(input)!;
 		pane = await descriptor.create({ input, instantiationService: services });

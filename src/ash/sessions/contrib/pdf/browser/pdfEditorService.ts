@@ -29,7 +29,8 @@ export class PdfEditorService extends Disposable implements IPdfEditorService {
 	}
 
 	public acquire(input: IResourceEditorInput): ReturnType<IPdfEditorService['acquire']> {
-		if (input.readOnly) {
+		// An immutable snapshot can name the same resource as a writable file.
+		if (input.readOnly || input.initialBytes) {
 			const model = this.instantiation.createInstance(PdfDocumentModel, input);
 			return { model, ready: model.open(), release: model };
 		}

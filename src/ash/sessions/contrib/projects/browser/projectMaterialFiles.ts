@@ -17,7 +17,7 @@ export function isPreviewableProjectFile(name: string): boolean {
 
 export function openProjectFile(editors: IEditorService, resource: URI, readOnly: boolean): Promise<void> {
 	if (isPreviewableProjectFile(resource.path)) {
-		return editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false }, {}, 'modalGroup');
+		return editors.openEditor({ resource, readOnly: extname(resource.path).toLowerCase() !== '.pdf', showBreadcrumbs: false }, {}, 'modalGroup');
 	}
 	return editors.openEditor({ resource, ...(readOnly && { readOnly, showBreadcrumbs: false }) });
 }
@@ -38,7 +38,7 @@ export async function resolveProjectFileReference(files: IFileService, copies: P
 	return copies.ensure({ id: projectMaterialId(material), name: material.name }, undefined);
 }
 
-/** Material IDs identify immutable remote uploads. Publish each copy once, even if two windows fetch it. */
+/** Publish each local copy once so a repeat download cannot overwrite local annotations. */
 export class ProjectMaterialFiles extends AbstractDisposable {
 	private readonly queue = new TaskQueue();
 	private readonly pending = new Map<string, Promise<URI>>();

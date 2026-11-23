@@ -210,7 +210,7 @@ test('PDF thumbnail navigation retains the selected page when the view reaches t
 	await page.goto('/pdfPreview.html');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(async () => {
-		window.aspdfTest.resize(440, 800);
+		window.aspdfTest.resize(440, 1040);
 		await window.aspdfTest.open(true);
 	});
 	const viewer = page.locator('.ash-sessions-pdf-preview');
@@ -294,6 +294,7 @@ test('PDF outline switches with thumbnails and opens nested chapter destinations
 	await expect(tabs).toBeHidden();
 	await expect(toggle).toBeFocused();
 
+	await page.evaluate(() => window.aspdfTest.resize(1280, 520));
 	await page.evaluate(() => window.aspdfTest.setScrollMode('paged'));
 	await expect(reader).toHaveCount(0);
 	await expect(viewer).toHaveAttribute('aria-busy', 'false');
@@ -320,7 +321,7 @@ test('PDF links stay in the document without appearing in the annotation panel',
 	const panel = viewer.locator('.ash-sessions-pdf-annotation-panel');
 	const annotations = panel.locator('.ash-sessions-pdf-annotation');
 	await expect(viewer.getByRole('status')).toHaveText('Page 1 of 2');
-	await expect(panel).toBeHidden();
+	await expect(panel).toBeVisible();
 	await expect(annotations).toHaveCount(0);
 
 	await page.evaluate(() => window.aspdfTest.open());
@@ -345,7 +346,7 @@ test('PDF links stay in the document without appearing in the annotation panel',
 	await expect(panel).toBeVisible();
 	await expect(annotations).toHaveCount(1);
 	await expect(note).toHaveValue('Updated review note');
-	await expect(note).toHaveAttribute('readonly', '');
+	await expect(note).toBeEditable();
 });
 
 for (const locale of ['en', 'zh-CN']) {
@@ -424,8 +425,16 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.aspdfTest.highContrast());
 		await testInfo.attach(`aspdf-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		await page.evaluate(() => window.aspdfTest.open(true));
-		await expect(viewer.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true })).toBeDisabled();
+		await viewer.locator('.ash-sessions-pdf-annotations > textarea').fill('Copy review');
+		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true }).click();
+		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Copy review');
+		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '保存副本' : 'Save a copy', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.aspdfTest.dirty())).toBe(false);
+		await page.evaluate(() => window.aspdfTest.open(false, 'review-copy.pdf'));
+		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Copy review');
 		await page.evaluate(() => window.aspdfTest.open());
+		await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(0);
+		expect(await page.evaluate(() => window.aspdfTest.hasExternalBytes())).toBe(true);
 		await page.evaluate(() => window.aspdfTest.split());
 		const first = page.locator('#viewer .ash-sessions-pdf-preview');
 		const second = page.locator('#split .ash-sessions-pdf-preview');
@@ -514,7 +523,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(viewer.locator('.ash-sessions-pdf-text-editor')).toHaveCount(0);
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea').last()).toHaveValue('Review 文本批注');
 		await button('Save changes', '保存修改').click();
-		await expect(button('Save changes', '保存修改')).toBeDisabled();
+		await expect.poll(() => page.evaluate(() => window.aspdfTest.dirty())).toBe(false);
 		await page.evaluate(() => window.aspdfTest.open());
 		await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(2);
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea').last()).toHaveValue('Review 文本批注');
@@ -560,11 +569,12 @@ for (const locale of ['en', 'zh-CN']) {
 				&& sheet.x + sheet.width <= frame.x + frame.width - 11
 				&& sheet.y + sheet.height <= frame.y + frame.height - 11;
 		};
-		await expect(viewer.locator('.ash-sessions-pdf-annotation-panel')).toBeHidden();
+		const panel = viewer.locator('.ash-sessions-pdf-annotation-panel');
+		await expect(panel).toBeVisible();
 		await expect.poll(centered).toBe(true);
 		const container = (await content.boundingBox())!;
 		const frame = (await reader.boundingBox())!;
-		expect(frame.width).toBeCloseTo(container.width, 0);
+		expect(frame.width + (await panel.boundingBox())!.width).toBeCloseTo(container.width, 0);
 		expect(await viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 		await testInfo.attach(`pdf-centered-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		if (locale === 'en') {
@@ -601,7 +611,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 		await page.evaluate(() => window.aspdfTest.resize(560, 480));
 		await expect.poll(centered).toBe(true);
-		await expect(viewer.locator('.ash-sessions-pdf-annotation-panel')).toBeHidden();
+		await expect(panel).toBeVisible();
 		await testInfo.attach(`pdf-centered-narrow-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		await page.evaluate(() => window.aspdfTest.resize(1400, 860));
 		await expect.poll(centered).toBe(true);
@@ -873,8 +883,8 @@ test('PDF selection toolbar opens on release and routes localized selection acti
 	await expect(toolbar).toBeVisible();
 	await expect(copy).toBeEnabled();
 	await expect(toolbar.getByRole('button', { name: '用 Ash 翻译', exact: true })).toBeEnabled();
-	await expect(toolbar.getByRole('button', { name: '添加评论', exact: true })).toBeDisabled();
-	await expect(toolbar.getByRole('button', { name: '高亮', exact: true })).toBeDisabled();
+	await expect(toolbar.getByRole('button', { name: '添加评论', exact: true })).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: '高亮', exact: true })).toBeEnabled();
 	await page.getByRole('button', { name: '下一页', exact: true }).click();
 	await expect(toolbar).toBeHidden();
 });
@@ -1111,7 +1121,7 @@ test('PDF continuous mode preserves mixed page sizes and restored reading mode',
 		const bounds = (await landscape.boundingBox())!;
 		return bounds.width / bounds.height;
 	}).toBeCloseTo(2, 2);
-	await expect(viewer.getByRole('button', { name: 'Add note', exact: true })).toBeDisabled();
+	await expect(viewer.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 	await continuous.press('Control+0');
 	await expect.poll(async () => (await landscape.boundingBox())!.width).toBeCloseTo(800, 1);
 	for (let index = 0; index < 3; index++) { await continuous.press('Control+='); }
@@ -1209,7 +1219,7 @@ for (const modifier of ['Control', 'Meta'] as const) {
 		await expect(stage.locator('img')).toHaveJSProperty('naturalHeight', 2048);
 		for (let index = 0; index < 20; index++) { await reader.dispatchEvent('wheel', { ctrlKey: true, deltaY: 10000 }); }
 		await expect.poll(async () => (await stage.boundingBox())!.width).toBeCloseTo(40, 1);
-		await expect(viewer.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
+		await expect(viewer.getByRole('button', { name: 'Save a copy', exact: true })).toBeDisabled();
 	});
 }
 

@@ -1994,7 +1994,7 @@ suite('sessions browser component', () => {
 		}
 	});
 
-	test('A sidebar project PDF opens beside Chat and returns focus to its file on close', async function () {
+	test('A sidebar project PDF opens for annotation beside Chat and returns focus to its file on close', async function () {
 		const { page } = browserTests;
 		await page.goto('/sessions.html?catalog&projectCreation&projectPdfPreview&locale=en');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -2016,6 +2016,7 @@ suite('sessions browser component', () => {
 			else await file.press('Enter');
 			await expect(controls).toBeVisible();
 			await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
+			await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 			await expect(conversation).toBeVisible();
 			const chatBounds = (await conversation.boundingBox())!;
 			const editorBounds = (await editor.boundingBox())!;

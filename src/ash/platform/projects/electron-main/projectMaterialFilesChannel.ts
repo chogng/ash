@@ -1,5 +1,6 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
+import { extname } from '../../../base/common/path.js';
 import { Event } from '../../../base/common/event.js';
 import { isValidBasename } from '../../../base/common/extpath.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
@@ -11,7 +12,7 @@ import { DiskFileSystemProviderChannel } from '../../files/electron-main/diskFil
 import { DiskFileSystemProvider } from '../../files/node/diskFileSystemProvider.js';
 import { projectMaterialFilesKey, projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../common/projectMaterialFiles.js';
 
-/** A local capability scoped to Ash's project material paths and create-only writes. */
+/** A local capability scoped to Ash's project material paths. */
 export class ProjectMaterialFilesChannel extends Disposable implements IServerChannel<string> {
 	private readonly lifetime = this._register(new MutableDisposable<DisposableStore>());
 	private current: { readonly root: URI; readonly channel: DiskFileSystemProviderChannel; } | undefined;
@@ -25,9 +26,8 @@ export class ProjectMaterialFilesChannel extends Disposable implements IServerCh
 	async call<T>(context: string, command: string, value: unknown, token = CancellationToken.None): Promise<T> {
 		this.checkContext(context);
 		if (!['stat', 'readFile', 'writeFile'].includes(command) || !isRecord(value)) throw new TypeError('Invalid project file operation');
-		if (command === 'writeFile' && (!isRecord(value.options) || value.options.create !== true || value.options.overwrite !== false
-			|| Object.keys(value.options).length !== 2)) throw new TypeError('Project file copies may only be created');
 		const resource = this.parseResource(value.resource);
+		if (command === 'writeFile') this.checkWriteOptions(resource, value.options);
 		if (resource.authority !== projectMaterialFilesKey(this.root().fsPath)) await this.configuration.reloadConfiguration();
 		const { channel, target } = this.resolve(resource);
 		return channel.call(context, command, { ...value, resource: target.toString() }, token);
@@ -44,6 +44,17 @@ export class ProjectMaterialFilesChannel extends Disposable implements IServerCh
 	private checkContext(context: string): void {
 		this.assertNotDisposed();
 		if (!this.acceptsContext(context)) throw new Error('Project files are unavailable in this window');
+	}
+
+	private checkWriteOptions(resource: URI, options: unknown): void {
+		if (isRecord(options)) {
+			const keyCount = Object.keys(options).length;
+			if (options.create === true && options.overwrite === false && keyCount === 2) return;
+			// PDF annotations replace only the revision that the editor opened.
+			if (extname(resource.path).toLowerCase() === '.pdf' && options.create === false && options.overwrite === true
+				&& keyCount === 3 && typeof options.expectedRevision === 'string' && /^[a-f0-9]{64}$/u.test(options.expectedRevision)) return;
+		}
+		throw new TypeError('Project file writes require a new copy or the expected revision of an existing PDF');
 	}
 
 	private root(): URI {

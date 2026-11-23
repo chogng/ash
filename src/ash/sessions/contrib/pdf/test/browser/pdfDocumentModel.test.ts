@@ -18,6 +18,30 @@ const resource = URI.file('/paper.pdf');
 const signal = new AbortController().signal;
 const note = { kind: 'note', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, contents: 'Saved note' } satisfies PdfAnnotationEdit;
 
+test('PDF snapshots can be annotated and saved without changing the source', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	const source = (await files.readFileBytes(resource)).bytes;
+	const copy = URI.file('/reviewed.pdf');
+	let target: URI | undefined;
+	using model = new PdfDocumentModel({ resource, readOnly: true, initialBytes: source }, files, pdf, {
+		async showSaveDialog(options) {
+			assert.equal(options.defaultUri?.path, '/paper.pdf');
+			return target;
+		},
+	});
+	await model.open();
+	await model.render(1, note);
+	await model.save(signal);
+	assert.equal(model.isDirty, true);
+	target = copy;
+	await model.save(signal);
+	assert.equal(model.isDirty, false);
+	assert.deepEqual((await files.readFileBytes(resource)).bytes, source);
+	using reopened = await pdf.open((await files.readFileBytes(copy)).bytes, signal);
+	assert.equal((await reopened.page(1, 1600, signal)).annotations[0]?.contents, note.contents);
+});
+
 test('Cancels active and queued preview reads while leaving the working copy editable', async () => {
 	using store = new DisposableStore();
 	const files = await createFiles(store);
@@ -334,7 +358,9 @@ async function createFiles(store: DisposableStore): Promise<FileService> {
 }
 
 async function openPdf(files: FileService, pdfService: IPdfService = pdf): Promise<PdfDocumentModel> {
-	const model = new PdfDocumentModel({ resource }, files, pdfService);
+	const model = new PdfDocumentModel({ resource }, files, pdfService, {
+		async showSaveDialog() { throw new Error('Writable PDFs save directly'); },
+	});
 	try {
 		await model.open();
 		await model.render(1);

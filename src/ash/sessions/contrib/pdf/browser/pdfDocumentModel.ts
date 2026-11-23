@@ -2,8 +2,12 @@ import { assert } from '../../../../base/common/assert.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { structuralEquals } from '../../../../base/common/equals.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { isValidBasename } from '../../../../base/common/extpath.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { extname } from '../../../../base/common/path.js';
+import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { FileRevisionConflictError, IFileService } from '../../../../platform/files/common/files.js';
 import { IPdfService, type IPdfDocument, type PdfAnnotationEdit, type PdfOutlineEntry, type PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../workbench/common/editor.js';
@@ -34,6 +38,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	private document: IPdfDocument | undefined;
 	private source: Uint8Array | undefined;
 	private fileRevision: string | undefined;
+	private sourceFileReadOnly = false;
 	private edits: PdfEdit[] = [];
 	private undone: PdfEdit[] = [];
 	private savedEdits: readonly PdfEdit[] | undefined = [];
@@ -47,6 +52,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		private readonly input: IResourceEditorInput,
 		@IFileService private readonly files: IFileService,
 		@IPdfService private readonly pdf: IPdfService,
+		@IFileDialogService private readonly dialogs: Pick<IFileDialogService, 'showSaveDialog'>,
 	) {
 		super();
 		this._register(toDisposable(() => { this.lifetime.abort(); this.document?.dispose(); }));
@@ -59,18 +65,17 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	}
 	public get canUndo(): boolean { return this.edits.length > 0; }
 	public get canRedo(): boolean { return this.undone.length > 0; }
-	public get readOnly(): boolean { return this.input.readOnly === true; }
+	public get savesCopy(): boolean { return this.input.readOnly === true || this.input.initialBytes !== undefined || this.sourceFileReadOnly; }
 	public get recoveryError(): unknown { return this.failedRecovery?.error; }
 
 	public open(): Promise<void> {
 		return this.serialize(async () => {
 			const signal = this.lifetime.signal;
-			if (this.input.initialBytes && this.readOnly) {
-				this.document = await this.pdf.open(this.input.initialBytes, signal);
-				return;
+			if (!this.input.initialBytes) {
+				const stat = await this.files.stat(this.resource);
+				if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
+				this.sourceFileReadOnly = stat.readonly;
 			}
-			const stat = await this.files.stat(this.resource);
-			if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
 			const { document, revision, source } = await this.openFile(signal);
 			this.document = document;
 			this.source = source;
@@ -78,7 +83,11 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		});
 	}
 
-	private async openFile(signal: AbortSignal): Promise<{ document: IPdfDocument; revision: string; source?: Uint8Array; }> {
+	private async openFile(signal: AbortSignal): Promise<{ document: IPdfDocument; revision?: string; source?: Uint8Array; }> {
+		if (this.input.initialBytes) {
+			const source = this.input.initialBytes;
+			return { document: await this.pdf.open(source, signal), source };
+		}
 		const snapshot = await this.pdf.openSnapshot?.(
 			async owner => this.files.openReadSnapshot?.(this.resource, owner, signal), signal,
 		);
@@ -86,12 +95,11 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		const file = await this.files.readFileBytes(this.resource);
 		signal.throwIfAborted();
 		const document = await this.pdf.open(file.bytes, signal);
-		return { document, revision: file.revision, source: this.residentSource(file.bytes) };
+		return { document, revision: file.revision, source: file.bytes.byteLength <= maxResidentOriginalBytes ? file.bytes : undefined };
 	}
 
 	public render(number: number, edit?: PdfAnnotationEdit, preview?: { readonly dimension: number; readonly signal?: AbortSignal; }): Promise<{ page: PdfPage; bytes: Uint8Array; }> {
 		return this.serialize(async () => {
-			if (edit && this.readOnly) { throw new Error(localize('sessions.pdfPreview.readOnly', 'This PDF is read-only.')); }
 			if (edit && this.failedRecovery) { throw this.failedRecovery.error; }
 			const document = this.document!;
 			const signal = preview?.signal && !edit ? AbortSignal.any([this.lifetime.signal, preview.signal]) : this.lifetime.signal;
@@ -160,19 +168,35 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 
 	public save(signal: AbortSignal, _options?: ISaveOptions): Promise<void> {
 		return this.serialize(async () => {
-			if (this.readOnly || !this.current || !this.isDirty) { return; }
+			if (!this.current || !this.isDirty) { return; }
 			// A failed replay leaves the previously opened native snapshot in place.
 			if (this.failedRecovery) { throw this.failedRecovery.error; }
-			const bytes = await this.document!.export(this.current, AbortSignal.any([signal, this.lifetime.signal]));
+			const operation = AbortSignal.any([signal, this.lifetime.signal]);
+			operation.throwIfAborted();
+			const target = this.savesCopy ? await this.pickCopyTarget() : this.resource;
+			if (!target) { return; }
+			operation.throwIfAborted();
+			const bytes = await this.document!.export(this.current, operation);
 			try {
-				const result = await this.files.writeFileBytes(this.resource, bytes, { create: false, overwrite: true, expectedRevision: this.fileRevision }, signal);
-				this.fileRevision = result.revision;
+				const options = this.savesCopy ? { create: true, overwrite: false }
+					: { create: false, overwrite: true, expectedRevision: this.fileRevision };
+				const result = await this.files.writeFileBytes(target, bytes, options, operation);
+				if (!this.savesCopy) this.fileRevision = result.revision;
 				this.savedEdits = this.edits.slice();
 				this.hasExternalChange = false; this.changed.fire();
 			} catch (error) {
 				if (error instanceof FileRevisionConflictError) { this.hasExternalChange = true; this.changed.fire(); }
 				throw error;
 			}
+		});
+	}
+
+	private pickCopyTarget(): Promise<URI | undefined> {
+		const name = basename(this.resource);
+		const filename = !isValidBasename(name) ? 'document.pdf' : extname(name).toLowerCase() === '.pdf' ? name : `${name}.pdf`;
+		return this.dialogs.showSaveDialog({
+			title: localize('sessions.pdfPreview.saveCopy', 'Save a copy'),
+			defaultUri: URI.file(`/${filename}`),
 		});
 	}
 
@@ -188,6 +212,14 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	public revert(signal: AbortSignal): Promise<void> {
 		return this.serialize(async () => {
 			signal.throwIfAborted();
+			if (this.savesCopy && this.source && this.savedEdits?.length && !this.failedRecovery) {
+				this.install(await this.rebuild(this.source, this.savedEdits));
+				this.edits = this.savedEdits.slice();
+				this.undone = [];
+				this.reverted.fire();
+				this.changed.fire();
+				return;
+			}
 			const operationSignal = AbortSignal.any([signal, this.lifetime.signal]);
 			const { document, revision, source } = await this.openFile(operationSignal);
 			try {
@@ -221,10 +253,6 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 			revision: this.fileRevision,
 			savedEdits,
 		});
-	}
-
-	private residentSource(bytes: Uint8Array): Uint8Array | undefined {
-		return !this.readOnly && bytes.byteLength <= maxResidentOriginalBytes ? bytes : undefined;
 	}
 
 	private originalSource(): Uint8Array {

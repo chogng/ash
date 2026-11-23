@@ -671,7 +671,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 	private openSidebarFile(resource: URI, readOnly: boolean, signal: AbortSignal, restoreFocus: () => void): Promise<void> {
 		if (extname(resource.path).toLowerCase() === '.pdf') {
-			return this.entries.openConversationFile({ resource, readOnly: true, showBreadcrumbs: false }, restoreFocus, signal);
+			return this.entries.openConversationFile({ resource, showBreadcrumbs: false }, restoreFocus, signal);
 		}
 		return openProjectFile(this.editors, resource, readOnly);
 	}
