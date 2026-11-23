@@ -21,6 +21,7 @@
 .ash-editor-pane-toolbar {
 	box-sizing: border-box;
 	min-block-size: var(--ash-editor-toolbar-height);
+	padding-inline: var(--ash-spacing-size40);
 }
 
 .ash-workbench-editor

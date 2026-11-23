@@ -60,6 +60,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 
 	private readonly activityActions: WorkbenchToolBar;
 	private readonly leftControls: HTMLElement;
+	private readonly rightControls: HTMLElement;
 	private readonly pageContent: HTMLElement;
 	private readonly sessionContent: HTMLElement;
 	private readonly editorHeaders: HTMLElement;
@@ -180,7 +181,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			}
 		}));
 		updatePageVisibility();
-		const right = h(container.ownerDocument, 'div');
+		const right = this.rightControls = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.editorHeaders = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-editor-headers' });
 		this.editorHeaders.hidden = true;
@@ -226,6 +227,8 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
+		this._register(layoutActions.onDidChangeMenuItems(() => this.updateRightControlsVisibility()));
+		this.updateRightControlsVisibility();
 
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
 		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
@@ -240,7 +243,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			const accountsWidth = this.activityActions.element.offsetWidth;
 			if (page || browser) {
 				// In a single-pane layout, the page starts behind the window navigation controls.
-				const rightControlsWidth = this.layoutActions.element.parentElement!.getBoundingClientRect().width;
+				const rightControlsWidth = this.rightControls.getBoundingClientRect().width;
 				left = Math.max(left, controlsEnd + rightControlsWidth);
 			}
 			// Keep the conversation's title and actions usable beside the editor header.
@@ -287,5 +290,11 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	public setActivityActions(actions: readonly IAction[], actionViewItemProvider: ActionViewItemProvider): void {
 		this.activityActionViewItemProvider = actionViewItemProvider;
 		this.activityActions.setActions([], [], actions);
+		this.updateRightControlsVisibility();
+	}
+
+	private updateRightControlsVisibility(): void {
+		// An empty controls area would still reserve its padding before docked editor headers.
+		this.rightControls.hidden = this.layoutActions.element.hidden && this.activityActions.getItemsLength() === 0;
 	}
 }

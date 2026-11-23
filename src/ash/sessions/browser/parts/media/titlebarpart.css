@@ -82,7 +82,7 @@
 	margin-left: auto;
 }
 
-.ash-sessions-titlebar-right {
+.ash-sessions-titlebar-right:not([hidden]) {
 	display: flex;
 	flex: none;
 	align-items: center;

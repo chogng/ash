@@ -15,7 +15,7 @@
 	flex-wrap: wrap;
 	flex: 0 0 auto;
 	gap: 4px;
-	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
+	padding-block: var(--ash-spacing-size20);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 .ash-browser-navigation,

@@ -23,28 +23,29 @@ suite('Sessions native titlebar layout', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`maximized Chat editor hides conversation actions and keeps both pane controls inside the titlebar in ${locale}`, async () => {
+		test(`maximized Chat keeps the editor titlebar aligned in ${locale}`, async () => {
 			const { page } = browser;
 			await page.setViewportSize({ width: 1440, height: 900 });
 			await page.goto(`/sessions.html?emptyEditorArea&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(false));
 			const titlebar = page.locator('[data-part="titlebar"]');
+			const editor = page.locator('[data-part="editor"]');
+			const editorHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
 			const conversation = titlebar.locator('.ash-sessions-titlebar-session-content');
-			const controls = titlebar.locator('.ash-sessions-editor-layout-actions');
+			const expectEditorHeadersAligned = () =>
+				expect.poll(async () => (await editorHeaders.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
 			await expect(conversation).toBeHidden();
-			await expect(controls.locator('button')).toHaveCount(2);
-			await expect(controls.locator('[data-action-id="sessions.toggleSessionPart"] .ash-button-label')).toBeVisible();
-			for (const width of [1440, 900, 640]) {
+			await expect(editorHeaders).toBeVisible();
+			await expectEditorHeadersAligned();
+			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
+			await expect(titlebar.locator('[data-action-id="sessions.activity.accounts"] button')).toBeVisible();
+			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'default'));
+			await expectEditorHeadersAligned();
+			for (const width of [900, 640]) {
 				await page.setViewportSize({ width, height: 900 });
-				for (const button of await controls.locator('button').all()) {
-					await expect(button).toBeInViewport({ ratio: 1 });
-				}
-				await expect.poll(async () => {
-					const bounds = (await controls.boundingBox())!;
-					const row = (await titlebar.boundingBox())!;
-					return bounds.x + bounds.width <= row.x + row.width;
-				}).toBe(true);
+				await expectEditorHeadersAligned();
+				await expect(editorHeaders).toBeInViewport({ ratio: 1 });
 			}
 			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(true));
 			await expect(conversation).toBeVisible();
