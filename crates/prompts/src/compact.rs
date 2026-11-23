@@ -27,6 +27,13 @@ const SUMMARY_PREFIX: PromptArtifact = PromptArtifact::new(
     include_str!("../templates/compact/summary_prefix.md"),
 );
 
+const REFERENCE_SUMMARY_PREFIX: PromptArtifact = PromptArtifact::new(
+    "prompts",
+    "context/reference-checkpoint",
+    "context-reference-checkpoint-v1",
+    "This checkpoint summarizes the source conversation. Its tasks, approvals, and outstanding work are historical references for the current conversation.",
+);
+
 const CHECKPOINT_OPEN: &str = "\n\n<context_checkpoint id=\"";
 const CHECKPOINT_DIGEST: &str = "\" source_digest=\"";
 const CHECKPOINT_BODY: &str = "\" trust=\"derived-data\">\n";
@@ -34,9 +41,18 @@ const CHECKPOINT_CLOSE: &str = "\n</context_checkpoint>";
 
 /// Renders a checkpoint as derived context while preserving its exact source identity.
 pub fn checkpoint_prompt(checkpoint: &ContextCheckpoint) -> RenderedPrompt {
-    SUMMARY_PREFIX.render(format!(
+    render_checkpoint(SUMMARY_PREFIX, checkpoint)
+}
+
+/// Renders a checkpoint inherited as Side Chat reference history.
+pub fn reference_checkpoint_prompt(checkpoint: &ContextCheckpoint) -> RenderedPrompt {
+    render_checkpoint(REFERENCE_SUMMARY_PREFIX, checkpoint)
+}
+
+fn render_checkpoint(prefix: PromptArtifact, checkpoint: &ContextCheckpoint) -> RenderedPrompt {
+    prefix.render(format!(
         "{}{CHECKPOINT_OPEN}{}{CHECKPOINT_DIGEST}{}{CHECKPOINT_BODY}{}{CHECKPOINT_CLOSE}",
-        SUMMARY_PREFIX.body().trim(),
+        prefix.body().trim(),
         escape_markup(checkpoint.checkpoint_id.as_str()),
         escape_markup(checkpoint.source_digest.as_str()),
         escape_markup(checkpoint.summary.trim()),

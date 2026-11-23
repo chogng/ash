@@ -345,6 +345,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         user_time_contexts: Default::default(),
         message_times: Default::default(),
         history_sources: Default::default(),
+        reference_history: Default::default(),
         message_checkpoints: Default::default(),
         history_redo: Vec::new(),
         history_workspace: None,

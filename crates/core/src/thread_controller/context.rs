@@ -262,13 +262,7 @@ impl ThreadController {
             additional.extend(crate::multi_agent::agent_context_fragments(
                 &loaded.snapshot,
             ));
-            additional.extend(
-                request
-                    .extension_fragments
-                    .into_iter()
-                    .map(crate::context::InstructionFragment::try_from)
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
+            additional.extend(request.additional_instructions);
             let instruction_fragments = crate::context::turn_instruction_fragments(
                 instructions,
                 turn.approval_mode,

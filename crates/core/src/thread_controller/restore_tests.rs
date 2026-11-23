@@ -83,6 +83,29 @@ fn side_chat_branches_at_an_earlier_turn_including_retained_cross_session_histor
     threads
         .complete_turn(&root.thread_id, &first, "first answer".into())
         .unwrap();
+    let source = threads.read_thread(&root.thread_id).unwrap();
+    threads
+        .commit_context_checkpoint(
+            &root.thread_id,
+            CommitContextCheckpointRequest {
+                source_thread_sequence: source.sequence,
+                covered: ContextSourceRange {
+                    start_sequence: 1,
+                    end_sequence: *source.item_sequences.values().max().unwrap(),
+                },
+                referenced_items: source
+                    .items
+                    .iter()
+                    .map(|item| item.item_id().clone())
+                    .collect(),
+                summary: "Source checkpoint details".into(),
+                schema_revision: "v1".into(),
+                prompt_revision: "v1".into(),
+                context_policy_revision: "v1".into(),
+                generator_model: None,
+            },
+        )
+        .unwrap();
     let second = turn(&threads, &root.thread_id, "side-history-second");
     threads
         .complete_turn(&root.thread_id, &second, "later answer".into())
@@ -115,6 +138,14 @@ fn side_chat_branches_at_an_earlier_turn_including_retained_cross_session_histor
     assert!(
         matches!(&branch.origin, ash_protocol::ThreadOrigin::SideChat { parent_thread_id, context_thread_id, .. }
         if parent_thread_id == &copied.thread_id && context_thread_id == &root.thread_id)
+    );
+    let local = turn(&threads, &branch.thread_id, "side question");
+    let request = assemble_request(&threads, &branch.thread_id, &local);
+    let input = serde_json::to_string(&request.input).unwrap();
+    assert!(input.contains("This checkpoint summarizes the source conversation."));
+    assert!(
+        input.find("Source checkpoint details").unwrap()
+            < input.find("<side_chat_history_boundary>").unwrap()
     );
 }
 
@@ -570,23 +601,7 @@ fn fork_continuations_keep_identical_model_input_prefixes() {
         (&fork.thread_id, "fork continuation"),
     ] {
         let current = turn(&threads, thread, text);
-        let crate::context::ModelInvocationPreparation::Ready(invocation) = threads
-            .prepare_model_invocation(
-                thread,
-                crate::thread_controller::PrepareModelInvocationRequest {
-                    turn_id: &current,
-                    harness_context: &crate::HarnessContext::default(),
-                    extension_fragments: vec![],
-                    evidence: vec![],
-                    tools: vec![].into(),
-                    budget: crate::ContextBudget::provider_managed(),
-                },
-            )
-            .unwrap()
-        else {
-            panic!("context must fit");
-        };
-        requests.push(crate::context::ContextAssembler::assemble(invocation.context()).unwrap());
+        requests.push(assemble_request(&threads, thread, &current));
     }
     let [parent, fork] = requests.as_slice() else {
         unreachable!()
@@ -599,6 +614,30 @@ fn fork_continuations_keep_identical_model_input_prefixes() {
         serde_json::to_vec(&fork.input[..=boundary]).unwrap()
     );
     assert_ne!(parent.input[boundary + 1..], fork.input[boundary + 1..]);
+}
+
+fn assemble_request(
+    threads: &ThreadController,
+    thread: &ash_protocol::ThreadId,
+    turn: &TurnId,
+) -> ash_protocol::ModelRequest {
+    let crate::context::ModelInvocationPreparation::Ready(invocation) = threads
+        .prepare_model_invocation(
+            thread,
+            crate::thread_controller::PrepareModelInvocationRequest {
+                turn_id: turn,
+                harness_context: &crate::HarnessContext::default(),
+                additional_instructions: vec![],
+                evidence: vec![],
+                tools: vec![].into(),
+                budget: crate::ContextBudget::provider_managed(),
+            },
+        )
+        .unwrap()
+    else {
+        panic!("context must fit");
+    };
+    crate::context::ContextAssembler::assemble(invocation.context()).unwrap()
 }
 
 #[test]

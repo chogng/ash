@@ -1,17 +1,9 @@
 use crate::ExtensionError;
+use ash_context_fragments::ContextEvidence;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use async_utils::CancellationToken;
-
-/// One bounded, revision-bound piece of untrusted evidence supplied to model context.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContextEvidence {
-    pub source: String,
-    pub reference: String,
-    pub revision: String,
-    pub body: String,
-}
 
 /// Stable identities and user query for one optional context-source lookup.
 pub struct ContextSourceRequest<'a> {

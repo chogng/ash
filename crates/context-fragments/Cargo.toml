@@ -1,0 +1,15 @@
+[package]
+name = "ash-context-fragments"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[package.metadata.ash.verify]
+test-packages = ["ash-extension-api", "ash-core"]
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

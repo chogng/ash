@@ -1,6 +1,6 @@
 use super::ContextTokenCount;
 use super::InstructionFragment;
-use crate::ContextEvidence;
+use crate::thread_reducer::ReferenceHistory;
 use ash_protocol::ContextCheckpoint;
 use ash_protocol::ContextSourceRange;
 use ash_protocol::ThreadItem;
@@ -99,13 +99,14 @@ pub(crate) struct ContextPlan {
     thread_hint: Option<(ash_protocol::ToolCallId, String)>,
     source_thread_sequence: u64,
     current_turn_id: TurnId,
+    reference_history: Arc<ReferenceHistory>,
     instructions: Vec<InstructionFragment>,
     environment: String,
     omitted_instructions: Vec<OmittedInstruction>,
     checkpoint: Option<ContextCheckpoint>,
     selected_items: Vec<ThreadItem>,
     turn_endings: BTreeMap<TurnId, ash_prompts::PromptArtifact>,
-    evidence: Vec<ContextEvidence>,
+    evidence_prompt: Option<String>,
     tools: Arc<Vec<ToolDefinition>>,
     budget: ContextBudgetReport,
 }
@@ -114,13 +115,14 @@ pub(super) struct ContextPlanInput {
     pub thread_hint: Option<(ash_protocol::ToolCallId, String)>,
     pub source_thread_sequence: u64,
     pub current_turn_id: TurnId,
+    pub reference_history: Arc<ReferenceHistory>,
     pub instructions: Vec<InstructionFragment>,
     pub environment: String,
     pub omitted_instructions: Vec<OmittedInstruction>,
     pub checkpoint: Option<ContextCheckpoint>,
     pub selected_items: Vec<ThreadItem>,
     pub turn_endings: BTreeMap<TurnId, ash_prompts::PromptArtifact>,
-    pub evidence: Vec<ContextEvidence>,
+    pub evidence_prompt: Option<String>,
     pub tools: Arc<Vec<ToolDefinition>>,
     pub budget: ContextBudgetReport,
 }
@@ -135,13 +137,14 @@ impl ContextPlan {
             thread_hint: input.thread_hint,
             source_thread_sequence: input.source_thread_sequence,
             current_turn_id: input.current_turn_id,
+            reference_history: input.reference_history,
             instructions: input.instructions,
             environment: input.environment,
             omitted_instructions: input.omitted_instructions,
             checkpoint: input.checkpoint,
             selected_items: input.selected_items,
             turn_endings: input.turn_endings,
-            evidence: input.evidence,
+            evidence_prompt: input.evidence_prompt,
             tools: input.tools,
             budget: input.budget,
         }
@@ -171,12 +174,16 @@ impl ContextPlan {
         &self.current_turn_id
     }
 
+    pub(super) fn reference_history(&self) -> &ReferenceHistory {
+        &self.reference_history
+    }
+
     pub(crate) fn turn_ending(&self, turn_id: &TurnId) -> Option<&ash_prompts::PromptArtifact> {
         self.turn_endings.get(turn_id)
     }
 
-    pub(crate) fn evidence(&self) -> &[ContextEvidence] {
-        &self.evidence
+    pub(super) fn evidence_prompt(&self) -> Option<&str> {
+        self.evidence_prompt.as_deref()
     }
 
     pub(crate) fn checkpoint(&self) -> Option<&ContextCheckpoint> {
@@ -194,6 +201,7 @@ impl ContextPlan {
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompactionPlan {
+    pub(crate) reference_history: Arc<ReferenceHistory>,
     pub(crate) handoff_request: Option<ash_protocol::ModelRequest>,
     pub(crate) handoff_input_tokens: ContextTokenCount,
     pub(crate) source_thread_sequence: u64,

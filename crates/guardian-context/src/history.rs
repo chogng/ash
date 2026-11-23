@@ -9,6 +9,7 @@ use protocol::ThreadItem;
 pub enum MessageOrigin {
     User,
     Agent,
+    Reference,
 }
 
 /// Collects ordered text evidence from an exact prefix supplied by Core. Reasoning and attachment
@@ -30,6 +31,11 @@ pub fn collect<'a>(
                     ),
                     MessageOrigin::Agent => (
                         ReviewEvidenceKind::Delegation,
+                        ReviewEvidenceTrust::UntrustedContent,
+                        text.clone(),
+                    ),
+                    MessageOrigin::Reference => (
+                        ReviewEvidenceKind::UserMessage,
                         ReviewEvidenceTrust::UntrustedContent,
                         text.clone(),
                     ),

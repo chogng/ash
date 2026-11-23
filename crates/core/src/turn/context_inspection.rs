@@ -81,7 +81,7 @@ impl TurnExecutor {
                 .contribute_turn_input(extension_context)
                 .map_err(|error| CoreError::Context(error.to_string()))?
                 .into_iter()
-                .map(crate::context::InstructionFragment::try_from)
+                .map(crate::context::resolve_extension_fragment)
                 .collect::<Result<Vec<_>, _>>()?,
         );
         let instructions = crate::context::turn_instruction_fragments(

@@ -33,10 +33,15 @@ use crate::context::CONTEXT_ESTIMATOR_REVISION;
 use crate::context::ContextMeasurementDisposition;
 use crate::context::ContextMeasurementPolicy;
 use crate::context::ContextOverflowRecoveryPreparation;
+use crate::context::InstructionFragment;
+use crate::context::InstructionPlacement;
+use crate::context::InstructionRetention;
+use crate::context::InstructionSource;
 use crate::context::ManualContextCompactionPreparation;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::context::calibrated_budget;
+use crate::context::resolve_extension_fragment;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::CommitModelResponseResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
@@ -1236,8 +1241,12 @@ impl TurnExecutor {
                 .with_cancellation(cancellation.clone()),
             );
             check_cancellation(cancellation)?;
-            let mut extension_fragments = extension_fragments
-                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            let mut additional_instructions = extension_fragments
+                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?
+                .into_iter()
+                .map(resolve_extension_fragment)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ExecutionFailure::model)?;
             if turn.nonterminal_continuations > 0
                 && matches!(
                     snapshot.items.last(),
@@ -1250,10 +1259,10 @@ impl TurnExecutor {
                     })
                 )
             {
-                extension_fragments.push(ash_extension_api::PromptFragment::new(
-                    ash_extension_api::PromptFragmentSource::new("core", "turn-loop-continuation", "v1"),
-                    ash_extension_api::PromptFragmentLayer::Product,
-                    ash_extension_api::PromptFragmentRetention::Required,
+                additional_instructions.push(InstructionFragment::new(
+                    InstructionSource::new("core", "turn-loop-continuation", "v1"),
+                    InstructionPlacement::Product,
+                    InstructionRetention::Required,
                     "Your last response declared progress or a partial answer but supplied no next action. Continue with the necessary tool calls, or provide your final answer for this turn. Do not repeat a progress-only response.",
                 ));
             }
@@ -1262,14 +1271,10 @@ impl TurnExecutor {
                 .permission_context(&snapshot.session_id, thread_id)
                 .map_err(ExecutionFailure::model)?
             {
-                extension_fragments.push(ash_extension_api::PromptFragment::new(
-                    ash_extension_api::PromptFragmentSource::new(
-                        "host",
-                        fact.source(),
-                        &self.policy.revision(),
-                    ),
-                    ash_extension_api::PromptFragmentLayer::Product,
-                    ash_extension_api::PromptFragmentRetention::Required,
+                additional_instructions.push(InstructionFragment::new(
+                    InstructionSource::new("host", fact.source(), self.policy.revision()),
+                    InstructionPlacement::Product,
+                    InstructionRetention::Required,
                     format!("Current host permission facts: {}", fact.content()),
                 ));
             }
@@ -1285,7 +1290,7 @@ impl TurnExecutor {
                     PrepareModelInvocationRequest {
                         turn_id,
                         harness_context: &harness_context,
-                        extension_fragments,
+                        additional_instructions,
                         evidence,
                         tools: tools.clone(),
                         budget,
@@ -1372,10 +1377,12 @@ impl TurnExecutor {
                     let identity = format!("{}:{}", skill.id.source, skill.id.name);
                     invocation.context().instructions().iter().any(|fragment| {
                         let source = fragment.source();
-                        source.kind() == "skill"
+                        fragment.registered_contributor()
+                            == Some(ash_extension_api::SKILL_TURN_INPUT_CONTRIBUTOR)
+                            && source.kind() == "skill"
                             && source.identity() == identity
                             && source.revision() == skill.content_digest.as_str()
-                            && fragment.placement() == crate::context::InstructionPlacement::Skill
+                            && fragment.layer() == InstructionPlacement::Skill
                             && !fragment.body().trim().is_empty()
                     })
                 })

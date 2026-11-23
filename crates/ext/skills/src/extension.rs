@@ -7,6 +7,7 @@ use ash_extension_api::PromptFragment;
 use ash_extension_api::PromptFragmentLayer;
 use ash_extension_api::PromptFragmentRetention;
 use ash_extension_api::PromptFragmentSource;
+use ash_extension_api::SKILL_TURN_INPUT_CONTRIBUTOR;
 use ash_extension_api::SkillActivationContext;
 use ash_extension_api::SkillActivationContributor;
 use ash_extension_api::TurnInputContext;
@@ -23,7 +24,7 @@ pub fn install(builder: &mut ExtensionRegistryBuilder, runtime: Arc<SkillRuntime
         "skills",
         Arc::new(SkillToolContributor::new(runtime.clone())),
     );
-    builder.turn_input_contributor("skills", runtime);
+    builder.turn_input_contributor(SKILL_TURN_INPUT_CONTRIBUTOR, runtime);
 }
 
 impl SkillActivationContributor for SkillRuntime {

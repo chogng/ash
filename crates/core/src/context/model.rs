@@ -1,6 +1,13 @@
 use super::ContextBudget;
+use super::InstructionRetention;
+use super::InstructionSource;
 use crate::ContextEvidence;
+use crate::CoreError;
 use crate::ThreadSnapshot;
+use crate::thread_reducer::ReferenceHistory;
+use ash_context_fragments::ContextFragment;
+use ash_extension_api::PromptFragment;
+use ash_extension_api::PromptFragmentLayer;
 use ash_protocol::ContextCheckpoint;
 use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
@@ -18,153 +25,39 @@ pub(crate) enum InstructionPlacement {
     User,
     Directory,
     Skill,
+    HistoryBoundary,
     /// Per-invocation context appended after the reusable history prefix.
     Turn,
     AgentMessage,
 }
 
-/// Whether budget pressure may remove an instruction fragment.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum InstructionRetention {
-    Required,
-    BestEffort,
-}
-
-/// Stable, diagnostic provenance for an instruction fragment.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct InstructionSource {
-    kind: String,
-    identity: String,
-    revision: String,
-    item_count: Option<u64>,
-}
-
-impl InstructionSource {
-    pub(crate) fn new(
-        kind: impl Into<String>,
-        identity: impl Into<String>,
-        revision: impl Into<String>,
-    ) -> Self {
-        Self {
-            kind: kind.into(),
-            identity: identity.into(),
-            revision: revision.into(),
-            item_count: None,
-        }
-    }
-
-    pub(crate) fn item_count(&self) -> Option<u64> {
-        self.item_count
-    }
-
-    pub(crate) fn kind(&self) -> &str {
-        &self.kind
-    }
-
-    pub(crate) fn identity(&self) -> &str {
-        &self.identity
-    }
-
-    pub(crate) fn revision(&self) -> &str {
-        &self.revision
-    }
-}
-
-impl TryFrom<&ash_extension_api::PromptFragmentSource> for InstructionSource {
-    type Error = crate::CoreError;
-
-    fn try_from(source: &ash_extension_api::PromptFragmentSource) -> Result<Self, Self::Error> {
-        if source.kind().trim().is_empty()
-            || source.identity().trim().is_empty()
-            || source.revision().trim().is_empty()
-        {
-            return Err(crate::CoreError::Context(
-                "extension prompt fragment provenance must not be empty".into(),
-            ));
-        }
-        Ok(Self {
-            kind: source.kind().to_owned(),
-            identity: source.identity().to_owned(),
-            revision: source.revision().to_owned(),
-            item_count: source.item_count(),
-        })
-    }
-}
-
 /// One bounded instruction contribution before placement and budget resolution.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct InstructionFragment {
-    source: InstructionSource,
-    placement: InstructionPlacement,
-    retention: InstructionRetention,
-    body: String,
-}
+pub(crate) type InstructionFragment = ContextFragment<InstructionPlacement>;
 
-impl InstructionFragment {
-    pub(crate) fn new(
-        source: InstructionSource,
-        placement: InstructionPlacement,
-        retention: InstructionRetention,
-        body: impl Into<String>,
-    ) -> Self {
-        Self {
-            source,
-            placement,
-            retention,
-            body: body.into(),
-        }
+pub(crate) fn resolve_extension_fragment(
+    fragment: PromptFragment,
+) -> Result<InstructionFragment, CoreError> {
+    if fragment.body().trim().is_empty() {
+        return Err(CoreError::Context(
+            "extension prompt fragment body must not be empty".into(),
+        ));
     }
-
-    pub(crate) fn source(&self) -> &InstructionSource {
-        &self.source
+    let source = fragment.source();
+    if source.kind().trim().is_empty()
+        || source.identity().trim().is_empty()
+        || source.revision().trim().is_empty()
+    {
+        return Err(CoreError::Context(
+            "extension prompt fragment provenance must not be empty".into(),
+        ));
     }
-
-    pub(crate) const fn placement(&self) -> InstructionPlacement {
-        self.placement
-    }
-
-    pub(crate) const fn retention(&self) -> InstructionRetention {
-        self.retention
-    }
-
-    pub(crate) fn body(&self) -> &str {
-        &self.body
-    }
-}
-
-impl TryFrom<ash_extension_api::PromptFragment> for InstructionFragment {
-    type Error = crate::CoreError;
-
-    fn try_from(fragment: ash_extension_api::PromptFragment) -> Result<Self, Self::Error> {
-        if fragment.body().trim().is_empty() {
-            return Err(crate::CoreError::Context(
-                "extension prompt fragment body must not be empty".into(),
-            ));
-        }
-        Ok(Self {
-            source: InstructionSource::try_from(fragment.source())?,
-            placement: match fragment.layer() {
-                ash_extension_api::PromptFragmentLayer::System => InstructionPlacement::System,
-                ash_extension_api::PromptFragmentLayer::Product => InstructionPlacement::Product,
-                ash_extension_api::PromptFragmentLayer::Directory => {
-                    InstructionPlacement::Directory
-                }
-                ash_extension_api::PromptFragmentLayer::Skill => InstructionPlacement::Skill,
-                ash_extension_api::PromptFragmentLayer::AgentMessage => {
-                    InstructionPlacement::AgentMessage
-                }
-            },
-            retention: match fragment.retention() {
-                ash_extension_api::PromptFragmentRetention::Required => {
-                    InstructionRetention::Required
-                }
-                ash_extension_api::PromptFragmentRetention::BestEffort => {
-                    InstructionRetention::BestEffort
-                }
-            },
-            body: fragment.body().to_owned(),
-        })
-    }
+    Ok(fragment.map_layer(|layer| match layer {
+        PromptFragmentLayer::System => InstructionPlacement::System,
+        PromptFragmentLayer::Product => InstructionPlacement::Product,
+        PromptFragmentLayer::Directory => InstructionPlacement::Directory,
+        PromptFragmentLayer::Skill => InstructionPlacement::Skill,
+        PromptFragmentLayer::AgentMessage => InstructionPlacement::AgentMessage,
+    }))
 }
 
 /// Complete immutable input to one context-planning operation.
@@ -174,6 +67,7 @@ pub(crate) struct ContextInput {
     policy: ash_protocol::ContextCompactionPolicy,
     source_thread_sequence: u64,
     current_turn_id: TurnId,
+    reference_history: Arc<ReferenceHistory>,
     instructions: Vec<InstructionFragment>,
     environment: String,
     evidence: Vec<ContextEvidence>,
@@ -193,7 +87,7 @@ impl ContextInput {
     pub(crate) fn new(
         snapshot: &ThreadSnapshot,
         current_turn_id: TurnId,
-        instructions: Vec<InstructionFragment>,
+        mut instructions: Vec<InstructionFragment>,
         tools: impl Into<Arc<Vec<ToolDefinition>>>,
         budget: ContextBudget,
     ) -> Self {
@@ -206,11 +100,31 @@ impl ContextInput {
                 ) if turn_id == &current_turn_id && input.is_empty()
             )
         });
+        if !snapshot.reference_history.threads.is_empty() {
+            for (prompt, placement) in [
+                (
+                    ash_prompts::SIDE_CHAT_REFERENCE_POLICY,
+                    InstructionPlacement::Product,
+                ),
+                (
+                    ash_prompts::SIDE_CHAT_REFERENCE_BOUNDARY,
+                    InstructionPlacement::HistoryBoundary,
+                ),
+            ] {
+                instructions.push(InstructionFragment::new(
+                    InstructionSource::new(prompt.owner(), prompt.id(), prompt.revision()),
+                    placement,
+                    InstructionRetention::Required,
+                    prompt.body(),
+                ));
+            }
+        }
         Self {
             identity: (snapshot.agent_id.clone(), snapshot.thread_id.clone()),
             policy: snapshot.context_policy(&current_turn_id),
             source_thread_sequence: snapshot.sequence,
             current_turn_id: current_turn_id.clone(),
+            reference_history: snapshot.reference_history.clone(),
             instructions,
             environment: String::new(),
             evidence: Vec::new(),
@@ -348,6 +262,10 @@ impl ContextInput {
         &self.instructions
     }
 
+    pub(super) fn reference_history(&self) -> &Arc<ReferenceHistory> {
+        &self.reference_history
+    }
+
     pub(crate) fn environment(&self) -> &str {
         &self.environment
     }
@@ -399,14 +317,15 @@ fn model_items(snapshot: &ThreadSnapshot, current_turn_id: &TurnId) -> Vec<Threa
         .find(|turn| &turn.turn_id == current_turn_id)
         .and_then(|turn| turn.model.as_ref());
     let compatible_turn = |turn_id: &TurnId| {
-        model.is_none_or(|model| {
-            snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .and_then(|turn| turn.model.as_ref())
-                .is_none_or(|origin| origin == model)
-        })
+        !snapshot.reference_history.turns.contains(turn_id)
+            && model.is_none_or(|model| {
+                snapshot
+                    .turns
+                    .iter()
+                    .find(|turn| &turn.turn_id == turn_id)
+                    .and_then(|turn| turn.model.as_ref())
+                    .is_none_or(|origin| origin == model)
+            })
     };
     // Read the effective mode from the latest compatible response, not from a model-name
     // heuristic. A missing mode stays unknown and is conservatively estimated on replay.

@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use ash_extension_api::ContextEvidence;
+pub use ash_context_fragments::ContextEvidence;
 pub use ash_extension_api::ContextSourceRequest;
 
 /// Supplies optional, low-trust evidence without owning context ordering or budget policy.

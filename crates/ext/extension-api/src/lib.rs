@@ -11,8 +11,10 @@ pub use lifecycle::LifecycleObserver;
 pub use lifecycle::ThreadContext;
 pub use lifecycle::ThreadLifecycle;
 
+pub use ash_context_fragments::ContextEvidence;
+pub use ash_context_fragments::FragmentRetention as PromptFragmentRetention;
+pub use ash_context_fragments::FragmentSource as PromptFragmentSource;
 pub use context::ContextContributor;
-pub use context::ContextEvidence;
 pub use context::ContextSourceRequest;
 pub use contributors::CapabilityToolContribution;
 pub use contributors::CapabilityToolContributor;
@@ -24,11 +26,12 @@ pub use contributors::TurnInputContext;
 pub use contributors::TurnInputContributor;
 pub use fragment::PromptFragment;
 pub use fragment::PromptFragmentLayer;
-pub use fragment::PromptFragmentRetention;
-pub use fragment::PromptFragmentSource;
 pub use registry::ExtensionError;
 pub use registry::ExtensionRegistry;
 pub use registry::ExtensionRegistryBuilder;
+
+/// Registration used by the host's Skill runtime for model-facing Skill bodies.
+pub const SKILL_TURN_INPUT_CONTRIBUTOR: &str = "skills";
 
 #[cfg(test)]
 #[path = "registry_tests.rs"]

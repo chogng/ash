@@ -26,6 +26,7 @@ sha2 = { workspace = true }
 ash-async-utils = { workspace = true, features = ["wait"] }
 ash-attachments = { workspace = true }
 ash-context-engine = { workspace = true }
+ash-context-fragments = { workspace = true }
 ash-tools = { workspace = true, optional = true }
 ash-code-mode = { workspace = true, optional = true }
 ash-code-mode-protocol = { workspace = true, optional = true }

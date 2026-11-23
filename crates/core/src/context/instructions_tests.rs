@@ -123,7 +123,7 @@ fn selected_files_keep_separate_sources_and_content_revisions() {
     assert!(
         files
             .iter()
-            .all(|entry| entry.placement() == InstructionPlacement::Directory)
+            .all(|entry| entry.layer() == InstructionPlacement::Directory)
     );
     assert!(
         files
@@ -161,13 +161,13 @@ fn scope_and_selection_cannot_inject_metadata_or_raise_authority() {
         .iter()
         .find(|entry| entry.source().identity() == "instruction-priority")
         .unwrap();
-    assert_eq!(policy.placement(), InstructionPlacement::Product);
+    assert_eq!(policy.layer(), InstructionPlacement::Product);
     assert!(!policy.body().contains(body));
     let file = fragments
         .iter()
         .find(|entry| entry.source().kind() == "directory")
         .unwrap();
-    assert_eq!(file.placement(), InstructionPlacement::Directory);
+    assert_eq!(file.layer(), InstructionPlacement::Directory);
     assert!(file.body().contains("scope=\"directory\""));
     assert!(file.body().contains("activation=\"selected\""));
     assert!(!file.body().contains("<system>"));
@@ -178,7 +178,7 @@ fn empty_catalog_does_not_remove_the_product_conflict_contract() {
     let fragments = HarnessInstructions::default().context_fragments();
     assert_eq!(fragments.len(), 1);
     assert_eq!(fragments[0].source().identity(), "instruction-priority");
-    assert_eq!(fragments[0].placement(), InstructionPlacement::Product);
+    assert_eq!(fragments[0].layer(), InstructionPlacement::Product);
     assert_eq!(fragments[0].retention(), InstructionRetention::Required);
 }
 

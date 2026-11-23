@@ -60,9 +60,17 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 #[path = "thread_reducer_approval.rs"]
 mod approval;
+
+/// Provenance of the immutable Side Chat prefix, derived when its history is replayed.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ReferenceHistory {
+    pub(crate) threads: BTreeSet<ThreadId>,
+    pub(crate) turns: BTreeSet<TurnId>,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
@@ -71,6 +79,7 @@ pub struct ThreadSnapshot {
     pub(crate) user_time_contexts: BTreeMap<ItemId, ash_protocol::TimeContext>,
     pub(crate) message_times: BTreeMap<ItemId, u64>,
     pub(crate) history_sources: BTreeMap<ThreadId, ash_protocol::HistoryPrefixRef>,
+    pub(crate) reference_history: Arc<ReferenceHistory>,
     pub(crate) message_checkpoints: BTreeMap<ItemId, ash_protocol::MessageCheckpoint>,
     pub(crate) history_redo: Vec<ash_protocol::ThreadHistoryCheckpoint>,
     pub(crate) history_workspace: Option<ash_protocol::WorkspaceCheckpoint>,
@@ -493,6 +502,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     user_time_contexts: Default::default(),
                     message_times: BTreeMap::new(),
                     history_sources: BTreeMap::new(),
+                    reference_history: Arc::default(),
                     message_checkpoints: BTreeMap::new(),
                     agent_id: ash_history::created_thread_agent_id(envelope)
                         .map_err(CoreError::Journal)?,
@@ -713,6 +723,19 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot
                 .history_sources
                 .insert(source.thread_id.clone(), prefix.clone());
+            snapshot.reference_history =
+                if matches!(snapshot.origin, ash_protocol::ThreadOrigin::SideChat { .. }) {
+                    Arc::new(ReferenceHistory {
+                        threads: snapshot.history_sources.keys().cloned().collect(),
+                        turns: snapshot
+                            .turns
+                            .iter()
+                            .map(|turn| turn.turn_id.clone())
+                            .collect(),
+                    })
+                } else {
+                    source.reference_history.clone()
+                };
         }
         ThreadEvent::HookRunUpdated { run, .. } => {
             if run.run_id.is_empty() || run.hook_id.is_empty() {

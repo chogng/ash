@@ -10,6 +10,8 @@ mod permissions;
 mod review;
 
 pub use agent::AGENT_INSTRUCTIONS;
+pub use agent::SIDE_CHAT_REFERENCE_BOUNDARY;
+pub use agent::SIDE_CHAT_REFERENCE_POLICY;
 pub use agent::TURN_INTERRUPTED_PROMPT;
 pub use artifact::PromptArtifact;
 pub use artifact::RenderedPrompt;
@@ -18,6 +20,7 @@ pub use compact::HANDOFF_PROMPT;
 pub use compact::checkpoint_prompt;
 pub use compact::checkpoint_prompt_overhead;
 pub use compact::checkpoint_summary_bytes;
+pub use compact::reference_checkpoint_prompt;
 pub use permissions::permissions_instructions;
 pub use review::ReviewOutcome;
 pub use review::ReviewPromptError;

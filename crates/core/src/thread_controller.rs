@@ -186,7 +186,7 @@ pub struct UpdatePlanResult {
 pub(crate) struct PrepareModelInvocationRequest<'a> {
     pub turn_id: &'a TurnId,
     pub harness_context: &'a HarnessContext,
-    pub extension_fragments: Vec<ash_extension_api::PromptFragment>,
+    pub additional_instructions: Vec<crate::context::InstructionFragment>,
     pub evidence: Vec<crate::ContextEvidence>,
     pub tools: Arc<Vec<ToolDefinition>>,
     pub budget: ContextBudget,

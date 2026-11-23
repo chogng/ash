@@ -101,7 +101,7 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
             PrepareModelInvocationRequest {
                 turn_id: &first.child_turn_id,
                 harness_context: &HarnessContext::default(),
-                extension_fragments: Vec::new(),
+                additional_instructions: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed"), tool_definition("blocked")].into(),
                 budget: ContextBudget::provider_managed(),
@@ -254,7 +254,7 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
             PrepareModelInvocationRequest {
                 turn_id: &spawned.child_turn_id,
                 harness_context: &HarnessContext::default(),
-                extension_fragments: Vec::new(),
+                additional_instructions: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![
                     tool_definition("exec"),
@@ -336,7 +336,7 @@ fn selected_and_forked_context_are_materialized_into_the_immutable_child_seed() 
             PrepareModelInvocationRequest {
                 turn_id: &forked.child_turn_id,
                 harness_context: &HarnessContext::default(),
-                extension_fragments: Vec::new(),
+                additional_instructions: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),
@@ -990,7 +990,7 @@ fn messages_and_results_apply_exactly_once_across_threads() {
             PrepareModelInvocationRequest {
                 turn_id: &spawned.child_turn_id,
                 harness_context: &HarnessContext::default(),
-                extension_fragments: Vec::new(),
+                additional_instructions: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),
@@ -1412,7 +1412,7 @@ fn root_role_and_default_worker_share_rules_without_inheriting_responsibilities(
                     PrepareModelInvocationRequest {
                         turn_id,
                         harness_context: &HarnessContext::default(),
-                        extension_fragments: Vec::new(),
+                        additional_instructions: Vec::new(),
                         evidence: Vec::new(),
                         tools: ["allowed", "blocked", "exec", "wait"]
                             .into_iter()
@@ -1550,7 +1550,7 @@ fn full_context_uses_original_history_and_appends_delegation_after_the_prefix() 
             PrepareModelInvocationRequest {
                 turn_id: &spawned.child_turn_id,
                 harness_context: &HarnessContext::default(),
-                extension_fragments: vec![],
+                additional_instructions: vec![],
                 evidence: vec![],
                 tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),

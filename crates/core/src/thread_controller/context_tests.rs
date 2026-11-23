@@ -92,7 +92,7 @@ impl Fixture {
                 PrepareModelInvocationRequest {
                     turn_id: turn,
                     harness_context: &crate::HarnessContext::default(),
-                    extension_fragments: Vec::new(),
+                    additional_instructions: Vec::new(),
                     evidence: Vec::new(),
                     tools: Vec::new().into(),
                     budget: ContextBudget::provider_managed(),

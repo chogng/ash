@@ -4,7 +4,7 @@ use super::super::ContextInput;
 use super::super::ContextPlanner;
 use super::super::ContextPreparation;
 use super::super::ContextTokenCount;
-use super::super::InstructionFragment;
+use super::super::resolve_extension_fragment;
 use super::*;
 use crate::HarnessContext;
 use crate::HarnessInstructions;
@@ -330,7 +330,7 @@ fn agent_reports_follow_history_as_assistant_messages() {
         }],
     );
     let reports = ["newest", "older"].into_iter().map(|body| {
-        InstructionFragment::try_from(ash_extension_api::PromptFragment::new(
+        resolve_extension_fragment(ash_extension_api::PromptFragment::new(
             ash_extension_api::PromptFragmentSource::new("agent-message-board", body, "1"),
             ash_extension_api::PromptFragmentLayer::AgentMessage,
             ash_extension_api::PromptFragmentRetention::BestEffort,
@@ -666,6 +666,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         user_time_contexts: Default::default(),
         message_times: Default::default(),
         history_sources: Default::default(),
+        reference_history: Default::default(),
         message_checkpoints: Default::default(),
         history_redo: Vec::new(),
         history_workspace: None,

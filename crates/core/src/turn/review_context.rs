@@ -9,6 +9,7 @@ use ash_protocol::ReviewContext;
 use ash_protocol::ReviewEvidence;
 use ash_protocol::ReviewEvidenceKind;
 use ash_protocol::ReviewEvidenceTrust;
+use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::UserGoalChange;
 use guardian_context::MessageOrigin;
@@ -28,17 +29,19 @@ pub(super) fn attach_review_context(
         items: BTreeSet::new(),
         answers: BTreeSet::new(),
         current_user_goals: BTreeSet::new(),
+        reference_threads: &snapshot.reference_history.threads,
         evidence: Vec::new(),
     };
-    history.append(snapshot)?;
+    history.append(snapshot, HistoryScope::Conversation)?;
     let user_intent = history
         .evidence
         .iter()
         .rev()
         .find(|entry| {
-            entry.kind() == ReviewEvidenceKind::UserMessage
-                || (entry.kind() == ReviewEvidenceKind::UserGoal
-                    && history.current_user_goals.contains(entry.source()))
+            entry.trust() == ReviewEvidenceTrust::TrustedUser
+                && (entry.kind() == ReviewEvidenceKind::UserMessage
+                    || (entry.kind() == ReviewEvidenceKind::UserGoal
+                        && history.current_user_goals.contains(entry.source())))
         })
         .map(|entry| entry.content().to_owned())
         .unwrap_or_default();
@@ -53,11 +56,38 @@ struct History<'a> {
     items: BTreeSet<ItemId>,
     answers: BTreeSet<String>,
     current_user_goals: BTreeSet<String>,
+    reference_threads: &'a BTreeSet<ThreadId>,
     evidence: Vec<ReviewEvidence>,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum HistoryScope {
+    Conversation,
+    Reference,
+}
+
+impl HistoryScope {
+    fn user_trust(self) -> ReviewEvidenceTrust {
+        match self {
+            Self::Conversation => ReviewEvidenceTrust::TrustedUser,
+            Self::Reference => ReviewEvidenceTrust::UntrustedContent,
+        }
+    }
+}
+
 impl History<'_> {
-    fn append(&mut self, snapshot: &ThreadSnapshot) -> Result<(), CoreError> {
+    fn append(&mut self, snapshot: &ThreadSnapshot, scope: HistoryScope) -> Result<(), CoreError> {
+        let reference_threads = self.reference_threads;
+        let source_scope = |thread: &ThreadId| {
+            if scope == HistoryScope::Reference
+                || reference_threads.contains(thread)
+                || snapshot.reference_history.threads.contains(thread)
+            {
+                HistoryScope::Reference
+            } else {
+                HistoryScope::Conversation
+            }
+        };
         if !self
             .prefixes
             .insert((snapshot.thread_id.clone(), snapshot.sequence))
@@ -72,7 +102,7 @@ impl History<'_> {
         }
         for prefix in snapshot.history_sources.values() {
             let source = self.threads.read_history_prefix(prefix)?;
-            self.append(&source)?;
+            self.append(&source, source_scope(&source.thread_id))?;
         }
         if let Some(seed) = &snapshot.agent_context_seed
             && !self
@@ -82,7 +112,7 @@ impl History<'_> {
             let parent = self
                 .threads
                 .read_thread_at_sequence(&seed.parent_thread_id, seed.parent_sequence)?;
-            self.append(&parent)?;
+            self.append(&parent, source_scope(&parent.thread_id))?;
         }
         let mut ordered = Vec::new();
         let delegated_input = snapshot.agent_context_seed.as_ref().and_then(|_| {
@@ -105,7 +135,11 @@ impl History<'_> {
             }
             // Only the initial delegated input is synthesized by the coordinator. Subsequent
             // user messages are client commands; Agent follow-ups use the separate inbox.
-            let origin = if delegated_input == Some(item.item_id()) {
+            let origin = if scope == HistoryScope::Reference
+                || snapshot.reference_history.turns.contains(item.turn_id())
+            {
+                MessageOrigin::Reference
+            } else if delegated_input == Some(item.item_id()) {
                 MessageOrigin::Agent
             } else {
                 MessageOrigin::User
@@ -141,7 +175,7 @@ impl History<'_> {
                 command.response_sequence,
                 ReviewEvidence::new(
                     ReviewEvidenceKind::UserAnswer,
-                    ReviewEvidenceTrust::TrustedUser,
+                    scope.user_trust(),
                     source,
                     content,
                 ),
@@ -170,7 +204,8 @@ impl History<'_> {
                 "thread/{}/goal/{goal_id}/change/{sequence}",
                 snapshot.thread_id
             );
-            if matches!(change, UserGoalChange::Set { .. })
+            if scope == HistoryScope::Conversation
+                && matches!(change, UserGoalChange::Set { .. })
                 && snapshot
                     .goal
                     .as_ref()
@@ -182,7 +217,7 @@ impl History<'_> {
                 *sequence,
                 ReviewEvidence::new(
                     ReviewEvidenceKind::UserGoal,
-                    ReviewEvidenceTrust::TrustedUser,
+                    scope.user_trust(),
                     source,
                     content,
                 ),

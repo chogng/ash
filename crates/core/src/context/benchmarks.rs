@@ -96,7 +96,7 @@ impl Fixture {
                 PrepareModelInvocationRequest {
                     turn_id: &self.turn,
                     harness_context: &HarnessContext::default(),
-                    extension_fragments: Vec::new(),
+                    additional_instructions: Vec::new(),
                     evidence: Vec::new(),
                     tools: self.tools.clone().into(),
                     budget: ContextBudget::provider_managed(),
@@ -155,7 +155,7 @@ fn tool_schema_copy_benchmark() {
                         PrepareModelInvocationRequest {
                             turn_id: &fixture.turn,
                             harness_context: &HarnessContext::default(),
-                            extension_fragments: Vec::new(),
+                            additional_instructions: Vec::new(),
                             evidence: Vec::new(),
                             tools: tools.clone(),
                             budget: ContextBudget::provider_managed(),

@@ -123,6 +123,7 @@ members = [
     "crates/terminal-detection",
     "crates/config",
     "crates/context-engine",
+    "crates/context-fragments",
     "crates/core",
     "crates/core-api",
     "crates/diff",
@@ -545,6 +546,7 @@ ash-otel = { path = "crates/otel" }
 otel-trace-websocket = { package = "ash-otel-trace-websocket", path = "crates/otel-trace-websocket" }
 ash-config = { path = "crates/config" }
 ash-context-engine = { path = "crates/context-engine" }
+ash-context-fragments = { path = "crates/context-fragments" }
 ash-core = { path = "crates/core" }
 core-api = { package = "ash-core-api", path = "crates/core-api" }
 ash-diff = { path = "crates/diff" }

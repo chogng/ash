@@ -323,11 +323,106 @@ fn delegated_review_uses_frozen_parent_authority_and_fork_preserves_sources() {
 fn user_answers_keep_their_question_and_precede_a_later_revocation() {
     let (threads, root) = fixture();
     let turn_id = turn(&threads, &root.thread_id, "Prepare deployment");
+    record_publish_answer(&threads, &root.thread_id, &turn_id);
+    threads
+        .steer_turn(
+            &root.thread_id,
+            crate::SteerTurnRequest {
+                command_id: CommandId::new("revoke").unwrap(),
+                expected_sequence: crate::SequenceExpectation::Any,
+                turn_id,
+                input: vec![UserInput::Text {
+                    text: "Do not publish".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
+    assert_eq!(context.evidence()[1].kind(), ReviewEvidenceKind::UserAnswer);
+    assert!(
+        context.evidence()[1]
+            .content()
+            .contains("Where may I publish?")
+    );
+    assert_eq!(context.evidence()[2].content(), "Do not publish");
+}
+
+#[test]
+fn side_chat_authority_excludes_source_messages_answers_and_goals() {
+    let (threads, root) = fixture();
+    let parent_turn = turn(&threads, &root.thread_id, "Prepare deployment");
+    record_publish_answer(&threads, &root.thread_id, &parent_turn);
+    threads
+        .complete_turn(&root.thread_id, &parent_turn, "Ready".into())
+        .unwrap();
+    threads
+        .set_goal(
+            &root.thread_id,
+            crate::SetGoalRequest {
+                objective: Some("Publish the release".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let side = threads
+        .create_side_chat(
+            &crate::NoThreadWorktreeBinder,
+            core_api::CreateSideChatRequest {
+                command_id: CommandId::new("side").unwrap(),
+                source_thread_id: root.thread_id,
+                source_turn_id: parent_turn,
+                title: "Side question".into(),
+                selection: None,
+            },
+        )
+        .unwrap();
+    let before = review(&threads, &side);
+    assert!(before.user_intent().is_empty());
+    for kind in [
+        ReviewEvidenceKind::UserMessage,
+        ReviewEvidenceKind::UserAnswer,
+        ReviewEvidenceKind::UserGoal,
+    ] {
+        assert!(
+            before.evidence().iter().any(|entry| entry.kind() == kind
+                && entry.trust() == ReviewEvidenceTrust::UntrustedContent)
+        );
+    }
+    let local_turn = turn(&threads, &side.thread_id, "Explain the deploy plan");
+    record_publish_answer(&threads, &side.thread_id, &local_turn);
+    threads
+        .complete_turn(&side.thread_id, &local_turn, "Explanation".into())
+        .unwrap();
+    let fork = threads
+        .fork_thread(
+            &crate::NoThreadWorktreeBinder,
+            crate::ForkThreadRequest {
+                command_id: CommandId::new("fork-side").unwrap(),
+                source_thread_id: side.thread_id.clone(),
+                title: "Fork of side chat".into(),
+            },
+        )
+        .unwrap();
+    for snapshot in [threads.read_thread(&side.thread_id).unwrap(), fork] {
+        let context = review(&threads, &snapshot);
+        assert_eq!(context.user_intent(), "Explain the deploy plan");
+        let trusted = context
+            .evidence()
+            .iter()
+            .filter(|entry| entry.trust() == ReviewEvidenceTrust::TrustedUser)
+            .collect::<Vec<_>>();
+        assert_eq!(trusted.len(), 2);
+        assert_eq!(trusted[0].content(), "Explain the deploy plan");
+        assert_eq!(trusted[1].kind(), ReviewEvidenceKind::UserAnswer);
+    }
+}
+
+fn record_publish_answer(threads: &ThreadController, thread: &ThreadId, turn_id: &TurnId) {
     let request_id = ash_protocol::RequestId::new("confirm").unwrap();
     threads
         .request_turn_interaction(
-            &root.thread_id,
-            &turn_id,
+            thread,
+            turn_id,
             crate::RequestTurnInteraction {
                 request_id: request_id.clone(),
                 item_id: None,
@@ -351,7 +446,7 @@ fn user_answers_keep_their_question_and_precede_a_later_revocation() {
         .unwrap();
     threads
         .resolve_turn_interaction(
-            &root.thread_id,
+            thread,
             crate::ResolveTurnInteractionRequest {
                 command_id: CommandId::new("answer").unwrap(),
                 expected_sequence: crate::SequenceExpectation::Any,
@@ -365,27 +460,6 @@ fn user_answers_keep_their_question_and_precede_a_later_revocation() {
             },
         )
         .unwrap();
-    threads
-        .steer_turn(
-            &root.thread_id,
-            crate::SteerTurnRequest {
-                command_id: CommandId::new("revoke").unwrap(),
-                expected_sequence: crate::SequenceExpectation::Any,
-                turn_id,
-                input: vec![UserInput::Text {
-                    text: "Do not publish".into(),
-                }],
-            },
-        )
-        .unwrap();
-    let context = review(&threads, &threads.read_thread(&root.thread_id).unwrap());
-    assert_eq!(context.evidence()[1].kind(), ReviewEvidenceKind::UserAnswer);
-    assert!(
-        context.evidence()[1]
-            .content()
-            .contains("Where may I publish?")
-    );
-    assert_eq!(context.evidence()[2].content(), "Do not publish");
 }
 
 #[test]

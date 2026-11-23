@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ash-action-policy = { workspace = true }
+ash-context-fragments = { workspace = true }
 async-utils = { package = "ash-async-utils", path = "../../async-utils" }
 extension-items = { workspace = true }
 ash-protocol = { workspace = true }

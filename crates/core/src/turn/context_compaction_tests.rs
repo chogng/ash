@@ -1,5 +1,124 @@
 use super::*;
 
+#[test]
+fn side_chat_keeps_the_reference_boundary_after_compaction_and_cold_restore() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let (threads, parent, parent_turn) =
+        started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
+    threads
+        .complete_turn(&parent, &parent_turn, "Parent task details. ".repeat(80))
+        .unwrap();
+    let side = threads
+        .create_side_chat(
+            &crate::NoThreadWorktreeBinder,
+            core_api::CreateSideChatRequest {
+                command_id: CommandId::new("side").unwrap(),
+                source_thread_id: parent,
+                source_turn_id: parent_turn.clone(),
+                title: "Side question".into(),
+                selection: None,
+            },
+        )
+        .unwrap();
+    let start = |threads: &ThreadController, command: &str, text: &str| {
+        threads
+            .start_turn(
+                &side.thread_id,
+                StartTurnRequest {
+                    context_policy: Default::default(),
+                    command_id: CommandId::new(command).unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    advisor: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    mode: Default::default(),
+                    instructions: crate::test_turn_instructions(),
+                    policy_revision: "test-policy-v1".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![UserInput::Text { text: text.into() }],
+                },
+            )
+            .unwrap()
+            .turn_id
+    };
+    let first = start(&threads, "first", "What did the parent find?");
+    let model = Arc::new(ScriptedModel::new([
+        Ok(text_response("A side-chat answer")),
+        Ok(text_response(
+            "Current: explanation complete. Reference: parent details.",
+        )),
+    ]));
+    let cancellation = CancellationSource::new().token();
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    executor
+        .execute(&side.thread_id, &first, &cancellation)
+        .unwrap();
+    let compact = threads
+        .start_context_compaction(
+            &side.thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("compact").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: None,
+            },
+        )
+        .unwrap()
+        .turn_id;
+    executor
+        .execute(&side.thread_id, &compact, &cancellation)
+        .unwrap();
+    let requests = model.requests();
+    let assert_order = |request: &ModelRequest, reference: &str, current: &str| {
+        assert!(
+            request
+                .instructions
+                .as_deref()
+                .unwrap()
+                .contains("Side Chat history boundary")
+        );
+        let input = serde_json::to_string(&request.input).unwrap();
+        let boundary = "<side_chat_history_boundary>";
+        assert_eq!(input.matches(boundary).count(), 1);
+        assert!(input.find(reference).unwrap() < input.find(boundary).unwrap());
+        assert!(input.find(boundary).unwrap() < input.find(current).unwrap());
+    };
+    assert_order(
+        &requests[0],
+        "Parent task details",
+        "What did the parent find?",
+    );
+    let InputItem::Message(source) = &requests[1].input[0] else {
+        panic!("compaction source must be a message");
+    };
+    let [ContentPart::Text(source)] = source.content.as_slice() else {
+        panic!("compaction source must contain JSON text");
+    };
+    let (_, json) = source.split_once("\n\n").unwrap();
+    let source: serde_json::Value = serde_json::from_str(json).unwrap();
+    assert_eq!(source["referenceOnlyTurnIds"], json!([parent_turn]));
+    assert_eq!(source["previousCheckpointReferenceOnly"], false);
+
+    let reopened = Arc::new(ThreadController::with_store(store));
+    let next = start(&reopened, "next", "Explain the finding another way");
+    let resumed_model = Arc::new(ScriptedModel::new([Ok(text_response("restated"))]));
+    TurnExecutor::without_tools(reopened, resumed_model.clone())
+        .execute(&side.thread_id, &next, &cancellation)
+        .unwrap();
+    let request = &resumed_model.requests()[0];
+    assert_order(
+        request,
+        "Reference: parent details",
+        "Explain the finding another way",
+    );
+    assert!(!request_contains(request, "Parent task details"));
+}
+
 struct WindowModel {
     ordinary: AtomicUsize,
     requests: Mutex<Vec<ModelRequest>>,

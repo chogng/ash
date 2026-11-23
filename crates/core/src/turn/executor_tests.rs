@@ -1314,6 +1314,15 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
 
 #[test]
 fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
+    assert_skill_load(ash_extension_api::SKILL_TURN_INPUT_CONTRIBUTOR);
+}
+
+#[test]
+fn a_fragment_cannot_impersonate_the_registered_skill_contributor() {
+    assert_skill_load("other-extension");
+}
+
+fn assert_skill_load(contributor: &'static str) {
     struct StreamingSkillModel(ScriptedModel);
 
     impl ModelService for StreamingSkillModel {
@@ -1398,7 +1407,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
     )])));
     let mut extensions = ash_extension_api::ExtensionRegistryBuilder::new();
     extensions.turn_input_contributor(
-        "skills",
+        contributor,
         Arc::new(FixedSkillContributor {
             expected: activation.clone(),
             body: "# Review workflow\nInspect correctness first.".into(),
@@ -1424,6 +1433,14 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         vec![activation.clone()]
     );
     let events = store.events();
+    if contributor != ash_extension_api::SKILL_TURN_INPUT_CONTRIBUTOR {
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event.event, ThreadEvent::TurnSkillsLoaded { .. }))
+        );
+        return;
+    }
     let loaded_at = events
         .iter()
         .position(|event| {
@@ -3328,7 +3345,8 @@ impl ash_extension_api::TurnInputContributor for FixedSkillContributor {
                 self.expected.content_digest.as_str(),
                 self.body,
             ),
-        )])
+        )
+        .with_registered_contributor(ash_extension_api::SKILL_TURN_INPUT_CONTRIBUTOR)])
     }
 }
 

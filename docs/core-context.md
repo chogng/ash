@@ -51,6 +51,10 @@ ContextAssembler
 checkpoint 和 ContextManager。父子 Agent、fork Thread 或 side conversation 都不能共享可变
 ContextManager。
 
+Side Chat 从已固定的源历史前缀恢复引用边界，普通 fork 会保留已有边界。Core 在首条本分支消息前插入
+边界，Guardian 将源分支的用户消息、回答、审批和目标作为参考证据。压缩输入标明引用 Turn 和源摘要，
+重启后的模型请求沿用同一历史边界。
+
 App Server 在执行目标所属宿主解析 Session 的目录绑定、审批默认值和自动取材范围。Chat 默认无工作区，省略审批模式时使用 Manual，自动取材限于个人指令、获准自动读取的个人记忆和个人配置的技能。Code 创建时需要选定执行目录，省略审批模式时使用后端配置，还可使用获准的工作区指令、环境、技能目录、代码检索及工作区记忆。未记录归属的旧会话沿用现有默认值。自动注入的权限说明遵循同一范围，并保留当前 Session 和 Thread 明确获得的授权。显式输入和工具操作按各自的授权契约处理。Core 共用预算、压缩和组装逻辑，压缩只读取当前 Thread 的持久上下文。
 
 ContextManager 也不能成为第二份 canonical history。它允许保存 cache、baseline、token estimate
@@ -157,13 +161,16 @@ ContextPlan 必须可诊断：
 模型选择冻结在同一次 `ModelInvocationSnapshot`；压缩策略冻结在该 Turn 的 `StartTurn` command receipt，审批策略版本和 Skill 激活来源冻结在 durable Turn，
 不复制进 `ContextPlan`。
 
-Skill 的发现、启用、模型选择和入口解析不属于上下文系统。外部 runtime 根据 durable activation
-解析出 `PromptFragment { source, layer, retention, body }`，也可以贡献 metadata-only catalog
-fragment；Core 只校验 fragment provenance，按 Skill layer、`Required / BestEffort` 预算语义
-注入。模型随后通过普通 Tool Call/Result 按需读取 Skill 正文。catalog generation、`$` 选择入口和
-activation reason 不进入模型可见 Skill 正文。
+[`ash-context-fragments`](../crates/context-fragments/src/lib.rs) 共享片段正文、来源、保留策略和
+`ContextEvidence`。扩展 API 将 `PromptFragment` 绑定到扩展可请求的层。Core 校验扩展贡献的正文与
+来源，将层映射到组装位置并按预算选择片段。
 
-它不要求成为公共 wire model。测试和诊断可以使用 Core-private readable view。
+Skill runtime 根据 durable activation 贡献 Skill 片段或 catalog metadata。模型通过普通
+Tool Call/Result 按需读取 Skill 正文。catalog generation、`$` 选择入口和 activation reason 不进入
+模型可见 Skill 正文。Registry 从注册项绑定贡献者身份，Core 只为选入请求的 Skill runtime 片段写入
+Skill 加载记录。
+
+`ContextPlan` 供 Core 内部使用，测试和诊断可以读取其只读视图。
 
 ### 工具目录的共享与调用隔离
 
@@ -648,10 +655,11 @@ crates/
 `context-engine` 保存可跨产品和 provider 复用的预算 value 与纯判定；Core `context` 保存 Thread 内容
 选择和组装算法；`context_manager` 保存 per-loaded-Thread 协调逻辑。Core 两个模块默认 private。
 `ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
-provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
-`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/directory instructions。
-Memory 由 `ext/memories` 通过 `ContextContributor` 注册；`ContextEvidence` 与请求身份由 `extension-api`
-定义。Core 先按注册顺序收集扩展材料，再按来源名称收集 host port，两者共用同一预算与低信任入口。
+provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，按转义和封装后的字节
+估算，并把数据作为 `trust="untrusted-data"` 的用户消息插在当前输入之前。
+Memory 由 `ext/memories` 通过 `ContextContributor` 注册。`ContextEvidence` 由 `context-fragments`
+定义，请求身份由 `extension-api` 定义。Core 先按注册顺序收集扩展材料，再按来源名称收集 host port，
+两者共用同一预算与低信任入口。
 替换或移除 Codebase 不影响 Memory，各条材料保留独立来源、引用和 revision。
 来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
 部分内容继续调用模型。压缩或 token 计量导致准备重试时重新读取，避免保留已删除或撤销授权的材料。
