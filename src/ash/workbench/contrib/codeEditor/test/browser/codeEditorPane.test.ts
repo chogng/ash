@@ -526,6 +526,7 @@ class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService
 	createPublisher(): LanguageDiagnosticsPublisher { return { update: () => undefined, dispose: () => undefined, [Symbol.dispose]: () => undefined }; }
 	getDiagnostics(): LanguageDiagnosticSnapshot | undefined { return undefined; }
 	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] { return []; }
+	getPendingDocumentClose(): undefined { return undefined; }
 }
 
 test('Stanza editor pane releases a load cancelled before content resolution', async () => {

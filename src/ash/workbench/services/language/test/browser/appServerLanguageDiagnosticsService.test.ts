@@ -710,6 +710,113 @@ test('a provider refresh retains the backend document binding until its last edi
 suite('Language diagnostic request scheduling', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('reopening a released resource waits for the old requests and close before synchronizing', async () => {
+		const api = new FakeLanguageApi();
+		const documents = new FakeCodeIntelligenceDocuments();
+		const events = new FakeServerEvents();
+		const firstPull = new DeferredPromise<AbortSignal>();
+		const finishPull = new DeferredPromise<Awaited<ReturnType<ILanguageApi['documentDiagnostics']>>>();
+		const firstClose = new DeferredPromise<void>();
+		const finishClose = new DeferredPromise<void>();
+		api.documentDiagnostics = async (params, options) => {
+			api.diagnosticPulls.push(params);
+			if (api.diagnosticPulls.length === 1) {
+				void firstPull.complete(options!.signal!);
+				return finishPull.p;
+			}
+			return { kind: 'unchanged', revision: params.document.revision, diagnostics: [] };
+		};
+		api.close = async params => {
+			api.closed.push(params);
+			if (api.closed.length === 1) {
+				void firstClose.complete();
+				await finishClose.p;
+			}
+		};
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		using service = createDiagnosticsService(api, events, workspace, documents);
+		const resource = URI.file('/project/main.rs');
+		using oldModel = new TextModel('fn old() {}');
+		using oldBinding = service.acquire(resource, 'rust', oldModel);
+		using intermediateModel = new TextModel('fn intermediate() {}');
+		using replacement = new TextModel('fn replacement() {}');
+		try {
+			const oldSignal = await firstPull.p;
+			assert.throws(() => service.acquire(resource, 'rust', replacement), /cannot bind multiple models/u);
+			oldBinding.dispose();
+			oldModel.dispose();
+			assert.equal(oldSignal.aborted, true);
+			using intermediate = service.acquire(resource, 'rust', intermediateModel);
+			intermediate.dispose();
+			intermediateModel.dispose();
+			using reopened = service.acquire(resource, 'rust', replacement);
+
+			events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: replacement.version, diagnostics: [] } });
+			assert.equal(service.getDiagnostics(resource), undefined, 'a late push must not attach to a new model with the same revision');
+			assert.equal(api.closed.length, 0);
+			await finishPull.complete({ kind: 'full', revision: 1, diagnostics: [] });
+			await firstClose.p;
+			assert.deepEqual(api.synchronized.map(request => request.document.text), ['fn old() {}']);
+			assert.deepEqual(documents.closed, ['main.rs']);
+			assert.ok(service.getPendingDocumentClose(resource));
+			await finishClose.complete();
+			await tick();
+			assert.equal(service.getPendingDocumentClose(resource), undefined);
+			assert.deepEqual(api.synchronized.map(request => request.document.text), ['fn old() {}', 'fn replacement() {}']);
+			assert.deepEqual(documents.synchronized.map(document => document.text), ['fn old() {}', 'fn replacement() {}']);
+			assert.deepEqual(api.closed, [{ path: 'main.rs' }]);
+			reopened.dispose();
+			await service.getPendingDocumentClose(resource);
+			assert.deepEqual(api.closed, [{ path: 'main.rs' }, { path: 'main.rs' }]);
+			assert.deepEqual(documents.closed, ['main.rs', 'main.rs']);
+		} finally {
+			if (!finishPull.isSettled) await finishPull.complete({ kind: 'unchanged', revision: 1, diagnostics: [] });
+			if (!finishClose.isSettled) await finishClose.complete();
+		}
+	});
+
+	test('a failed language synchronization still drains its pending code intelligence overlay on close', async () => {
+		const api = new FakeLanguageApi();
+		const documents = new FakeCodeIntelligenceDocuments();
+		const overlayStarted = new DeferredPromise<void>();
+		const finishOverlay = new DeferredPromise<void>();
+		const error = new Error('synchronization failed');
+		api.synchronize = async request => {
+			api.synchronized.push(request);
+			if (api.synchronized.length === 1) throw error;
+		};
+		documents.synchronize = async document => {
+			documents.synchronized.push(document);
+			if (documents.synchronized.length === 1) {
+				void overlayStarted.complete();
+				await finishOverlay.p;
+			}
+		};
+		const report = mock.method(console, 'error', () => undefined);
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
+		const resource = URI.file('/project/main.rs');
+		using oldModel = new TextModel('fn old() {}');
+		using oldBinding = service.acquire(resource, 'rust', oldModel);
+		using newModel = new TextModel('fn new() {}');
+		try {
+			await overlayStarted.p;
+			oldBinding.dispose();
+			using newBinding = service.acquire(resource, 'rust', newModel);
+			await tick();
+			assert.equal(documents.synchronized.length, 1);
+			assert.equal(documents.closed.length, 0);
+			await finishOverlay.complete();
+			await tick();
+			assert.deepEqual(documents.closed, ['main.rs']);
+			assert.deepEqual(documents.synchronized.map(document => document.text), ['fn old() {}', 'fn new() {}']);
+			assert.deepEqual(report.mock.calls.map(call => call.arguments), [['App Server language document synchronization failed', error]]);
+		} finally {
+			if (!finishOverlay.isSettled) await finishOverlay.complete();
+			report.mock.restore();
+		}
+	});
+
 	test('workspace diagnostics serialize pending sweeps and merge document bursts into one fresh follow-up', async () => {
 		const api = new FakeLanguageApi();
 		api.availableServers = [{ id: 'rust-analyzer', languageIds: ['rust'] }];

@@ -895,7 +895,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
 		const languageLifecycle = options.api.appServer.isAvailable ? services.get(ILanguageServerLifecycleService) : undefined;
-		const languageProviders = options.api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		// A disconnected preview needs local syntax, not server diagnostics or model sync.
 		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust);
 		const languageDiagnosticsService = options.api.appServer.isAvailable ? this._register(createDiagnostics()) : undefined;
@@ -903,6 +902,7 @@ export abstract class Workbench extends Disposable {
 			services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 			this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
 		} else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
+		const languageProviders = options.api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ISessionPrimaryProviderServices, this._register(primaryHostServices.createInstance(SessionProviderServices)));
 		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, providerId,

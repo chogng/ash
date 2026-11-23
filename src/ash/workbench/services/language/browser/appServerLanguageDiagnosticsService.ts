@@ -58,6 +58,7 @@ interface PublishedDiagnostics {
 /** Synchronizes open Code models and aggregates current diagnostics by revision. */
 export class AppServerLanguageDiagnosticsService extends Disposable implements ILanguageDiagnosticsService {
 	private readonly entries = new Map<string, LanguageDocumentEntry>();
+	private readonly pendingCloses = new Map<string, Promise<void>>();
 	private readonly serverSnapshots = new Map<string, ServerDiagnosticSnapshot>();
 	private readonly pullCapabilities = new Map<string, PullDiagnosticCapabilities>();
 	private readonly workspaceServerKeys = new Set<string>();
@@ -168,6 +169,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				entry.modelListener.dispose();
 			}
 			this.entries.clear();
+			this.pendingCloses.clear();
 			this.diagnosticRefreshes.clear();
 			this.serverSnapshots.clear();
 			this.workspaceServerKeys.clear();
@@ -189,10 +191,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error('One language document resource cannot bind multiple models or languages');
 		if (!target || model.largeFile.tooLargeForSynchronization) return Disposable.None;
 		if (existing) {
-			const reopening = existing.references === 0;
-			if (reopening) existing.modelListener = this.listenToModel(existing);
 			existing.references += 1;
-			if (reopening) this.schedule(existing, true);
 			return toDisposable(() => this.release(key, existing));
 		}
 		const entry: LanguageDocumentEntry = {
@@ -206,12 +205,13 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			modelListener: Disposable.None,
 			references: 1,
 			timer: undefined,
-			queue: Promise.resolve(),
+			queue: this.pendingCloses.get(key) ?? Promise.resolve(),
 			languageSynchronized: false,
 			codeIntelligenceSynchronized: false,
 			pullRequest: undefined,
 		};
 		entry.modelListener = this.listenToModel(entry);
+		this.entries.set(key, entry);
 		this.workspaceServerKeys.delete(key);
 		const previous = this.serverSnapshots.get(key);
 		// Providers can open the server document while the model is being resolved,
@@ -220,7 +220,6 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			this.serverSnapshots.delete(key);
 			this.changeEmitter.fire(resource);
 		}
-		this.entries.set(key, entry);
 		this.schedule(entry, true);
 		return toDisposable(() => this.release(key, entry));
 	}
@@ -251,6 +250,10 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	getDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined {
 		return this.mergeDiagnostics(resource);
+	}
+
+	getPendingDocumentClose(resource: URI): Promise<void> | undefined {
+		return this.pendingCloses.get(resource.toString());
 	}
 
 	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] {
@@ -311,7 +314,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
 			const languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
 			let codeIntelligenceSynchronized = false;
-			await Promise.all([
+			const [languageResult] = await Promise.allSettled([
 				languageSynchronized ? this.api.synchronize({ document }) : undefined,
 				this.canSynchronizeCodeIntelligence(entry)
 					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
@@ -319,8 +322,9 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			]);
 			// Losing provider support does not close its backend document. Retain
 			// that ownership until closeEntry drains the old language binding.
-			entry.languageSynchronized ||= languageSynchronized;
+			entry.languageSynchronized ||= languageSynchronized && languageResult.status === 'fulfilled';
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
+			if (languageResult.status === 'rejected') throw languageResult.reason;
 			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			if (!languageSynchronized) return;
 			if (savedText !== undefined) {
@@ -425,7 +429,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		this.workspaceServerKeys.clear();
 		for (const [key, snapshot] of next) {
-			if (this.entries.has(key)) continue;
+			if (this.entries.has(key) || this.pendingCloses.has(key)) continue;
 			this.serverSnapshots.set(key, snapshot);
 			this.workspaceServerKeys.add(key);
 			changed.set(key, snapshot.resource);
@@ -461,7 +465,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private async refreshDirAccess(generation: number): Promise<void> {
-		await Promise.all([...this.entries.values()].map(entry => entry.queue));
+		const openQueues = [...this.entries.values()].map(entry => entry.queue);
+		await Promise.all([...this.pendingCloses.values(), ...openQueues]);
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration) : new AppServerLanguageSupport();
@@ -510,6 +515,22 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (this.entries.get(key) !== entry || entry.references === 0) return;
 		entry.references -= 1;
 		if (entry.references > 0) return;
+		this.entries.delete(key);
+		this.diagnosticRefreshes.delete(entry);
+		// The editor can reattach immediately. Backend work for the new binding
+		// waits for the old requests and the path-scoped close to finish.
+		const close = entry.queue.catch(() => undefined).then(async () => {
+			// Releasing an editor can queue this close during Workbench disposal.
+			// The connection is gone by the next microtask; only a live owner may send it.
+			if (!this.alive) return;
+			await this.closeEntry(entry);
+		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); }).finally(() => {
+			if (this.pendingCloses.get(key) === close) {
+				this.pendingCloses.delete(key);
+				this.queueWorkspaceDiagnostics();
+			}
+		});
+		this.pendingCloses.set(key, close);
 		entry.pullRequest?.abort();
 		if (entry.timer !== undefined) {
 			clearTimeout(entry.timer);
@@ -517,14 +538,6 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		entry.modelListener.dispose();
 		if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
-		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			// Releasing an editor can queue this close during Workbench disposal.
-			// The connection is gone by the next microtask; only a live owner may send it.
-			if (!this.alive || this.entries.get(key) !== entry || entry.references > 0) return;
-			await this.closeEntry(entry);
-			if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
-			this.queueWorkspaceDiagnostics();
-		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
 	}
 
 	private acceptDiagnostics(notification: LanguageDiagnosticsNotification, pullCapabilities?: PullDiagnosticCapabilities): void {
@@ -537,6 +550,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const resource = workspaceResourceFromPath(folder.uri, notification.path);
 		if (!resource) return;
 		const key = resource.toString();
+		if (this.pendingCloses.has(key)) return;
 		const entry = this.entries.get(key);
 		if (entry && (entry.references === 0 || !this.support.supports(entry.dirId, entry.languageId) || notification.revision > entry.model.version)) return;
 		if (!entry && this.support.workspaceLanguageIds(folder.id).length === 0) return;

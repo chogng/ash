@@ -891,7 +891,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
 		const languageLifecycle = api.appServer.isAvailable ? services.get(ILanguageServerLifecycleService) : undefined;
-		const languageProviders = api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		services.registerSingleton(ICodeIntelligenceDocumentService, () => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols));
@@ -900,6 +899,7 @@ export class Workbench extends Disposable {
 		const languageDiagnosticsService = api.appServer.isAvailable ? this._register(createDiagnostics()) : undefined;
 		if (languageDiagnosticsService) services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
+		const languageProviders = api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));

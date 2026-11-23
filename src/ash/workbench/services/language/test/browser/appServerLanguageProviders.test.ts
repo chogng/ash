@@ -12,6 +12,8 @@ import { parseExtensionManifest } from '../../../extensions/common/extensionMani
 import { AppServerLanguageSupport } from '../../browser/appServerLanguageSupport.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -31,6 +33,7 @@ import { type LanguageServerFeatureDto, type ServerNotification } from '../../..
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { AppServerLanguageProviders } from '../../browser/appServerLanguageProviders.js';
 import { ILanguageServerLifecycleService } from '../../common/languageServerLifecycleService.js';
+import { ILanguageDiagnosticsService } from '../../common/languageDiagnosticsService.js';
 
 suite('Rust configuration catalog forwarding', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -207,13 +210,25 @@ test('retained adapters filter every request after capability revocation and acr
 	assert.deepEqual(calls.filter(key => key !== 'servers'), [], 'retained providers cannot bypass the live capability check');
 });
 
-function createProviders(languages: LanguageFeaturesService, api: FakeLanguageApi, workspace: TestWorkspaceService, options: { workspaceTrust?: IWorkspaceTrustManagementService; events?: FakeServerEvents; } = {}): AppServerLanguageProviders {
+function createProviders(languages: LanguageFeaturesService, api: FakeLanguageApi, workspace: TestWorkspaceService, options: {
+	workspaceTrust?: IWorkspaceTrustManagementService;
+	events?: FakeServerEvents;
+	getPendingDocumentClose?: ILanguageDiagnosticsService['getPendingDocumentClose'];
+} = {}): AppServerLanguageProviders {
 	using services = new InstantiationService();
 	using defaultTrust = new TestWorkspaceTrustManagementService();
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IConfigurationService, workspace);
 	services.registerInstance(ILanguageServerLifecycleService, { start() { }, withActivity: (_document, _signal, operation) => operation() });
+	services.registerInstance(ILanguageDiagnosticsService, {
+		onDidChangeDiagnostics: Event.None,
+		getDiagnostics: () => undefined,
+		getAllDiagnostics: () => [],
+		getPendingDocumentClose: options.getPendingDocumentClose ?? (() => undefined),
+		acquire: () => { throw new Error('Unexpected diagnostics acquisition'); },
+		createPublisher: () => { throw new Error('Unexpected diagnostics publisher'); },
+	});
 	const events = options.events ?? new FakeServerEvents();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(IWorkspaceTrustManagementService, options.workspaceTrust ?? Object.assign(defaultTrust, {
@@ -297,6 +312,37 @@ test('capability retirement aborts backend operations, ignores late replies and 
 	api.directorySymbols = async () => { throw error; };
 	await assert.rejects(async () => languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal), candidate => candidate === error);
 	await assert.rejects(async () => languages.workspaceSymbolProvider.allNoModel()[0]!.provideWorkspaceSymbols('value', signal), candidate => candidate === error);
+});
+
+test('language features wait for the previous document close and can cancel while waiting', async () => {
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using languages = new LanguageFeaturesService();
+	const api = new FakeLanguageApi();
+	const resource = URI.file('/project/main.rs');
+	const close = new DeferredPromise<void>();
+	using providers = createProviders(languages, api, workspace, {
+		getPendingDocumentClose: requested => requested.toString() === resource.toString() && !close.isSettled ? close.p : undefined,
+	});
+	const opened: string[] = [];
+	api.hover = async ({ document }) => {
+		opened.push(document.path);
+		return { revision: document.revision, contents: 'reopened', range: DTO_RANGE };
+	};
+	using model = new TextModel('fn main() {}', { resource, languageId: 'rust' });
+	await tick();
+	const provider = languages.hoverProvider.ordered(model)[0]!;
+	const request = (signal: AbortSignal) => ({ ...createLanguageFeatureRequest(model, 'rust', signal), resource, position: new Position(1, 4) });
+	const controller = new AbortController();
+	const cancelled = Promise.resolve(provider.provideHover(request(controller.signal), controller.signal));
+	controller.abort();
+	await assert.rejects(cancelled, isCancellationError);
+	const signal = new AbortController().signal;
+	const hover = provider.provideHover(request(signal), signal);
+	await tick();
+	assert.deepEqual(opened, []);
+	await close.complete();
+	assert.ok(await hover);
+	assert.deepEqual(opened, ['main.rs']);
 });
 
 test('language providers require the scoped trust registration even when the backend authorizes Web requests', () => {

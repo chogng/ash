@@ -3,6 +3,7 @@ import { TestThemeService } from '../../../../../../platform/theme/test/common/t
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TestWorkspaceTrustManagementService } from '../../../../../test/common/workbenchTestServices.js';
 import { ILanguageServerLifecycleService } from '../../../common/languageServerLifecycleService.js';
+import { ILanguageDiagnosticsService } from '../../../common/languageDiagnosticsService.js';
 import { IPaneCompositePartService } from '../../../../panecomposite/browser/panecomposite.js';
 import { IViewDescriptorService } from '../../../../../common/views.js';
 import { IViewsService } from '../../../../views/common/viewsService.js';
@@ -173,6 +174,14 @@ providerServices.registerInstance(IWorkspaceTrustManagementService, store.add(Ob
 } satisfies Partial<IWorkspaceTrustManagementService>)));
 providerServices.registerInstance(IServerEventApi, { subscribe: listener => changes.event(listener) });
 providerServices.registerInstance(ILanguageServerLifecycleService, { start() {}, withActivity: (_document, _signal, operation) => operation() });
+providerServices.registerInstance(ILanguageDiagnosticsService, {
+	onDidChangeDiagnostics: Event.None,
+	getDiagnostics: () => undefined,
+	getAllDiagnostics: () => [],
+	getPendingDocumentClose: () => undefined,
+	acquire: () => { throw new Error('Unexpected diagnostics acquisition'); },
+	createPublisher: () => { throw new Error('Unexpected diagnostics publisher'); },
+});
 const languageProviders = store.add(providerServices.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: false }));
 languageProviders.start();
 for (const [id, value] of [['install', true], ['uninstall', false]] as const) {

@@ -1,4 +1,5 @@
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -16,6 +17,7 @@ import { IServerEventApi } from '../../../../platform/agentHost/common/appServer
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { ILanguageServerLifecycleService } from '../common/languageServerLifecycleService.js';
+import { ILanguageDiagnosticsService } from '../common/languageDiagnosticsService.js';
 import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
 import { languageWorkspaceDirId, resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
 
@@ -60,6 +62,7 @@ export class AppServerLanguageProviders extends Disposable {
 		@IServerEventApi events: IServerEventApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ILanguageServerLifecycleService private readonly lifecycle: ILanguageServerLifecycleService,
+		@ILanguageDiagnosticsService private readonly diagnostics: ILanguageDiagnosticsService,
 	) {
 		super();
 		const subscription = events.subscribe(event => {
@@ -131,7 +134,7 @@ export class AppServerLanguageProviders extends Disposable {
 		const folders = this.workspace.getWorkspace().folders;
 		const languageIds = support.languageIds;
 		const completionLanguages = languageIds.filter(language => folders.some(folder => support.supports(folder.id, language) && this.capabilities.get(`${folder.id}:${language}`)?.features.has('completion')));
-		const adapter = new AppServerLanguageProvider(this.api, this.workspace, completionLanguages, this.capabilities, this.lifecycle);
+		const adapter = new AppServerLanguageProvider(this.api, this.workspace, completionLanguages, this.capabilities, this.lifecycle, this.diagnostics);
 		const registrations = new DisposableStore();
 		// Negotiated features control availability; exact resource guards also protect
 		// retained adapters and completion's language-only provider catalog.
@@ -232,7 +235,14 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	readonly id = 'ash.appServer.completions';
 	readonly triggerCharacters: readonly string[];
 
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[], private readonly capabilities: ReadonlyMap<string, ServerCapabilities>, private readonly lifecycle: ILanguageServerLifecycleService) {
+	constructor(
+		private readonly api: ILanguageApi,
+		private readonly workspace: IWorkspaceContextService,
+		readonly languageIds: readonly string[],
+		private readonly capabilities: ReadonlyMap<string, ServerCapabilities>,
+		private readonly lifecycle: ILanguageServerLifecycleService,
+		private readonly diagnostics: ILanguageDiagnosticsService,
+	) {
 		const all = [...this.capabilities.values()];
 		this.triggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.completion))]);
 		this.signatureHelpTriggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.signature))]);
@@ -500,8 +510,22 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		return Object.freeze(result.ranges.map(item => Object.freeze({ startLineIndex: item.startLineIndex, endLineIndex: item.endLineIndex, ...(item.kind ? { kind: item.kind } : {}), ...(item.collapsedText ? { collapsedText: item.collapsedText } : {}) })));
 	}
 
-	private requestFeature<T>(feature: LanguageServerFeatureDto, document: { readonly dirId?: string; readonly languageId: string; }, signal: AbortSignal | undefined, invoke: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
-		return this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, feature, document, signal, invoke));
+	private requestFeature<T>(feature: LanguageServerFeatureDto, document: { readonly dirId?: string; readonly languageId: string; readonly path: string; }, signal: AbortSignal | undefined, invoke: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+		return this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, feature, document, signal, async requestSignal => {
+			// Feature RPCs can open the backend document themselves, just like diagnostics synchronization.
+			const folders = this.workspace.getWorkspace().folders;
+			const folder = document.dirId ? folders.find(folder => folder.id === document.dirId) : folders[0];
+			const resource = folder && workspaceResourceFromPath(folder.uri, document.path);
+			if (resource) {
+				let close = this.diagnostics.getPendingDocumentClose(resource);
+				while (close) {
+					await raceCancellationError(close, requestSignal);
+					close = this.diagnostics.getPendingDocumentClose(resource);
+				}
+			}
+			requestSignal.throwIfAborted();
+			return invoke(requestSignal);
+		}));
 	}
 
 	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string; }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean; }; }; }) {
