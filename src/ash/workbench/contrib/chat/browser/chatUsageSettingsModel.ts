@@ -37,8 +37,9 @@ export class ChatUsageSettingsModel extends Disposable implements SettingsSectio
 		this._register(widgets.onDidChangeWidgets(() => {
 			if (this.visible) { void this.load(); }
 		}));
-		this._register(chat.onDidBecomeReady(() => {
-			if (this.visible) { void this.load(); }
+		this._register(chat.onDidBecomeReady(event => {
+			const sessionId = this.target?.sessionId;
+			if (this.visible && (!event || !sessionId || event.affectsSession(sessionId))) { void this.load(); }
 		}));
 		this._register(chat.onDidUpdateThread(event => {
 			if (this.visible && event.sessionId === this.target?.sessionId && event.threadId === this.target.threadId && event.update.type === 'committed') {

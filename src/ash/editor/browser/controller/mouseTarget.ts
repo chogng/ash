@@ -162,8 +162,10 @@ export class MouseTargetFactory {
 			// Actual decorations were handled above. The unused part of their lane
 			// is an editing surface, including on wrapped continuation lines.
 			if (relativePos.x >= layout.decorationsLeft && !detail.isAfterLines) {
-				const start = new Position(position.lineNumber, this.context.viewModel.getLineMinColumn(position.lineNumber));
-				return MouseTarget.createContentEmpty(target, start.column, start, { isAfterLines: false });
+				const { lineNumber } = position;
+				const column = this.context.viewModel.getTextDirection(lineNumber) === TextDirection.RTL
+					? this.context.viewModel.getLineMaxColumn(lineNumber) : this.context.viewModel.getLineMinColumn(lineNumber);
+				return MouseTarget.createContentEmpty(target, column, new Position(lineNumber, column), { isAfterLines: false });
 			}
 			return MouseTarget.createMargin(type, target, mouseColumn, position, Range.fromPositions(position), detail);
 		}

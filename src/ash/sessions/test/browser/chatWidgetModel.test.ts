@@ -57,7 +57,7 @@ function messageHistory(threadId: string, sequence: number, text: string): Threa
 	};
 }
 
-function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false, skillService?: IPromptsService) {
+function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false, skillService?: IPromptsService, otherScope?: ISessionProviderScope) {
 	const resources = new DisposableStore();
 	const updates = resources.add(new Emitter<ThreadUpdateEnvelope>());
 	const transcripts = resources.add(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -96,7 +96,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const sessionApi = createDisconnectedAgentSessionService(async operation => { throw new Error(`Unexpected ${operation}`); });
 	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
-	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
+	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => otherScope ? [scope, otherScope] : [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
 	const models = {
 		onDidChangeModels: Event.None, listModels: async () => [], listModelCatalog: async () => [], isModelVisible: () => true,
@@ -130,6 +130,38 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+test('a different host becoming ready leaves the current conversation subscribed', async () => {
+	const remote = fixture('Code');
+	using remoteResources = remote.resources;
+	const scope = { services: { chat: remote.chat } } as unknown as ISessionProviderScope;
+	const local = fixture('Code', undefined, false, true, undefined, scope);
+	using localResources = local.resources;
+	await Promise.all([local.model.initialize(), remote.model.initialize()]);
+	const reads = local.historyRequests.length;
+	const remoteReads = remote.historyRequests.length;
+	remote.reconnect();
+	await waitFor(() => remote.historyRequests.length > remoteReads);
+	assert.equal(local.historyRequests.length, reads);
+	assert.equal(local.model.state, 'ready');
+	local.reconnect();
+	await waitFor(() => local.historyRequests.length > reads);
+	assert.equal(local.historyRequests.length, reads + 1);
+});
+
+test('reconnecting renews a subscription while the retired request is still pending', async () => {
+	const old = new DeferredPromise<ThreadSubscription>();
+	let calls = 0;
+	const f = fixture('Code', threadId => ++calls === 1 ? old.p : Promise.resolve({ ...snapshot(threadId, 2), updates: [] }));
+	using resources = f.resources;
+	await waitFor(() => calls === 1);
+	f.reconnect();
+	await waitFor(() => f.model.thread?.sequence === 2);
+	await old.complete({ ...snapshot('A'), updates: [] });
+	await f.model.initialize();
+	assert.equal(f.model.state, 'ready');
+	assert.equal(f.model.thread?.sequence, 2);
+});
 
 test('context estimates coalesce submission snapshots and retire pending work with the Thread', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });

@@ -1284,6 +1284,31 @@ test('archive sends only the Session grouping identity', async () => {
 	assert.equal(service.active?.session.sessionId, 'session-2');
 });
 
+test('a pending archive can hide a row and rolls back without changing durable status', async () => {
+	const fake = sessionHost([session('first', 'first-root'), session('second', 'second-root')]);
+	using service = createManagement(fake);
+	await service.initialize();
+	const originalArchive = fake.host.session.archive;
+	const response = new DeferredPromise<Awaited<ReturnType<typeof originalArchive>>>();
+	fake.host.session.archive = () => response.p;
+
+	const archiving = service.archiveSession('first');
+	assert.equal(archiving, service.archiveSession('first'));
+	assert.deepEqual([...service.pendingArchives.get()], ['first']);
+	assert.equal(service.active?.session.sessionId, 'first');
+	assert.equal(service.sessions.find(item => item.sessionId === 'first')?.status, 'active');
+	const failed = assert.rejects(archiving, /Archive rejected/u);
+	await response.error(new Error('Archive rejected'));
+	await failed;
+	assert.equal(service.pendingArchives.get().size, 0);
+	assert.equal(service.sessions.find(item => item.sessionId === 'first')?.status, 'active');
+
+	fake.host.session.archive = originalArchive;
+	await service.archiveSession('first');
+	assert.equal(service.pendingArchives.get().size, 0);
+	assert.equal(service.sessions.find(item => item.sessionId === 'first')?.status, 'archived');
+});
+
 test('restoring a Session preserves the foreground draft and only restores the canonical root', async () => {
 	const first = session('first', 'root');
 	const fake = sessionHost([{ ...first, threads: [...first.threads, { ...first.threads[0]!, threadId: 'child', parentThreadId: 'root' }] }, session('second', 'second-root')]);

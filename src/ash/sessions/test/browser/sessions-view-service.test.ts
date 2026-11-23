@@ -936,6 +936,7 @@ test('an unavailable catalog restores local drafts and preserves unresolved conv
 });
 
 class FakeSessionService implements ISessionsManagementService {
+	readonly pendingArchives = constObservable<ReadonlySet<string>>(new Set());
 	completeBackgroundSend(): never { throw new Error('Unexpected background send'); }
 	readonly navigationRevision = 0;
 	readonly primaryCatalogReady = true;

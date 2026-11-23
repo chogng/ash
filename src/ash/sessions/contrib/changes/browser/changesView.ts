@@ -262,7 +262,10 @@ export class ChangesViewPane extends ViewPane {
 			const active = sessions.activeSelection;
 			if (active?.kind === 'session' && active.active.session.sessionId === event.sessionId && active.active.threadId === event.threadId) { void this.refresh(); }
 		}));
-		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
+		this._register(chat.onDidBecomeReady(event => {
+			const active = sessions.activeSelection;
+			if (active?.kind === 'session' && (!event || event.affectsSession(active.active.session.sessionId))) { void this.refresh(); }
+		}));
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.update.type !== 'committed' || event.update.event.type !== 'threadHistoryMoved') { return; }
 			const active = sessions.activeSelection;

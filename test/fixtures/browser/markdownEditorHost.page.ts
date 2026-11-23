@@ -5,6 +5,7 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
+import { EndOfLineSequence } from '../../../src/ash/editor/common/model.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
@@ -114,6 +115,7 @@ window.ashMarkdownHost = {
 	},
 	undo: () => source.model.undo(),
 	redo: () => source.model.redo(),
+	useCRLF: () => source.model.pushEOL(EndOfLineSequence.CRLF),
 	save: () => source.save(new AbortController().signal),
 	disable: () => registration.clear(),
 	refreshPackages: () => packageChanges.fire(),
@@ -127,7 +129,7 @@ declare global {
 			readonly dirty: boolean; readonly sharedModel: boolean;
 			readonly editable: boolean; readonly messages: unknown[];
 			edit(start: number, end: number, text: string): void;
-			undo(): void; redo(): void;
+			undo(): void; redo(): void; useCRLF(): void;
 			save(): Promise<void>;
 			disable(): void; readonly registered: boolean;
 			refreshPackages(): void;

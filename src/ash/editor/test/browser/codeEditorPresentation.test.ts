@@ -1800,6 +1800,28 @@ suite('textModel browser component', () => {
 		}
 	});
 
+	test('clicking blank line decorations selects the visual start of LTR and RTL text', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		const { x, firstY, secondY } = await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ folding: false, lineDecorationsWidth: 44, wordWrap: 'off' });
+			editor.setValue('English\nשלום');
+			const { left, top } = editor.getDomNode().getBoundingClientRect();
+			const layout = editor.getLayoutInfo();
+			const first = editor.getTopForLineNumber(1);
+			const second = editor.getTopForLineNumber(2);
+			const halfLine = (second - first) / 2;
+			return { x: left + (layout.decorationsLeft + layout.contentLeft) / 2, firstY: top + first + halfLine, secondY: top + second + halfLine };
+		});
+		const caretPosition = () => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition());
+		await page.mouse.click(x, secondY);
+		await expect.poll(caretPosition).toEqual({ lineNumber: 2, column: 5 });
+		await page.mouse.click(x, firstY);
+		await expect.poll(caretPosition).toEqual({ lineNumber: 1, column: 1 });
+	});
+
 	test('glyph margin, line numbers, and folding controls keep VS Code gutter order', async function () {
 		const { page } = browserTests;
 

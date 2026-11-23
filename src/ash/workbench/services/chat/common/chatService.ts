@@ -279,7 +279,8 @@ export interface IChatService {
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readonly onDidUpdateGoal: Event<ThreadGoalUpdate>;
-	readonly onDidBecomeReady: Event<void>;
+	/** A routed service identifies the conversations whose host became ready. */
+	readonly onDidBecomeReady: Event<void | { affectsSession(sessionId?: SessionId, draftProviderId?: string): boolean; }>;
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	readonly onDidChangeQueue: Event<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;

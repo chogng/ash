@@ -106,7 +106,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				void this.refresh();
 			}
 		}));
-		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
+		this._register(chat.onDidBecomeReady(event => {
+			if (this.input && (!event || event.affectsSession(this.input.resource.path.slice(1)))) { void this.refresh(); }
+		}));
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.update.type !== 'committed' || event.update.event.type !== 'threadHistoryMoved') { return; }
 			if (!this.gitComparison && this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) { void this.refresh(); }

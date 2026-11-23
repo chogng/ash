@@ -158,7 +158,7 @@ const sessions = [1, 2, ...(fixtureOptions.has('treeFixture') ? [3] : [])].map(i
 		}] : []),
 	],
 }));
-const management = { sessions, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+const management = { sessions, untitledSessions: [], state: 'ready', onDidChange: changes.event, pendingArchives: constObservable(new Set<string>()) } as unknown as ISessionsManagementService;
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);

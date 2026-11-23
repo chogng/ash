@@ -46,7 +46,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly pendingDetailRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
-	private readonly archives = new Map<SessionId, Promise<void>>();
+	private readonly archives = observableValue<ReadonlyMap<SessionId, Promise<void>>>(this, new Map());
+	readonly pendingArchives = this.archives.map<ReadonlySet<SessionId>>(archives => new Set(archives.keys()));
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
@@ -73,6 +74,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		for (const entry of this.availableProviders()) this.observeProvider(entry);
 		this._register(providers.onDidChangeProviders(({ added, removed }) => {
 			if (this.isDisposed) return;
+			const pendingArchives = new Map(this.archives.get());
 			for (const entry of removed) {
 				this.providerListeners.get(entry)?.dispose();
 				this.providerListeners.delete(entry);
@@ -83,9 +85,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 						}
 					}
 				}
+				for (const sessionId of pendingArchives.keys()) {
+					if (parseSessionIdentity(sessionId, this.defaultProviderId).providerId === entry.id) pendingArchives.delete(sessionId);
+				}
 				this._sessions = this._sessions.filter(session => (session.providerId ?? this.defaultProviderId) !== entry.id);
 				if (this._active && (this._active.session.providerId ?? this.defaultProviderId) === entry.id) this._active = undefined;
 			}
+			if (pendingArchives.size !== this.archives.get().size) this.archives.set(pendingArchives, undefined);
 			for (const entry of added) this.observeProvider(entry);
 			if (this.initializePromise) this.initializePromise = this.loadSessions();
 			else this._onDidChange.fire();
@@ -661,10 +667,15 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	archiveSession(sessionId: SessionId): Promise<void> {
-		const pending = this.archives.get(sessionId);
+		const pending = this.archives.get().get(sessionId);
 		if (pending) return pending;
-		const archive = this.finishSession(sessionId, 'archiving').finally(() => this.archives.delete(sessionId));
-		this.archives.set(sessionId, archive);
+		const archive = this.finishSession(sessionId, 'archiving').finally(() => {
+			const remaining = new Map(this.archives.get());
+			if (remaining.get(sessionId) !== archive) return;
+			remaining.delete(sessionId);
+			this.archives.set(remaining, undefined);
+		});
+		this.archives.set(new Map(this.archives.get()).set(sessionId, archive), undefined);
 		return archive;
 	}
 	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'stopping'); }
@@ -755,12 +766,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	private async finishSession(sessionId: SessionId, state: 'archiving' | 'stopping'): Promise<void> {
+		const archiveOwner = state === 'archiving' ? this.owner(sessionId) : undefined;
 		await this.initialize();
+		if (archiveOwner) this.assertCurrentProvider(archiveOwner);
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
 		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
 		this.setState(state);
 		try {
-			const provider = this.owner(sessionId);
+			const provider = archiveOwner ?? this.owner(sessionId);
 			const result = state === 'archiving' ? await provider.archive(backendSession(session, this.defaultProviderId)) : await provider.stop(backendSession(session, this.defaultProviderId));
 			this.assertCurrentProvider(provider);
 			this.replaceSession(this.project(result, provider));

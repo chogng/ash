@@ -152,6 +152,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
+		pendingArchives: observableValue<ReadonlySet<string>>('pending archives', new Set()),
 		navigationRevision: 0,
 		onDidChange: onDidChange.event,
 		materializedSessions: observableValue('materialized drafts', new Map()),

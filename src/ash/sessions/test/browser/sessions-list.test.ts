@@ -56,6 +56,7 @@ import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
 
 
+const noPendingArchives = constObservable<ReadonlySet<string>>(new Set());
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
 const projectPreferences = { state: constObservable(undefined), isPinned: () => false } as unknown as IProjectsService;
 const listLog = new NullLoggerService();
@@ -138,6 +139,7 @@ test('Code folder migration waits for the primary catalog and retries when it re
 	const remote = { ...session, sessionId: 'remote', backendSessionId: 'local' };
 	let primaryReady = false;
 	const management = {
+		pendingArchives: noPendingArchives,
 		get sessions() { return primaryReady ? [session, remote] : [remote]; },
 		get primaryCatalogReady() { return primaryReady; },
 		untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event,
@@ -216,7 +218,7 @@ test('Sidebar project load failures offer retry only in notifications', async ()
 			return project;
 		},
 	} as unknown as IProjectService;
-	const management = { sessions: [], untitledSessions: [], state: 'loading', onDidChange: Event.None } as unknown as ISessionsManagementService;
+	const management = { pendingArchives: noPendingArchives, sessions: [], untitledSessions: [], state: 'loading', onDidChange: Event.None } as unknown as ISessionsManagementService;
 	const view = { onDidChange: Event.None, activeSelection: undefined } as unknown as ISessionsService;
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view, github, emptyGroups, storage, projects,
@@ -272,7 +274,7 @@ test('Needs Attention reuses title bar alerts in the single sidebar tree', async
 	const pinned = makeSession('pinned', true);
 	const chat = { ...makeSession('chat', true), kind: 'chat' } as const;
 	let sessions = [waiting, ci, pinned, chat];
-	const management = { get sessions() { return sessions; }, untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event } as unknown as ISessionsManagementService;
+	const management = { pendingArchives: noPendingArchives, get sessions() { return sessions; }, untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event } as unknown as ISessionsManagementService;
 	const opened: [string, string | undefined][] = [];
 	const view = {
 		onDidChange: Event.None, getSelection: () => ({ visibleSelections: [] }),
@@ -386,6 +388,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
 	}
 	const sessionService = {
+		pendingArchives: noPendingArchives,
 		get untitledSessions() { return untitledSessions; },
 		sessions: [],
 		state: 'ready', onDidChange: changes.event,
@@ -472,7 +475,7 @@ for (const mode of ['chat', 'code'] as const) {
 				const saved = { sessionId: 'saved', kind: 'code' as const, title: 'Saved conversation', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
 				const standalone = { ...saved, sessionId: 'standalone', title: 'Standalone conversation', workspace: undefined };
 				const sessions = mode === 'code' ? [saved, standalone] : [saved];
-				const management = { get untitledSessions() { return drafts; }, sessions, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+				const management = { pendingArchives: noPendingArchives, get untitledSessions() { return drafts; }, sessions, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 				const opened: string[] = [];
 				const view = {
 					onDidChange: changes.event,
@@ -548,7 +551,7 @@ test('SessionsList updates passive status without changing row identity or selec
 		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const, updatedAt }],
 		management: { status: 'working', statusChangedAtUnixMs: 10 },
 	};
-	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+	const sessionService = { pendingArchives: noPendingArchives, get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
 	const summaries = new Map<HTMLElement, HoverContent>();
@@ -648,6 +651,7 @@ test('The keyboard menu sets a workspace only for an unbound Session and targets
 	let busy = false;
 	const workspaceChanges: [string, string | null][] = [];
 	const management = {
+		pendingArchives: noPendingArchives,
 		get sessions() { return [source, destination]; },
 		untitledSessions: [], state: 'ready', onDidChange: Event.None,
 		canChangeDirectory: (id: string, options?: { ignoreActivity?: true; }) => id === 'target' && (!busy || options?.ignoreActivity === true),
@@ -737,7 +741,7 @@ test('Session hover discards Git results after the session moves or disappears',
 	};
 	for (const nextSessions of [[{ ...session, workspace: { authorityId: 'local', root: '/moved' } }], []]) {
 		let sessions: readonly ISession[] = [session];
-		const management = { get sessions() { return sessions; } } as ISessionsManagementService;
+		const management = { pendingArchives: noPendingArchives, get sessions() { return sessions; } } as ISessionsManagementService;
 		const git = new DeferredPromise<readonly { head: { type: string; name: string; }; }[]>();
 		const scopes = {
 			getScope: () => ({
@@ -773,7 +777,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 	});
 	let drafts = [{ untitledSessionId: 'feedback', title: 'Synthetic feedback' }];
 	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback');
-	const sessions = { sessions: [], get untitledSessions() { return drafts; }, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+	const sessions = { pendingArchives: noPendingArchives, sessions: [], get untitledSessions() { return drafts; }, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const views = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', sessions, views,
@@ -830,7 +834,8 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		chats: [{ threadId: 'root', status: 'active' as const, origin: { type: 'root' as const } }],
 	}));
 	let sessions = catalog;
-	const management = { get sessions() { return sessions; }, untitledSessions: [], state: 'ready', onDidChange: changed.event } as unknown as ISessionsManagementService;
+	const pendingArchives = observableValue<ReadonlySet<string>>('pending archives', new Set());
+	const management = { pendingArchives, get sessions() { return sessions; }, untitledSessions: [], state: 'ready', onDidChange: changed.event } as unknown as ISessionsManagementService;
 	const view = { onDidChange: Event.None } as unknown as ISessionsService;
 	using groupsChanged = new Emitter<void>();
 	let groupEntries = [
@@ -872,6 +877,14 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	{
 		using list = makeList('code');
 		assert.deepEqual(sectionNames(list), ['Quality', 'Release']);
+		const archivingRow = list.domNode.querySelector<HTMLButtonElement>('[data-item="session:one"] button.ash-sessions-list-item')!;
+		archivingRow.focus();
+		pendingArchives.set(new Set(['one']), undefined);
+		assert.equal(list.domNode.querySelector('[data-item="session:one"]'), null);
+		assert.ok(list.domNode.contains(dom.window.document.activeElement));
+		assert.deepEqual(groupEntries[0]!.sessionIds, ['one', 'two']);
+		pendingArchives.set(new Set(), undefined);
+		assert.ok(list.domNode.querySelector('[data-item="session:one"]'));
 		const groupTitle = list.domNode.querySelector<HTMLButtonElement>('[data-section="group:quality"] > h3 button')!;
 		assert.ok(groupTitle.querySelector('[data-ash-icon-id="chat"]'));
 		groupTitle.focus();
@@ -950,6 +963,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const automated: ISession = { ...makeSession(remoteId), source: 'automation' };
 	const catalog = [manual, makeSession('run'), automated];
 	const management = {
+		pendingArchives: noPendingArchives,
 		sessions: catalog, untitledSessions: [], state: 'ready', onDidChange: Event.None,
 		whenDirectoriesReady: async () => {
 			catalog[0] = { ...manual, chats: [{ ...manual.chats[0]!, workspace: { authorityId: 'local', root: '/worktrees/repo/folder' } }] };

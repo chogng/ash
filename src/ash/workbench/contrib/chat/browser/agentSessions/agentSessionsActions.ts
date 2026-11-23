@@ -195,6 +195,7 @@ export function registerAgentSessionActions(): void {
 			const sessions = accessor.get(IAgentSessionActionsService);
 			const configuration = accessor.get(IConfigurationService);
 			const dialogs = accessor.get(IDialogService);
+			const progressService = accessor.get(IProgressService);
 			let target: { readonly title: string; archive(): Promise<boolean>; };
 			let detail: string | undefined;
 			if (isRecord(argument) && 'catalogId' in argument) {
@@ -214,13 +215,21 @@ export function registerAgentSessionActions(): void {
 				};
 				detail = localize('chatSession.archive.detail', 'Running work in this session will be interrupted. You can restore its root conversation later.');
 			}
-			const action = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
+			const wording = getChatSessionArchiveActionWording(configuration);
+			const action = getChatSessionArchiveActionPresentation(wording).archive;
 			const result = await dialogs.confirm({
 				message: localize('chatSession.archive.confirm', '{0}: {1}?', action.title.value, target.title),
 				detail,
 				primaryButton: action.title.value,
 			});
-			return result.confirmed && await target.archive();
+			if (!result.confirmed) return false;
+			return progressService.withProgress({
+				location: ProgressLocation.Notification,
+				title: wording === ChatSessionArchiveActionWording.MarkAsDone
+					? localize('chatSession.markAsDone.progress', 'Marking {0} as done…', target.title)
+					: localize('chatSession.archive.progress', 'Archiving {0}…', target.title),
+				delay: 300,
+			}, () => target.archive());
 		}
 	});
 

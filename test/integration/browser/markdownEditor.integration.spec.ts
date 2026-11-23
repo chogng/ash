@@ -261,22 +261,46 @@ test('native Markdown shares Chinese composition, undo, and saves with the sourc
 	} finally { await cdp.detach(); }
 });
 
-test('native Markdown keeps an uncommitted composition after an external edit', async ({ page, context }) => {
-	const body = await openArkdown(page, { locale: 'zh-CN' });
+test('native Markdown rebases a composition across disjoint edits and an EOL change', async ({ page, context }) => {
+	const body = await openArkdown(page);
 	await selectInline(body, '中文段落');
+	const cdp = await context.newCDPSession(page);
+	try {
+		await cdp.send('Input.imeSetComposition', { text: '同步输入', selectionStart: 4, selectionEnd: 4 });
+		const external = await page.evaluate(() => {
+			window.ashMarkdownHost.edit(0, 0, 'External\n\n');
+			window.ashMarkdownHost.useCRLF();
+			return window.ashMarkdownHost.text;
+		});
+		await cdp.send('Input.insertText', { text: '同步输入' });
+		await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(external.replace('中文段落', '中文段落同步输入'));
+		await expect(body).toHaveAttribute('aria-readonly', 'false');
+		await page.evaluate(() => window.ashMarkdownHost.undo());
+		await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(external);
+	} finally { await cdp.detach(); }
+});
+
+test('native Markdown keeps an uncommitted composition after an overlapping edit', async ({ page, context }) => {
+	const body = await openArkdown(page, { locale: 'zh-CN' });
+	await selectInline(body, '中文段落', 1, 3);
 	const cdp = await context.newCDPSession(page);
 	try {
 		await cdp.send('Input.imeSetComposition', { text: '保留草稿', selectionStart: 4, selectionEnd: 4 });
 		const external = await page.evaluate(() => {
-			window.ashMarkdownHost.edit(0, 0, 'External\r\n');
+			const start = window.ashMarkdownHost.text.indexOf('中文段落');
+			window.ashMarkdownHost.edit(start, start + '中文段落'.length, '外部更改');
 			return window.ashMarkdownHost.text;
 		});
 		await cdp.send('Input.insertText', { text: '保留草稿' });
-		await expect(page.locator('.ash-arkdown-conflict')).toContainText('保留草稿');
+		const draft = page.getByRole('textbox', { name: '未提交的文本' });
+		await expect(draft).toHaveValue('保留草稿');
+		await expect(draft).toBeFocused();
+		expect(await draft.evaluate((input: HTMLTextAreaElement) => input.value.slice(input.selectionStart, input.selectionEnd))).toBe('保留草稿');
 		await expect(body).toHaveAttribute('aria-readonly', 'true');
 		expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(external);
 		await page.getByRole('button', { name: '重新载入文档' }).click();
 		await expect(body).toHaveAttribute('aria-readonly', 'false');
+		await expect(body).toBeFocused();
 		expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(external);
 	} finally { await cdp.detach(); }
 });

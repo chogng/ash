@@ -1,5 +1,10 @@
 import { BaseSecretStorageService, ISecretStorageService } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
+import { IProgressService } from '../../../src/ash/platform/progress/common/progress.js';
+import { IArtifactCatalogService } from '../../../src/ash/sessions/services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService } from '../../../src/ash/sessions/test/common/testArtifactCatalogService.js';
+import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../../src/ash/sessions/services/sessions/browser/sessionsProvidersService.js';
 import './chatFixtureLocalization.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
@@ -1590,6 +1595,9 @@ window.ashChatTranscriptIntegration = {
 		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
 		await services.get(IConfigurationService).updateValue(ChatSessionArchiveActionWordingSettingId, wording);
 		const lifecycleServices = resources.add(services.createChild());
+		lifecycleServices.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		lifecycleServices.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
+		lifecycleServices.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 		lifecycleServices.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
 		lifecycleServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 		lifecycleCommands = resources.add(new CommandService(lifecycleServices));

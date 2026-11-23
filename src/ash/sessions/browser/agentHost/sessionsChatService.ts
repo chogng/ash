@@ -47,7 +47,14 @@ export class SessionsChatService extends Disposable implements IChatService {
 			this.listeners.add(chat.onDidUpdateThread(event => this.onDidUpdateThreadEmitter.fire(pair(event, scope))));
 			this.listeners.add(chat.onDidUpdateThreadTranscript(event => this.onDidUpdateThreadTranscriptEmitter.fire(pair(event, scope))));
 			this.listeners.add(chat.onDidUpdateGoal(event => this.onDidUpdateGoalEmitter.fire({ ...event, threadId: scope.identity(event.threadId), goal: event.goal && goal(event.goal, scope) })));
-			this.listeners.add(chat.onDidBecomeReady(() => this.onDidBecomeReadyEmitter.fire()));
+			this.listeners.add(chat.onDidBecomeReady(() => this.onDidBecomeReadyEmitter.fire({
+				affectsSession: (sessionId, draftProviderId) => {
+					try {
+						const owner = draftProviderId ? this.scopes.getProviderScope(draftProviderId) : this.scopes.getScope(sessionId);
+						return owner === scope;
+					} catch { return false; }
+				},
+			})));
 			this.listeners.add(chat.onDidUpdateTurnChanges(event => this.onDidUpdateTurnChangesEmitter.fire({ ...pair(event, scope), changeSets: event.changeSets.map(value => pair(value, scope)) })));
 			this.listeners.add(chat.onDidChangeQueue(() => this.onDidChangeQueueEmitter.fire()));
 		}

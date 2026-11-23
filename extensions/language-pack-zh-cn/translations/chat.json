@@ -182,6 +182,8 @@
     "chatSession.active.none": "没有可用的活动会话。",
     "chatSession.archive.confirm": "{0}：{1}？",
     "chatSession.archive.detail": "此会话中正在运行的工作将被中断。之后可以恢复根对话。",
+    "chatSession.archive.progress": "正在归档 {0}…",
+    "chatSession.markAsDone.progress": "正在将 {0} 标记为完成…",
     "chatSession.archiveAll.confirm": "{0}（{1} 个会话）？",
     "chatSession.archiveAll.detail": "这些会话中正在运行的工作将被中断。未发送的草稿会保留。",
     "chatSession.archiveAll.failed": "已归档 {0} 个会话，共 {1} 个。",

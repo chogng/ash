@@ -173,6 +173,7 @@ test('opens a local Chat conversation before the backend session request settles
 });
 
 class PendingSessionService implements ISessionsManagementService {
+	readonly pendingArchives = observableValue<ReadonlySet<string>>(this, new Set());
 	readonly navigationRevision = 0;
 	readonly primaryCatalogReady = false;
 	private readonly _onDidChange = new Emitter<void>();

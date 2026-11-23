@@ -462,6 +462,7 @@ export class SessionsList extends DomWidget {
 			customViews.activeCustomView.read(reader);
 			this.attention.read(reader);
 			if (!this.catalog) this.projectPreferences.state.read(reader);
+			if (!this.catalog && mode === 'code') sessionService.pendingArchives.read(reader);
 			this.render();
 		}));
 		this.render();
@@ -1463,7 +1464,8 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code'), this.listModel,
+		const pendingArchives = this.sessionService.pendingArchives.get();
+		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code' && !pendingArchives.has(session.sessionId)), this.listModel,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
@@ -1659,6 +1661,7 @@ export class SessionsList extends DomWidget {
 		if (this.mode === 'code' || this.catalog) this.syncTreeSelection();
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 		else if (focusedRow && !focusedRow.isConnected && this.tree.model.has(SessionsListTree.id(focusedRow))) this.tree.focusRow(focusedRow, true);
+		else if (focusedRow && !focusedRow.isConnected && ownerDocument.activeElement === ownerDocument.body) this.focus();
 		else if (focusedRow?.dataset.section === attentionSection && !attentionRows.length) this.focus();
 	}
 

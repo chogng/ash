@@ -56,6 +56,8 @@ export interface ISessionsManagementService {
 	ensureActiveThread(): Promise<IActiveSessionThread>;
 	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
+	/** A pending archive can hide the list row while the durable Session stays active. */
+	readonly pendingArchives: IObservable<ReadonlySet<SessionId>>;
 	archiveSession(sessionId: SessionId): Promise<void>;
 	/** Restores the canonical catalog entry without changing foreground selection or drafts. */
 	restoreSession(sessionId: SessionId): Promise<void>;

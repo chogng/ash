@@ -42,7 +42,11 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 		});
 		this._register(widgets.onDidChangeWidgets(() => this.collectOwners()));
 		this._register(chat.onDidChangeSession(event => { if ([...this.owners.values()].some(owner => owner.session.path.slice(1) === event.sessionId)) { void this.pruneOwners(event.sessionId); } }));
-		this._register(chat.onDidBecomeReady(() => { for (const id of new Set([...this.owners.values()].map(owner => owner.session.path.slice(1)))) { void this.pruneOwners(id); } }));
+		this._register(chat.onDidBecomeReady(event => {
+			for (const id of new Set([...this.owners.values()].map(owner => owner.session.path.slice(1)))) {
+				if (!event || event.affectsSession(id)) { void this.pruneOwners(id); }
+			}
+		}));
 		this.collectOwners();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(CanvasesEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId)) { this.changed.fire(); }

@@ -460,6 +460,18 @@
 	overflow-wrap: anywhere;
 }
 
-.ash-arkdown-conflict button:focus-visible {
+.ash-arkdown-conflict textarea {
+	display: block;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-editorWidget-border));
+	box-sizing: border-box;
+	inline-size: 100%;
+	margin-block-end: var(--ash-spacing-size80);
+}
+
+.ash-arkdown-conflict :is(button, textarea):focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }

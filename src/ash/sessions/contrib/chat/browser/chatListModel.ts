@@ -330,8 +330,9 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 			};
 			const rows: ChatListEntry[] = [];
 			const forkEntries: ChatListEntry[] = [];
+			const pendingArchives = management.pendingArchives.read(reader);
 			for (const session of sessions) {
-				if (session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
+				if (pendingArchives.has(session.sessionId) || session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
 				const thread = roots.get(session.sessionId);
 				if (!thread) continue;
 				const id = session.sessionId;

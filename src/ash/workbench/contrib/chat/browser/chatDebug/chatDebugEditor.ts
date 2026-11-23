@@ -166,7 +166,8 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.sessionId === this.sessionId && event.durableSequence > (this.cursors[event.threadId] ?? 0)) { this.requestRefresh(); }
 		}));
-		this._register(chat.onDidBecomeReady(() => {
+		this._register(chat.onDidBecomeReady(event => {
+			if (event && this.sessionId && !event.affectsSession(this.sessionId)) return;
 			this.subscriptions.clear();
 			this.sessionDetailsLoaded = false; this.sessionDetailsVersion++;
 			this.requestRefresh();

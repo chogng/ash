@@ -510,6 +510,7 @@ const localChat = {
 	chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
 };
 services.registerInstance(ISessionsManagementService, {
+	pendingArchives: observableValue<ReadonlySet<string>>('pending archives', new Set()),
 	state: 'ready', primaryCatalogReady: true, onDidChange: Event.None, untitledSessions: [],
 	async initialize() { },
 	async refresh() { },

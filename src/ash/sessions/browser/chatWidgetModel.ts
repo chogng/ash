@@ -204,7 +204,9 @@ export class ChatWidgetModel extends Disposable {
 		this._register(chatService.onDidChangeInteractionOffer(change => {
 			if (change.sessionId === this.sessionId && change.threadId === this.threadId) this._onDidChange.fire();
 		}));
-		this._register(chatService.onDidBecomeReady(() => {
+		this._register(chatService.onDidBecomeReady(event => {
+			const draftProviderId = this.selection.kind === 'untitled' ? this.selection.session.providerId : undefined;
+			if (event && !event.affectsSession(this.activeSession?.session.sessionId, draftProviderId)) return;
 			for (const [surface, view] of this.recapViews) {
 				void this.reportRecapPresence(view.sessionId, view.threadId, surface, view.focused).catch(() => { });
 			}
@@ -1309,8 +1311,9 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
-	private async subscribe(active: IActiveSessionThread): Promise<void> {
+	private async subscribe(active: IActiveSessionThread, reconnected = false): Promise<void> {
 		if (
+			!reconnected &&
 			this.subscriptionThreadId === active.threadId &&
 			this.subscriptionPromise
 		) {
@@ -1428,7 +1431,7 @@ export class ChatWidgetModel extends Disposable {
 	private async reconnect(): Promise<void> {
 		const active = this.activeSession;
 		await Promise.all([
-			active ? this.subscribe(active) : Promise.resolve(),
+			active ? this.subscribe(active, true) : Promise.resolve(),
 			this.loadCatalogs(),
 		]);
 	}

@@ -5,9 +5,11 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { Checkbox } from '../../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { TextModelChangeReason, type TextModelChange } from '../../../../../editor/common/core/textChange.js';
 import { TrackedRangeStickiness } from '../../../../../editor/common/model.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
+import type { TrackedRange } from '../../../../../editor/common/model/trackedRange.js';
 import { localize } from '../../../../../nls.js';
 import { RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -44,8 +46,13 @@ interface RenderedRoot {
 	readonly checkboxes: readonly Checkbox[];
 	range: ArkdownRange;
 }
-interface TableComposition { readonly offset: number; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; }
-interface Composition { readonly range: ArkdownRange; readonly version: number; readonly table?: TableComposition; }
+interface TableComposition { readonly range: ArkdownRange; readonly top: number; readonly left: number; readonly bottom: number; readonly right: number; }
+interface Composition {
+	readonly target: TrackedRange;
+	readonly table?: { readonly anchor: TrackedRange; readonly rectangle: TableComposition; };
+	readonly version: number;
+	protectedRange: ArkdownRange | undefined;
+}
 export const ArkdownEditorFocused = new RawContextKey<boolean>('arkdownEditorFocus', false);
 
 /** Direct Markdown editing over the Workbench model. DOM and Rust output are
@@ -69,12 +76,13 @@ export class ArkdownEditor extends Disposable {
 	private selection: ArkdownRange = { start: 0, end: 0 };
 	private indentationCapabilities: { version: number; start: number; end: number; increase?: boolean; decrease?: boolean; } | undefined;
 	private composition: Composition | undefined;
+	private readonly compositionRanges = this._register(new DisposableStore());
 	private pendingTableComposition: TableComposition | undefined;
 	private skipCompositionInput: string | undefined;
 	private inputReadOnly = false;
-	private readonly conflictNotice: HTMLElement | undefined;
-	private readonly conflictDraft: HTMLElement | undefined;
-	private get readOnly(): boolean { return this.inputReadOnly || this.conflictNotice?.hidden === false; }
+	private readonly conflictNotice: HTMLElement;
+	private readonly conflictDraft: HTMLTextAreaElement;
+	private get readOnly(): boolean { return this.inputReadOnly || !this.conflictNotice.hidden; }
 	private mode: ArkdownEditorMode;
 	private pageWide = false;
 	private renderedVersion = -1;
@@ -127,19 +135,17 @@ export class ArkdownEditor extends Disposable {
 		this.prose.tabIndex = 0;
 		ArkdownEditorFocused.bindTo(this._register(contextKeys.createScoped(this.prose))).set(true);
 		this.domNode.append(this.remoteHistory, this.prose, this.source);
-		if (fileEditor) {
-			const reload = h(document, 'button', { attributes: { type: 'button' } }, localize({ bundle: 'ash.arkdown', key: 'reloadDocument' }, 'Reload Document'));
-			this.conflictDraft = h(document, 'p');
-			this.conflictNotice = h(document, 'aside', { className: 'ash-arkdown-conflict', attributes: { hidden: '' } },
-				h(document, 'p', { attributes: { role: 'status' } }, localize({ bundle: 'ash.arkdown', key: 'compositionConflict' }, 'The Markdown source changed during typing. The uncommitted text is shown below. Reload the document to continue editing.')),
-				this.conflictDraft, reload);
-			this.domNode.prepend(this.conflictNotice);
-			this._register(addDisposableListener(reload, 'click', () => {
-				this.conflictNotice!.hidden = true;
-				this.conflictDraft!.textContent = '';
-				this.render(true);
-			}));
-		}
+		const reload = h(document, 'button', { attributes: { type: 'button' } }, localize({ bundle: 'ash.arkdown', key: 'reloadDocument' }, 'Reload Document'));
+		this.conflictDraft = h(document, 'textarea', { attributes: { readonly: '', rows: '2', 'aria-label': localize({ bundle: 'ash.arkdown', key: 'compositionDraft' }, 'Uncommitted text') } });
+		this.conflictNotice = h(document, 'aside', { className: 'ash-arkdown-conflict', attributes: { hidden: '' } },
+			h(document, 'p', { attributes: { role: 'status' } }, localize({ bundle: 'ash.arkdown', key: 'compositionConflict' }, 'The Markdown source changed at the typing location. Copy the uncommitted text before reloading to continue editing.')),
+			this.conflictDraft, reload);
+		this.domNode.prepend(this.conflictNotice);
+		this._register(addDisposableListener(reload, 'click', () => {
+			this.conflictNotice.hidden = true;
+			this.conflictDraft.value = '';
+			this.render(true);
+		}));
 		this._register(toDisposable(() => {
 			this.clearRemoteHighlights();
 			this.sourceHighlights?.clear();
@@ -150,10 +156,10 @@ export class ArkdownEditor extends Disposable {
 			apply: (table: HTMLTableElement, action: ArkdownTableAction, target?: { row: number; column: number; }) => this.applyTableAction(table, action, target),
 			setCaret: (table: HTMLTableElement, row: number, column: number) => this.setTableCaret(table, row, column),
 			canEdit: () => !this.readOnly && !this.composition && this.mode === 'rich',
-			beginComposition: (table: HTMLTableElement, rectangle: Omit<TableComposition, 'offset'>) => {
+			beginComposition: (table: HTMLTableElement, rectangle: Omit<TableComposition, 'range'>) => {
 				const node = this.getTableNode(table);
 				if (!node) return;
-				this.pendingTableComposition = { offset: node.range.start, ...rectangle };
+				this.pendingTableComposition = { range: node.range, ...rectangle };
 				this.setTableCaret(table, rectangle.top, rectangle.left);
 			},
 			blockTarget: (table: HTMLTableElement, target: { clientY: number; } | 'previous' | 'next') => this.tableBlockTarget(table, target),
@@ -179,9 +185,18 @@ export class ArkdownEditor extends Disposable {
 			void this.insertImages(() => Promise.all(files.map(readArkdownImageFile))).catch(this.onError);
 		}));
 		this._register(addDisposableListener(this.prose, 'compositionstart', () => {
+			if (this.readOnly) return;
 			this.renderedVersion = -1;
 			this.resetProjection = true;
-			this.composition = { range: this.readSelection(), version: model.getVersionId(), table: this.pendingTableComposition };
+			this.compositionRanges.clear();
+			const range = this.readSelection();
+			const rectangle = this.pendingTableComposition;
+			this.composition = {
+				target: this.trackCompositionRange(range),
+				table: rectangle && { anchor: this.trackCompositionRange(rectangle.range), rectangle },
+				protectedRange: rectangle?.range ?? range,
+				version: model.getVersionId(),
+			};
 			this.pendingTableComposition = undefined;
 		}));
 		this._register(addDisposableListener(this.prose, 'compositionend', event => this.finishComposition((event as CompositionEvent).data)));
@@ -238,7 +253,7 @@ export class ArkdownEditor extends Disposable {
 		this._register(addDisposableListener(document, 'pointerdown', event => { if (this.hasFocus() && !this.domNode.contains(event.target as Node)) this.selection = this.readSelection(); }, true));
 		this._register(addDisposableListener(this.prose, 'keydown', event => this.keydown(event)));
 		this._register(model.onDidChangeContent(change => {
-			if (this.composition) return;
+			if (this.composition) { this.updateComposition(change, this.composition); return; }
 			const cursor = change.resultingSelection?.[0];
 			if (cursor) this.selection = { start: model.getOffsetAt(cursor.getStartPosition()), end: model.getOffsetAt(cursor.getEndPosition()) };
 			else {
@@ -959,30 +974,67 @@ export class ArkdownEditor extends Disposable {
 		this.selectionChanged.fire();
 	}
 
+	private trackCompositionRange(range: ArkdownRange): TrackedRange {
+		const positions = Range.fromPositions(this.model.getPositionAt(range.start), this.model.getPositionAt(range.end));
+		return this.compositionRanges.add(this.model.trackRange(positions, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges));
+	}
+
+	private compositionOffsets(anchor: TrackedRange): ArkdownRange {
+		const range = anchor.range;
+		return { start: this.model.getOffsetAt(range.getStartPosition()), end: this.model.getOffsetAt(range.getEndPosition()) };
+	}
+
+	private updateComposition(change: TextModelChange, composition: Composition): void {
+		const range = composition.protectedRange;
+		if (!range) return;
+		// Model anchors have already moved. Compare edits against the preceding
+		// coordinates so a replacement at the composition cannot silently win.
+		const overlaps = change.changes.some(edit => {
+			const start = edit.rangeOffset;
+			const end = start + edit.rangeLength;
+			if (range.start === range.end) return start === range.start || start < range.start && end > range.start;
+			return start < range.end && end > range.start;
+		});
+		composition.protectedRange = change.reason === TextModelChangeReason.Reset || overlaps
+			? undefined : this.compositionOffsets(composition.table?.anchor ?? composition.target);
+	}
+
+	private showCompositionConflict(text: string): void {
+		this.conflictDraft.value = text;
+		this.conflictNotice.hidden = false;
+		this.render(false);
+		this.conflictDraft.focus();
+		this.conflictDraft.select();
+	}
+
 	private finishComposition(text: string): void {
 		const composition = this.composition;
 		this.composition = undefined;
 		if (!composition) return;
-		if (composition.version !== this.model.getVersionId() || this.readOnly || !text) {
-			if (text && this.conflictNotice && this.conflictDraft && composition.version !== this.model.getVersionId()) {
-				this.conflictDraft.textContent = text;
-				this.conflictNotice.hidden = false;
-			}
+		const range = composition.protectedRange && this.compositionOffsets(composition.target);
+		this.compositionRanges.clear();
+		if (!text) {
 			this.render(this.hasFocus());
 			return;
 		}
 		this.skipCompositionInput = text;
+		if (!range || this.readOnly) { this.showCompositionConflict(text); return; }
+		if (composition.version !== this.model.getVersionId()) {
+			this.selection = range;
+			this.render(this.hasFocus());
+			if (this.mode !== 'rich') { this.showCompositionConflict(text); return; }
+		}
 		if (composition.table) {
-			const rectangle = composition.table;
-			const table = [...this.prose.querySelectorAll('table')].find(element => this.ranges.get(element)?.start === rectangle.offset);
-			if (!table) { this.render(this.hasFocus()); return; }
+			const { rectangle } = composition.table;
+			const table = [...this.prose.querySelectorAll('table')].find(element => this.ranges.get(element)?.start === composition.protectedRange?.start);
+			if (!table) { this.showCompositionConflict(text); return; }
 			// IME cancellation never clears a rectangle, and a committed composition
 			// replaces it through one source transaction and one undo entry.
 			const values = Array.from({ length: rectangle.bottom - rectangle.top + 1 }, (_, row) => Array.from({ length: rectangle.right - rectangle.left + 1 }, (_, column) => row === 0 && column === 0 ? text : ''));
 			this.applyTableAction(table, { kind: 'paste_cells', row: rectangle.top, column: rectangle.left, values }, { row: rectangle.top, column: rectangle.left });
 			return;
 		}
-		this.insertText(composition.range, text);
+		this.insertText(range, text);
 	}
 
 	private splitTableCellBlock(range: ArkdownRange): boolean {

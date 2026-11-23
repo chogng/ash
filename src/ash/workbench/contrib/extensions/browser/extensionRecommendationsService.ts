@@ -144,12 +144,33 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			add({ ...recommendation, uiTargets, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.WORKSPACE, name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace') } } : {}) });
 		}
 		const languageQueries = new Map<string, ReturnType<IExtensionManagementService['search']>>();
+		const resources = new Map<string, { resource: URI; languageId?: string; }>();
+		for (const resource of this.requestedResources.values()) { resources.set(this.uriIdentity.extUri.getComparisonKey(resource), { resource }); }
+		for (const input of this.editors.visibleEditors) { resources.set(this.uriIdentity.extUri.getComparisonKey(input.resource), { resource: input.resource, languageId: input.languageId }); }
+		const directResources = new Set(resources.keys());
+		const supportedResources = new Map<string, Set<string>>();
+		const supportedFolderLanguages = new Map<string | undefined, Set<string>>();
+		for (const model of [...this.editorModels.getModels(), ...this.models.getModels()]) {
+			const resourceKey = this.uriIdentity.extUri.getComparisonKey(model.uri);
+			const languageId = model.getLanguageId();
+			// Background previews in Agents can supply language support, while only
+			// an editor or explicit request supplies recommendation context there.
+			if (!model.isForSimpleWidget && (this.target === ExtensionUiTarget.IDE || directResources.has(resourceKey))) {
+				resources.set(resourceKey, { resource: model.uri, languageId });
+			}
+			if (languageId === 'plaintext' || !this.languageFeatures.hoverProvider.has(model)) { continue; }
+			const languages = supportedResources.get(resourceKey) ?? new Set<string>();
+			languages.add(languageId);
+			supportedResources.set(resourceKey, languages);
+			const folderId = this.workspace.getWorkspaceFolder(model.uri)?.id;
+			const folderLanguages = supportedFolderLanguages.get(folderId) ?? new Set<string>();
+			folderLanguages.add(languageId);
+			supportedFolderLanguages.set(folderId, folderLanguages);
+		}
 		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason, resource: URI): Promise<void> => {
 			const folder = this.workspace.getWorkspaceFolder(resource) ?? folders[0];
-			const hasProvider = [...this.editorModels.getModels(), ...this.models.getModels()].some(model =>
-				model.getLanguageId() === languageId
-				&& (this.uriIdentity.extUri.isEqual(model.uri, resource) || reasonId === ExtensionRecommendationReason.WorkspaceConfig && this.workspace.getWorkspaceFolder(model.uri)?.id === folder?.id)
-				&& this.languageFeatures.hoverProvider.has(model));
+			const hasProvider = supportedResources.get(this.uriIdentity.extUri.getComparisonKey(resource))?.has(languageId)
+				|| reasonId === ExtensionRecommendationReason.WorkspaceConfig && supportedFolderLanguages.get(folder?.id)?.has(languageId);
 			if (languageId === 'plaintext' || hasProvider || folder && serverLanguages.get(folder.id)?.has(languageId)) { return; }
 			let query = languageQueries.get(languageId);
 			if (!query) {
@@ -164,21 +185,10 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				}
 			} catch { /* Offline language discovery must not prevent declared or editor recommendations. */ }
 		};
-		const resources = new Map<string, { resource: URI; languageId?: string; }>();
-		for (const resource of this.requestedResources.values()) { resources.set(this.uriIdentity.extUri.getComparisonKey(resource), { resource }); }
-		for (const input of this.editors.visibleEditors) { resources.set(this.uriIdentity.extUri.getComparisonKey(input.resource), { resource: input.resource, languageId: input.languageId }); }
-		const directResources = new Set(resources.keys());
-		for (const model of [...this.editorModels.getModels(), ...this.models.getModels()]) {
-			const key = this.uriIdentity.extUri.getComparisonKey(model.uri);
-			// Agents can load documents for execution and previews. Only an actual editor or
-			// explicit editor request establishes a recommendation context in that window.
-			if (!model.isForSimpleWidget && (this.target === ExtensionUiTarget.IDE || directResources.has(key))) {
-				resources.set(key, { resource: model.uri, languageId: model.getLanguageId() });
-			}
-		}
+		const resourceSchemes = new Set(['file', 'untitled', 'ash-remote', ...folders.map(folder => folder.uri.scheme)]);
 		const work: Promise<void>[] = [];
 		for (const { resource, languageId } of resources.values()) {
-			if (!['file', 'untitled', 'ash-remote', ...this.workspace.getWorkspace().folders.map(folder => folder.uri.scheme)].includes(resource.scheme)) { continue; }
+			if (!resourceSchemes.has(resource.scheme)) { continue; }
 			const extension = extname(resource.path).toLowerCase();
 			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
 			if (tip) {
