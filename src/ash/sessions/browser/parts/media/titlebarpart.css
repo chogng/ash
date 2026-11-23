@@ -53,6 +53,11 @@
 	padding: 0 var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
 }
 
+.ash-sessions-titlebar.has-tool-headers > .ash-workbench-part-content {
+	/* Docked editor headers supply their own edge padding. */
+	padding-right: 0;
+}
+
 .ash-sessions-titlebar-left {
 	display: flex;
 	/* A narrow sidebar must not hide history actions or overlap the workspace switcher. */

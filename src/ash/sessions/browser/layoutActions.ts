@@ -103,6 +103,7 @@ export function registerLayoutActions(
 				toggled: {
 					condition: sessionsPartHidden.isEqualTo(true),
 					title: localize2('sessions.layout.showChat', 'Show Chat'),
+					tooltip: localize2('sessions.layout.exitFullScreen', 'Exit Full Screen'),
 					icon: Lxicon.minimize,
 				},
 				menu: [
@@ -121,6 +122,7 @@ export function registerLayoutActions(
 			super({
 				id: 'sessions.closeEditorPart',
 				title: localize2('sessions.layout.closeEditor', 'Close editor'),
+				tooltip: localize2('sessions.layout.closeEditorTooltip', 'Close'),
 				icon: Lxicon.close,
 				menu: [
 					{ id: Menus.EditorPartLayout, group: 'navigation', order: 2 },

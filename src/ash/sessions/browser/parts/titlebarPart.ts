@@ -233,7 +233,8 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 
 	public layoutEditorHeaders(left: number | undefined, page: HTMLElement | undefined, setToolHost: (host: HTMLElement | undefined) => void, browser = false, conversationVisible = true): void {
 		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
-		let width = 0;
+		const row = this.contentDomNode;
+		let availableWidth = 0;
 		if (left !== undefined) {
 			const controlsEnd = this.leftControls.getBoundingClientRect().right;
 			const accountsWidth = this.activityActions.element.offsetWidth;
@@ -244,19 +245,20 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			}
 			// Keep the conversation's title and actions usable beside the editor header.
 			if (page || browser || left - controlsEnd >= this.minimumHeight * 2 + accountsWidth) {
-				const row = this.contentDomNode;
-				const rightInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight);
-				width = Math.max(0, row.getBoundingClientRect().right - rightInset - left);
+				availableWidth = Math.max(0, row.getBoundingClientRect().right - left);
 			}
 		}
-		const dockTools = width > 0 && !page;
+		const dockTools = availableWidth > 0 && !page;
+		// Apply the docked row's padding before sizing the header host.
+		this.domNode.classList.toggle('has-tool-headers', dockTools);
+		const rightInset = availableWidth > 0 ? parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) : 0;
+		const width = Math.max(0, availableWidth - rightInset);
 		// Return the focused row to its group before hiding the titlebar slot.
 		if (!dockTools) setToolHost(undefined);
 		const oldPage = this.editorHeaders.firstElementChild;
 		if (page && oldPage !== page) this.editorHeaders.replaceChildren(page);
 		else if (!page && this.domNode.classList.contains('has-editor-page-header')) oldPage?.remove();
 		this.editorHeaders.hidden = width === 0;
-		this.domNode.classList.toggle('has-tool-headers', dockTools);
 		this.domNode.classList.toggle('has-editor-page-header', !!page);
 		this.editorHeaders.style.flexBasis = `${width}px`;
 		if (dockTools) setToolHost(this.editorHeaders);

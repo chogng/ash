@@ -169,9 +169,9 @@ test('Sessions layout commands update menu state from their owners and release w
 		layout.setPartAvailable('sessions', false);
 		using partMenu = new MenuService(commands, contextKeys).createMenu(Menus.EditorPartLayout);
 		const partActions = () => partMenu.getActions().flatMap(([, actions]) => actions);
-		assert.deepEqual(partActions().map(action => [action.id, action.label, action.icon]), [
-			['sessions.toggleSessionPart', 'Show Chat', Lxicon.minimize],
-			['sessions.closeEditorPart', 'Close editor', Lxicon.close],
+		assert.deepEqual(partActions().map(action => [action.id, action.label, action.tooltip, action.icon]), [
+			['sessions.toggleSessionPart', 'Show Chat', 'Exit Full Screen', Lxicon.minimize],
+			['sessions.closeEditorPart', 'Close editor', 'Close', Lxicon.close],
 		]);
 		await partActions()[1]!.run();
 		assert.equal(layout.isPartVisible('editor'), false);
@@ -179,6 +179,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.equal(group.activeInput, input);
 		assert.deepEqual(group.inputs, [input], 'Hiding the Part retains its document working set');
 		assert.equal(partActions()[0]!.label, 'Maximize');
+		assert.equal(partActions()[0]!.tooltip, 'Maximize');
 		layout.showPart('editor');
 		assert.equal(group.activeInput, input);
 
