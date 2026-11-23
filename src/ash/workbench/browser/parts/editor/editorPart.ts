@@ -23,6 +23,7 @@ import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISeriali
 import { DisposableMap, Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -40,6 +41,7 @@ import type { IAccessibilityService } from '../../../../platform/accessibility/c
 import type { ICollabApi } from '../../../../platform/collab/common/collabApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { Part } from '../../part.js';
+import { WorkbenchWindowBarHeight } from '../workbenchPartDimensions.js';
 import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from './editorGroupView.js';
 import type { IEditorGroupView, IEditorGroupViewOptions } from './editor.js';
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from './editorConfiguration.js';
@@ -132,6 +134,8 @@ export const IEditorPart =
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
 	readonly headerRowHeight?: IEditorGroupViewOptions['headerRowHeight'];
+	/** Minimum height in CSS pixels of an EditorPane's content toolbar row. */
+	readonly paneToolbarHeight?: IObservable<number>;
 	readonly hideTabs?: boolean;
 	/** Restricts which tabs can be transferred into an independently routed editor part. */
 	readonly canDropEditor?: (input: IResourceEditorInput) => boolean;
@@ -333,6 +337,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				} : {}),
 			},
 		} satisfies ModalEditorPartOptions));
+		this._register(autorun(reader => {
+			const height = `${options.paneToolbarHeight?.read(reader) ?? WorkbenchWindowBarHeight}px`;
+			this.domNode.style.setProperty('--ash-editor-toolbar-height', height);
+			this.modalEditor.domNode.style.setProperty('--ash-editor-toolbar-height', height);
+		}));
 		this.onDidChangeModalVisibility = this.modalEditor.onDidChangeVisibility;
 		this.editorsObserver = this._register(new EditorsObserver(this));
 		this._register(this.modalEditor.onDidRequestClose(input => {

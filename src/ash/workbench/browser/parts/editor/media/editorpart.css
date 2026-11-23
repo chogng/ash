@@ -18,6 +18,11 @@
 	height: 100%;
 }
 
+.ash-editor-pane-toolbar {
+	box-sizing: border-box;
+	min-block-size: var(--ash-editor-toolbar-height);
+}
+
 .ash-workbench-editor
 	.ash-workbench-part-content
 	> :is(.ash-grid, .ash-split-view) {

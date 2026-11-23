@@ -34,6 +34,7 @@ import { OpenerService } from '../../../../../../editor/browser/services/openerS
 import { SaveReason, type IResourceEditorInput, type ISaveOptions } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight, StatusbarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
+import { observableValue } from '../../../../../../base/common/observable.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
 import { Dimension } from '../../../../../../base/browser/dom.js';
 import type { IEditorPartOptions } from '../../editorPart.js';
@@ -489,6 +490,26 @@ test('EditorPart resizes its active pane once when the content inset is unchange
 		editor.layout(new Dimension(840, 600));
 		assert.equal(dimensions.length, 1);
 		assert.equal(dimensions[0]!.width, pane.dimension!.width);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorPart scopes the pane toolbar height to its editor region and modal', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	try {
+		const { document } = dom.window;
+		const paneToolbarHeight = observableValue('paneToolbarHeight', 36);
+		using editor = createEditorPart(document.querySelector('main')!, { paneToolbarHeight, modalContainer: document.querySelector('aside')! });
+		using otherEditor = createEditorPart(document.querySelector('main')!, {});
+		const modal = document.querySelector<HTMLElement>('aside .ash-modal-editor')!;
+		const height = (element: HTMLElement) => element.style.getPropertyValue('--ash-editor-toolbar-height');
+		assert.equal(height(editor.domNode), '36px');
+		assert.equal(height(modal), '36px');
+		paneToolbarHeight.set(40, undefined);
+		assert.equal(height(editor.domNode), '40px');
+		assert.equal(height(modal), '40px');
+		assert.equal(height(otherEditor.domNode), `${WorkbenchWindowBarHeight}px`);
 	} finally {
 		dom.window.close();
 	}

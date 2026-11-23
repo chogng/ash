@@ -81,7 +81,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 			showContextMenu: delegate => menus.showContextMenu({ ...delegate, useNativeWindow: true }),
 		};
 		const container = this.container = h(editor.browserContainer.ownerDocument, 'div');
-		container.className = 'ash-browser-toolbar';
+		container.className = 'ash-editor-pane-toolbar ash-browser-toolbar';
 		const navigation = h(container.ownerDocument, 'div');
 		navigation.className = 'ash-browser-navigation';
 		container.append(navigation);

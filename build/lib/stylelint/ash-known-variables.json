@@ -652,6 +652,7 @@
 		"--ash-cornerRadius-xLarge",
 		"--ash-cornerRadius-xSmall",
 		"--ash-cornerRadius-xxLarge",
+		"--ash-editor-toolbar-height",
 		"--ash-fontSize-body1",
 		"--ash-fontSize-body2",
 		"--ash-fontSize-heading1",

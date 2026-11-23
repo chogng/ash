@@ -510,12 +510,12 @@ export class DesktopWorkbenchLayout
 		}
 		const auxiliary = this.view('auxiliarybar');
 		auxiliary.frame.classList.add('ash-sessions-auxiliarybar-frame');
-		const updateTitlebarHeight = () => {
+		const updateAuxiliaryFrame = () => {
 			const height = this.titlebarHeight;
-			this.domNode.style.setProperty('--ash-sessions-titlebar-height', `${height}px`);
+			auxiliary.frame.style.setProperty('--ash-sessions-titlebar-height', `${height}px`);
 			auxiliary.setFrameInsets({ ...NoWorkbenchPartFrameInsets, top: height });
 		};
-		updateTitlebarHeight();
+		updateAuxiliaryFrame();
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => {
 			if (this.responsiveLayout) return;
 			if (this.partUpdateDepth === 0 && this.grid.width > 0 && this.grid.height > 0) {
@@ -529,7 +529,7 @@ export class DesktopWorkbenchLayout
 		this.rebuildGrid(state, this.initialDimension);
 		this._register(
 			this.view('titlebar').part.onDidChangeConstraints(() => {
-				updateTitlebarHeight();
+				updateAuxiliaryFrame();
 				// Grid and overlays follow the titlebar's new height.
 				if (this.grid.width > 0 && this.grid.height > 0)
 					this.layout(new Dimension(this.grid.width, this.grid.height));

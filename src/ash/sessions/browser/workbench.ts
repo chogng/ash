@@ -1437,6 +1437,7 @@ export abstract class Workbench extends Disposable {
 				catch { return false; }
 			},
 			headerRowHeight: derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined),
+			paneToolbarHeight: titlebarHeight,
 			configurationService: this.configurationService,
 			modalContainer: this.domNode,
 			keybindingService: services.get(IKeybindingService),

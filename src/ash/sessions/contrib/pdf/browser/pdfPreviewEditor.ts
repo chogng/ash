@@ -140,7 +140,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		const document = parent.ownerDocument;
 		this.element = h(document, 'section', { className: 'ash-sessions-pdf-preview' });
 		this._register(toDisposable(() => this.element.remove()));
-		const controls = h(document, 'div', { className: 'ash-sessions-pdf-controls', attributes: { role: 'group', 'aria-label': localize('sessions.pdfPreview.controls', 'PDF controls') } });
+		const controls = h(document, 'div', { className: 'ash-editor-pane-toolbar ash-sessions-pdf-controls', attributes: { role: 'group', 'aria-label': localize('sessions.pdfPreview.controls', 'PDF controls') } });
 		const navigation = h(document, 'div', { className: 'ash-sessions-pdf-navigation' });
 		controls.append(navigation);
 		const navigationLabel = localize('sessions.pdfPreview.pageNavigation', 'PDF page navigation');
