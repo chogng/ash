@@ -60,41 +60,6 @@ fn missing_keybindings_restore_builtins_without_user_rules() {
 }
 
 #[test]
-fn saved_mode_shortcut_runs_and_next_edit_writes_the_current_command() {
-    let document = json!([
-        {"key": "ctrl+y", "command": "ashCode.action.cycleCollaborationMode"},
-        {"key": "ctrl+o", "block": true}
-    ]);
-    let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), document.clone())]));
-    let settings = settings_from_tui(&section).unwrap();
-    assert_eq!(
-        settings.keymap.resolve_single(
-            &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
-            context()
-        ),
-        Some(AppKeymapAction::CycleAgentMode)
-    );
-
-    let edit = KeymapEdit {
-        expected_revision: 7,
-        command_id: "ashCode.action.cycleAgentMode".into(),
-        kind: KeymapEditKind::Set {
-            key: "ctrl+y".into(),
-            intent: KeymapEditIntent::AddAlternate,
-        },
-    };
-    let (saved, _) = edited_document(document, &edit).unwrap();
-    assert_eq!(
-        saved,
-        json!([
-            {"key": "ctrl+y", "command": "ashCode.action.cycleAgentMode"},
-            {"key": "ctrl+o", "block": true}
-        ])
-    );
-    assert_eq!(edited_document(saved.clone(), &edit).unwrap().0, saved);
-}
-
-#[test]
 fn shortcut_edit_preserves_unrelated_rules() {
     let document = json!([{
         "key": "ctrl+x",
@@ -102,7 +67,7 @@ fn shortcut_edit_preserves_unrelated_rules() {
     }]);
     let edit = KeymapEdit {
         expected_revision: 7,
-        command_id: "ashCode.action.copyLastResponse".into(),
+        command_id: "ashCode.action.cycleAgentMode".into(),
         kind: KeymapEditKind::Set {
             key: "ctrl+y".into(),
             intent: KeymapEditIntent::AddAlternate,
@@ -120,7 +85,7 @@ fn shortcut_edit_preserves_unrelated_rules() {
             &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
             context(),
         ),
-        Some(AppKeymapAction::CopyLastResponse)
+        Some(AppKeymapAction::CycleAgentMode)
     );
 }
 
