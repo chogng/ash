@@ -33,7 +33,7 @@ test('PDF editor renders pages, creates annotations, and saves a companion docum
 	const annotations = new TestAnnotationStore();
 	const renderer = new TestRenderer();
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer, () => { });
 	pane.create(dom.window.document.body);
 
 	await pane.setInput(input('paper.pdf'), new AbortController().signal);
@@ -102,7 +102,7 @@ test('PDF editor observes cancellation before rendering pages', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const renderer = new TestRenderer();
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer, () => { });
 	pane.create(dom.window.document.body);
 	const controller = new AbortController();
 	controller.abort('closed');
@@ -113,10 +113,31 @@ test('PDF editor observes cancellation before rendering pages', async () => {
 	dom.window.close();
 });
 
+test('PDF editor reports redraw failures through the window and clears its busy state', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createTestComponentServices(undefined, undefined, dom.window.document);
+		const reported = new DeferredPromise<string>();
+		const renderer = new TestRenderer();
+		renderer.setScale = async () => { throw new Error('Canvas failed'); };
+		using pane = services.createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer, (message: string) => { void reported.complete(message); });
+		pane.create(dom.window.document.body);
+		await pane.setInput(input('paper.pdf'), new AbortController().signal);
+		const zoom = dom.window.document.querySelector<HTMLSelectElement>('.ash-pdf-zoom')!;
+		zoom.value = '2';
+		zoom.dispatchEvent(new dom.window.Event('change'));
+		assert.equal(await reported.p, 'Could not redraw PDF: Canvas failed');
+		assert.equal(pane.getContainer()!.hasAttribute('aria-busy'), false);
+		assert.doesNotMatch(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Canvas failed/);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('PDF reading shortcuts precede document commands only while the pane is focused', async () => {
 	const dom = new JSDOM('<!doctype html><body><button id="outside">Outside</button></body>');
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	using pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), new TestRenderer());
+	using pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), new TestRenderer(), () => { });
 	pane.create(dom.window.document.body);
 	await pane.setInput(input('paper.pdf'), new AbortController().signal);
 	let globalKeys = 0;
@@ -219,7 +240,7 @@ test('PDF editor keeps edits and the previous revision after a failed save, then
 	await pending;
 	assert.equal(dom.window.document.querySelectorAll('.ash-pdf-annotation-note').length, 2);
 	assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
-	assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Could not save annotations: write failed/);
+	assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Unsaved annotations/);
 	const retry = pane.save();
 	assert.equal(annotations.requests[1].expectedRevision, 'initial');
 	assert.equal(annotations.requests[1].document.annotations.length, 2);
@@ -286,7 +307,7 @@ for (const concurrent of [false, true]) {
 		const doms = [new JSDOM('<!doctype html><body></body>'), new JSDOM('<!doctype html><body></body>')];
 		using firstServices = createTestComponentServices(undefined, undefined, doms[0].window.document);
 		using secondServices = createTestComponentServices(undefined, undefined, doms[1].window.document);
-		const panes = [firstServices, secondServices].map(services => registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new WorkspacePdfAnnotationStore(files), new TestRenderer()));
+		const panes = [firstServices, secondServices].map(services => registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new WorkspacePdfAnnotationStore(files), new TestRenderer(), () => { }));
 		try {
 			for (let index = 0; index < panes.length; index++) {
 				panes[index].create(doms[index].window.document.body);
@@ -306,7 +327,7 @@ for (const concurrent of [false, true]) {
 			const items = () => [...dom.window.document.querySelectorAll('.ash-pdf-annotation-list-item')].map(item => item.textContent);
 			assert.deepEqual(items(), [`Note 1: Window ${loser}`]);
 			assert.equal(actionButton(dom, 'ash.pdf.annotations.save').disabled, false);
-			assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Could not save annotations/);
+			assert.match(dom.window.document.querySelector('.ash-pdf-annotation-status')!.textContent!, /Unsaved annotations/);
 			actionButton(dom, 'ash.pdf.annotations.undo').click();
 			actionButton(dom, 'ash.pdf.annotations.redo').click();
 			assert.deepEqual(items(), [`Note 1: Window ${loser}`]);
@@ -324,7 +345,7 @@ async function createSavingFixture(): Promise<SavingFixture> {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const annotations = new DelayedAnnotationStore();
 	const services = createTestComponentServices(undefined, undefined, dom.window.document);
-	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, annotations, new TestRenderer());
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, annotations, new TestRenderer(), () => { });
 	const provider = new AbortController();
 	pane.bindProvider(provider.signal);
 	pane.create(dom.window.document.body);
@@ -420,6 +441,7 @@ class TestAnnotationStore implements IPdfAnnotationStore {
 class TestRenderer implements IPdfRenderer {
 	readonly requests: PdfRenderRequest[] = [];
 	disposed = 0;
+	setScale: IPdfRenderResult['setScale'] = async () => { };
 
 	async render(request: PdfRenderRequest): Promise<IPdfRenderResult> {
 		this.requests.push(request);
@@ -432,7 +454,7 @@ class TestRenderer implements IPdfRenderer {
 		return {
 			pages: [{ pageNumber: 1, element: page, width: 300, height: 144, text: '', textRuns: [] }],
 			scale: request.scale,
-			setScale: async () => { },
+			setScale: this.setScale,
 			pageCount: 1,
 			dispose: () => {
 				this.disposed += 1;

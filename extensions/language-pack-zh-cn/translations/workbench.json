@@ -739,7 +739,6 @@
     "workbench.editorOpenClose": "关闭编辑器",
     "workbench.editorOpenFailure": "无法打开 {0}",
     "workbench.editorOpenFailureGeneric": "无法打开编辑器",
-    "workbench.editorOpenUnknownError": "打开此编辑器时发生未知错误。",
     "workbench.editorOpenAsBinary": "作为二进制文件打开",
     "workbench.editorOpenWarning": "警告",
     "workbench.editorOpenInfo": "信息",

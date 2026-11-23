@@ -13,6 +13,8 @@ import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { registerTestComponentServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { INotificationService, Severity } from '../../../src/ash/platform/notification/common/notification.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
@@ -37,6 +39,8 @@ services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 const memory = new InMemoryFileSystemProvider();
 const files = createTestFileService(memory); services.registerInstance(IFileService, files);
 registerTestComponentServices(services);
+const notifications = services.createInstance(NotificationService);
+services.registerInstance(INotificationService, notifications);
 services.registerInstance(IConfigurationService, new TestConfigurationService());
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
 const uri = URI.file('/fixture/paper.pdf');
@@ -102,10 +106,12 @@ window.pdfExtensionTest = {
 		catch { return undefined; }
 	},
 	async unchanged() { return String((await memory.readFile(uri)).bytes) === String(bytes); },
+	async createSidecar() { await memory.writeFile(URI.file('/fixture/paper.pdf.ash-annotations.json'), new TextEncoder().encode('{"version":1,"annotations":[]}'), { create: true, overwrite: false }); },
+	errors() { return notifications.model.getNotifications().filter(item => item.severity === Severity.Error).map(item => item.message); },
 	close() { chat?.dispose(); chat = undefined; pane?.dispose(); pane = undefined; container.replaceChildren(); },
-	dispose() { chat?.dispose(); pane?.dispose(); responseFiles.dispose(); bridge.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
+	dispose() { chat?.dispose(); pane?.dispose(); responseFiles.dispose(); bridge.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); files.dispose(); memory.dispose(); },
 };
 
 declare global {
-	interface Window { pdfExtensionTest: { setTheme(theme: 'dark' | 'hcDark' | 'hcLight'): void; accessible(help?: boolean): string; verbosity(enabled: boolean): Promise<void>; previewChat(): void; available(): boolean; enable(value: boolean): Promise<void>; open(readOnly?: boolean): Promise<void>; saved(): Promise<{ annotations: unknown[]; } | undefined>; unchanged(): Promise<boolean>; close(): void; dispose(): void; }; }
+	interface Window { pdfExtensionTest: { setTheme(theme: 'dark' | 'hcDark' | 'hcLight'): void; accessible(help?: boolean): string; verbosity(enabled: boolean): Promise<void>; previewChat(): void; available(): boolean; enable(value: boolean): Promise<void>; open(readOnly?: boolean): Promise<void>; saved(): Promise<{ annotations: unknown[]; } | undefined>; unchanged(): Promise<boolean>; createSidecar(): Promise<void>; errors(): string[]; close(): void; dispose(): void; }; }
 }

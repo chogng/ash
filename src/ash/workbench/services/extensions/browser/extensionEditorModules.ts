@@ -91,8 +91,8 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 	};
 	if ('getResourceEditor' in component) return {
 		packageId: component.packageId, packageVersion: component.packageVersion,
-		getResourceEditor: (editorId, createInstance) => {
-			const Pane = component.getResourceEditor(editorId, createInstance);
+		getResourceEditor: (editorId, createInstance, reportError) => {
+			const Pane = component.getResourceEditor(editorId, createInstance, reportError);
 			return class StyledResourceEditor extends Pane {
 				private styleLease: IDisposable | undefined;
 				private styleParent: HTMLElement | undefined;

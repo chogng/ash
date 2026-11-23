@@ -6,6 +6,8 @@ When an existing extension is blocked by a missing capability, apply the [SDK ca
 
 The development SDK contains the Rust SDK, versioned Host RPC types, the client source-digest build helper, TypeScript declarations, a closed-client compiler and a native development host. It does not contain Ash runtime implementations. Its editor API is `editor.client.v1` / client API v1; imports use `ash:editor/<module>.js` and the exported allowlist. Only the runtime exports in `editor-api.json` are callable. Type declarations do not grant runtime authority.
 
+The resource editor factory `getResourceEditor(editorId, createInstance, reportError)` receives a plain-text error callback. Ash presents errors in the owning window's notification center while the provider is admitted. The callback becomes inactive when the provider retires.
+
 From the Ash checkout, build the development host and export into **new sibling directories**:
 
 ```sh

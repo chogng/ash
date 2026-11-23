@@ -14,6 +14,8 @@ import { registerTestTitlebarServices } from '../../../src/ash/workbench/test/co
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { INotificationService, Severity } from '../../../src/ash/platform/notification/common/notification.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
@@ -26,6 +28,7 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
+import { EditorPanes as EditorPaneHost } from '../../../src/ash/workbench/browser/parts/editor/editorPanes.js';
 import type { IEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { languagePackCatalog as chineseCatalog } from '../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
@@ -40,6 +43,7 @@ import { pdfScrollModeSetting } from '../../../src/ash/sessions/contrib/pdf/brow
 import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import '../../../src/ash/sessions/contrib/pdf/browser/pdfPreview.contribution.js';
+import '../../../src/ash/sessions/browser/ui/filterTabs.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 
 class Transport implements AppServerTransport {
@@ -86,6 +90,8 @@ services.registerInstance(IConfigurationService, configuration);
 const initialMode = new URL(location.href).searchParams.get('scrollMode');
 if (initialMode) { await configuration.updateValue(pdfScrollModeSetting, initialMode, ConfigurationTarget.USER_LOCAL); }
 services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+const notifications = services.createInstance(NotificationService);
+services.registerInstance(INotificationService, notifications);
 registerTestTitlebarServices(services);
 const commands = new CommandService(services);
 services.registerInstance(ICommandService, commands);
@@ -106,7 +112,13 @@ const original = new Uint8Array(await (await fetch('/__aspdf_bytes')).arrayBuffe
 await memory.writeFile(resource, original, { create: true, overwrite: false });
 let pane: EditorPane | undefined;
 let split: EditorPane | undefined;
-window.aspdfTest = {
+const pdfTest = {
+	async createWithPaneHost() {
+		const input = { resource, readOnly: true };
+		const editor = await EditorPanes.getEditorPane(input)!.create({ input, instantiationService: services });
+		using host = new EditorPaneHost(document.getElementById('viewer')!);
+		host.create(editor);
+	},
 	async open(readOnly = false, name = 'review.pdf') {
 		pane?.dispose();
 		const target = URI.file(`/fixture/${name}`);
@@ -124,6 +136,7 @@ window.aspdfTest = {
 	},
 	dirty() { return pane?.workingCopy?.isDirty ?? false; },
 	chatDraft() { return chatDraft; },
+	errors() { return notifications.model.getNotifications().filter(item => item.severity === Severity.Error).map(item => item.message); },
 	setScrollMode(value: unknown) { return configuration.updateValue(pdfScrollModeSetting, value, ConfigurationTarget.USER_LOCAL); },
 	async scrollPreference() { return { value: configuration.getValue(pdfScrollModeSetting), source: (await configuration.read()).source }; },
 	viewState() { return (pane as EditorPane & IEditorPaneWithViewState).saveViewState(); },
@@ -143,8 +156,9 @@ window.aspdfTest = {
 		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
 	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
-	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
+	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
 };
+window.aspdfTest = pdfTest;
 declare global {
-	interface Window { aspdfTest: { open(readOnly?: boolean, name?: string): Promise<void>; setScrollMode(value: unknown): Promise<void>; scrollPreference(): Promise<{ value: unknown; source: string; }>; resize(width: number, height: number): void; dirty(): boolean; chatDraft(): string; viewState(): unknown; restoreViewState(state: unknown): void; saved(): Promise<{ changed: boolean; pdf: boolean; }>; externalWrite(): Promise<void>; hasExternalBytes(): Promise<boolean>; revert(): Promise<void>; split(): Promise<void>; closeFirst(): void; highContrast(): void; colorTheme(scheme: 'light' | 'dark' | 'hcDark' | 'hcLight'): void; dispose(): void; }; }
+	interface Window { aspdfTest: typeof pdfTest; }
 }

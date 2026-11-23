@@ -9,6 +9,19 @@ suite('Projects toolbar', () => {
 		expect(await browser.page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
 	});
 
+	test('a missing PDF material is reported by the window notification service', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?projectCreation&projectPdfPreview&missingProjectPdf&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
+		const projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'PDF project', exact: true }).click();
+		await projects.getByRole('button', { name: 'report.pdf', exact: true }).click();
+		const message = '无法打开此资料。请检查源文件是否仍然可用。';
+		await expect(page.locator('.ash-notification-host').getByText(message, { exact: true })).toBeVisible();
+		await expect(projects.getByText(message, { exact: true })).toHaveCount(0);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`sidebar creation keeps the remote project on cancel and renames the new local project on save (${locale})`, async () => {
 			const { page, info } = browser;

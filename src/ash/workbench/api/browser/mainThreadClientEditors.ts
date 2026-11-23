@@ -13,6 +13,7 @@ import { EditorPanes, type IEditorPaneDescriptor } from '../../browser/editor.js
 import { EditorPane, EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../common/editor.js';
 import type { ExtensionEditorModuleLoader } from '../../services/extensions/browser/extensionEditor.js';
+import { ResourceEditorNotifications } from '../../services/extensions/browser/resourceEditorNotifications.js';
 
 interface ClientEditor {
 	readonly editorId: string;
@@ -255,7 +256,11 @@ export class MainThreadClientEditors extends Disposable {
 							const component = await resolveComponent();
 							if (!('getResourceEditor' in component) || typeof component.getResourceEditor !== 'function') throw new TypeError(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
 							if (!options.instantiationService) throw new Error('Resource editor requires the Workbench instantiation service');
-							const Constructor = component.getResourceEditor(editor.editorId, (constructor, ...args) => { signal.throwIfAborted(); return options.instantiationService!.createInstance(constructor, ...args); });
+							const notifications = options.instantiationService.createInstance(ResourceEditorNotifications, signal);
+							const Constructor = component.getResourceEditor(editor.editorId, (constructor, ...args) => {
+								signal.throwIfAborted();
+								return options.instantiationService!.createInstance(constructor, ...args);
+							}, message => notifications.error(message));
 							if (typeof Constructor !== 'function') throw new TypeError('Invalid resource editor constructor');
 							const pane = options.instantiationService.createInstance(Constructor, signal);
 							if (!(pane instanceof EditorPane)) throw new TypeError(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));

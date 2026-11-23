@@ -1,9 +1,12 @@
 import type { Event } from '../../../../base/common/event.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { extname } from '../../../../base/common/path.js';
+import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
@@ -26,7 +29,15 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 	const copies = accessor.get(IWorkingCopyService);
 	const lifecycle = accessor.get(ILifecycleService);
 	const log = accessor.get(ILogService);
+	const notifications = accessor.get(INotificationService);
 	const lifetime = new DisposableStore();
+	const reportFailure = (error: unknown, logMessage: string, message: string): void => {
+		if (lifetime.isDisposed || isCancellationError(error)) return;
+		log.error('pdf', logMessage, error);
+		notifications.error(message);
+	};
+	const reportBackupFailure = (error: unknown): void => reportFailure(error, 'PDF backup failed',
+		localize('sessions.pdfPreview.backupFailed', 'Could not back up PDF changes.'));
 	// Recovery needs the original PDF bytes, which can exceed the App Server backup record limit.
 	const backups = lifetime.add(new IndexedDbWorkingCopyBackupService('sessions-pdf'));
 	const isPdf = (copy: IWorkingCopy): copy is PdfDocumentModel => copy instanceof PdfDocumentModel;
@@ -37,15 +48,25 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 		get: resource => copies.get(resource).filter(isPdf),
 		onDidRegister: pdfEvent(copies.onDidRegister),
 		onDidUnregister: pdfEvent(copies.onDidUnregister),
-	}, backups, editors.domNode.ownerDocument.defaultView!, error => log.error('pdf', 'PDF backup failed', error)));
-	lifetime.add(lifecycle.onWillShutdown(event => event.join(() => tracker.shutdown(), 'PDF backup drain', () => tracker.isShutdownCurrent)));
+	}, backups, editors.domNode.ownerDocument.defaultView!, reportBackupFailure));
+	lifetime.add(lifecycle.onWillShutdown(event => event.join(async () => {
+		try { await tracker.shutdown(); }
+		catch (error) {
+			if (event.reason !== 'pageHide') reportBackupFailure(error);
+			throw error;
+		}
+	}, 'PDF backup drain', () => tracker.isShutdownCurrent)));
 	lifetime.add(lifecycle.onDidShutdown(() => tracker.completeShutdown()));
 	lifetime.add(lifecycle.onDidShutdownError(reason => { if (reason !== 'pageHide') tracker.cancelShutdown(); }));
 	lifetime.add(lifecycle.onBeforeShutdownError(event => { if (event.reason === 'pageHide') tracker.completeShutdown(); }));
 
 	return Object.assign(lifetime, {
 		async onWorkspaceRestored(): Promise<void> {
-			for (const backup of await backups.list()) {
+			const pending = await backups.list().catch(error => {
+				reportFailure(error, 'PDF backups could not be read', localize('sessions.pdfPreview.backupReadFailed', 'Could not read PDF recovery backups.'));
+				return [];
+			});
+			for (const backup of pending) {
 				if (lifetime.isDisposed) return;
 				if (backup.kind !== 'structuredDocument' || backup.contentType !== 'application/pdf') continue;
 				try {
@@ -57,7 +78,8 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 					if (lifetime.isDisposed) return;
 					if (model instanceof PdfDocumentModel && !model.isDirty) model.restoreBackup(backup.content);
 				} catch (error) {
-					log.error('pdf', `PDF recovery failed for '${backup.resource.toString()}'`, error);
+					reportFailure(error, `PDF recovery failed for '${backup.resource.toString()}'`,
+						localize('sessions.pdfPreview.recoveryFailed', 'Could not recover PDF changes for {0}.', basename(backup.resource)));
 				}
 			}
 		},

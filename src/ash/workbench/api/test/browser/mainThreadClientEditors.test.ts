@@ -3,6 +3,8 @@ import { generalProfile } from '../../../../../../extensions/academy/browser/gen
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { EditorPaneOptions } from '../../../contrib/documentEditor/browser/documentEditorPane.js';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'mocha';
@@ -14,6 +16,8 @@ import { EditorPanes } from '../../../browser/editor.js';
 import { type EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
 import { type ExtensionEditorModuleLoader } from '../../../services/extensions/browser/extensionEditor.js';
+import { ResourceEditorNotifications } from '../../../services/extensions/browser/resourceEditorNotifications.js';
+import { TestNotificationService } from '../../../services/notification/test/common/testNotificationService.js';
 import { MainThreadClientEditors } from '../../browser/mainThreadClientEditors.js';
 
 const owner = { id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
@@ -321,6 +325,19 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 });
 
 const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;
+
+test('resource editor notification callbacks reject non-text and stop on provider retirement', () => {
+	using services = new InstantiationService();
+	using notifications = new TestNotificationService();
+	services.registerInstance(INotificationService, notifications);
+	const provider = new AbortController();
+	const reporter = services.createInstance(ResourceEditorNotifications, provider.signal);
+	assert.throws(() => reporter.error(['Unexpected'] as unknown as string), TypeError);
+	reporter.error('PDF render failed');
+	provider.abort();
+	reporter.error('Late error');
+	assert.deepEqual(notifications.model.getNotifications().map(item => item.message), ['PDF render failed']);
+});
 
 test('a sibling window resource runtime does not register, invoke or load without a local package', async () => {
 	const requests: string[] = [];

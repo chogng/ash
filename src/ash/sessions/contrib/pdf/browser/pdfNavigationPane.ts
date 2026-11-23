@@ -1,9 +1,9 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { observeResize } from '../../../../base/browser/observer.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import type { PdfOutlineEntry, PdfOutlineTarget } from '../../../../platform/pdf/common/pdfService.js';
@@ -32,10 +32,11 @@ export class PdfNavigationPane extends Disposable {
 	private readonly tabs: TabList<NavigationTab>;
 	private readonly tabItems: readonly TabListItem<NavigationTab>[];
 	private readonly outlinePanel: HTMLElement;
-	private readonly tree: ObjectTree<OutlineNode>;
+	private readonly outlineLabel = localize('sessions.pdfPreview.outlineTab', 'Outline');
+	private readonly outlineTree = this._register(new MutableDisposable<DisposableStore>());
 	private activeTab: NavigationTab = 'thumbnails';
 	private outlineRequest: AbortController | undefined;
-	private outlineAvailable: boolean | undefined;
+	private outlineEntries: readonly PdfOutlineEntry[] | undefined;
 	private page = 0;
 	private pageCount = 0;
 
@@ -44,13 +45,13 @@ export class PdfNavigationPane extends Disposable {
 		renderThumbnail: (page: number, signal: AbortSignal) => Promise<Uint8Array>,
 		private readonly readOutline: (signal: AbortSignal) => Promise<readonly PdfOutlineEntry[]>,
 		openPage: (page: number) => void,
-		openDestination: (target: PdfOutlineTarget) => void,
+		private readonly openDestination: (target: PdfOutlineTarget) => void,
 		close: () => void,
+		private readonly reportError: (message: string) => void,
 	) {
 		super();
 		const id = `pdf-navigation-${createUuid()}`;
 		const label = localize('sessions.pdfPreview.pageNavigation', 'PDF page navigation');
-		const outlineLabel = localize('sessions.pdfPreview.outlineTab', 'Outline');
 		this.domNode = h(document, 'aside', {
 			className: 'ash-sessions-pdf-navigation-pane',
 			properties: { id, hidden: true },
@@ -58,48 +59,22 @@ export class PdfNavigationPane extends Disposable {
 		});
 		this.tabs = this._register(new TabList(this.domNode, {
 			ariaLabel: label,
-			presentation: 'underline',
+			presentation: 'navigation',
 			onActivate: tab => this.selectTab(tab),
 		}));
-		this.tabs.setSizing({ mode: 'shrink' });
-		this.minimap = this._register(new PdfMinimap(document, renderThumbnail, openPage));
+		const thumbnails = { id: `${id}-thumbnails`, tabId: `${id}-thumbnails-tab` };
+		this.minimap = this._register(new PdfMinimap(this.domNode, thumbnails, renderThumbnail, openPage, reportError));
 		this.outlinePanel = h(document, 'div', {
 			className: 'ash-sessions-pdf-outline',
 			attributes: { role: 'tabpanel', 'aria-labelledby': `${id}-outline-tab` },
-			properties: { id: `${id}-outline`, hidden: true },
+			properties: { id: `${id}-outline`, hidden: true, tabIndex: 0 },
 		});
-		this.minimap.domNode.id = `${id}-thumbnails`;
 		this.tabItems = [
-			{ id: 'thumbnails', value: 'thumbnails', label: localize('sessions.pdfPreview.thumbnailsTab', 'Thumbnails'), tabId: `${id}-thumbnails-tab`, panelId: this.minimap.domNode.id },
-			{ id: 'outline', value: 'outline', label: outlineLabel, tabId: `${id}-outline-tab`, panelId: this.outlinePanel.id },
+			{ id: 'thumbnails', value: 'thumbnails', label: localize('sessions.pdfPreview.thumbnailsTab', 'Thumbnails'), tabId: thumbnails.tabId, panelId: thumbnails.id },
+			{ id: 'outline', value: 'outline', label: this.outlineLabel, tabId: `${id}-outline-tab`, panelId: this.outlinePanel.id },
 		];
-		this.domNode.append(this.minimap.domNode, this.outlinePanel);
-		this.tree = this._register(new ObjectTree(this.outlinePanel, {
-			ariaLabel: outlineLabel,
-			styles: defaultListStyles,
-			scrolling: 'managed',
-			multipleSelectionSupport: false,
-			expandOnDoubleClick: false,
-			modelOptions: { identityProvider: { getId: node => node.id }, defaultCollapseState: 'expanded' },
-			accessibilityProvider: { getAriaLabel: node => node.entry.title },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.entry.title },
-			getHeight: () => 28,
-			renderElement: ({ entry }) => h(document, 'span', {
-				className: 'ash-sessions-pdf-outline-title',
-				properties: { title: entry.title },
-			}, entry.title),
-		}));
-		const activate = ({ id, entry }: OutlineNode) => {
-			if (entry.target) { openDestination(entry.target); }
-			else { this.tree.toggleCollapsed(id); }
-		};
-		this._register(this.tree.onPointer(({ element, browserEvent }) => {
-			if (browserEvent.button === 0) { activate(element); }
-		}));
-		this._register(this.tree.onDidAccept(({ element }) => activate(element)));
-		this._register(observeResize(this.outlinePanel, () => {
-			if (!this.outlinePanel.hidden) { this.tree.layout(this.outlinePanel.clientHeight); }
-		}));
+		this.domNode.append(this.outlinePanel);
+		this.tabs.setTabs(this.tabItems, this.activeTab);
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) { return; }
 			event.preventDefault();
@@ -107,12 +82,12 @@ export class PdfNavigationPane extends Disposable {
 			close();
 		}));
 		this._register(toDisposable(() => this.outlineRequest?.abort()));
-		this.selectTab('thumbnails');
 	}
 
 	setVisible(visible: boolean): void {
 		this.domNode.hidden = !visible;
-		this.selectTab(this.activeTab);
+		if (visible) { this.tabs.setTabs(this.tabItems, this.activeTab); }
+		this.updatePanels();
 		if (visible) { void this.loadOutline(); }
 		else { this.page = 0; this.pageCount = 0; }
 	}
@@ -127,43 +102,72 @@ export class PdfNavigationPane extends Disposable {
 	resetOutline(): void {
 		this.outlineRequest?.abort();
 		this.outlineRequest = undefined;
-		this.outlineAvailable = undefined;
-		this.tree.setChildren([]);
+		this.outlineEntries = undefined;
+		this.outlineTree.clear();
+		this.outlinePanel.tabIndex = 0;
 		this.selectTab('thumbnails');
 		if (!this.domNode.hidden) { void this.loadOutline(); }
 	}
 
 	private selectTab(tab: NavigationTab): void {
+		if (this.activeTab === tab) { return; }
 		this.activeTab = tab;
-		const hasOutline = this.outlineAvailable === true;
-		this.domNode.classList.toggle('has-outline', hasOutline);
-		this.tabs.element.hidden = !hasOutline;
-		this.tabs.setTabs(hasOutline ? this.tabItems : [], hasOutline ? tab : undefined);
-		const thumbnailPanel = this.minimap.domNode;
-		if (hasOutline) {
-			thumbnailPanel.setAttribute('role', 'tabpanel');
-			thumbnailPanel.setAttribute('aria-labelledby', this.tabItems[0].tabId);
-		} else {
-			thumbnailPanel.removeAttribute('role');
-			thumbnailPanel.removeAttribute('aria-labelledby');
-		}
-		this.minimap.setVisible(!this.domNode.hidden && tab === 'thumbnails');
-		this.outlinePanel.hidden = this.domNode.hidden || tab !== 'outline';
+		this.tabs.setTabs(this.tabItems, tab);
+		this.updatePanels();
+	}
+
+	private updatePanels(): void {
+		this.minimap.setVisible(!this.domNode.hidden && this.activeTab === 'thumbnails');
+		this.outlinePanel.hidden = this.domNode.hidden || this.activeTab !== 'outline';
+		this.mountOutline();
 		if (this.page > 0) { this.minimap.setPage(this.page, this.pageCount); }
 	}
 
+	private mountOutline(): void {
+		if (this.outlinePanel.hidden || this.outlineTree.value || !this.outlineEntries?.length) { return; }
+		const document = this.outlinePanel.ownerDocument;
+		const resources = this.outlineTree.value = new DisposableStore();
+		const tree = resources.add(new ObjectTree<OutlineNode>(this.outlinePanel, {
+			ariaLabel: this.outlineLabel,
+			styles: defaultListStyles,
+			scrolling: 'managed',
+			multipleSelectionSupport: false,
+			expandOnDoubleClick: false,
+			modelOptions: { identityProvider: { getId: node => node.id }, defaultCollapseState: 'expanded' },
+			accessibilityProvider: { getAriaLabel: node => node.entry.title },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.entry.title },
+			getHeight: () => 28,
+			renderElement: ({ entry }) => h(document, 'span', {
+				className: 'ash-sessions-pdf-outline-title',
+				properties: { title: entry.title },
+			}, entry.title),
+		}));
+		const activate = ({ id, entry }: OutlineNode) => {
+			if (entry.target) { this.openDestination(entry.target); }
+			else { tree.toggleCollapsed(id); }
+		};
+		resources.add(tree.onPointer(({ element, browserEvent }) => {
+			if (browserEvent.button === 0) { activate(element); }
+		}));
+		resources.add(tree.onDidAccept(({ element }) => activate(element)));
+		tree.setChildren(outlineNodes(this.outlineEntries));
+		this.outlinePanel.tabIndex = -1;
+	}
+
 	private async loadOutline(): Promise<void> {
-		if (this.outlineAvailable !== undefined || this.outlineRequest) { return; }
+		if (this.outlineEntries || this.outlineRequest) { return; }
 		const request = new AbortController();
 		this.outlineRequest = request;
 		try {
 			const entries = await this.readOutline(request.signal);
 			if (request.signal.aborted) { return; }
-			if (entries.length) { this.tree.setChildren(outlineNodes(entries)); }
-			this.outlineAvailable = entries.length > 0;
-			if (this.outlineAvailable) { this.selectTab(this.activeTab); }
-		} catch {
+			this.outlineEntries = entries;
+			this.mountOutline();
+		} catch (error) {
 			// The page list stays usable. Reopening the sidebar can retry the request.
+			if (!request.signal.aborted && !this.domNode.hidden && !isCancellationError(error)) {
+				this.reportError(localize('sessions.pdfPreview.outlineFailed', 'Could not load the PDF outline: {0}', error instanceof Error ? error.message : String(error)));
+			}
 		} finally {
 			if (this.outlineRequest === request) { this.outlineRequest = undefined; }
 		}

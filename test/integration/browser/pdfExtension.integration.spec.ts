@@ -99,6 +99,21 @@ for (const locale of ['en', 'zh-CN']) test(`optional PDF package opens, saves, r
 	expect(errors).toEqual([]);
 });
 
+test('optional PDF reports a sidecar conflict through the owning window', async ({ page }) => {
+	await page.goto('/pdfExtension.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.pdfExtensionTest);
+	await page.evaluate(async () => { await window.pdfExtensionTest.enable(true); await window.pdfExtensionTest.open(); });
+	const reader = page.locator('.ash-pdf-editor');
+	await reader.locator('[data-action-id="ash.pdf.annotations.note"] button').click();
+	await reader.locator('.ash-pdf-annotation-layer').press('Enter');
+	await page.evaluate(() => window.pdfExtensionTest.createSidecar());
+	await reader.locator('[data-action-id="ash.pdf.annotations.save"] button').click();
+	await expect.poll(() => page.evaluate(() => window.pdfExtensionTest.errors())).toEqual([expect.stringMatching(/^无法保存批注：/u)]);
+	await expect(reader.locator('.ash-pdf-annotation-note')).toHaveCount(1);
+	await expect(reader.locator('.ash-pdf-annotation-status')).not.toContainText('无法保存批注');
+	expect(await page.evaluate(() => window.pdfExtensionTest.saved())).toEqual({ version: 1, annotations: [] });
+});
+
 test('optional PDF rejects modified client bytes before executing the package', async ({ page }) => {
 	await page.route('**/__pdf_resource?*', route => route.fulfill({ body: 'throw new Error("unverified client executed")', contentType: 'text/javascript' }));
 	await page.goto('/pdfExtension.html'); await page.waitForFunction(() => !!window.pdfExtensionTest);

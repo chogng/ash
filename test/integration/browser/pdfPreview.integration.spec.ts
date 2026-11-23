@@ -67,8 +67,31 @@ test.afterEach(async ({ page }) => {
 	pending.clear();
 });
 
+test('PDF keeps the original error when navigation creation fails', async ({ page }) => {
+	await page.goto('/pdfPreview.html');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	const failure = await page.evaluate(async () => {
+		const append = Element.prototype.append;
+		Element.prototype.append = function (this: Element, ...nodes: (Node | string)[]) {
+			if (this.classList.contains('ash-sessions-pdf-navigation-pane')) { throw new Error('PDF navigation creation failed'); }
+			append.apply(this, nodes);
+		};
+		try {
+			await window.aspdfTest.createWithPaneHost();
+		} catch (error) {
+			return error instanceof Error ? error.message : String(error);
+		} finally {
+			Element.prototype.append = append;
+		}
+	});
+	expect(failure).toBe('PDF navigation creation failed');
+	await expect(page.locator('.ash-editor-pane-host')).toHaveCount(0);
+	await page.evaluate(() => window.aspdfTest.open(true));
+	await expect(page.getByRole('region', { name: 'PDF — review.pdf' }).getByRole('status')).toHaveText('Page 1 of 2');
+});
+
 test('PDF thumbnails open beside the document and follow page navigation', async ({ page }) => {
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(24), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(24, true), contentType: 'application/pdf' }));
 	const thumbnailRequests: number[] = [];
 	await page.route('**/__aspdf_rpc', route => {
 		const request = route.request().postDataJSON();
@@ -82,14 +105,14 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await page.evaluate(() => window.aspdfTest.open(true));
 	const viewer = page.locator('.ash-sessions-pdf-preview');
 	const toolbar = viewer.locator('.ash-sessions-pdf-controls');
-	const toggle = toolbar.getByRole('button', { name: '页面缩略图', exact: true });
+	const toggle = toolbar.getByRole('button', { name: 'PDF 页面导航', exact: true });
 	const rail = viewer.locator('.ash-sessions-pdf-navigation-pane');
 	const list = rail.getByRole('listbox', { name: '页面缩略图', exact: true });
 	const option = (number: number) => list.getByRole('option', { name: `第 ${number} 页`, exact: true });
 	const input = viewer.locator('.ash-sessions-pdf-page-number');
 	const reader = viewer.locator('.ash-sessions-pdf-continuous');
 	await expect(reader).toBeVisible();
-	await expect(toolbar.getByRole('button').first()).toHaveAccessibleName('页面缩略图');
+	await expect(toolbar.getByRole('button').first()).toHaveAccessibleName('PDF 页面导航');
 	await expect(toggle.locator('.ash-icon-list-unordered')).toBeVisible();
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 	await expect(rail).toBeHidden();
@@ -100,7 +123,33 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(list).toBeVisible();
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
 	await expect(option(1).locator('img')).toHaveJSProperty('naturalWidth', 192);
-	await expect(rail.getByRole('tablist')).toHaveCount(0);
+	await expect(option(2).locator('img')).toHaveJSProperty('naturalWidth', 256);
+	for (const pageNumber of [1, 2]) {
+		const row = option(pageNumber);
+		const image = row.locator('> img');
+		const [rowBounds, imageBounds, labelBounds, ratio] = await Promise.all([
+			row.boundingBox(), image.boundingBox(), row.locator('> .ash-sessions-pdf-thumbnail-number').boundingBox(),
+			image.evaluate((element: HTMLImageElement) => element.naturalWidth / element.naturalHeight),
+		]);
+		expect(imageBounds!.y).toBeGreaterThan(rowBounds!.y);
+		expect(imageBounds!.y + imageBounds!.height).toBeLessThan(labelBounds!.y);
+		expect(labelBounds!.y + labelBounds!.height).toBeLessThan(rowBounds!.y + rowBounds!.height);
+		expect(imageBounds!.width / imageBounds!.height).toBeCloseTo(ratio, 2);
+	}
+	const tabs = rail.getByRole('tablist', { name: 'PDF 页面导航' });
+	const thumbnails = tabs.getByRole('tab', { name: '缩略图', exact: true });
+	const outline = tabs.getByRole('tab', { name: '目录', exact: true });
+	await expect(thumbnails).toHaveAttribute('aria-selected', 'true');
+	await thumbnails.press('ArrowRight');
+	await expect(outline).toBeFocused();
+	await outline.press('Enter');
+	const emptyOutline = rail.getByRole('tabpanel', { name: '目录', exact: true });
+	await expect(emptyOutline).toBeVisible();
+	await expect(emptyOutline).toBeEmpty();
+	await outline.press('Tab');
+	await expect(emptyOutline).toBeFocused();
+	await thumbnails.click();
+	await expect(list).toBeVisible();
 	await expect(option(3).locator('.ash-sessions-pdf-thumbnail-number')).toHaveText('3');
 	expect(await list.getByRole('option').count()).toBeLessThan(24);
 	expect(thumbnailRequests.length).toBeLessThan(24);
@@ -135,6 +184,28 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
 });
 
+test('PDF navigation reports outline and thumbnail failures without disabling page links', async ({ page }) => {
+	await page.route('**/__aspdf_rpc', route => {
+		const request = route.request().postDataJSON();
+		if (request.method === 'pdf/outline' || request.params.dimension === 256) {
+			return route.fulfill({ json: { id: request.id, error: { code: -32170, message: 'PdfNotFound', data: { kind: 'PdfNotFound' } } } });
+		}
+		return route.fallback();
+	});
+	await page.goto('/pdfPreview.html?locale=zh-CN&scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open());
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	await viewer.getByRole('button', { name: 'PDF 页面导航', exact: true }).click();
+	const errors = () => page.evaluate(() => window.aspdfTest.errors().sort());
+	const expected = ['无法加载 PDF 目录：PdfNotFound', '无法加载 PDF 缩略图：PdfNotFound'].sort();
+	await expect.poll(errors).toEqual(expected);
+	await viewer.getByRole('option', { name: '第 2 页', exact: true }).click();
+	await expect(viewer).toHaveAttribute('aria-busy', 'false');
+	await expect(viewer.locator('.ash-sessions-pdf-page-number')).toHaveValue('2');
+	expect(await errors()).toEqual(expected);
+});
+
 test('PDF thumbnail navigation retains the selected page when the view reaches the scroll limit', async ({ page }) => {
 	await page.goto('/pdfPreview.html');
 	await page.waitForFunction(() => !!window.aspdfTest);
@@ -146,7 +217,7 @@ test('PDF thumbnail navigation retains the selected page when the view reaches t
 	const reader = viewer.locator('.ash-sessions-pdf-continuous');
 	const viewport = reader.locator('> .ash-scrollbar-viewport');
 	await expect(reader).toBeVisible();
-	await viewer.getByRole('button', { name: 'Page thumbnails', exact: true }).click();
+	await viewer.getByRole('button', { name: 'PDF page navigation', exact: true }).click();
 	const secondPage = viewer.getByRole('option', { name: 'Page 2', exact: true });
 	await secondPage.click();
 	await expect(viewer.getByRole('status')).toHaveText('Page 2 of 2');
@@ -167,7 +238,7 @@ test('PDF outline switches with thumbnails and opens nested chapter destinations
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(() => window.aspdfTest.open(true));
 	const viewer = page.locator('.ash-sessions-pdf-preview');
-	const toggle = viewer.getByRole('button', { name: '页面缩略图', exact: true });
+	const toggle = viewer.getByRole('button', { name: 'PDF 页面导航', exact: true });
 	const tabs = viewer.getByRole('tablist', { name: 'PDF 页面导航' });
 	const thumbnails = tabs.getByRole('tab', { name: '缩略图' });
 	const outline = tabs.getByRole('tab', { name: '目录' });
@@ -179,6 +250,7 @@ test('PDF outline switches with thumbnails and opens nested chapter destinations
 	await expect(tabs).toBeHidden();
 	await toggle.click();
 	await expect(thumbnails).toHaveAttribute('aria-selected', 'true');
+	await expect(viewer.getByRole('tree', { includeHidden: true })).toHaveCount(0);
 	await thumbnails.press('ArrowRight');
 	await expect(outline).toBeFocused();
 	await outline.press('Enter');
@@ -342,7 +414,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(2);
 		await page.evaluate(() => window.aspdfTest.externalWrite());
 		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '保存修改' : 'Save changes', exact: true }).click();
-		await expect(viewer.locator('[role="alert"]')).not.toBeEmpty();
+		const failure = locale === 'zh-CN' ? '无法完成 PDF 操作：' : 'Could not complete the PDF operation: ';
+		await expect.poll(() => page.evaluate(() => window.aspdfTest.errors())).toEqual([`${failure}File changed since it was read: file:///fixture/review.pdf`]);
 		expect(await page.evaluate(() => window.aspdfTest.dirty())).toBe(true);
 		expect(await page.evaluate(() => window.aspdfTest.hasExternalBytes())).toBe(true);
 		await page.evaluate(() => window.aspdfTest.revert());
@@ -989,8 +1062,33 @@ test('PDF defers continuous restoration until the hidden viewport is laid out', 
 	await page.evaluate(() => window.aspdfTest.resize(1400, 860));
 	await expect(page.locator('.ash-sessions-pdf-continuous')).toBeVisible();
 	await expect(page.locator('.ash-sessions-pdf-page-number')).toHaveValue('2');
-	await expect(page.locator('.ash-sessions-pdf-error')).toBeEmpty();
 	await expect(page.locator('.ash-sessions-pdf-continuous [data-page-number="2"] img')).toHaveJSProperty('naturalWidth', 1200);
+	expect(await page.evaluate(() => window.aspdfTest.errors())).toEqual([]);
+});
+
+test('PDF page failures enter the window notification history and allow retry', async ({ page }) => {
+	await page.goto('/pdfPreview.html?locale=zh-CN&scrollMode=paged');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(() => window.aspdfTest.open());
+	let failNextTurn = true;
+	await page.route('**/__aspdf_rpc', route => {
+		const request = route.request().postDataJSON();
+		if (failNextTurn && ['pdf/page', 'pdf/renderPage'].includes(request.method) && request.params.page === 2) {
+			failNextTurn = false;
+			return route.fulfill({ json: { id: request.id, error: { code: -32170, message: 'PdfNotFound', data: { kind: 'PdfNotFound' } } } });
+		}
+		return route.fallback();
+	});
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const next = viewer.getByRole('button', { name: '下一页', exact: true });
+	const number = viewer.locator('.ash-sessions-pdf-page-number');
+	await next.click();
+	await expect.poll(() => page.evaluate(() => window.aspdfTest.errors())).toEqual(['无法完成 PDF 操作：PdfNotFound']);
+	await expect(number).toHaveValue('1');
+	await expect(viewer.getByRole('alert')).toHaveCount(0);
+	await next.click();
+	await expect(viewer).toHaveAttribute('aria-busy', 'false');
+	await expect(number).toHaveValue('2');
 });
 
 test('PDF continuous mode preserves mixed page sizes and restored reading mode', async ({ page }) => {

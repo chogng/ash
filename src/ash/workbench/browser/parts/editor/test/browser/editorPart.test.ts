@@ -589,7 +589,7 @@ for (const target of ['activeGroup', 'modalGroup'] as const) {
 			assert.equal(editor.activeInput, resource);
 			assert.match(
 				dom.window.document.querySelector('.ash-editor-open-error')?.textContent ?? '',
-				/No editor can open/,
+				/Unable to open unregistered\.txt/,
 			);
 		} finally {
 			dom.window.close();
@@ -870,6 +870,35 @@ test('EditorPart saves the active pane through the editor contract', async () =>
 	assert.equal(pane.saveCount, 1);
 	editor.dispose();
 	dom.window.close();
+});
+
+test('EditorPart reports explicit save and close failures through the pane while keeping its draft', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const document = input('/project/draft.pdf');
+		using copy = new TestWorkingCopy(document.resource);
+		copy.markDirty();
+		const conflict = new Error('Save conflict');
+		copy.save = async () => { throw conflict; };
+		const reported: unknown[] = [];
+		const pane = new TestEditorPane('ash.editor.save-failure', copy);
+		pane.save = () => copy.save();
+		pane.reportSaveError = error => { reported.push(error); };
+		registry.registerEditorPane(descriptor(pane.id, '.pdf', () => pane));
+		using editor = createEditorPart(dom.window.document.body, {
+			registry,
+			fileDialogService: new TestFileDialogService(ConfirmResult.SAVE),
+		});
+		await editor.openEditor(document);
+		await editor.saveActiveEditor();
+		assert.equal(await editor.closeEditor(document), false);
+		assert.deepEqual(reported, [conflict, conflict]);
+		assert.equal(editor.activeInput, document);
+		assert.equal(copy.isDirty, true);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('EditorPart opens cross-resource language targets and reveals their selection', async () => {
@@ -5097,7 +5126,7 @@ test('EditorPart shows a retryable placeholder when an editor cannot open', asyn
 		descriptor('ash.editor.retryable', '.retry', () => {
 			const pane = new TestEditorPane('ash.editor.retryable');
 			attempts += 1;
-			if (attempts === 1) pane.inputError = new Error('Temporary decoder failure');
+			if (attempts === 1) pane.inputError = new TypeError('Cannot set properties of undefined (setting \'value\')');
 			return pane;
 		}),
 	);
@@ -5109,7 +5138,11 @@ test('EditorPart shows a retryable placeholder when an editor cannot open', asyn
 	assert.equal(editor.activePane?.id, 'workbench.editor.openError');
 	assert.equal(editor.saveWorkingSet('retryable').groups[0]!.editors[0]!.paneId, undefined);
 	assert.match(editor.domNode.textContent ?? '', /Unable to open document\.retry/);
-	assert.match(editor.domNode.textContent ?? '', /Temporary decoder failure/);
+	assert.doesNotMatch(editor.domNode.textContent ?? '', /Cannot set properties/);
+	const placeholder = editor.domNode.querySelector('.ash-editor-open-error');
+	assert.equal(placeholder?.hasAttribute('aria-describedby'), false);
+	assert.equal(placeholder?.querySelector('[role="img"]')?.getAttribute('aria-label'), 'Error');
+	assert.ok(placeholder?.querySelector('.ash-icon-error'));
 	editor.domNode.querySelector<HTMLButtonElement>('.ash-editor-open-error-actions button')?.click();
 	await nextTask();
 
@@ -6578,6 +6611,8 @@ test('error pages render severity and run the supplied action without duplicatin
 		const page = editor.domNode.querySelector<HTMLElement>('.ash-editor-open-error');
 		assert.equal(page?.getAttribute('role'), 'status');
 		assert.equal(page?.querySelector('h2')?.textContent, 'Choose a compatible viewer');
+		assert.equal(page?.querySelector('[role="img"]')?.getAttribute('aria-label'), 'Information');
+		assert.ok(page?.querySelector('.ash-icon-info'));
 		editor.focus();
 		const action = page?.querySelector<HTMLButtonElement>('button');
 		assert.equal(action, dom.window.document.activeElement);

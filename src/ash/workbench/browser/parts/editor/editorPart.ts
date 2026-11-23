@@ -16,7 +16,7 @@ import { basename } from '../../../../base/common/resources.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter, PauseableEmitter, type Event } from '../../../../base/common/event.js';
-import { CancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { addDisposableListener, computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
@@ -677,7 +677,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const { result } = await this.dialogService.prompt({
 			title,
 			message: openError?.forceMessage ? openError.message : title,
-			detail: openError?.forceMessage ? undefined : error instanceof Error ? error.message : String(error),
+			detail: openError && !openError.forceMessage ? openError.message : undefined,
 			severity,
 			buttons: actions.filter(action => action.enabled).map(action => ({ label: action.label, run: () => action })),
 			cancelButton: localize('workbench.editorOpenDismiss', 'Dismiss'),
@@ -850,7 +850,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async saveActiveEditor(): Promise<void> {
-		await this.activePane?.save?.();
+		const pane = this.activePane;
+		try {
+			await pane?.save?.();
+		} catch (error) {
+			if (!pane?.reportSaveError) throw error;
+			if (!isCancellationError(error)) pane.reportSaveError(error);
+		}
 	}
 
 	async setContent(content: Element): Promise<void> {
@@ -1026,7 +1032,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			return group ? group.closeEditor(saved) : true;
 		}
 		if (group && input.resource.scheme === 'untitled') return !!await this.saveEditor(group, input, pane);
-		for (const copy of dirty) await copy.save(controller.signal);
+		try {
+			for (const copy of dirty) await copy.save(controller.signal);
+		} catch (error) {
+			if (!pane.reportSaveError) throw error;
+			if (!isCancellationError(error)) pane.reportSaveError(error);
+			return false;
+		}
 		if (group && !group.inputs.some(candidate => this.isSameEditor(candidate, input))) return true;
 		return dirty.every(copy => !copy.isDirty);
 	}

@@ -37,7 +37,8 @@ export interface ListViewOptions<T> {
 	readonly dnd?: ListDragAndDrop<T>;
 	readonly getDragElements?: (item: T, index: number) => readonly T[];
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
-	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
+	/** A fragment mounts sibling elements directly in the owned row. */
+	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement | DocumentFragment;
 	/** Retains matching rows while visible and in a bounded offscreen cache. */
 	readonly reuseRows?: boolean;
 	readonly updateItem?: (item: T, index: number, row: HTMLDivElement, rerender: boolean) => void;

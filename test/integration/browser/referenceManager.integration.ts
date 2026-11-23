@@ -3,6 +3,8 @@ import { IExtensionService } from '../../../src/ash/workbench/services/extension
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { createTestEditorServices, createTestFileService, createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../src/ash/workbench/services/notification/test/common/testNotificationService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
@@ -39,6 +41,7 @@ import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const parent = new InstantiationService();
+parent.registerSingleton(INotificationService, () => new TestNotificationService());
 const memory = new InMemoryFileSystemProvider(); const files = createTestFileService(memory); parent.registerInstance(IFileService, files);
 let dialogPaths: string[] = []; let metadata: string[] | undefined;
 parent.registerInstance(IFileDialogService, { showSaveDialog: async () => dialogPaths[0] ? URI.file(dialogPaths.shift()!) : undefined, showOpenDialog: async () => dialogPaths.splice(0).map(path => URI.file(path)) } as unknown as IFileDialogService);

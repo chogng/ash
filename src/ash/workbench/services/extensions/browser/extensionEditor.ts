@@ -17,7 +17,8 @@ export interface ExtensionEditorModule {
 export interface ExtensionResourceEditorModule {
 	readonly packageId: string;
 	readonly packageVersion: string;
-	getResourceEditor(editorId: string, createInstance: EditorClientInstantiation): ResourceEditorConstructor;
+	/** The error callback publishes plain text to the owning window while the provider is admitted. */
+	getResourceEditor(editorId: string, createInstance: EditorClientInstantiation, reportError: (message: string) => void): ResourceEditorConstructor;
 }
 
 export type ExtensionEditorClientModule = ExtensionEditorModule | ExtensionResourceEditorModule;

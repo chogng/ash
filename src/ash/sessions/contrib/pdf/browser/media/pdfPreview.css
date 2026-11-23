@@ -1,6 +1,6 @@
 .ash-sessions-pdf-preview {
 	display: grid;
-	grid-template-rows: auto auto minmax(0, 1fr);
+	grid-template-rows: auto minmax(0, 1fr);
 	block-size: 100%;
 	min-block-size: 0;
 	overflow: hidden;
@@ -56,12 +56,6 @@
 	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 	padding: var(--ash-spacing-size40);
-}
-
-.ash-sessions-pdf-error {
-	margin: 0;
-	padding-inline: var(--ash-spacing-size160);
-	color: var(--ash-error-foreground);
 }
 
 .ash-sessions-pdf-content {

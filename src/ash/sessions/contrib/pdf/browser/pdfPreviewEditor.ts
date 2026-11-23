@@ -5,6 +5,7 @@ import { ZoomAnchor } from '../../../../base/browser/ui/zoom/zoomAnchor.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Action } from '../../../../base/common/actions.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Delayer, RunOnceScheduler } from '../../../../base/common/async.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
@@ -25,6 +26,7 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { PdfAnnotation, PdfAnnotationEdit, PdfPage, PdfPoint, PdfRect } from '../../../../platform/pdf/common/pdfService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -66,9 +68,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private activeView!: PdfPageView;
 	private readingArea!: HTMLElement;
 	private navigationPane!: PdfNavigationPane;
-	private thumbnailToggle!: Button;
+	private navigationToggle!: Button;
 	private scrollMode = PdfScrollMode.Paged;
 	private pendingViewState = false;
+	private viewCreated = false;
 	private element!: HTMLElement;
 	private surface!: HTMLElement;
 	private pageScroll!: ScrollableElement;
@@ -78,7 +81,6 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private progress!: HTMLElement;
 	private pageInput!: HTMLInputElement;
 	private pageCount!: HTMLElement;
-	private error!: HTMLElement;
 	private annotations!: HTMLElement;
 	private note!: HTMLTextAreaElement;
 	private previous!: Action;
@@ -129,6 +131,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) { super(id, theme, storage); }
@@ -136,20 +139,21 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.element = h(document, 'section', { className: 'ash-sessions-pdf-preview' });
+		this._register(toDisposable(() => this.element.remove()));
 		const controls = h(document, 'div', { className: 'ash-sessions-pdf-controls', attributes: { role: 'group', 'aria-label': localize('sessions.pdfPreview.controls', 'PDF controls') } });
 		const navigation = h(document, 'div', { className: 'ash-sessions-pdf-navigation' });
 		controls.append(navigation);
-		const thumbnailsLabel = localize('sessions.pdfPreview.thumbnails', 'Page thumbnails');
-		this.thumbnailToggle = this._register(new Button(navigation, {
+		const navigationLabel = localize('sessions.pdfPreview.pageNavigation', 'PDF page navigation');
+		this.navigationToggle = this._register(new Button(navigation, {
 			...defaultButtonStyles,
-			label: thumbnailsLabel,
-			title: thumbnailsLabel,
+			label: navigationLabel,
+			title: navigationLabel,
 			icon: Lxicon.listUnordered,
 			iconOnly: true,
 			enabled: false,
 			onClick: () => this.setNavigationPaneVisible(this.navigationPane.domNode.hidden === true),
 		}));
-		this.thumbnailToggle.domNode.setAttribute('aria-expanded', 'false');
+		this.navigationToggle.domNode.setAttribute('aria-expanded', 'false');
 		this.previous = this.action('previous', localize('sessions.pdfPreview.previous', 'Previous page'), Lxicon.chevronLeft, () => this.showPage(this.pageNumber - 1), false);
 		this.toolbar(navigation, [this.previous], localize('sessions.pdfPreview.previous', 'Previous page'));
 		const pages = h(document, 'div', { className: 'ash-sessions-pdf-pagination' });
@@ -195,7 +199,6 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.toolbar(controls, [this.fitAction, this.scrollModeAction, this.saveAction], localize('sessions.pdfPreview.documentActions', 'PDF document actions'));
 		this.progress = h(document, 'span', { className: 'ash-sessions-pdf-status', attributes: { role: 'status' } });
 		controls.append(this.progress);
-		this.error = h(document, 'p', { className: 'ash-sessions-pdf-error', attributes: { role: 'alert' } });
 		const content = h(document, 'div', { className: 'ash-sessions-pdf-content' });
 		this.navigationPane = this._register(new PdfNavigationPane(document,
 			(number, signal) => this.model!.renderThumbnail(number, signal),
@@ -206,10 +209,11 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			target => { void this.showPage(target.page, initialRasterDimension, false, target.top ?? 0); },
 			() => {
 				this.setNavigationPaneVisible(false);
-				this.thumbnailToggle.focus();
+				this.navigationToggle.focus();
 			},
+			message => this.notifications.error(message),
 		));
-		this.thumbnailToggle.domNode.setAttribute('aria-controls', this.navigationPane.domNode.id);
+		this.navigationToggle.domNode.setAttribute('aria-controls', this.navigationPane.domNode.id);
 		this.readingArea = h(document, 'div', { className: 'ash-sessions-pdf-reading-area' });
 		content.append(h(document, 'div', { className: 'ash-sessions-pdf-pages' }, this.navigationPane.domNode, this.readingArea));
 		this.pageScroll = this._register(new ScrollableElement(this.readingArea, {
@@ -260,12 +264,12 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.annotations = h(document, 'div');
 		this.annotationScroll.append(this.annotations);
 		content.append(sidebar);
-		this.element.append(controls, this.error, content);
+		this.element.append(controls, content);
 		parent.append(this.element);
 		super.create(this.element);
 		this._register(registerResourceEditorAccessibility(this.element, this.configuration,
 			() => this.accessibleContent(), () => localize('sessions.pdfPreview.help', 'The page opens centered and fitted to the reading area. Use the arrow keys, Page Up and Page Down to scroll. Use Scroll mode to choose Continuous scrolling or Page scrolling. New PDFs use the last selected mode. Continuous scrolling places pages in one scrollable document. In Page scrolling, scroll the mouse wheel or press Page Up or Page Down at a page boundary to turn pages. Hold Control or Command and use the mouse wheel to zoom around the pointer. With the page focused, Control or Command plus + or - zooms in or out; Control or Command plus 0 restores 100 percent. Enter a page number and press Enter to navigate, or use Previous page and Next page. Select text and choose Highlight selection. Enter annotation text and choose Add note. Choose Draw and drag on the page; with the page focused, press Space to start a stroke, use arrow keys to draw and press Enter to finish. Choose Erase highlights and drawings, then click a mark or focus its erase button and press Enter. Choose Add text box, then click the page or press Enter with the page focused; enter text and press Control+Enter or Command+Enter to apply. Escape cancels the current tool or text box. Fit page and Fit width switch the page size. Save changes writes annotations into the PDF file. Control+Z or Command+Z undoes an edit; add Shift to redo. Existing annotations have Update and Delete controls. Read-only attachments cannot be changed.')
-				+ '\n\n' + localize('sessions.pdfPreview.thumbnailsHelp', 'Page thumbnails opens the sidebar to the left of the document. If the PDF has an outline, use Left and Right to focus a tab, then Enter to switch tabs. In Thumbnails, use Up and Down to change pages, or Home and End to go to the first and last page. In Outline, use the arrow keys to navigate and Enter to open a chapter. Escape closes the sidebar and returns focus to Page thumbnails.')
+				+ '\n\n' + localize('sessions.pdfPreview.thumbnailsHelp', 'PDF page navigation opens the sidebar to the left of the document. Use Left and Right to focus Thumbnails or Outline, then Enter to switch tabs. In Thumbnails, use Up and Down to change pages, or Home and End to go to the first and last page. Outline is blank when the PDF has no bookmarks. Use the arrow keys to browse bookmarks and Enter to open a chapter. Escape closes the sidebar and returns focus to PDF page navigation.')
 				+ '\n\n' + localize('sessions.pdfPreview.selectionHelp', 'Selecting text opens the selection toolbar. Press Shift+F10 to focus it, use arrow keys to choose an action, and press Escape to return to the page. Copy copies the selected text. Translate with Ash opens a translation request in the chat draft. On editable pages, Add comment creates a note at the selection and Highlight marks the selected text.')));
 		// Workbench dispatches edit commands before bubbling DOM key events.
 		for (const [command, operation] of [[UndoCommand, 'undo'], [RedoCommand, 'redo']] as const) {
@@ -293,13 +297,14 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			}
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void this.perform(() => this.save()); }
 		}));
-		this._register(toDisposable(() => { this.clearInput(); this.element.remove(); }));
+		this._register(toDisposable(() => this.clearInput()));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(pdfScrollModeSetting)) { return; }
 			if (!this.pendingViewState) { this.savedPage = this.pageNumber; }
 			this.pendingViewState = true;
 			this.restorePendingViewState();
 		}));
+		this.viewCreated = true;
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -335,7 +340,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			this.restorePendingViewState();
 		} catch (error) {
 			signal.throwIfAborted();
-			if (this.model === model) { this.showError(error); }
+			if (this.inputLifetime.value === store) {
+				this.progress.textContent = '';
+				if (!isCancellationError(error)) { this.showError(error); }
+			}
 		}
 	}
 
@@ -577,13 +585,16 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 
 	private async perform(run: () => Promise<unknown>): Promise<void> {
 		if (this.busy || this.isNavigating()) { return; }
+		const input = this.inputLifetime.value;
 		this.flushWheelZoom();
 		this.zoomRefinement.cancel();
 		this.pageRender?.controller.abort();
 		this.pageTurnDelay.cancel();
-		this.busy = true; this.error.textContent = ''; this.updateControls();
+		this.busy = true; this.updateControls();
 		try { await run(); }
-		catch (error) { this.showError(error); }
+		catch (error) {
+			if (input === this.inputLifetime.value && !isCancellationError(error)) { this.showError(error); }
+		}
 		finally { this.busy = false; this.updateControls(); this.restorePendingViewState(); }
 	}
 
@@ -605,7 +616,6 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		}
 		this.pageNumber = number;
 		this.pageInput.value = String(number);
-		this.error.textContent = '';
 		this.updateControls();
 		try {
 			// A first turn starts immediately. A burst replaces its pending turn before
@@ -636,7 +646,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			if (signal.aborted) { return; }
 			this.pageNumber = previous;
 			this.pageInput.value = String(previous);
-			this.showError(error);
+			if (!this.displayedPage) { this.progress.textContent = ''; }
+			if (!isCancellationError(error)) { this.showError(error); }
 		} finally {
 			if (this.pageRender === request) {
 				this.pageRender = undefined;
@@ -936,8 +947,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 
 	private setNavigationPaneVisible(visible: boolean): void {
 		this.navigationPane.setVisible(visible);
-		this.thumbnailToggle.toggleClassName('checked', visible);
-		this.thumbnailToggle.domNode.setAttribute('aria-expanded', String(visible));
+		this.navigationToggle.toggleClassName('checked', visible);
+		this.navigationToggle.domNode.setAttribute('aria-expanded', String(visible));
 		const page = this.displayedPage;
 		if (visible && page) { this.navigationPane.setPage(page.page, page.pageCount); }
 	}
@@ -1084,7 +1095,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		if (!this.previous) { return; }
 		const page = this.displayedPage;
 		const navigating = this.isNavigating();
-		this.thumbnailToggle.enabled = !!page;
+		this.navigationToggle.enabled = !!page;
 		this.navigationPane.minimap.setPaused(this.busy || !!this.pageRender);
 		if (page && !navigating) { this.navigationPane.setPage(page.page, page.pageCount); }
 		this.previous.enabled = !this.busy && !!page && this.pageNumber > 1;
@@ -1105,7 +1116,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	}
 
 	private showError(error: unknown): void {
-		this.error.textContent = localize('sessions.pdfPreview.operationFailed', 'Could not complete the PDF operation: {0}', error instanceof Error ? error.message : String(error));
+		if (this.isDisposed) { return; }
+		this.notifications.error(localize('sessions.pdfPreview.operationFailed', 'Could not complete the PDF operation: {0}', error instanceof Error ? error.message : String(error)));
 	}
 
 	private accessibleContent(): string {
@@ -1117,7 +1129,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	}
 
 	public override async save(): Promise<void> { await this.model?.save(new AbortController().signal); }
+	public override reportSaveError(error: unknown): void { this.showError(error); }
 	public override clearInput(): void {
+		// The pane host also clears the input when create() fails before the controls exist.
+		if (!this.viewCreated) { return; }
 		if (this.navigationPane?.domNode.hidden === false) { this.setNavigationPaneVisible(false); }
 		this.navigationPane?.resetOutline();
 		this.dismissSelectionToolbar();
@@ -1137,7 +1152,10 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.pageLifetime.clear(); this.inputLifetime.clear(); this.model = undefined; this.pageNumber = 1;
 		this.pagedView?.clear(); this.annotations?.replaceChildren();
 		this.pageScroll?.scrollTo(0, 0);
-		if (this.progress) { this.progress.textContent = ''; this.error.textContent = ''; this.pageInput.value = '1'; this.pageCount.textContent = '/–'; this.note.value = ''; }
+		this.progress.textContent = '';
+		this.pageInput.value = '1';
+		this.pageCount.textContent = '/–';
+		this.note.value = '';
 		this.updateControls();
 	}
 	public override focus(): void { this.surface.focus(); }

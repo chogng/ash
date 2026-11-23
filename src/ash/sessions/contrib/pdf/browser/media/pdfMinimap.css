@@ -1,47 +1,43 @@
-.ash-sessions-pdf-thumbnails > .ash-scrollable-element {
-	block-size: 100%;
-}
-
 .ash-sessions-pdf-thumbnails .ash-list {
 	--ash-list-row-inset-start: var(--ash-spacing-size40);
 	--ash-list-row-inset-end: var(--ash-spacing-size40);
+	--ash-list-row-padding-start: var(--ash-spacing-size80);
+	--ash-list-row-padding-end: var(--ash-spacing-size80);
 	--ash-list-row-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-sessions-pdf-thumbnails .ash-list-row {
+	--ash-pdf-thumbnail-number-height: 1.5em;
+	--ash-pdf-thumbnail-gap: var(--ash-spacing-size40);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-pdf-thumbnail-gap);
+	padding-block: var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-label1);
 	cursor: pointer;
 }
 
-.ash-sessions-pdf-thumbnail {
-	box-sizing: border-box;
-	display: grid;
-	grid-template-rows: minmax(0, 1fr) auto;
-	gap: var(--ash-spacing-size40);
-	block-size: 100%;
-	padding: var(--ash-spacing-size80);
-	text-align: center;
-}
-
-.ash-sessions-pdf-thumbnail-image {
-	display: grid;
-	place-items: center;
-	min-inline-size: 0;
-	min-block-size: 0;
-}
-
-.ash-sessions-pdf-thumbnail-image > img {
+.ash-sessions-pdf-thumbnails .ash-list-row > img {
 	display: block;
+	flex: none;
 	max-inline-size: 100%;
-	max-block-size: 100%;
+	/* Keep the page and its number together inside the virtual row. */
+	max-block-size: calc(
+		100% - var(--ash-pdf-thumbnail-number-height) -
+			var(--ash-pdf-thumbnail-gap)
+	);
 	outline: var(--ash-strokeThickness) solid var(--ash-border);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
 }
 
-.ash-sessions-pdf-thumbnail-image > img:not([src]) {
+.ash-sessions-pdf-thumbnails .ash-list-row > img:not([src]) {
 	display: none;
 }
 
 .ash-sessions-pdf-thumbnail-number {
-	font-size: var(--ash-fontSize-label1);
+	line-height: var(--ash-pdf-thumbnail-number-height);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -52,4 +48,9 @@
 
 :is(.hc-black, .hc-light) .ash-sessions-pdf-thumbnails .ash-list-row.selected {
 	box-shadow: inset 0 0 0 var(--ash-strokeThickness) var(--ash-contrastBorder);
+}
+
+:is(.hc-black, .hc-light) .ash-sessions-pdf-thumbnails .ash-list-row > img {
+	outline-color: var(--ash-contrastBorder);
+	box-shadow: none;
 }

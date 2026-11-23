@@ -41,7 +41,7 @@ export interface ListOptions<T> {
 	readonly getHeight?: (item: T) => number;
 	readonly dnd?: ListDragAndDrop<T>;
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
-	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
+	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement | DocumentFragment;
 	readonly reuseRows?: boolean;
 	readonly updateItem?: (item: T, index: number, row: HTMLDivElement, rerender: boolean) => void;
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;

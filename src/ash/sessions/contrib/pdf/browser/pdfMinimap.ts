@@ -1,6 +1,7 @@
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { List } from '../../../../base/browser/ui/list/listWidget.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -16,25 +17,23 @@ interface ThumbnailRow {
 
 /** Projects a single PDF's page navigation into a virtual list with bounded raster loading. */
 export class PdfMinimap extends Disposable {
-	readonly domNode: HTMLElement;
+	private readonly domNode: HTMLElement;
 	private readonly list: List<number>;
 	private readonly rows = new Map<HTMLElement, ThumbnailRow>();
 	private readonly load: AnimationFrameScheduler;
 	private loading = false;
 	private paused = false;
+	private reportedFailure = false;
 
 	constructor(
-		document: Document,
+		container: HTMLElement,
+		panel: { readonly id: string; readonly tabId: string; },
 		private readonly render: (page: number, signal: AbortSignal) => Promise<Uint8Array>,
 		openPage: (page: number) => void,
+		private readonly reportError: (message: string) => void,
 	) {
 		super();
-		this.domNode = h(document, 'div', {
-			className: 'ash-sessions-pdf-thumbnails',
-			properties: { hidden: true },
-		});
-		this.load = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.loadNext()));
-		this.list = this._register(new List<number>(this.domNode, {
+		this.list = this._register(new List<number>(container, {
 			ariaLabel: localize('sessions.pdfPreview.thumbnails', 'Page thumbnails'),
 			scrolling: 'managed',
 			styles: defaultListStyles,
@@ -43,11 +42,18 @@ export class PdfMinimap extends Disposable {
 			loopNavigation: false,
 			focusOnMouseMove: false,
 			getId: page => String(page),
-			getHeight: () => 152,
+			getHeight: () => 184,
 			accessibilityProvider: { getAriaLabel: page => localize('sessions.pdfPreview.thumbnailPage', 'Page {0}', page) },
 			renderItem: (page, _, row) => this.renderRow(page, row),
 			onDidRemoveRow: row => this.releaseRow(row),
 		}));
+		this.domNode = this.list.domNode;
+		this.domNode.classList.add('ash-sessions-pdf-thumbnails');
+		this.domNode.id = panel.id;
+		this.domNode.hidden = true;
+		this.domNode.setAttribute('role', 'tabpanel');
+		this.domNode.setAttribute('aria-labelledby', panel.tabId);
+		this.load = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.loadNext()));
 		this._register(this.list.onDidRenderRows(() => this.load.schedule()));
 		this._register(this.list.onDidAccept(({ item }) => openPage(item)));
 		// In a single-selection navigation list, moving with the keyboard selects the page.
@@ -67,7 +73,10 @@ export class PdfMinimap extends Disposable {
 
 	setVisible(visible: boolean): void {
 		this.domNode.hidden = !visible;
-		if (!visible && this.list.items.length) { this.list.items = []; }
+		if (!visible) {
+			this.reportedFailure = false;
+			if (this.list.items.length) { this.list.items = []; }
+		}
 	}
 
 	setPage(page: number, pageCount: number): void {
@@ -92,14 +101,16 @@ export class PdfMinimap extends Disposable {
 		for (const { page } of [...this.rows.values()]) { this.list.rerender(page - 1); }
 	}
 
-	private renderRow(page: number, row: HTMLElement): HTMLElement {
+	private renderRow(page: number, row: HTMLElement): DocumentFragment {
 		const document = row.ownerDocument;
 		const image = h(document, 'img', { properties: { alt: '', draggable: false }, attributes: { 'aria-hidden': 'true' } });
 		this.rows.set(row, { page, image, request: new AbortController(), requested: false });
-		return h(document, 'div', { className: 'ash-sessions-pdf-thumbnail' },
-			h(document, 'div', { className: 'ash-sessions-pdf-thumbnail-image' }, image),
+		const contents = document.createDocumentFragment();
+		contents.append(
+			image,
 			h(document, 'span', { className: 'ash-sessions-pdf-thumbnail-number' }, String(page)),
 		);
+		return contents;
 	}
 
 	private releaseRow(row: HTMLElement): void {
@@ -116,14 +127,18 @@ export class PdfMinimap extends Disposable {
 		if (!entry) { return; }
 		entry.requested = true;
 		this.loading = true;
+		const { signal } = entry.request;
 		try {
-			const { signal } = entry.request;
 			const bytes = await this.render(entry.page, signal);
 			if (signal.aborted) { return; }
 			entry.url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
 			entry.image.src = entry.url;
-		} catch {
-			// The numbered row still navigates when its preview cannot be rendered.
+		} catch (error) {
+			// Rows remain navigable. Report once per sidebar visit so a failed PDF cannot flood the window.
+			if (!signal.aborted && !this.reportedFailure && !isCancellationError(error)) {
+				this.reportedFailure = true;
+				this.reportError(localize('sessions.pdfPreview.thumbnailsFailed', 'Could not load PDF thumbnails: {0}', error instanceof Error ? error.message : String(error)));
+			}
 		} finally {
 			this.loading = false;
 			if (!this.isDisposed) { this.load.schedule(); }

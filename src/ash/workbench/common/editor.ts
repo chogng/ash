@@ -53,6 +53,8 @@ export interface IEditorPane extends IComposite, IDisposable {
 	isVisible(): boolean;
 	revealRange?(range: Range): void;
 	save?(options?: ISaveOptions): Promise<void>;
+	/** Presents a failure from a Workbench save action while the editor retains the draft. */
+	reportSaveError?(error: unknown): void;
 	/** Custom drafts own naming and return their saved replacement, or undefined when cancelled. */
 	saveDraft?(): Promise<IResourceEditorInput | undefined>;
 	saveAs?(resource: URI): Promise<void>;

@@ -93,6 +93,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		private readonly documentLoader: IPdfDocumentLoader,
 		private readonly annotationStore: IPdfAnnotationStore,
 		private readonly renderer: IPdfRenderer,
+		private readonly reportError: (message: string) => void,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
@@ -355,10 +356,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			this.annotationModel.markSaved(snapshot);
 			this.statusMessage = this.annotationModel.isDirty ? undefined : localize('pdf.viewer.saved', 'Annotations saved');
 		} catch (error) {
-			if (this.input !== input || signal.aborted) throw error;
-			this.statusMessage = error instanceof Error ? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message) : localize('pdf.viewer.saveFailed', 'Could not save annotations');
+			if (this.input === input && !signal.aborted) this.statusMessage = undefined;
 			throw error;
 		}
+	}
+
+	public override reportSaveError(error: unknown): void {
+		if (this.isDisposed || !this.inputController || this.inputController.signal.aborted || this.providerSignal?.aborted) return;
+		this.reportError(error instanceof Error ? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message) : localize('pdf.viewer.saveFailed', 'Could not save annotations'));
 	}
 
 	private onAnnotationsChanged(): void {
@@ -380,7 +385,11 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			action('ash.pdf.annotations.redo', localize('pdf.viewer.redo', 'Redo'), localize('pdf.viewer.redoHint', 'Redo annotation change'), Lxicon.history, available && this.annotationModel.canRedo, false, () => { if (this.canAnnotate()) this.annotationModel.redo(); }),
 			action('ash.pdf.annotations.delete', localize('pdf.viewer.delete', 'Delete'), localize('pdf.viewer.deleteHint', 'Delete selected annotation'), Lxicon.trash, available && this.selectedAnnotationId !== undefined, false, () => this.deleteSelectedAnnotation()),
 			new Separator(),
-			action('ash.pdf.annotations.save', localize('pdf.viewer.save', 'Save'), localize('pdf.viewer.saveHint', 'Save annotations'), Lxicon.check, available && this.annotationModel.isDirty && !this.saveOperation, false, () => this.save().catch(() => undefined)),
+			action('ash.pdf.annotations.save', localize('pdf.viewer.save', 'Save'), localize('pdf.viewer.saveHint', 'Save annotations'), Lxicon.check, available && this.annotationModel.isDirty && !this.saveOperation, false, async () => {
+				const input = this.input;
+				try { await this.save(); }
+				catch (error) { if (input === this.input) this.reportSaveError(error); }
+			}),
 		]);
 	}
 
@@ -683,8 +692,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 				this.findWidget?.layout();
 			} catch (error) {
 				if (!signal.aborted) {
-					this.statusMessage = localize('pdf.viewer.zoomFailed', 'Could not redraw PDF: {0}', error instanceof Error ? error.message : String(error));
-					this.renderSidebar();
+					this.reportError(localize('pdf.viewer.zoomFailed', 'Could not redraw PDF: {0}', error instanceof Error ? error.message : String(error)));
 				}
 			} finally {
 				if (this.zoomController === controller) this.container?.removeAttribute('aria-busy');

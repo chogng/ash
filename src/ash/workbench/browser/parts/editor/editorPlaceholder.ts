@@ -4,8 +4,10 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import './media/editorplaceholder.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { basename } from '../../../../base/common/resources.js';
 import Severity from '../../../../base/common/severity.js';
 import { localize } from '../../../../nls.js';
@@ -21,7 +23,7 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 	private root!: HTMLDivElement;
 	private title!: HTMLHeadingElement;
 	private detail!: HTMLParagraphElement;
-	private severityLabel!: HTMLParagraphElement;
+	private severityIcon!: HTMLSpanElement;
 	private actionsDomNode!: HTMLDivElement;
 	private readonly buttons = this._register(new DisposableStore());
 	private firstButton: Button | undefined;
@@ -49,12 +51,13 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.detail.id = `ash-editor-open-error-detail-${id}`;
 		this.detail.className = 'ash-editor-open-error-detail';
 		this.root.setAttribute('aria-labelledby', this.title.id);
-		this.root.setAttribute('aria-describedby', this.detail.id);
-		this.severityLabel = h(ownerDocument, 'p');
-		this.severityLabel.className = 'ash-editor-open-error-severity';
+		this.severityIcon = h(ownerDocument, 'span', {
+			className: 'ash-editor-open-error-severity',
+			attributes: { role: 'img' },
+		});
 		this.actionsDomNode = h(ownerDocument, 'div');
 		this.actionsDomNode.className = 'ash-editor-open-error-actions';
-		this.root.append(this.severityLabel, this.title, this.detail, this.actionsDomNode);
+		this.root.append(this.severityIcon, this.title, this.detail, this.actionsDomNode);
 		parent.append(this.root);
 		super.create(this.root);
 		this._register(toDisposable(() => this.root.remove()));
@@ -89,17 +92,22 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.root.classList.toggle('warning', severity === Severity.Warning);
 		this.root.classList.toggle('info', severity === Severity.Info);
 		this.root.setAttribute('role', severity === Severity.Info ? 'status' : 'alert');
-		this.severityLabel.textContent = severity === Severity.Warning
-			? localize('workbench.editorOpenWarning', 'Warning')
+		const [icon, severityLabel] = severity === Severity.Warning
+			? [Lxicon.warning, localize('workbench.editorOpenWarning', 'Warning')] as const
 			: severity === Severity.Info
-				? localize('workbench.editorOpenInfo', 'Information')
-				: localize('workbench.editorOpenError', 'Error');
+				? [Lxicon.info, localize('workbench.editorOpenInfo', 'Information')] as const
+				: [Lxicon.error, localize('workbench.editorOpenError', 'Error')] as const;
+		this.severityIcon.setAttribute('aria-label', severityLabel);
+		this.severityIcon.replaceChildren();
+		appendIcon(icon, this.severityIcon);
 		this.title.textContent = error?.forceMessage ? error.message : this.input
 			? localize('workbench.editorOpenFailure', 'Unable to open {0}', this.input.label || basename(this.input.resource))
 			: localize('workbench.editorOpenFailureGeneric', 'Unable to open editor');
-		this.detail.hidden = error?.forceMessage === true;
-		this.detail.textContent = this.error instanceof Error ? this.error.message
-			: localize('workbench.editorOpenUnknownError', 'An unknown error occurred while opening this editor.');
+		const detail = error && !error.forceMessage ? error.message : '';
+		this.detail.textContent = detail;
+		this.detail.hidden = !detail;
+		if (detail) { this.root.setAttribute('aria-describedby', this.detail.id); }
+		else { this.root.removeAttribute('aria-describedby'); }
 		const actions: readonly IAction[] = error?.actions.length ? error.actions : [{
 			id: 'workbench.editor.retry',
 			label: localize('workbench.editorOpenRetry', 'Retry'),

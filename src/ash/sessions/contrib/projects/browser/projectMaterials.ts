@@ -15,6 +15,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { LRUCache } from '../../../../base/common/map.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { autorun, observableFromEvent, observableValue, type IReader, type ISettableObservable } from '../../../../base/common/observable.js';
 import { extname } from '../../../../base/common/path.js';
 import { isWeb } from '../../../../base/common/platform.js';
@@ -30,6 +31,7 @@ import { getPathForFile } from '../../../../platform/dnd/browser/dnd.js';
 import { ByteSize, FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
 import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -91,6 +93,7 @@ export class ProjectMaterials extends Disposable {
 		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
 		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this._register(toDisposable(() => this.selectedFiles.clear()));
@@ -140,11 +143,7 @@ export class ProjectMaterials extends Disposable {
 			return {
 				...file,
 				resolveFile,
-				open: resolveFile ? async () => {
-					if (!isCurrent()) return;
-					const resource = await resolveFile();
-					if (isCurrent()) await openProjectFile(this.editors, resource, true);
-				} : undefined,
+				open: resolveFile ? () => this.openMaterial(resolveFile, isCurrent, true) : undefined,
 			};
 		});
 		const { upload } = model;
@@ -279,15 +278,19 @@ export class ProjectMaterials extends Disposable {
 				const sizeBytes = material.kind === 'file' ? material.sizeBytes : undefined;
 				const resolveFile = material.kind === 'file'
 					? () => resolveProjectFileReference(this.fileService, localFiles, material, isCurrent) : undefined;
+				const resolveOpenResource = material.kind === 'folder'
+					? async () => (await this.files.showOpenDialog({ defaultUri: material.resource, canSelectFiles: true, canSelectFolders: false }))?.[0]
+					: resolveFile;
 				return {
 					id, name: material.name, kind: material.kind === 'text' ? 'file' : material.kind,
-					tooltip: material.kind === 'text' ? undefined : material.resource.fsPath,
+					tooltip: material.kind === 'text' ? undefined
+						: material.resource.scheme === Schemas.file ? material.resource.fsPath : material.resource.path,
 					sizeBytes: material.kind === 'text' ? new TextEncoder().encode(material.content).length : sizeBytes,
 					readText: material.kind === 'text' ? async () => material.content : undefined,
 					previewText: material.kind === 'text' ? material.content.slice(0, textThumbnailLength) : undefined,
 					resolveFile,
 					selectedFile: material.kind === 'file' ? this.selectedFiles.get(previewKey(material.resource)) : undefined,
-					open: material.kind !== 'text' ? () => this.openMaterial(material, resolveFile) : undefined,
+					open: resolveOpenResource ? () => this.openMaterial(resolveOpenResource, isCurrent) : undefined,
 					remove: material.kind === 'folder' ? () => removeMaterials(new Set([id])) : undefined,
 				};
 			}),
@@ -697,29 +700,17 @@ export class ProjectMaterials extends Disposable {
 		if (resources?.length && !this.isDisposed) await add(resources);
 	}
 
-	private async openMaterial(material: Exclude<ProjectMaterial, { kind: 'text'; }>, resolveFile?: () => Promise<URI>): Promise<void> {
+	private async openMaterial(resolveResource: () => Promise<URI | undefined>, isCurrent: () => boolean, readOnly?: boolean): Promise<void> {
+		if (!isCurrent()) return;
 		try {
-			const resource =
-				material.kind === 'folder'
-					? (
-						await this.files.showOpenDialog({
-							defaultUri: material.resource,
-							canSelectFiles: true,
-							canSelectFolders: false,
-						})
-					)?.[0]
-					: await resolveFile?.() ?? material.resource;
-			if (resource && !this.isDisposed) {
-				await openProjectFile(this.editors, resource, resource.scheme === projectMaterialFilesScheme);
+			const resource = await resolveResource();
+			if (resource && isCurrent() && !this.isDisposed) {
+				await openProjectFile(this.editors, resource, readOnly ?? resource.scheme === projectMaterialFilesScheme);
 			}
 		} catch (error) {
-			if (isCancellationError(error)) return;
-			this.reportError(
-				localize(
-					'projects.openFailed',
-					'Could not open this material. Check that the source file is still available.',
-				),
-			);
+			if (!this.isDisposed && isCurrent() && !isCancellationError(error)) {
+				this.notifications.error(localize('projects.openFailed', 'Could not open this material. Check that the source file is still available.'));
+			}
 		}
 	}
 }

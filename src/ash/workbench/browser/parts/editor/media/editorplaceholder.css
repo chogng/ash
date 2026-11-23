@@ -21,6 +21,7 @@
 
 .ash-editor-open-error-detail {
 	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-editor-open-error-actions {
@@ -36,8 +37,12 @@
 }
 
 .ash-editor-open-error-severity {
+	display: inline-flex;
 	color: var(--ash-error-foreground);
-	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-editor-open-error-severity > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
 }
 
 .ash-editor-open-error.warning .ash-editor-open-error-severity {

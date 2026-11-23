@@ -223,6 +223,7 @@ window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true
 if (new URL(location.href).searchParams.has('projectCreation')) {
 	const { ChatListCatalog, IChatListCatalog } = await import('../../../src/ash/sessions/contrib/chat/browser/chatListModel.js');
 	const projectPdfPreview = new URL(location.href).searchParams.has('projectPdfPreview');
+	const missingProjectPdf = new URL(location.href).searchParams.has('missingProjectPdf');
 	const remote = new SyncDescriptor(class implements ChatListSource {
 		readonly snapshot = constObservable({
 			entries: [],
@@ -237,6 +238,7 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 		const { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_CHAT_WORKSPACE_COMMAND } = await import('../../../src/ash/sessions/common/chatWorkspace.js');
 		const { ISessionsEntryService } = await import('../../../src/ash/sessions/services/layout/common/sessionsEntryService.js');
 		const { InMemoryFileSystemProvider } = await import('../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js');
+		const { projectMaterialFilesScheme } = await import('../../../src/ash/platform/projects/common/projectMaterialFiles.js');
 		const { DisposableStore } = await import('../../../src/ash/base/common/lifecycle.js');
 		const registrations = new DisposableStore();
 		registrations.add(registerChatWorkspaceNavigation({ verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' }));
@@ -260,12 +262,15 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 			service: createServiceIdentifier('test.projectPdf'), dependencies: [IFileService],
 			install: ({ container, register, blockRestorationUntil }) => {
 				const provider = register(new InMemoryFileSystemProvider());
-				register(container.get(IFileService).registerProvider(resource.scheme, provider));
-				blockRestorationUntil(provider.writeFile(resource, content, { create: true, overwrite: false, unlock: false }).then(() => undefined));
+				const files = container.get(IFileService);
+				register(files.registerProvider(resource.scheme, provider));
+				if (missingProjectPdf) register(files.registerProvider(projectMaterialFilesScheme, provider));
+				else blockRestorationUntil(provider.writeFile(resource, content, { create: true, overwrite: false, unlock: false }).then(() => undefined));
 			},
 		});
 		globalThis.ashWebWorkbenchHost = { api: {
 			...globalThis.ashWebWorkbenchHost.api,
+			...(missingProjectPdf ? { userDataHome: URI.file('/fixture-profile') } : {}),
 			pdf: {
 				open: async () => ({
 					page: async page => ({
