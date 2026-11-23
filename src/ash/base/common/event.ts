@@ -106,7 +106,7 @@ class EventDeliveryQueueImpl implements EventDeliveryQueue {
 	private isDelivering = false;
 
 	enqueue(deliveries: readonly BufferedEventDelivery[]): void {
-		this.deliveries.push(...deliveries);
+		for (const delivery of deliveries) this.deliveries.push(delivery);
 		if (this.isDelivering) return;
 		this.isDelivering = true;
 		try {

@@ -205,6 +205,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	private readonly hiddenCategories = new Set<string>();
 	private _text = '';
 	private textSyntaxVersion: 1 | 2 = CurrentTextSyntaxVersion;
+	private textTerms = parseFilterTerms('');
 	private preserveStoredState = false;
 
 	readonly onDidChange = this.changeEmitter.event;
@@ -228,8 +229,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		}
 		// Only restoration can enter the older grammar. Explicit input always leaves it,
 		// including resubmitting the same text, whose meaning may now be different.
-		this.textSyntaxVersion = CurrentTextSyntaxVersion;
-		this._text = text;
+		this.updateTextFilter(text, CurrentTextSyntaxVersion);
 		this.persistAndFire();
 	}
 
@@ -271,8 +271,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 			if (this.preserveNewerStoredState()) { this.changeEmitter.fire(); }
 			return;
 		}
-		this.textSyntaxVersion = CurrentTextSyntaxVersion;
-		this._text = '';
+		this.updateTextFilter('', CurrentTextSyntaxVersion);
 		this.hiddenSeverities.clear();
 		this.hiddenCategories.clear();
 		this.persistAndFire();
@@ -280,11 +279,18 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 
 	matches(entry: IOutputEntry, channelId: string): boolean {
 		if (this.hiddenSeverities.has(entry.severity) || (entry.category && !this.isCategoryVisible(entry.category, channelId))) return false;
+		const terms = this.textTerms;
+		if (terms.includes.length === 0 && terms.excludes.length === 0) return true;
 		const restored = this.textSyntaxVersion === 1;
 		const haystack = (restored ? `${entry.category ?? ''} ${entry.text}` : entry.text).toLocaleLowerCase();
-		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
 		const included = restored ? terms.includes.every(term => haystack.includes(term)) : terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
 		return included && terms.excludes.every(term => !haystack.includes(term));
+	}
+
+	private updateTextFilter(text: string, version: 1 | 2): void {
+		this._text = text;
+		this.textSyntaxVersion = version;
+		this.textTerms = version === 1 ? parseRestoredFilterTerms(text) : parseFilterTerms(text);
 	}
 
 	private restore(): void {
@@ -300,8 +306,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 				return;
 			}
 			if (typeof stored.text === 'string') {
-				this._text = stored.text;
-				this.textSyntaxVersion = stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1;
+				this.updateTextFilter(stored.text, stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1);
 			}
 			if (Array.isArray(stored.hiddenSeverities)) {
 				for (const severity of stored.hiddenSeverities) if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);

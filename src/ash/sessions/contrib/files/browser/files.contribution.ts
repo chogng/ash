@@ -9,7 +9,6 @@ import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keyb
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -18,7 +17,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
 import { FocusedViewContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
-import { FileDownload } from '../../../../workbench/contrib/files/browser/fileImportExport.js';
+import { DOWNLOAD_COMMAND_ID } from '../../../../workbench/contrib/files/browser/fileActions.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { SESSIONS_FILES_VIEW_ID, SessionsExplorerView } from './filesView.js';
@@ -107,17 +106,18 @@ export class DownloadRemoteFileAction extends Action2 {
 
 	public override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
 		const context = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
-		const download = new FileDownload(accessor.get(IFileService));
+		const commands = accessor.get(ICommandService);
+		const notifications = accessor.get(INotificationService);
 		try {
 			for (const { editors } of context.groupedEditors) {
 				for (const editor of editors) {
 					if (editor.resource.scheme === ASH_REMOTE_SCHEME) {
-						await download.download(editor.resource, document);
+						await commands.executeCommand(DOWNLOAD_COMMAND_ID, editor.resource);
 					}
 				}
 			}
 		} catch (error) {
-			accessor.get(INotificationService).error(error instanceof Error ? error.message : String(error));
+			notifications.error(error instanceof Error ? error.message : String(error));
 			throw error;
 		}
 	}
@@ -137,7 +137,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.navigationHelp', 'Opening Files shows its title and file tree without creating an editor tab. Opening a file creates its tab. Closing the last file returns to Files. The title bar Files button hides or restores the file editors and their attached tree together. Browser, Changes and Terminal remain independent. Toggle details changes only the attached tree. In a file editor, run Add File as Context from the Command Palette to attach the file to the current draft.') + '\n' + localize('sessions.files.help', "Files\nThe Files EditorPart owns the file tree beside its document groups. Files, Changes, Browser and Terminal have independent EditorParts. Drag a tab to move its editor. On Desktop, drag blank space or plain titles in the window title bar to move the window. When a group title is inside a card, drag empty title space to move the group, or Alt-drag to move the tool workspace. Drop at a group edge to split, or in its center to combine tabs. With a header action focused, Alt+Shift+Arrow moves the group beside its local neighbor, or moves the tool workspace at the group boundary. Separators resize tools and groups. Toggle details hides or shows the file tree without closing documents. Toggle Files retains the tree, selection and unsaved edits. Use Ctrl or Command+Shift+E to focus Files, arrow keys to navigate, Enter to open a file, and Shift+F10 for file actions. Ctrl or Command+F searches the tree; Escape clears Find and restores focus. Alt+F2 reads the visible files. Files follows the selected session directory. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.")
+			() => localize('sessions.files.navigationHelp', 'Opening Files shows its title and file tree without creating an editor tab. Opening a file creates its tab. Closing the last file returns to Files. The title bar Files button hides or restores the file editors and their attached tree together. Browser, Changes and Terminal remain independent. Toggle details changes only the attached tree. In a file editor, run Add File as Context from the Command Palette to attach the file to the current draft.') + '\n' + localize('sessions.files.help', "Files\nThe Files EditorPart owns the file tree beside its document groups. Files, Changes, Browser and Terminal have independent EditorParts. Drag a tab to move its editor. On Desktop, drag blank space or plain titles in the window title bar to move the window. When a group title is inside a card, drag empty title space to move the group, or Alt-drag to move the tool workspace. Drop at a group edge to split, or in its center to combine tabs. With a header action focused, Alt+Shift+Arrow moves the group beside its local neighbor, or moves the tool workspace at the group boundary. Separators resize tools and groups. Toggle details hides or shows the file tree without closing documents. Toggle Files retains the tree, selection and unsaved edits. Use Ctrl or Command+Shift+E to focus Files, arrow keys to navigate, Enter to open a file, and Shift+F10 for file actions. Ctrl or Command+F searches the tree; Escape clears Find and restores focus. Alt+F2 reads the visible files. Files follows the selected session directory. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. On Desktop, choose a save location and use Cancel in the progress notification to stop the download. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.")
 				+ '\n' + localize('sessions.files.editorNavigationHelp', 'Use <keybinding:ash.sessions.openSearchEditor> or choose Search in the Code layout toolbar’s More Actions menu to open the Search tool. Find in Folder opens a search scoped to the selected folder. From a file tab menu, Reveal in Explorer View opens the file tree and selects the file. Drag the file tree separator to the edge to collapse the tree, or activate Toggle details from the keyboard. Word Wrap is available under More Actions in a file editor.'),
 			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,

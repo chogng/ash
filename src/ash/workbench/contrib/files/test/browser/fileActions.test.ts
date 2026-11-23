@@ -18,7 +18,9 @@ import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/comm
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { afterEach, suiteTeardown, test, suite, teardown } from 'mocha';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
+import { bufferToStream, decodeBase64, VSBuffer } from '../../../../../base/common/buffer.js';
+import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -42,6 +44,7 @@ import { IFileDialogService } from '../../../../../platform/dialogs/common/dialo
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
 import { createFileSystemProviderError, IFileService, FileKind, FileNotFoundError, FileSystemProviderErrorCode, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
+import { FILE_DOWNLOAD_CHUNK_BYTES, saveFileDownload } from '../../../../../platform/files/common/diskFileSystemProviderClient.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -54,11 +57,13 @@ import type { IEditorPart as EditorPartContract } from '../../../../browser/part
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
 import { CANCEL_CUT_COMMAND_ID, COPY_FILE_COMMAND_ID, CUT_FILE_COMMAND_ID, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, OPEN_TO_SIDE_COMMAND_ID, PASTE_FILE_COMMAND_ID, RENAME_FILE_COMMAND_ID } from '../../browser/fileActions.js';
 import { IExplorerService } from '../../browser/files.js';
+import { FileDownload } from '../../browser/fileImportExport.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
 import { INativeHostService } from '../../../../common/services.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { REVEAL_IN_OS_COMMAND_ID } from '../../electron-browser/fileActions.contribution.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { NATIVE_HOST_REVEAL_FILE_CHANNEL } from '../../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../../../../platform/native/electron-main/nativeHostIpc.js';
 
@@ -635,6 +640,7 @@ for (const fileRoot of fileCommandRoots) {
 			};
 			const services = createFileActionServices();
 			services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
+			services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 			services.registerInstance(IFileService, {
 				readFileBytes: async requested => {
 					reads.push(requested);
@@ -655,6 +661,56 @@ for (const fileRoot of fileCommandRoots) {
 		}
 	});
 }
+
+test('desktop download streams bounded chunks and cancels from translated progress', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const resource = URI.from({ scheme: Schemas.ashRemote, authority: 'ssh+fixture', path: '/fixture/payload.bin' });
+		const contents = VSBuffer.alloc(FILE_DOWNLOAD_CHUNK_BYTES + 1);
+		contents.buffer.fill(42);
+		for (const interrupted of [false, true]) {
+			const chunks: VSBuffer[] = [];
+			const operations: string[] = [];
+			let cancel: (() => void) | undefined;
+			const channel: IChannel = {
+				listen<T>(): Event<T> {
+					return listener => {
+						queueMicrotask(() => listener({ kind: 'ready' } as T));
+						return Disposable.None;
+					};
+				},
+				call: async <T>(command: string, arg?: unknown) => {
+					operations.push(command);
+					if (command === 'downloadChunk') {
+						chunks.push(decodeBase64((arg as { bytes: string; }).bytes));
+						if (interrupted) cancel?.();
+					}
+					return undefined as T;
+				},
+			};
+			const download = new FileDownload({
+				readFileStream: async (actual, _options, token) => {
+					assert.equal(actual, resource);
+					assert.equal(token?.isCancellationRequested, false);
+					return { value: bufferToStream(contents), resource, kind: FileKind.File, sizeBytes: contents.byteLength, readonly: true };
+				},
+			} as FileServiceContract, {
+				withProgress: (options, task, onCancel) => {
+					assert.equal(options.title, '正在下载 payload.bin');
+					assert.equal(options.cancellable, true);
+					cancel = onCancel;
+					return task({ report() { } });
+				},
+			});
+			await download.download(resource, document, { save: (name, transfer) => saveFileDownload(channel, name, transfer) });
+			assert.deepEqual(operations, interrupted ? ['downloadChunk', 'cancelDownload'] : ['downloadChunk', 'downloadChunk', 'finishDownload']);
+			assert.deepEqual(chunks.map(chunk => chunk.byteLength), interrupted ? [FILE_DOWNLOAD_CHUNK_BYTES] : [FILE_DOWNLOAD_CHUNK_BYTES, 1]);
+			assert.deepEqual(VSBuffer.concat(chunks).buffer, contents.slice(0, interrupted ? FILE_DOWNLOAD_CHUNK_BYTES : undefined).buffer);
+		}
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('Explorer menu commands rename, open beside the editor, and delete the selected file', async () => {
 	await import('../../browser/fileActions.contribution.js');

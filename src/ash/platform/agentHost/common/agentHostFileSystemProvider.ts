@@ -7,7 +7,7 @@ import { assertFileReadSize, createFileSystemProviderError, FileSystemProviderEr
 import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from './appServerApi.js';
 import { AppServerRemoteError } from './appServerError.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
-import { Emitter, Event } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -71,7 +71,6 @@ export interface IRemoteFilesystemConnection {
 }
 
 interface AuthorityRoute {
-	readonly cancellation: CancellationTokenSource;
 	provider: AgentHostFileSystemProvider | undefined;
 }
 
@@ -124,6 +123,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 	private connectionEpoch = 0;
+	private connectionCancellation = new CancellationTokenSource();
 	private readonly authorities = new Map<string, Map<string, AuthorityRoot>>();
 	private readonly authorityLifetimes = this._register(new DisposableStore());
 	private readonly copyScopes = this._register(new DisposableStore());
@@ -144,14 +144,18 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		this.isConnectionReady = options.isConnectionReady ?? (() => true);
 		this._register(this.api.onDidChangeConnection(() => {
 			this.connectionEpoch++;
+			const retired = this.connectionCancellation;
+			this.connectionCancellation = new CancellationTokenSource();
 			this.reads.clearAndDisposeAll();
 			this.resolvedDirectories.clear();
 			this.directoryRequests.clear();
 			this.clearPathIdentity();
+			retired.dispose(true);
 		}));
 		this._register(toDisposable(() => { this.resetPathIdentities(); this.pathIdentities.clear(); this.resolvedDirectories.clear(); this.directoryRequests.clear(); }));
 		this._register(this.api.onDidChangeFiles(change => this.acceptFileChange(change)));
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
+		this._register(toDisposable(() => this.connectionCancellation.dispose(true)));
 	}
 
 	/** Mounts roots on their originating connection; a retired root can never fall back to another host. */
@@ -170,9 +174,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			}
 		}
 		const lifetime = new DisposableStore();
-		const cancellation = lifetime.add(new CancellationTokenSource());
 		const provider = lifetime.add(new AgentHostFileSystemProvider(connection));
-		const route: AuthorityRoute = { cancellation, provider };
+		const route: AuthorityRoute = { provider };
 		this.authorities.set(key, entries);
 		for (const root of roots) { entries.set(extUri.getComparisonKey(root), { resource: root, route }); }
 		this.authorityLifetimes.add(lifetime);
@@ -182,7 +185,6 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			// This blocks stale links even if the visible Workspace later projects the same URI.
 			for (const entry of entries.values()) { if (entry.route === route) { entry.route = undefined; } }
 			route.provider = undefined;
-			cancellation.cancel();
 			if (previousCapabilities !== this.capabilities) { this.capabilityChanges.fire(); }
 			this.identityChanges.fire();
 			this.fileChanges.fire({ resources: roots });
@@ -227,9 +229,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (!provider) { throw canceled(); }
 		const generation = provider.api.connectionGeneration;
 		const epoch = provider.connectionEpoch;
-		using cancellation = new CancellationTokenSource(route.cancellation.token);
-		using changed = Event.once(provider.api.onDidChangeConnection)(() => cancellation.cancel());
-		const result = await raceCancellationError(operation(provider), cancellation.token);
+		const token = provider.connectionCancellation.token;
+		const result = await raceCancellationError(operation(provider), token);
 		if (provider.isDisposed || generation !== provider.api.connectionGeneration || epoch !== provider.connectionEpoch) { throw canceled(); }
 		return result;
 	}
@@ -241,10 +242,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const generation = provider.api.connectionGeneration;
 		const epoch = provider.connectionEpoch;
 		const lifetime = new DisposableStore();
-		const cancellation = new CancellationTokenSource(route?.cancellation.token);
+		const cancellation = new CancellationTokenSource(provider.connectionCancellation.token);
 		lifetime.add(toDisposable(() => cancellation.dispose(true)));
 		const token = cancellation.token;
-		lifetime.add(Event.once(provider.api.onDidChangeConnection)(() => cancellation.cancel()));
 		provider.copyScopes.add(lifetime);
 		const assertCurrent = (uri: URI, operationToken: CancellationToken): void => {
 			if (token.isCancellationRequested || operationToken.isCancellationRequested || this.isDisposed || provider.isDisposed || generation !== provider.api.connectionGeneration || epoch !== provider.connectionEpoch || this.connectionRoute(uri) !== route) { throw canceled(); }
@@ -631,14 +631,15 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStream<Uint8Array> {
 		const route = this.connectionRoute(resource);
 		if (route) {
+			const provider = route.provider;
+			if (!provider) { throw canceled(); }
 			const lifetime = new DisposableStore();
 			const cancellation = new CancellationTokenSource(token);
 			lifetime.add(toDisposable(() => cancellation.dispose(true)));
-			lifetime.add(route.cancellation.token.onCancellationRequested(() => cancellation.cancel()));
-			lifetime.add(Event.once(route.provider!.api.onDidChangeConnection)(() => cancellation.cancel()));
+			lifetime.add(provider.connectionCancellation.token.onCancellationRequested(() => cancellation.cancel()));
 			const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 			try {
-				const source = route.provider!.readFileStream(resource, options, cancellation.token);
+				const source = provider.readFileStream(resource, options, cancellation.token);
 				const destroy = stream.destroy;
 				stream.destroy = (): void => { lifetime.dispose(); source.destroy(); destroy(); };
 				// Report retirement immediately while the original reader keeps ownership of

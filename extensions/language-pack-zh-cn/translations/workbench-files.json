@@ -1,5 +1,7 @@
 {
   "ash": {
+    "files.download.progress": "正在下载 {0}",
+    "accessibility.explorerDownloadHelp": "在 Ash 桌面版中，从远程文件的上下文菜单选择“下载文件”。选择保存位置后，可在进度通知中选择“取消”停止下载。",
     "workspaceTrust.revisionChanged": "目录授权已更改。请刷新后再保存。",
     "workspaceTrust.requestMessage": "你是否信任此工作区中文件的作者？",
     "workspaceTrust.requestDetail": "信任后，将在下列所有文件夹中启用命令、项目配置、指令、技能、MCP 服务器、钩子、插件和语言服务。请仅在信任这些项目时继续。",

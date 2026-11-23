@@ -10,7 +10,8 @@ import { Schemas } from '../../../../base/common/network.js';
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IDesktopFileDownloadService } from '../../../../platform/files/common/diskFileSystemProviderClient.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
@@ -291,7 +292,13 @@ CommandsRegistry.registerMany([
 	{ id: NEW_FILE_COMMAND_ID, handler: createNewFile },
 	{ id: NEW_FOLDER_COMMAND_ID, handler: createNewFolder },
 	{ id: OPEN_TO_SIDE_COMMAND_ID, handler: openExplorerItemToSide },
-	{ id: DOWNLOAD_COMMAND_ID, handler: (accessor, resource) => new FileDownload(accessor.get(IFileService)).download(resolveFileResource(accessor, resource), document) },
+	{
+		id: DOWNLOAD_COMMAND_ID, handler: (accessor, resource) => {
+			const source = resolveFileResource(accessor, resource);
+			const desktop = isRemoteResource(source) ? accessor.getOptional(IDesktopFileDownloadService) : undefined;
+			return accessor.get(IInstantiationService).createInstance(FileDownload).download(source, document, desktop);
+		}
+	},
 	{ id: COPY_PATH_COMMAND_ID, handler: copyFilePath },
 	{ id: COPY_RELATIVE_PATH_COMMAND_ID, handler: copyRelativeFilePath },
 	{ id: RENAME_FILE_COMMAND_ID, handler: renameExplorerItem },

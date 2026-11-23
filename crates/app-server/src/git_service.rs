@@ -391,6 +391,26 @@ impl GitService {
         })
     }
 
+    /// Reads the repository context without inspecting worktree, index, or stash state.
+    pub(crate) fn repository_context_for_request(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(ash_git::GitHead, Vec<ash_git::GitRemote>), GitServiceError> {
+        self.ensure_readable()?;
+        let client = self.client();
+        run(&self.runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = async {
+                    let repository = self.open_repository().await?;
+                    tokio::try_join!(client.head(&repository), client.remotes(&repository))
+                        .map_err(GitServiceError::Git)
+                } => result,
+            }
+        })
+    }
+
     pub(crate) fn reference_state_for_request(
         &self,
         repository: &GitRepository,

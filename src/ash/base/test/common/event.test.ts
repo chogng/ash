@@ -45,6 +45,21 @@ test('Event.None returns the reusable empty disposable', () => {
 	assert.equal(Event.None(() => undefined), noneDisposable);
 });
 
+test('Event delivers a large listener set in registration order', () => {
+	using emitter = new Emitter<void>();
+	using listeners = new DisposableStore();
+	let next = 0;
+	let outOfOrder = false;
+	for (let index = 0; index < 150_000; index++) {
+		emitter.event(() => {
+			if (next++ !== index) outOfOrder = true;
+		}, undefined, listeners);
+	}
+	emitter.fire();
+	assert.equal(next, 150_000);
+	assert.equal(outOfOrder, false);
+});
+
 test('Event.any subscriptions belong to each consumer and release all source listeners', () => {
 	using first = new Emitter<number>();
 	using second = new Emitter<number>();

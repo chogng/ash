@@ -314,11 +314,8 @@ pub(super) fn repository_contexts(
             let descriptor = repository_descriptor(None, authorization, &root)?;
             let service = GitService::new(authorization.clone(), root.clone())
                 .map_err(GitRuntimeError::Service)?;
-            let (repository, snapshot) = service
-                .snapshot_for_request(cancellation)
-                .map_err(GitRuntimeError::Service)?;
-            let references = service
-                .reference_state_for_request(&repository, cancellation)
+            let (current_head, remotes) = service
+                .repository_context_for_request(cancellation)
                 .map_err(GitRuntimeError::Service)?;
             cancellation
                 .check()
@@ -328,8 +325,8 @@ pub(super) fn repository_contexts(
                 label: descriptor.label,
                 path: descriptor.path,
                 root_path: wire_path(&root)?,
-                head: head(snapshot.head()),
-                remotes: project_remotes(&references.remotes),
+                head: head(&current_head),
+                remotes: project_remotes(&remotes),
             })
         })
         .collect()

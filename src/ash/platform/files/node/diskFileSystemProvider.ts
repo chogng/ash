@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path
 import { Emitter, Event } from '../../../base/common/event.js';
 import { ResourceQueue } from '../../../base/common/async.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
-import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { consumeStream, newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { parse } from '../../../base/common/glob.js';
@@ -333,6 +333,39 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 			this.changes.fire({ resources: [resource] });
 			return { stat: await this.stat(resource), revision: revision(content) };
 		}, extUriBiasedIgnorePathCase).catch(error => { throw fileError(error, resource); });
+	}
+
+	/** Stages a stream beside its destination and replaces the target only after the last chunk. */
+	public async writeFileStream(resource: URI, content: AsyncIterable<Uint8Array>, token: CancellationToken): Promise<void> {
+		const path = await this.path(resource);
+		if (this.roots.includes(path)) throw new Error('Cannot overwrite a granted root');
+		throwIfCancelled(token);
+		const temporary = resolve(dirname(path), `.ash-download-${randomUUID()}.tmp`);
+		const handle = await open(temporary, 'wx');
+		try {
+			try {
+				for await (const chunk of content) {
+					let offset = 0;
+					while (offset < chunk.byteLength) {
+						throwIfCancelled(token);
+						const { bytesWritten } = await handle.write(chunk, offset, chunk.byteLength - offset);
+						if (bytesWritten === 0) throw new Error('File write made no progress');
+						offset += bytesWritten;
+					}
+				}
+			} finally {
+				await handle.close();
+			}
+			await DiskFileSystemProvider.pendingWrites.queueFor(resource, async () => {
+				// Recheck the authorized path before publishing an already staged download.
+				if (await this.path(resource) !== path) throw new Error('Download destination changed');
+				throwIfCancelled(token);
+				await Promises.rename(temporary, path);
+			}, extUriBiasedIgnorePathCase);
+			this.changes.fire({ resources: [resource] });
+		} finally {
+			await rm(temporary, { force: true });
+		}
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

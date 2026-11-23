@@ -38,6 +38,36 @@ function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, r
 suite('Agent Host filesystem authority routes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('shares the connection subscription across concurrent reads and renews it after reconnect', async () => {
+		let listeners = 0;
+		using changes = new Emitter<void>({
+			onDidAddListener: () => { listeners++; },
+			onWillRemoveListener: () => { listeners--; },
+		});
+		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
+		const blocked = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		let requests = 0;
+		using remote = provider.registerAuthority(root.authority, connection(root, 'remote', {
+			onDidChangeConnection: changes.event,
+			async getMetadata() {
+				if (++requests === 300) void started.complete();
+				await blocked.p;
+				return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null };
+			},
+		}));
+
+		const reads = Array.from({ length: 300 }, (_, index) => provider.stat(URI.joinPath(root, String(index))));
+		const results = Promise.allSettled(reads);
+		await started.p;
+		assert.equal(listeners, 1);
+		changes.fire();
+		assert.ok((await results).every(result => result.status === 'rejected' && isCancellationError(result.reason)));
+		await blocked.complete();
+		assert.equal((await provider.stat(URI.joinPath(root, 'after-reconnect'))).sizeBytes, 1);
+		assert.equal(listeners, 1);
+	});
+
 	test('leases an exact file snapshot only to its owning connection', async () => {
 		const workspace = URI.file('/workspace');
 		const file = URI.joinPath(workspace, 'paper.pdf');

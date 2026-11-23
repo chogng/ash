@@ -3,6 +3,9 @@ import { Schemas } from '../../../../base/common/network.js';
 import { localize2, type ILocalizedString } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { IDesktopFileDownloadService, LOCAL_FILE_SYSTEM_CHANNEL_NAME, saveFileDownload, type ILocalFileDownload } from '../../../../platform/files/common/diskFileSystemProviderClient.js';
+import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { INativeHostService } from '../../../common/services.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -14,6 +17,16 @@ import { resolveFileResource } from '../browser/fileCommands.js';
 
 export const REVEAL_IN_OS_COMMAND_ID = 'revealFileInOS';
 export const REVEAL_ACTIVE_FILE_IN_OS_COMMAND_ID = 'workbench.action.files.revealActiveFileInWindows';
+
+class DesktopFileDownloadService implements IDesktopFileDownloadService {
+	constructor(@IMainProcessService private readonly main: IMainProcessService) { }
+
+	save(name: string, transfer: (target: ILocalFileDownload) => Promise<void>): Promise<void> {
+		return saveFileDownload(this.main.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME), name, transfer);
+	}
+}
+
+registerSingleton(IDesktopFileDownloadService, DesktopFileDownloadService, InstantiationType.Delayed);
 
 function revealLabel(): ILocalizedString {
 	return isWindows

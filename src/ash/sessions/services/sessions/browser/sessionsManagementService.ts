@@ -648,8 +648,16 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const provider = this.owner(sessionId);
 		const identity = (id: string) => parseSessionIdentity(id, this.defaultProviderId).backendSessionId;
 		await provider.moveChat!(identity(sessionId), identity(threadId), identity(destination), createUuid());
-		this.assertCurrentProvider(provider);
-		await this.refresh();
+		for (; ;) {
+			// A catalog already being replaced may hold a snapshot from before the move.
+			if (this._state === 'loading' && this.initializePromise) await this.initializePromise;
+			this.assertCurrentProvider(provider);
+			const generation = this.catalogGeneration;
+			this.pendingRefreshes.add(sessionId);
+			this.pendingRefreshes.add(destination);
+			await Promise.all([this.scheduleRefresh(sessionId), this.scheduleRefresh(destination)]);
+			if (this.catalogGeneration === generation) return;
+		}
 	}
 
 	archiveSession(sessionId: SessionId): Promise<void> {
@@ -809,12 +817,16 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		};
 	}
 
-	private scheduleRefresh(sessionId: SessionId): void {
-		if (this.refreshes.has(sessionId)) return;
+	private scheduleRefresh(sessionId: SessionId): Promise<void> {
+		const pending = this.refreshes.get(sessionId);
+		if (pending) return pending;
 		const refresh = this.refreshSession(sessionId).finally(() => {
-			if (this.refreshes.get(sessionId) === refresh) this.refreshes.delete(sessionId);
+			if (this.refreshes.get(sessionId) !== refresh) return;
+			this.refreshes.delete(sessionId);
+			if (this.pendingRefreshes.has(sessionId)) return this.scheduleRefresh(sessionId);
 		});
 		this.refreshes.set(sessionId, refresh);
+		return refresh;
 	}
 
 	private async refreshSession(sessionId: SessionId): Promise<void> {
@@ -837,13 +849,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				if (sameSession(current, refreshed)) continue;
 				if (refreshed) this.replaceSession(refreshed);
 				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
-				if (this._active?.session.sessionId === sessionId) {
+				const refreshedActive = this._active?.session.sessionId === sessionId;
+				if (refreshedActive && this._active) {
 					this._active = refreshed?.status === 'active' ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 				}
 				this.restoreSelection();
 				this._error = undefined;
 				this._onDidChange.fire();
-				if (this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
+				if (refreshedActive && this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 			}
 		} catch (error) {
 			if (generation === this.catalogGeneration) this.setError(error);
@@ -859,10 +872,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			if (!current || current.agentTree && current.chats.every(chat => chat.status !== 'active' || chat.workspace !== undefined)) return;
 			const session = await this.subscribe(current);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
-			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === 'active')) {
+			const latest = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
+			if (!latest) {
 				await this.unsubscribe(sessionId);
 				return;
 			}
+			// A newer catalog update owns membership even if an older detail read finishes later.
+			if (latest !== current) return;
 			this.replaceSession(session);
 			if (!this.activeUntitledSession && this._active?.session.sessionId === sessionId) {
 				this._active = activeThread(session, this._active.threadId) ?? this.firstActiveThread();

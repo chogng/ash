@@ -24,6 +24,34 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[test]
+fn repository_context_reads_head_and_remotes_without_status_or_stashes() {
+    let repository = TestRepository::init();
+    repository.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/ash/example.git",
+    ]);
+    std::fs::write(repository.root().join("untracked.txt"), "dirty").unwrap();
+    let authorization = inspection_authorization(repository.root());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let (contexts, timings) = crate::git_service::with_process_timings(|| {
+        super::repository_contexts(&authorization, &cancellation.token())
+    });
+    let contexts = contexts.unwrap();
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0].remotes.len(), 1);
+    let operations: Vec<_> = timings
+        .records
+        .iter()
+        .map(|timing| timing.kind.name())
+        .collect();
+    assert!(operations.contains(&"for-each-ref"), "{operations:?}");
+    assert!(!operations.contains(&"status"), "{operations:?}");
+    assert!(!operations.contains(&"stash"), "{operations:?}");
+}
+
+#[test]
 fn deferred_directory_git_is_discovered_by_the_first_query() {
     let repository = TestRepository::init();
     let runtime = GitRuntime::new_deferred(

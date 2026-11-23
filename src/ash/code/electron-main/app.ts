@@ -651,7 +651,18 @@ export class AshApplication extends Disposable {
 		const profileFiles = this.profileFileSystem;
 		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
-		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')))));
+		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(
+			profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')),
+			async (context, name) => {
+				const record = [...this.workbenchWindowData.values()].find(candidate => `window:${candidate.id}` === context);
+				if (!record || record.window.isDestroyed()) return undefined;
+				const result = await this.dialogs.showSaveDialog({
+					defaultPath: name,
+					title: localize('dialog.saveFileTitle', 'Save File'),
+				}, record.window);
+				return !result.canceled && result.filePath ? URI.file(result.filePath) : undefined;
+			},
+		)));
 		this.mainProcessIpcServer.registerChannel(projectMaterialFilesChannel, this._register(this.windowServices.createInstance(
 			ProjectMaterialFilesChannel, URI.file(this.profileRoot),
 			(context: string) => context === `window:${this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id}`,

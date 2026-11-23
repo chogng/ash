@@ -2,6 +2,7 @@ import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLo
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
+import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { CursorChangeReason, type ICursorPositionChangedEvent } from '../../../../editor/common/cursorEvents.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -243,11 +244,12 @@ export class OutputViewPane extends ViewPane {
 
 	private renderContent(): void {
 		const active = this.outputService.activeChannel;
-		const categories = active ? categoriesOf(active.entries) : [];
-		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join('\0'), active?.id ?? '', (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? '', this.filters.text, this.defaultLogLevels.getDefaultLogLevel(active?.descriptor.extensionId), ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join('\u0001');
+		const entries = active?.entries ?? [];
+		const categories = categoriesOf(entries);
+		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join('\0'), active?.id ?? '', entries.length > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? '', this.defaultLogLevels.getDefaultLogLevel(active?.descriptor.extensionId), ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join('\u0001');
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
-			this.titleActions.updateActions(this.createTitleActions(active));
+			this.titleActions.updateActions(this.createTitleActions(active, entries.length > 0));
 			this.titleActions.domNode.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)?.classList.add('ash-output-channel-picker');
 			const filtered = OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) || categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
 			this.filterWidget.classList.toggle('filtered', filtered);
@@ -269,30 +271,60 @@ export class OutputViewPane extends ViewPane {
 		}
 		const model = this.loadedModel;
 		if (!active || !model) return;
-		const visibleLines = new Map<number, boolean>();
-		const severities = new Map<number, OutputEntrySeverity>();
+		const hiddenAreas: Range[] = [];
+		const decorations: IModelDeltaDecoration[] = [];
+		let hasVisibleContent = false;
+		let hiddenStart: number | undefined;
+		let hiddenEnd = 0;
+		let projectedLine = 0;
+		let projectedVisible = false;
+		let projectedSeverity: OutputEntrySeverity = 'log';
+		const finishLine = (): void => {
+			if (projectedLine === 0) return;
+			if (projectedVisible) hasVisibleContent = true;
+			if (hiddenStart !== undefined && (projectedVisible || projectedLine !== hiddenEnd + 1)) {
+				hiddenAreas.push(new Range(hiddenStart, 1, hiddenEnd, 1));
+				hiddenStart = undefined;
+			}
+			if (!projectedVisible) {
+				hiddenStart ??= projectedLine;
+				hiddenEnd = projectedLine;
+			}
+			if (projectedSeverity === 'warning' || projectedSeverity === 'error') {
+				decorations.push({
+					range: new Range(projectedLine, 1, projectedLine, model.getLineMaxColumn(projectedLine)),
+					options: { description: 'output-severity', inlineClassName: `ash-output-${projectedSeverity}` },
+				});
+			}
+		};
+
 		let line = 1;
 		let previousEndedWithCarriageReturn = false;
-		for (const entry of active.entries) {
+		for (const entry of entries) {
 			const recordMatches = active.kind === 'log' && this.filters.matches(entry, active.id);
 			const text = previousEndedWithCarriageReturn && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
 			previousEndedWithCarriageReturn = entry.text.endsWith('\r');
 			const count = (text.match(/\r\n|\r|\n/g) ?? []).length;
 			const end = line + count - (/[\r\n]$/.test(entry.text) || text.length === 0 ? 1 : 0);
 			for (let number = line; number <= end; number++) {
-				// Ordinary output is a stream: one model line may span or share producer writes.
-				const matches = active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) }, active.id);
-				visibleLines.set(number, Boolean(visibleLines.get(number)) || matches);
-				severities.set(number, entry.severity);
+				if (projectedLine !== number) {
+					finishLine();
+					projectedLine = number;
+					projectedVisible = false;
+				}
+				// A line shared by multiple writes remains visible if any write matches.
+				projectedVisible ||= active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) }, active.id);
+				projectedSeverity = entry.severity;
 			}
 			line += count;
 		}
+		finishLine();
+		if (hiddenStart !== undefined) hiddenAreas.push(new Range(hiddenStart, 1, hiddenEnd, 1));
 		this.changeContent(() => {
-			const hasVisibleContent = [...visibleLines.values()].some(Boolean);
-			if (!hasVisibleContent && active.entries.length > 0) { this.editor.setModel(null); return; }
+			if (!hasVisibleContent && entries.length > 0) { this.editor.setModel(null); return; }
 			if (this.editor.getModel() !== model) this.editor.setModel(model);
-			this.editor.setHiddenAreas([...visibleLines].filter(([, visible]) => !visible).map(([number]) => new Range(number, 1, number, model.getLineMaxColumn(number))));
-			this.decorations.set([...severities].filter(([, severity]) => severity === 'error' || severity === 'warning').map(([number, severity]) => ({ range: new Range(number, 1, number, model.getLineMaxColumn(number)), options: { description: 'output-severity', inlineClassName: `ash-output-${severity}` } })));
+			this.editor.setHiddenAreas(hiddenAreas);
+			this.decorations.set(decorations);
 			if (this.autoScroll) this.scrollToEnd();
 		});
 	}
@@ -304,10 +336,10 @@ export class OutputViewPane extends ViewPane {
 		return undefined;
 	}
 
-	private createTitleActions(active: IOutputChannel | undefined): readonly IAction[] {
+	private createTitleActions(active: IOutputChannel | undefined, hasEntries: boolean): readonly IAction[] {
 		return [
 			this.action(SelectChannelActionId, active?.label ?? localize('output.selectChannel', 'Select Output Channel'), active ? localize('output.selectNamedChannel', 'Select Output Channel: {0}', active.label) : localize('output.selectChannel', 'Select Output Channel'), undefined, this.outputService.channels.length > 0, undefined, () => undefined),
-			this.action(ClearChannelActionId, localize('output.clear', 'Clear Output'), active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'), Lxicon.clearAll, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
+			this.action(ClearChannelActionId, localize('output.clear', 'Clear Output'), active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'), Lxicon.clearAll, hasEntries, undefined, () => active?.clear()),
 			this.action(AutoScrollActionId, localize('output.autoScroll', 'Auto Scroll'), this.autoScroll ? localize('output.pauseFollow', 'Pause Following Output') : localize('output.resumeFollow', 'Follow New Output'), Lxicon.follow, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
 			this.action(MoreActionId, localize('output.more', 'More Output Actions'), localize('output.more', 'More Output Actions'), Lxicon.ellipsis, Boolean(active), undefined, () => undefined),
 		];
@@ -378,7 +410,8 @@ export class OutputViewPane extends ViewPane {
 		this.autoScroll = autoScroll;
 		this.persistAutoScroll();
 		this.titleStateKey = '';
-		this.titleActions.updateActions(this.createTitleActions(this.outputService.activeChannel));
+		const active = this.outputService.activeChannel;
+		this.titleActions.updateActions(this.createTitleActions(active, Boolean(active?.entries.length)));
 	}
 
 	private persistAutoScroll(): void {

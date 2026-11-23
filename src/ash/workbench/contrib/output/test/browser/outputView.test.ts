@@ -245,6 +245,16 @@ test('ordinary Output filters individual lines without changing the shared text 
 	assert.equal(view.editor.getModel(), reference.object.textEditorModel);
 });
 
+test('Output represents consecutive hidden lines with one range', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.channel.append({ text: 'keep first\n' + 'hide\n'.repeat(10_000) + 'keep last\n' });
+	view.filter('keep');
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'keep last']);
+	const hidden = view.editor._getViewModel()!.getHiddenAreas();
+	assert.deepEqual(hidden.map(range => [range.startLineNumber, range.endLineNumber]), [[2, 10_001]]);
+});
+
 test('raw saved backend logs filter model lines independently of filesystem read chunks', async () => {
 	using resources = new DisposableStore();
 	const view = await createOutputView(resources);

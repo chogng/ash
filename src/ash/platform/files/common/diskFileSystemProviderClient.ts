@@ -2,10 +2,13 @@ import { isLinux } from '../../../base/common/platform.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { CancellationToken } from '../../../base/common/cancellation.js';
-import { canceled } from '../../../base/common/errors.js';
+import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../../base/common/cancellation.js';
+import { canceled, isCancellationError } from '../../../base/common/errors.js';
+import { DeferredPromise, raceCancellationError } from '../../../base/common/async.js';
 import { newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { isRecord } from '../../../base/common/types.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { createDecorator } from '../../instantiation/common/instantiation.js';
 import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { URI } from '../../../base/common/uri.js';
 import {
@@ -31,6 +34,70 @@ import {
 } from './files.js';
 
 export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'localFilesystem';
+export const FILE_DOWNLOAD_CHUNK_BYTES = 256 * 1024;
+
+export interface ILocalFileDownload {
+	readonly token: CancellationToken;
+	write(data: VSBuffer): Promise<void>;
+	finish(): Promise<void>;
+	cancel(): void;
+}
+
+/** Publishes a downloaded file at a location chosen by the desktop user. */
+export interface IDesktopFileDownloadService {
+	save(name: string, transfer: (target: ILocalFileDownload) => Promise<void>): Promise<void>;
+}
+
+export const IDesktopFileDownloadService = createDecorator<IDesktopFileDownloadService>('desktopFileDownload');
+
+/** Borrows the Main-owned download until publication, cancellation, or renderer shutdown. */
+export async function saveFileDownload(channel: IChannel, name: string, transfer: (target: ILocalFileDownload) => Promise<void>): Promise<void> {
+	const id = generateUuid();
+	const ready = new DeferredPromise<boolean>();
+	using cancellation = new CancellationTokenSource();
+	let failure: Error | undefined;
+	using subscription = channel.listen<unknown>('download', { id, name })(value => {
+		if (isRecord(value) && (value.kind === 'ready' || value.kind === 'dismissed')) {
+			void ready.complete(value.kind === 'ready');
+		} else {
+			failure = isRecord(value) && value.kind === 'error' && typeof value.message === 'string'
+				? new Error(value.message)
+				: new TypeError('Invalid download reply');
+			void ready.error(failure);
+			cancellation.cancel();
+		}
+	});
+	if (!await ready.p) return;
+
+	const token = cancellation.token;
+	let cleanup: Promise<void> | undefined;
+	let published = false;
+	const discard = (): Promise<void> => cleanup ??= channel.call('cancelDownload', { id });
+	using cancelRequested = token.onCancellationRequested(() => { void discard().catch(() => undefined); });
+	try {
+		await transfer({
+			token,
+			write: async data => {
+				for (let offset = 0; offset < data.byteLength; offset += FILE_DOWNLOAD_CHUNK_BYTES) {
+					throwIfCancelled(token);
+					const bytes = encodeBase64(data.slice(offset, offset + FILE_DOWNLOAD_CHUNK_BYTES));
+					await raceCancellationError(channel.call('downloadChunk', { id, bytes }), token);
+				}
+			},
+			finish: async () => {
+				throwIfCancelled(token);
+				await channel.call('finishDownload', { id });
+				published = true;
+			},
+			cancel: () => cancellation.cancel(),
+		});
+	} catch (error) {
+		if (failure) throw failure;
+		if (!token.isCancellationRequested || !isCancellationError(error)) throw error;
+	} finally {
+		if (!published) await discard();
+	}
+}
 
 /** URI serialization and error transport for the desktop file provider. */
 export class DiskFileSystemProviderClient extends Disposable implements IFileSystemProviderWithFileReadStreamCapability {

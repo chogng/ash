@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
@@ -7,7 +7,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../common/diskFileSystemProviderClient.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
-import { VSBuffer } from '../../../../base/common/buffer.js';
+import { VSBuffer, encodeBase64 } from '../../../../base/common/buffer.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { IPCClient } from '../../../../base/parts/ipc/common/ipc.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -18,6 +19,50 @@ import { FileKind, FileNotFoundError, FileRevisionConflictError, type IWatchOpti
 import { DiskFileSystemProviderChannel } from '../../electron-main/diskFileSystemProviderServer.js';
 import { DiskFileSystemProvider } from '../../node/diskFileSystemProvider.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+
+suite('Desktop file downloads', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('publishes exact chunks only after finish and preserves the target on cancellation', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-download-'));
+		const root = URI.file(directory);
+		const target = URI.joinPath(root, 'selected.bin');
+		try {
+			await writeFile(target.fsPath, 'existing');
+			using provider = new DiskFileSystemProvider([root]);
+			using incoming = new Emitter<VSBuffer>();
+			using outgoing = new Emitter<VSBuffer>();
+			using server = new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, 'window:download');
+			using peer = new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, 'window:download');
+			using channel = new DiskFileSystemProviderChannel(provider, root, root, async (context, name) => {
+				assert.equal(context, 'window:download');
+				assert.equal(name, '.._suggested.bin');
+				return target;
+			});
+			server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
+			const client = peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
+			for (const finish of [false, true]) {
+				const id = generateUuid();
+				const ready = new DeferredPromise<{ kind: string; }>();
+				using subscription = client.listen<{ kind: string; }>('download', { id, name: '../suggested.bin' })(event => { void ready.complete(event); });
+				assert.deepEqual(await ready.p, { kind: 'ready' });
+				await client.call('downloadChunk', { id, bytes: encodeBase64(VSBuffer.wrap(Uint8Array.of(0, 255))) });
+				await client.call('downloadChunk', { id, bytes: encodeBase64(VSBuffer.wrap(Uint8Array.of(127, 1))) });
+				assert.equal(await readFile(target.fsPath, 'utf8'), 'existing');
+				if (finish) {
+					await client.call('finishDownload', { id });
+					assert.deepEqual(await readFile(target.fsPath), Buffer.from([0, 255, 127, 1]));
+				} else {
+					await client.call('cancelDownload', { id });
+					assert.equal(await readFile(target.fsPath, 'utf8'), 'existing');
+				}
+				assert.deepEqual(await readdir(directory), ['selected.bin']);
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+});
 
 suite('Desktop watch subscription ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

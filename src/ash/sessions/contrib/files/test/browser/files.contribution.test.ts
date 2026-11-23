@@ -8,6 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ASH_REMOTE_SCHEME } from '../../../../../platform/remote/common/remote.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
@@ -45,6 +46,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	using services = new InstantiationService();
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 	services.registerInstance(IEditorGroupsService, { getGroup: () => group } as unknown as IEditorGroupsService);
 	const reads: URI[] = [];
 	const downloads: string[] = [];
@@ -70,6 +72,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	browser.window.HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
 	try {
 		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
 		await commands.executeCommand(DownloadRemoteFileAction.ID, { groupId: group.id });
 		assert.deepEqual(reads, remote);
 		assert.deepEqual(downloads, ['first.bin', 'second.bin']);

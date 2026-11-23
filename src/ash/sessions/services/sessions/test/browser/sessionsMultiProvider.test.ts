@@ -57,6 +57,40 @@ class Provider extends Disposable implements ISessionsProvider {
 	async interrupt(session: ISession, threadId: string) { this.calls.push(`interrupt:${session.sessionId}:${threadId}`); }
 }
 
+test('moving a chat refreshes both sessions without reading an unrelated provider', async () => {
+	using registry = new SessionsProvidersService();
+	class MovableProvider extends Provider {
+		canMoveChat(): boolean { return true; }
+		async moveChat(source: string, threadId: string, target: string): Promise<void> {
+			const chat = this.items.find(session => session.sessionId === source)!.chats.find(chat => chat.threadId === threadId)!;
+			this.items = this.items.map(session => {
+				if (session.sessionId === source) return { ...session, chats: session.chats.filter(candidate => candidate.threadId !== threadId) };
+				if (session.sessionId === target) return { ...session, chats: [...session.chats, chat] };
+				return session;
+			});
+		}
+	}
+	using primary = new MovableProvider('primary');
+	using remote = new Provider('remote');
+	const source = { ...primary.items[0]!, sessionId: 'source', workspace: null, agentTree: undefined };
+	const moving = { ...source.chats[0]!, threadId: 'moving' };
+	primary.items = [
+		{ ...source, chats: [{ ...source.chats[0]!, threadId: 'source' }, moving] },
+		{ ...source, sessionId: 'destination', chats: [{ ...source.chats[0]!, threadId: 'destination' }] },
+	];
+	using primaryRegistration = registry.registerProvider(primary);
+	using remoteRegistration = registry.registerProvider(remote);
+	using management = new SessionsManagementService(primary.id, registry);
+	await management.initialize();
+	let remoteLists = 0;
+	remote.list = async () => { remoteLists++; throw new Error('Remote host unavailable'); };
+	await management.moveChat('source', 'moving', 'destination');
+	assert.equal(remoteLists, 0);
+	assert.deepEqual(management.sessions.find(session => session.sessionId === 'source')?.chats.map(chat => chat.threadId), ['source']);
+	assert.deepEqual(management.sessions.find(session => session.sessionId === 'destination')?.chats.map(chat => chat.threadId), ['destination', 'moving']);
+	assert.ok(management.sessions.some(session => session.providerId === remote.id));
+});
+
 test('project archive retries after a partial catalog and only requires the primary host', async () => {
 	using registry = new SessionsProvidersService();
 	using primary = new Provider('primary');
