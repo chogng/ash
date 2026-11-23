@@ -5,6 +5,7 @@ use crate::Scope;
 use crate::Store;
 use crate::Unread;
 use crate::WriteRequest;
+use async_utils::CancellationSource;
 use async_utils::CancellationToken;
 use protocol::SessionId;
 use protocol::ThreadId;
@@ -12,11 +13,35 @@ use protocol::TurnId;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Mutex;
 
+/// Supplies membership and scopes transient state to a live Turn under the owner lock.
+pub trait BoardTurnHost: Send + Sync {
+    fn tree_members(&self, caller: &ThreadId) -> Result<(Scope, Vec<ThreadId>)>;
+    fn with_active_turn(
+        &self,
+        caller: &ThreadId,
+        session: &SessionId,
+        turn: &TurnId,
+        update: &mut dyn FnMut(),
+    ) -> Result<()>;
+}
+
+/// Supplies board access facts from the runtime that owns Threads and Turns.
+pub trait MessageBoardHost: BoardTurnHost {
+    fn require_running_turn(
+        &self,
+        caller: &ThreadId,
+        session: &SessionId,
+        turn: &TurnId,
+    ) -> Result<()>;
+    fn scope(&self, caller: &ThreadId) -> Result<Scope>;
+    fn current_time(&self) -> Result<i64>;
+}
+
 /// Board operations shared by SQLite and remote service implementations.
-/// The runtime owns tree membership and the configured clock. Each backend preserves
+/// The host owns tree membership and the configured clock. Each backend preserves
 /// operation receipts and unread acknowledgements; a transport error must remain an error.
 pub trait BoardBackend: Send + Sync {
     /// Publishes the host-validated members of this tree before accessing it.
@@ -160,35 +185,76 @@ fn validate_preview(post: &Value) -> Result<i64> {
     Ok(preview.id)
 }
 
-/// Transient SSE previews owned by ExtensionState's receiving Turn scope.
-/// Durable unread state remains authoritative, including acknowledgements.
+/// A background snapshot of authoritative unread records for exactly one Turn.
 #[derive(Default)]
-pub struct LiveNotices(Mutex<BTreeMap<i64, Value>>);
+pub struct RemoteUnread(Mutex<RemoteUnreadState>);
 
-impl LiveNotices {
-    pub fn accept(&self, post: Value) -> Result<()> {
-        let id = validate_preview(&post)?;
-        let mut notices = self
-            .0
-            .lock()
-            .map_err(|_| crate::Error::Runtime("board notification lock poisoned".into()))?;
-        notices.insert(id, post);
-        while notices.len() > 8 {
-            notices.pop_first();
-        }
-        Ok(())
+#[derive(Default)]
+struct RemoteUnreadState {
+    revision: u64,
+    unread: Unread,
+    observation: Option<CancellationSource>,
+}
+
+impl RemoteUnread {
+    /// Starts a refresh and stream that a successful acknowledgement can retire.
+    pub fn start_observation(&self, turn: &CancellationToken) -> CancellationToken {
+        let source = turn.child_source();
+        let token = source.token();
+        self.state().observation = Some(source);
+        token
     }
 
-    pub(crate) fn merge(&self, unread: &mut Unread) -> Result<()> {
-        let notices = self
-            .0
+    pub fn revision(&self) -> u64 {
+        self.state().revision
+    }
+
+    pub fn publish(&self, revision: u64, unread: Unread) {
+        let mut state = self.state();
+        if state.revision == revision {
+            state.unread = unread;
+        }
+    }
+
+    pub(crate) fn snapshot(&self) -> Unread {
+        self.state().unread.clone()
+    }
+
+    pub(crate) fn invalidate(&self) {
+        let observation = {
+            let mut state = self.state();
+            state.revision += 1;
+            state.unread = Unread::default();
+            state.observation.take()
+        };
+        if let Some(source) = observation {
+            source.cancel();
+        }
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, RemoteUnreadState> {
+        self.0
             .lock()
-            .map_err(|_| crate::Error::Runtime("board notification lock poisoned".into()))?;
-        // Only replace previews still present in the authoritative unread page.
-        // An SSE frame cannot resurrect an acknowledged or deleted message.
-        for post in &mut unread.notices {
-            if let Some(live) = post["id"].as_i64().and_then(|id| notices.get(&id)) {
-                *post = live.clone();
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl Unread {
+    /// Checks the remote snapshot before trusting it as contextual evidence.
+    pub fn validate_remote(&self) -> Result<()> {
+        let invalid = || crate::Error::Runtime("invalid board unread response".into());
+        if self.count < self.notices.len() as i64
+            || self.notices.len() > 8
+            || (self.count == 0 && self.through != 0)
+            || (self.count > 0 && self.through <= 0)
+        {
+            return Err(invalid());
+        }
+        let mut ids = BTreeSet::new();
+        for notice in &self.notices {
+            let id = validate_preview(notice)?;
+            if id > self.through || !ids.insert(id) {
+                return Err(invalid());
             }
         }
         Ok(())

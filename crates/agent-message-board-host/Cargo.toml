@@ -1,0 +1,31 @@
+[package]
+name = "ash-agent-message-board-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+agent-message-board = { workspace = true }
+agent-message-board-client = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-config = { workspace = true }
+ash-core = { workspace = true }
+ash-extension-api = { workspace = true }
+ash-http-client = { workspace = true }
+ash-protocol = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+ash-prompts = { workspace = true }
+ash-tools = { workspace = true }
+core-api = { workspace = true }
+pollster = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

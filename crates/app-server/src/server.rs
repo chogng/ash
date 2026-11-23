@@ -432,7 +432,7 @@ pub struct AppServer {
     agent_extensions: Arc<ExtensionRegistry>,
     git_attribution_policy: Option<Arc<dyn git_attribution::GitAttributionPolicySource>>,
     notes: Option<Arc<history_notes::NotesStore>>,
-    message_board: Option<Arc<dyn agent_message_board::BoardBackend>>,
+    message_board: Option<agent_message_board_host::MessageBoard>,
     workflows: Arc<workflows::Store>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
@@ -2592,21 +2592,10 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_remote_board_notifications(
-        mut self,
-        board: Arc<agent_message_board_client::RemoteMessageBoard>,
-    ) -> Self {
-        let mut builder =
-            ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
-        crate::agent_message_board_host::install_notifications(&mut builder, &self.threads, board);
-        self.agent_extensions = Arc::new(builder.build());
-        self
-    }
-
-    pub fn with_agent_capabilities(
+    pub(crate) fn with_agent_capabilities(
         mut self,
         notes: Arc<history_notes::NotesStore>,
-        message_board: Arc<dyn agent_message_board::BoardBackend>,
+        message_board: agent_message_board_host::MessageBoard,
         image_backend: Option<Arc<dyn image_generation::ImageGenerationBackend>>,
         artifact_root: &std::path::Path,
         attribution: Arc<dyn git_attribution::GitAttributionPolicySource>,
@@ -2617,7 +2606,7 @@ impl AppServer {
         builder.item_contributor("results", items.clone());
         sleep::install(&mut builder, items.clone());
         history_notes::install(&mut builder, &self.threads, notes.clone());
-        agent_message_board::install(&mut builder, &self.threads, message_board.clone());
+        message_board.install(&mut builder, &self.threads);
         if let Some(service) = &self.task_delivery {
             let dirs = self
                 .env_runtime

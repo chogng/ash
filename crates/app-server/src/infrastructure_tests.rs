@@ -1701,10 +1701,15 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
     let images = Arc::new(ImageService {
         requests: Default::default(),
     });
+    let http: Arc<dyn ash_http_client::HttpClient> =
+        Arc::new(ash_http_client::UreqHttpClient::new().unwrap());
+    let message_board = agent_message_board_host::MessageBoardStorage::new(Some(database.clone()))
+        .open(&ash_config::MessageBoardConfig::Local, &http)
+        .unwrap();
     let server = super::server_with_model(model.clone())
         .with_agent_capabilities(
             notes.clone(),
-            Arc::new(agent_message_board::Store::open(&database).unwrap()),
+            message_board,
             Some(images.clone()),
             &root.path().join("images"),
             Arc::new(git_attribution::GitAttributionPolicy::Enabled {

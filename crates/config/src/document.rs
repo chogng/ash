@@ -320,6 +320,8 @@ pub struct UserConfigDocument {
     pub network: NetworkConfig,
     #[serde(default)]
     pub message_board: crate::MessageBoardConfig,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub message_board_cleanup: Vec<crate::MessageBoardCleanupConfig>,
     #[serde(default)]
     pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
     #[serde(default)]
@@ -376,6 +378,9 @@ impl UserConfigDocument {
             .map_err(|message| ConfigError(message.into()))?;
         self.network.validate()?;
         self.message_board.validate()?;
+        for cleanup in &self.message_board_cleanup {
+            cleanup.validate()?;
+        }
         if let Some(advisor) = &self.agent.advisor {
             advisor
                 .validate()
@@ -571,6 +576,7 @@ pub struct ResolvedConfig {
     pub grep_backend: GrepBackend,
     pub network: NetworkConfig,
     pub message_board: crate::MessageBoardConfig,
+    pub message_board_cleanup: Vec<crate::MessageBoardCleanupConfig>,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub connections: BTreeMap<ModelConnectionId, ModelProviderConfig>,
     pub active_connections: BTreeMap<ProviderId, ModelConnectionId>,
@@ -774,6 +780,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             grep_backend: document.grep.backend,
             network: document.network.clone(),
             message_board: document.message_board.clone(),
+            message_board_cleanup: document.message_board_cleanup.clone(),
             providers,
             connections: document.connections.clone(),
             active_connections,

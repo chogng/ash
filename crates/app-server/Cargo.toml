@@ -51,8 +51,7 @@ goal = { workspace = true }
 app-tools = { workspace = true }
 advisor = { workspace = true }
 agent = { workspace = true }
-agent-message-board = { workspace = true }
-agent-message-board-client = { workspace = true }
+agent-message-board-host = { workspace = true }
 workflows = { workspace = true }
 guardian-v2 = { workspace = true }
 ash-utils-home-dir = { workspace = true }

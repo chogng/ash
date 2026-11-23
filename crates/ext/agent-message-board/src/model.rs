@@ -9,7 +9,7 @@ use serde_json::json;
 
 pub(crate) const OUTPUT_BYTES: usize = 8_000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scope {
     pub session: SessionId,

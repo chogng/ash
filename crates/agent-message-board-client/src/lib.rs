@@ -11,5 +11,4 @@ pub use agent_message_board::MemberRegistration;
 pub use agent_message_board::NotificationWatch;
 pub use agent_message_board::ServiceFailure;
 pub use client::RemoteMessageBoard;
-pub use notifications::NotificationHost;
 pub use notifications::install_notifications;

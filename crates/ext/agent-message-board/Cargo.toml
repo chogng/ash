@@ -11,11 +11,8 @@ doctest = false
 [dependencies]
 zeroize = { workspace = true }
 async-utils = { package = "ash-async-utils", path = "../../async-utils" }
-ash-core = { workspace = true }
-core-api = { workspace = true }
 base64 = { workspace = true }
 caseless = { workspace = true }
-chrono = { workspace = true }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 rusqlite = { workspace = true }
@@ -27,8 +24,6 @@ thiserror = { workspace = true }
 tools = { package = "ash-tools", path = "../../tools" }
 
 [dev-dependencies]
-pollster = { workspace = true }
-prompts = { package = "ash-prompts", path = "../../prompts" }
 tempfile = { workspace = true }
 
 [lints]

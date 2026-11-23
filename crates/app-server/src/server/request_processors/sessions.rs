@@ -8,6 +8,7 @@ use super::decode;
 use super::operations::SessionMutation;
 use super::result;
 use super::session_execution_router::SessionExecutionRoute;
+use agent_message_board_host::MessageBoard;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::session::SessionCatalogReadResult;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
@@ -106,7 +107,7 @@ pub(super) struct SessionRequestProcessor<'ctx, C: SessionRequestProcessorContex
     env_runtime: &'ctx super::Arc<super::RwLock<super::EnvRuntime>>,
     git_turn_changes:
         &'ctx Option<super::Arc<super::git_turn_changes_runtime::GitTurnChangesRuntime>>,
-    message_board: &'ctx Option<super::Arc<dyn agent_message_board::BoardBackend>>,
+    message_board: &'ctx Option<MessageBoard>,
     notes: &'ctx Option<super::Arc<history_notes::NotesStore>>,
     queue: &'ctx Option<super::Arc<queue::QueueStore>>,
     trace_recorder: &'ctx super::Arc<ash_rollout_trace::TraceRecorder>,
@@ -270,7 +271,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         git_turn_changes: &'ctx Option<
             super::Arc<super::git_turn_changes_runtime::GitTurnChangesRuntime>,
         >,
-        message_board: &'ctx Option<super::Arc<dyn agent_message_board::BoardBackend>>,
+        message_board: &'ctx Option<MessageBoard>,
         notes: &'ctx Option<super::Arc<history_notes::NotesStore>>,
         queue: &'ctx Option<super::Arc<queue::QueueStore>>,
         trace_recorder: &'ctx super::Arc<ash_rollout_trace::TraceRecorder>,

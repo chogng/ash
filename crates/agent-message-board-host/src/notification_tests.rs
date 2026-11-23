@@ -1,13 +1,26 @@
 use super::*;
+use agent_message_board::AccessToken;
+use agent_message_board::BoardBackend;
+use agent_message_board::BoardNotification;
+use agent_message_board::RemoteUnread;
+use agent_message_board_client::NotificationWatch;
+use ash_async_utils::CancellationToken;
 use ash_core::CreateThreadRequest;
 use ash_core::InMemoryThreadStore;
 use ash_core::StartTurnRequest;
-use ash_protocol::SessionId;
-use ash_protocol::TurnId;
+use ash_extension_api::ExtensionScope;
+use ash_extension_api::TurnInputContext;
+use ash_http_client::HttpBodySink;
+use ash_http_client::HttpClientError;
+use ash_http_client::HttpRequest;
+use ash_http_client::HttpResponse;
 use core_api::SequenceExpectation;
 use serde_json::json;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::time::Duration;
 
 fn start(threads: &ThreadController, root: &ThreadId, key: &str) -> TurnId {
     threads
@@ -37,16 +50,14 @@ fn start(threads: &ThreadController, root: &ThreadId, key: &str) -> TurnId {
         .turn_id
 }
 #[test]
-fn remote_board_host_rejects_stale_turns_and_cross_tree_notifications() {
+fn only_the_exact_active_turn_can_install_a_receiver() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
     let registry = Arc::new(ExtensionRegistryBuilder::new().build());
     threads.install_extensions(registry.clone()).unwrap();
-    let state = registry.state().clone();
-    let host = Host {
+    let host = ThreadHost {
         threads: Arc::downgrade(&threads),
-        state: Arc::downgrade(&state),
     };
     let session = SessionId::new("session").unwrap();
     let root = ThreadId::new("root").unwrap();
@@ -62,32 +73,24 @@ fn remote_board_host_rejects_stale_turns_and_cross_tree_notifications() {
         })
         .unwrap();
     let current = start(&threads, &root, "current");
-    let notice = BoardNotification {
-        scope: Scope {
-            session: session.clone(),
-            root: root.clone(),
-        },
-        recipient: root.clone(),
-        turn_id: current.clone(),
-        post: json!({"id":1,"topic":1,"channel":"work","author":"sender","created_at":1,"preview":"evidence","total_chars":8,"replies":0}),
+    let accepted = |session: &SessionId, turn: &TurnId| {
+        let mut accepted = false;
+        host.with_active_turn(&root, session, turn, &mut || accepted = true)
+            .unwrap();
+        accepted
     };
-    assert!(host.accept(notice.clone()).unwrap());
-    let mut foreign = notice.clone();
-    foreign.scope.root = ThreadId::new("other-root").unwrap();
-    assert!(!host.accept(foreign).unwrap());
+    assert!(accepted(&session, &current));
+    assert!(!accepted(
+        &SessionId::new("foreign-session").unwrap(),
+        &current
+    ));
     threads
         .complete_turn(&root, &current, "done".into())
         .unwrap();
-    assert!(!host.accept(notice.clone()).unwrap());
+    assert!(!accepted(&session, &current));
     let next = start(&threads, &root, "next");
-    assert!(!host.accept(notice.clone()).unwrap());
-    assert!(
-        host.accept(BoardNotification {
-            turn_id: next.clone(),
-            ..notice
-        })
-        .unwrap()
-    );
+    assert!(!accepted(&session, &current));
+    assert!(accepted(&session, &next));
     threads
         .interrupt_turn(
             &root,
@@ -103,12 +106,7 @@ fn remote_board_host_rejects_stale_turns_and_cross_tree_notifications() {
 
 #[test]
 fn remote_board_tools_use_host_identity_and_reject_calls_after_turn_completion() {
-    use agent_message_board::BoardBackend;
     use ash_async_utils::CancellationSource;
-    use ash_http_client::HttpClient;
-    use ash_http_client::HttpClientError;
-    use ash_http_client::HttpRequest;
-    use ash_http_client::HttpResponse;
     use ash_tools::ToolExecutionOutcome;
     use ash_tools::ToolOutputStatus;
 
@@ -159,7 +157,10 @@ fn remote_board_tools_use_host_identity_and_reject_calls_after_turn_completion()
         InMemoryThreadStore::default(),
     )));
     let mut builder = ExtensionRegistryBuilder::new();
-    agent_message_board::install(&mut builder, &threads, remote.clone());
+    let host = Arc::new(ThreadHost {
+        threads: Arc::downgrade(&threads),
+    });
+    agent_message_board::install(&mut builder, host, BoardInput::Remote(remote.clone()));
     let registry = Arc::new(builder.build());
     threads.install_extensions(registry.clone()).unwrap();
     let session = SessionId::new("tool-session").unwrap();
@@ -307,5 +308,132 @@ fn remote_board_tools_use_host_identity_and_reject_calls_after_turn_completion()
     assert_eq!(
         written["operation"]["params"]["request"]["text"],
         "evidence"
+    );
+}
+
+#[test]
+fn a_recovered_turn_receives_remote_unread_updates_from_its_background_observer() {
+    struct Transport {
+        delivered: mpsc::Sender<NotificationWatch>,
+        has_post: AtomicBool,
+    }
+
+    fn preview() -> serde_json::Value {
+        json!({"id":1,"topic":1,"channel":"work","author":"sender","created_at":1,"preview":"evidence","total_chars":8,"replies":0})
+    }
+
+    impl HttpClient for Transport {
+        fn execute(
+            &self,
+            request: &HttpRequest,
+        ) -> std::result::Result<HttpResponse, HttpClientError> {
+            let body = if request.url().ends_with("/members") {
+                json!("registered-board-tree-credential-32")
+            } else {
+                assert!(request.url().ends_with("/call"));
+                if self.has_post.load(Ordering::Relaxed) {
+                    json!({"count":1,"through":1,"notices":[preview()]})
+                } else {
+                    json!({"count":0,"through":0,"notices":[]})
+                }
+            };
+            Ok(HttpResponse::new(
+                200,
+                vec![],
+                serde_json::to_vec(&body).unwrap(),
+            ))
+        }
+
+        fn execute_streaming_with_cancellation(
+            &self,
+            request: &HttpRequest,
+            _: &CancellationToken,
+            sink: &mut dyn HttpBodySink,
+        ) -> std::result::Result<HttpResponse, HttpClientError> {
+            let watch: NotificationWatch = serde_json::from_slice(request.body()).unwrap();
+            let notice = BoardNotification {
+                scope: watch.scope.clone(),
+                recipient: watch.caller.clone(),
+                turn_id: watch.turn_id.clone(),
+                post: preview(),
+            };
+            let frame = format!(
+                "event: ready\ndata: {{}}\n\nevent: notification\ndata: {}\n\n",
+                serde_json::to_string(&notice).unwrap()
+            );
+            self.has_post.store(true, Ordering::Relaxed);
+            sink.emit(frame.as_bytes())?;
+            let _ = self.delivered.send(watch);
+            Ok(HttpResponse::new(200, vec![], vec![]))
+        }
+    }
+
+    let (delivered, notices) = mpsc::channel();
+    let http: Arc<dyn HttpClient> = Arc::new(Transport {
+        delivered,
+        has_post: AtomicBool::new(false),
+    });
+    let remote = RemoteMessageBoard::new(
+        http.clone(),
+        "https://boards.test",
+        AccessToken::new("host-administrator-credential-32-bytes".into()).unwrap(),
+    )
+    .unwrap();
+    let board = MessageBoard {
+        backend: Backend::Remote {
+            client: Arc::new(remote),
+            location: RemoteBoardLocation {
+                endpoint: "https://boards.test".into(),
+                credential_env: "ASH_TEST_UNUSED_BOARD_CREDENTIAL".into(),
+            },
+        },
+        store: Arc::new(Store::in_memory().unwrap()),
+        cleanup: Arc::default(),
+        http,
+    };
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let session = SessionId::new("session").unwrap();
+    let root = ThreadId::new("root").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: session.clone(),
+            thread_id: root.clone(),
+            title: "root".into(),
+        })
+        .unwrap();
+    let turn = start(&threads, &root, "remote-notice");
+    let mut builder = ExtensionRegistryBuilder::new();
+    board.install(&mut builder, &threads);
+    let registry = Arc::new(builder.build());
+    threads.install_extensions(registry.clone()).unwrap();
+    let context = || TurnInputContext::for_session(&session, &root, &turn, &[]);
+    registry.contribute_turn_input(context()).unwrap();
+    let watch = notices.recv_timeout(Duration::from_secs(3)).unwrap();
+    assert_eq!(watch.turn_id, turn);
+    assert_eq!(watch.scope.session, session);
+    assert_eq!(watch.scope.root, root);
+    let fragments = registry.contribute_turn_input(context()).unwrap();
+    assert_eq!(fragments.len(), 2);
+    assert!(fragments[1].body().contains("evidence"));
+    let scope = ExtensionScope::Turn(session.clone(), root.clone(), turn.clone());
+    threads.complete_turn(&root, &turn, "done".into()).unwrap();
+    assert!(
+        registry
+            .contribute_turn_input(context())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        registry
+            .state()
+            .get::<RemoteUnread>(&scope)
+            .unwrap()
+            .is_none()
     );
 }

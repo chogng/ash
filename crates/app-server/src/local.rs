@@ -901,7 +901,7 @@ struct LocalProfileStores {
     workflows: Arc<workflows::Store>,
     issue_cache: Mutex<Option<Arc<ash_state::SqliteIssueCache>>>,
     turn_changes: Mutex<Option<Arc<ash_state::SqliteTurnChangeStore>>>,
-    message_board: Mutex<Option<Arc<agent_message_board::Store>>>,
+    message_board: agent_message_board_host::MessageBoardStorage,
     task_delivery: Mutex<Option<Arc<task_delivery::Store>>>,
 }
 
@@ -956,7 +956,10 @@ impl LocalProfileStores {
             ),
             issue_cache: Mutex::default(),
             turn_changes: Mutex::default(),
-            message_board: Mutex::default(),
+            message_board: agent_message_board_host::MessageBoardStorage::new(match mode {
+                SessionStateMode::Durable => Some(path.to_path_buf()),
+                SessionStateMode::Ephemeral => None,
+            }),
             task_delivery: Mutex::default(),
         })
     }
@@ -2292,36 +2295,14 @@ pub fn open_app_server_with_codebase_providers(
             options.web_search_backend.take(),
         )
         .map_err(OpenAppServerError)?;
-    let message_board: Arc<dyn agent_message_board::BoardBackend> =
-        match &user_config.values.message_board {
-            ash_config::MessageBoardConfig::Local => {
-                shared_store(&stores.message_board, || match options.session_state_mode {
-                    SessionStateMode::Durable => agent_message_board::Store::open(&database_path),
-                    SessionStateMode::Ephemeral => agent_message_board::Store::in_memory(),
-                })?
-            }
-            ash_config::MessageBoardConfig::Remote {
-                endpoint,
-                credential_env,
-            } => {
-                let credential = std::env::var(credential_env).map_err(|_| {
-                    OpenAppServerError(
-                        "configured message-board credential is missing or invalid".into(),
-                    )
-                })?;
-                let board = Arc::new(
-                    agent_message_board_client::RemoteMessageBoard::new(
-                        application_http.clone(),
-                        endpoint,
-                        agent_message_board_client::AccessToken::new(credential)
-                            .map_err(open_error)?,
-                    )
-                    .map_err(open_error)?,
-                );
-                server = server.with_remote_board_notifications(board.clone());
-                board
-            }
-        };
+    let message_board = stores
+        .message_board
+        .open(&user_config.values.message_board, &application_http)
+        .map_err(open_error)?;
+    if options.session_state_mode == SessionStateMode::Durable {
+        message_board
+            .recover_deleted_sessions(&user_config.values.message_board_cleanup, server.threads());
+    }
     server = server
         .with_agent_capabilities(
             stores.notes.clone(),

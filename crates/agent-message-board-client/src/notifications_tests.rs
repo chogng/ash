@@ -1,6 +1,5 @@
 use super::*;
 use crate::AccessToken;
-use agent_message_board::BoardNotification;
 use agent_message_board::Scope;
 use http_client::HttpBodySink;
 use http_client::HttpClient;
@@ -13,12 +12,19 @@ use protocol::TurnId;
 use std::sync::mpsc;
 
 struct Host(Scope);
-impl NotificationHost for Host {
-    fn members(&self, _: &ThreadId) -> agent_message_board::Result<(Scope, Vec<ThreadId>)> {
+impl BoardTurnHost for Host {
+    fn tree_members(&self, _: &ThreadId) -> agent_message_board::Result<(Scope, Vec<ThreadId>)> {
         Ok((self.0.clone(), vec![self.0.root.clone()]))
     }
-    fn accept(&self, _: BoardNotification) -> agent_message_board::Result<bool> {
-        Ok(true)
+    fn with_active_turn(
+        &self,
+        _: &ThreadId,
+        _: &SessionId,
+        _: &TurnId,
+        update: &mut dyn FnMut(),
+    ) -> agent_message_board::Result<()> {
+        update();
+        Ok(())
     }
 }
 struct Transport {
@@ -26,12 +32,13 @@ struct Transport {
     closed: mpsc::Sender<TurnId>,
 }
 impl HttpClient for Transport {
-    fn execute(&self, _: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
-        Ok(HttpResponse::new(
-            200,
-            vec![],
-            b"\"registered-board-tree-credential-32\"".to_vec(),
-        ))
+    fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+        let body: &[u8] = if request.url().ends_with("/members") {
+            b"\"registered-board-tree-credential-32\""
+        } else {
+            b"{\"count\":0,\"through\":0,\"notices\":[]}"
+        };
+        Ok(HttpResponse::new(200, vec![], body.to_vec()))
     }
     fn execute_streaming_with_cancellation(
         &self,

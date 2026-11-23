@@ -3479,6 +3479,47 @@ fn message_board_remote_configuration_roundtrips_without_credentials() {
 }
 
 #[test]
+fn message_board_cleanup_is_independent_of_the_selected_backend() {
+    let source = r#"
+[[messageBoardCleanup]]
+endpoint = "https://retired.test/board"
+credentialEnv = "ASH_RETIRED_BOARD_TOKEN"
+deletedSessions = ["deleted-session"]
+"#;
+    let document = crate::document_migration::decode(source).unwrap().document;
+    assert_eq!(document.message_board, crate::MessageBoardConfig::Local);
+    let resolved = crate::ResolvedConfig::from(&document);
+    assert_eq!(
+        resolved.message_board_cleanup,
+        document.message_board_cleanup
+    );
+    assert!(
+        document.message_board_cleanup[0]
+            .deleted_sessions
+            .contains(&ash_protocol::SessionId::new("deleted-session").unwrap())
+    );
+    assert_eq!(
+        crate::document_migration::decode(&crate::document_migration::encode(&document).unwrap())
+            .unwrap()
+            .document,
+        document
+    );
+    for source in [
+        source.replace(
+            "deletedSessions = [\"deleted-session\"]",
+            "deletedSessions = []",
+        ),
+        source.replace("deleted-session", ""),
+        source.replace(
+            "https://retired.test/board",
+            "https://retired.test/?secret=data",
+        ),
+    ] {
+        assert!(crate::document_migration::decode(&source).is_err());
+    }
+}
+
+#[test]
 fn fast_model_migration_preserves_each_connection_and_declared_mechanism() {
     let source = r#"
 schemaVersion = 8

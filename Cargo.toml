@@ -17,6 +17,7 @@ members = [
     "crates/ext/app-tools",
     "crates/ext/agent-message-board",
     "crates/agent-message-board-client",
+    "crates/agent-message-board-host",
     "crates/ext/workflows",
     "crates/ext/guardian-v2",
     "crates/memories",
@@ -328,6 +329,7 @@ advisor = { package = "ash-advisor", path = "crates/ext/advisor" }
 agent = { package = "ash-agent", path = "crates/ext/agent" }
 agent-message-board = { package = "ash-agent-message-board", path = "crates/ext/agent-message-board" }
 agent-message-board-client = { package = "ash-agent-message-board-client", path = "crates/agent-message-board-client" }
+agent-message-board-host = { package = "ash-agent-message-board-host", path = "crates/agent-message-board-host" }
 workflows = { package = "ash-workflows", path = "crates/ext/workflows" }
 caseless = "0.2.2"
 guardian-v2 = { package = "ash-guardian-v2", path = "crates/ext/guardian-v2" }

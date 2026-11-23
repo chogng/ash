@@ -1,4 +1,6 @@
-use crate::Store;
+use crate::MessageBoardStorage;
+use ash_async_utils as async_utils;
+use ash_config::MessageBoardConfig;
 use ash_core::AgentTreeLimits;
 use ash_core::CreateThreadRequest;
 use ash_core::InMemoryThreadStore;
@@ -6,6 +8,10 @@ use ash_core::MultiAgentCoordinator;
 use ash_core::SpawnAgentRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
+use ash_extension_api as extension_api;
+use ash_prompts as prompts;
+use ash_protocol as protocol;
+use ash_tools as tools;
 use core_api::SequenceExpectation;
 use extension_api::ExtensionRegistry;
 use extension_api::ExtensionRegistryBuilder;
@@ -133,11 +139,12 @@ impl Runtime {
             InMemoryThreadStore::default(),
         )));
         let mut builder = ExtensionRegistryBuilder::new();
-        crate::install(
-            &mut builder,
-            &threads,
-            Arc::new(Store::in_memory().unwrap()),
-        );
+        let http: Arc<dyn ash_http_client::HttpClient> =
+            Arc::new(ash_http_client::UreqHttpClient::new().unwrap());
+        MessageBoardStorage::new(None)
+            .open(&MessageBoardConfig::Local, &http)
+            .unwrap()
+            .install(&mut builder, &threads);
         let registry = Arc::new(builder.build());
         threads.install_extensions(registry.clone()).unwrap();
         let session = SessionId::new("session").unwrap();

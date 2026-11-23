@@ -8,9 +8,11 @@ mod tools;
 
 pub use api::BoardBackend;
 pub use api::BoardNotification;
-pub use api::LiveNotices;
+pub use api::BoardTurnHost;
+pub use api::MessageBoardHost;
+pub use api::RemoteUnread;
+pub use extension::BoardInput;
 pub use extension::install;
-pub use extension::tree_members;
 pub use model::Commit;
 pub use model::Read as ReadRequest;
 pub use model::Scope;
@@ -24,6 +26,7 @@ pub use remote::MAX_BODY;
 pub use remote::MemberRegistration;
 pub use remote::NotificationWatch;
 pub use remote::ServiceFailure;
+pub use store::RemoteBoardLocation;
 pub use store::Store;
 pub use store::Unread;
 
@@ -41,9 +44,6 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[cfg(test)]
-#[path = "extension_tests.rs"]
-mod extension_tests;
 #[cfg(test)]
 #[path = "store_tests.rs"]
 mod store_tests;

@@ -368,17 +368,12 @@ name = "ash-agent-message-board"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
- "ash-core",
- "ash-core-api",
  "ash-extension-api",
- "ash-prompts",
  "ash-protocol",
  "ash-state",
  "ash-tools",
  "base64 0.22.1",
  "caseless",
- "chrono",
- "pollster 1.0.1",
  "rusqlite",
  "serde",
  "serde_json",
@@ -401,6 +396,27 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "ash-agent-message-board-host"
+version = "0.1.0"
+dependencies = [
+ "ash-agent-message-board",
+ "ash-agent-message-board-client",
+ "ash-async-utils",
+ "ash-config",
+ "ash-core",
+ "ash-core-api",
+ "ash-extension-api",
+ "ash-http-client",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-tools",
+ "chrono",
+ "log",
+ "pollster 1.0.1",
+ "serde_json",
 ]
 
 [[package]]
@@ -628,8 +644,7 @@ dependencies = [
  "ash-advisor",
  "ash-agent",
  "ash-agent-environment",
- "ash-agent-message-board",
- "ash-agent-message-board-client",
+ "ash-agent-message-board-host",
  "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-analytics",

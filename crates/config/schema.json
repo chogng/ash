@@ -1383,6 +1383,31 @@
         }
       ]
     },
+    "MessageBoardCleanupConfig": {
+      "additionalProperties": false,
+      "description": "Routes explicitly identified, permanently deleted Sessions to a former board deployment.",
+      "properties": {
+        "credentialEnv": {
+          "type": "string"
+        },
+        "deletedSessions": {
+          "items": {
+            "$ref": "#/$defs/SessionId"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "endpoint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint",
+        "credentialEnv",
+        "deletedSessions"
+      ],
+      "type": "object"
+    },
     "MessageBoardConfig": {
       "description": "Deployment choice for task discussion storage. Credential values remain outside configuration.",
       "oneOf": [
@@ -1781,6 +1806,11 @@
         }
       ]
     },
+    "SessionId": {
+      "description": "Stable identity for one product-level Agent session.",
+      "minLength": 1,
+      "type": "string"
+    },
     "SkillEnablement": {
       "description": "Desired user enablement for one discovered Skill.",
       "enum": [
@@ -2113,6 +2143,12 @@
       "default": {
         "type": "local"
       }
+    },
+    "messageBoardCleanup": {
+      "items": {
+        "$ref": "#/$defs/MessageBoardCleanupConfig"
+      },
+      "type": "array"
     },
     "network": {
       "$ref": "#/$defs/NetworkConfig",

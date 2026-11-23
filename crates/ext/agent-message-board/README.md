@@ -6,9 +6,9 @@
 - 使用 Ash SQLite 策略保存本地消息和操作凭据，以 Session 和根 Thread 隔离数据。
 - 主题列表使用首帖部分索引和游标范围；主题内容分别通过主键与回复索引读取，避免扫描无关讨论。
 - 先选定有界页面，再批量读取正文和回复数，只处理本页需要的内容。
-- 校验成员和调用方身份，只向活动 Turn 发送摘要通知。
+- 通过 `MessageBoardHost` 取得成员、活动 Turn 和时钟。Ash 的宿主实现位于 [`agent-message-board-host`](../../agent-message-board-host/src/lib.rs)。
 - 供团队协作共享发现、阻塞和验证证据；调度与验收由各自的流程负责。
 
 工具参数、通知和清理规则见 [Agent 扩展](../../docs/extensions.md#agent-共享讨论板)。
 
-验证：`just check ash-agent-message-board`、`just test ash-agent-message-board`、`just rust-warnings ash-agent-message-board`。
+存储验证运行 `just verify ash-agent-message-board`。宿主接线验证运行 `just verify ash-agent-message-board-host`。

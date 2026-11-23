@@ -40,7 +40,10 @@ pub struct RemoteMessageBoard {
     endpoint: Url,
     administrator: AccessToken,
     credentials: Mutex<BTreeMap<(SessionId, ThreadId), AccessToken>>,
+    registration_guard: Option<Box<RegistrationGuard>>,
 }
+
+type RegistrationGuard = dyn Fn(&SessionId) -> Result<()> + Send + Sync;
 impl RemoteMessageBoard {
     pub fn new(
         http: Arc<dyn HttpClient>,
@@ -70,7 +73,17 @@ impl RemoteMessageBoard {
             endpoint,
             administrator,
             credentials: Mutex::new(BTreeMap::new()),
+            registration_guard: None,
         })
+    }
+
+    /// Installs the host's durable ownership check before any membership request.
+    pub fn with_registration_guard(
+        mut self,
+        guard: impl Fn(&SessionId) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
+        self.registration_guard = Some(Box::new(guard));
+        self
     }
     fn request(
         &self,
@@ -165,6 +178,30 @@ impl RemoteMessageBoard {
         }
         Ok(())
     }
+
+    /// Clears the remote data and retires cached credentials after confirmed deletion.
+    pub fn delete_session_with_cancellation(
+        &self,
+        session: &SessionId,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        self.send::<Value>(
+            "/delete-session",
+            &self.administrator,
+            session,
+            cancellation,
+        )?;
+        self.forget_session(session);
+        Ok(())
+    }
+
+    /// Retires this client's local tree credentials when the Session is closed.
+    pub fn forget_session(&self, session: &SessionId) {
+        self.credentials
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(id, _), _| id != session);
+    }
 }
 impl BoardBackend for RemoteMessageBoard {
     fn register_members(
@@ -173,6 +210,10 @@ impl BoardBackend for RemoteMessageBoard {
         members: &[ThreadId],
         cancellation: &CancellationToken,
     ) -> Result<()> {
+        cancellation.check().map_err(transport)?;
+        if let Some(guard) = &self.registration_guard {
+            guard(&scope.session)?;
+        }
         let raw: String = self.send(
             "/members",
             &self.administrator,
@@ -231,28 +272,12 @@ impl BoardBackend for RemoteMessageBoard {
         cancellation: &CancellationToken,
     ) -> Result<Unread> {
         let unread: Unread = self.call(scope, member, BoardOperation::Unread, cancellation)?;
-        if unread.count < 0
-            || unread.through < 0
-            || unread.notices.len() > 8
-            || unread.count < unread.notices.len() as i64
-        {
-            return Err(Error::Runtime("invalid board unread response".into()));
-        }
+        unread.validate_remote()?;
         Ok(unread)
     }
     fn delete_session(&self, session: &SessionId) -> Result<()> {
         let cancellation = async_utils::CancellationSource::new();
-        self.send::<Value>(
-            "/delete-session",
-            &self.administrator,
-            session,
-            &cancellation.token(),
-        )?;
-        self.credentials
-            .lock()
-            .map_err(|_| Error::Runtime("board credential lock poisoned".into()))?
-            .retain(|(id, _), _| id != session);
-        Ok(())
+        self.delete_session_with_cancellation(session, &cancellation.token())
     }
 }
 fn transport(error: impl fmt::Display) -> Error {

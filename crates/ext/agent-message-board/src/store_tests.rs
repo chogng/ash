@@ -1,4 +1,7 @@
+use crate::RemoteBoardLocation;
+use crate::RemoteUnread;
 use crate::Store;
+use crate::Unread;
 use crate::model::Commit;
 use crate::model::Read;
 use crate::model::Scope;
@@ -9,6 +12,166 @@ use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::Barrier;
+
+#[test]
+fn watched_unread_tracks_posts_acknowledgements_and_other_sqlite_connections() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let store = Store::open(&path).unwrap();
+    let other = Store::open(&path).unwrap();
+    let scope = board_scope("task", "root");
+    let worker = ThreadId::new("worker").unwrap();
+    let watch = store.watch_unread(&scope, &worker).unwrap();
+    let unread = || store.watched_unread(&scope, &worker, &watch).unwrap();
+    assert_eq!(unread().count, 0);
+    channel(&store, &scope);
+    let post = write(
+        &store,
+        &scope,
+        "root",
+        "new",
+        json!({"action":"post","channel":"work","text":"first finding","notify":[worker]}),
+    );
+    assert_eq!(unread().notices[0]["preview"], "first finding");
+    write(
+        &store,
+        &scope,
+        "worker",
+        "ack",
+        json!({"action":"acknowledge","through":post.output["id"]}),
+    );
+    assert_eq!(unread().count, 0);
+    write(
+        &other,
+        &scope,
+        "root",
+        "external",
+        json!({"action":"post","channel":"work","text":"other connection","notify":[worker]}),
+    );
+    assert_eq!(unread().notices[0]["preview"], "other connection");
+}
+
+#[test]
+fn deletion_remembers_used_remotes_across_restart_and_cleans_local_posts() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let store = Store::open(&path).unwrap();
+    let scope = board_scope("task", "root");
+    let location = |endpoint: &str| RemoteBoardLocation {
+        endpoint: endpoint.into(),
+        credential_env: "TEST_BOARD_TOKEN".into(),
+    };
+    let first = location("https://first.test");
+    let second = location("https://second.test");
+    let current = location("https://new-config.test");
+    channel(&store, &scope);
+    write(
+        &store,
+        &scope,
+        "root",
+        "post",
+        json!({"action":"post","channel":"work","text":"local history"}),
+    );
+    store.remember_remote(&scope.session, &first).unwrap();
+    store.remember_remote(&scope.session, &second).unwrap();
+    assert!(store.pending_remote_deletions().unwrap().is_empty());
+    assert!(store.close_session(&scope.session, Some(&current)).unwrap());
+    assert!(store.remember_remote(&scope.session, &current).is_err());
+    drop(store);
+
+    let store = Store::open(&path).unwrap();
+    assert_eq!(
+        store.pending_remote_deletions().unwrap(),
+        [
+            (scope.session.clone(), first.clone()),
+            (scope.session.clone(), second.clone())
+        ]
+    );
+    assert_eq!(
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM agent_board_posts", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    store
+        .confirm_remote_deletion(&scope.session, &first)
+        .unwrap();
+    assert_eq!(
+        store.pending_remote_deletions().unwrap(),
+        [(scope.session.clone(), second.clone())]
+    );
+    store
+        .confirm_remote_deletion(&scope.session, &second)
+        .unwrap();
+    assert!(!store.close_session(&scope.session, Some(&current)).unwrap());
+    assert!(store.pending_remote_deletions().unwrap().is_empty());
+}
+
+#[test]
+fn recovered_cleanup_accepts_missing_routes_and_remembers_success() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let store = Store::open(&path).unwrap();
+    let session = board_scope("deleted", "root").session;
+    let retired = RemoteBoardLocation {
+        endpoint: "https://old.test".into(),
+        credential_env: "ASH_OLD_BOARD_TOKEN".into(),
+    };
+    let current = RemoteBoardLocation {
+        endpoint: "https://new.test".into(),
+        credential_env: "ASH_NEW_BOARD_TOKEN".into(),
+    };
+    store.remember_remote(&session, &current).unwrap();
+    store.close_session(&session, None).unwrap();
+    drop(store);
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "ALTER TABLE agent_board_remote_locations DROP COLUMN cleaned;
+             UPDATE ash_schema_migrations SET version=2 WHERE component='agent-message-board';",
+        )
+        .unwrap();
+
+    let store = Store::open(&path).unwrap();
+    store.recover_remote_deletion(&session, &retired).unwrap();
+    assert_eq!(
+        store.pending_remote_deletions().unwrap(),
+        [
+            (session.clone(), current.clone()),
+            (session.clone(), retired.clone())
+        ]
+    );
+    store.confirm_remote_deletion(&session, &retired).unwrap();
+    drop(store);
+
+    let store = Store::open(&path).unwrap();
+    store.recover_remote_deletion(&session, &retired).unwrap();
+    assert_eq!(
+        store.pending_remote_deletions().unwrap(),
+        [(session, current)]
+    );
+}
+
+#[test]
+fn remote_acknowledgement_retires_an_in_flight_snapshot() {
+    let unread = RemoteUnread::default();
+    let turn = async_utils::CancellationSource::new();
+    let request = unread.start_observation(&turn.token());
+    let revision = unread.revision();
+    unread.invalidate();
+    assert!(request.is_cancelled());
+    unread.publish(
+        revision,
+        Unread {
+            count: 1,
+            through: 4,
+            notices: Vec::new(),
+        },
+    );
+    assert_eq!(unread.snapshot().count, 0);
+}
 
 fn board_scope(session: &str, root: &str) -> Scope {
     Scope {
@@ -101,6 +264,7 @@ fn topic_index_is_installed_on_reopen_and_pagination_excludes_replies() {
     connection
         .execute_batch(
             "DROP INDEX agent_board_channel_topics;
+             DROP TABLE agent_board_remote_locations;
              DELETE FROM ash_schema_migrations WHERE component = 'agent-message-board';",
         )
         .unwrap();
@@ -260,6 +424,7 @@ fn explicit_topic_unsubscribe_survives_post_and_reopen() {
         .execute_batch(
             "DROP TABLE IF EXISTS agent_board_channel_opt_outs;
              DROP TABLE IF EXISTS agent_board_topic_opt_outs;
+             DROP TABLE agent_board_remote_locations;
              DELETE FROM ash_schema_migrations WHERE component = 'agent-message-board';",
         )
         .unwrap();
