@@ -22,6 +22,7 @@ use crate::NoTools;
 use crate::ThreadController;
 use crate::ThreadExecutionContext;
 use crate::ThreadUpdateSink;
+use crate::ToolActivationResult;
 use crate::ToolService;
 use crate::TurnCompletedHookRequest;
 use crate::TurnExecutionFinished;
@@ -168,8 +169,12 @@ impl TurnExecutor {
 
     /// Captures the model-neutral direct tool surface for a newly accepted Turn.
     pub fn tool_profile_snapshot(&self) -> Result<ash_protocol::ToolProfileSnapshot, CoreError> {
-        let catalog = self.tools.model_catalog_snapshot(&BTreeSet::new())?;
+        let catalog = self.tools.model_catalog_snapshot(&mut std::iter::empty())?;
         crate::tool_profile::snapshot_tool_profile(catalog.definitions())
+    }
+
+    pub(crate) fn agent_tool_catalog(&self) -> core_api::AgentToolCatalog {
+        self.tools.agent_tool_catalog()
     }
 
     /// Resolves a product capability scope against the host's complete tool catalog.
@@ -185,7 +190,7 @@ impl TurnExecutor {
         &self,
         names: &[ash_protocol::ToolName],
     ) -> Result<ash_protocol::ToolProfileSnapshot, CoreError> {
-        let catalog = self.tools.model_catalog_snapshot(&BTreeSet::new())?;
+        let catalog = self.tools.model_catalog_snapshot(&mut std::iter::empty())?;
         let selected = catalog
             .definitions()
             .iter()
@@ -205,12 +210,12 @@ impl TurnExecutor {
     /// Shares the execution tool surface with inspections before or during a Turn.
     pub(super) fn context_tool_catalog(
         &self,
-        activated: &BTreeSet<ash_protocol::ToolName>,
+        results: &[ToolActivationResult<'_>],
         turn: Option<&crate::TurnSnapshot>,
         mode: ash_protocol::ToolMode,
         instructions: Option<&ash_protocol::TurnInstructions>,
     ) -> Result<crate::ModelToolCatalogSnapshot, CoreError> {
-        let catalog = self.tools.model_catalog_snapshot(activated)?;
+        let catalog = self.tools.model_catalog_snapshot(&mut results.iter())?;
         let profile = turn.and_then(|turn| turn.tool_profile.as_ref());
         let catalog = match profile {
             Some(profile) if profile.id == crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID => {
@@ -218,15 +223,22 @@ impl TurnExecutor {
             }
             _ => catalog,
         };
-        if let Some(profile) = profile {
+        let catalog = if let Some(profile) = profile {
             let frozen_definitions = catalog
                 .definitions()
                 .iter()
-                .filter(|definition| !activated.contains(&definition.name))
+                .filter(|definition| !catalog.activated_names().contains(&definition.name))
                 .cloned()
                 .collect::<Vec<_>>();
-            crate::tool_profile::validate_tool_profile_definitions(profile, &frozen_definitions)?;
-        }
+            crate::tool_profile::validate_tool_profile_definitions(
+                profile,
+                &frozen_definitions,
+                self.tools.as_ref(),
+            )?;
+            catalog.with_frozen_tool_names(profile)
+        } else {
+            catalog
+        };
         let catalog = if turn.is_none_or(|turn| turn.advisor.is_none()) {
             let names = catalog
                 .definitions()
@@ -1051,17 +1063,10 @@ impl TurnExecutor {
                 .threads
                 .read_model_step(thread_id, turn_id)
                 .map_err(ExecutionFailure::model)?;
-            let activated = activate_tools(
-                self.tools.as_ref(),
-                step.tool_results
-                    .iter()
-                    .map(|(call, text)| (call, text.as_str())),
-            )
-            .map_err(ExecutionFailure::model)?;
             let turn = &step.turn;
             let tool_catalog = self
                 .context_tool_catalog(
-                    &activated,
+                    &step.tool_results,
                     Some(turn),
                     turn.tool_mode,
                     turn.instructions.as_ref(),
@@ -2010,28 +2015,6 @@ fn validate_model_tool_calls(
         )));
     }
     Ok(())
-}
-
-pub(super) fn activated_tool_names(
-    tools: &dyn ToolService,
-    items: &[ThreadItem],
-    turn_id: &TurnId,
-) -> Result<BTreeSet<ash_protocol::ToolName>, CoreError> {
-    let results = crate::services::tool_activation_results(
-        items.iter().filter(|item| item.turn_id() == turn_id),
-    )?;
-    activate_tools(tools, results.iter().map(|(call, text)| (call, *text)))
-}
-
-fn activate_tools<'a>(
-    tools: &dyn ToolService,
-    results: impl IntoIterator<Item = (&'a ToolCall, &'a str)>,
-) -> Result<BTreeSet<ash_protocol::ToolName>, CoreError> {
-    let mut activated = BTreeSet::new();
-    for (call, text) in results {
-        activated.extend(tools.activated_tool_names(call, text)?);
-    }
-    Ok(activated)
 }
 
 struct InvocationStream {

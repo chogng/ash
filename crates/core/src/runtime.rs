@@ -725,6 +725,10 @@ impl AgentRuntime for Runtime<'_> {
     fn tool_profile(&self) -> Result<ToolProfileSnapshot, CoreError> {
         self.executor.tool_profile_snapshot()
     }
+
+    fn agent_tool_catalog(&self) -> core_api::AgentToolCatalog {
+        self.executor.agent_tool_catalog()
+    }
     fn resolve_tool_scope(
         &self,
         scope: &ash_protocol::ToolScope,

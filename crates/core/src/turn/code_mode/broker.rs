@@ -374,15 +374,18 @@ impl CodeModeBroker {
         let turn_id = context.turn_id().clone();
         let snapshot = self.inner.threads.read_thread(&thread_id)?;
         let key = TurnKey::new(snapshot.session_id.to_string(), &thread_id, &turn_id);
-        let activated = super::super::executor::activated_tool_names(
-            self.tools.as_ref(),
-            &snapshot.items,
-            &turn_id,
+        let tool_results = crate::services::tool_activation_results(
+            snapshot
+                .items
+                .iter()
+                .filter(|item| item.turn_id() == &turn_id),
         )?;
         // CodeModeOnly hides ordinary tools from the model, but those same tools must remain
         // available through the JavaScript projection. Keep the runtime catalog independent from
         // the model-facing mode filter while retaining the exact activated registry snapshot.
-        let frozen_catalog = self.tools.code_mode_catalog_snapshot(&activated)?;
+        let frozen_catalog = self
+            .tools
+            .code_mode_catalog_snapshot(&mut tool_results.iter())?;
         let frozen_catalog = match snapshot.agent_configuration() {
             Some(seed) => frozen_catalog.restrict_to_names(&seed.capability_scope.tools),
             None => frozen_catalog,
@@ -404,7 +407,9 @@ impl CodeModeBroker {
             .find(|turn| &turn.turn_id == context.turn_id())
             .and_then(|turn| turn.tool_profile.as_ref())
         {
-            Some(profile) => frozen_catalog.with_tool_scope(profile),
+            Some(profile) => frozen_catalog
+                .with_frozen_tool_names(profile)
+                .with_tool_scope(profile),
             None => frozen_catalog,
         };
         // Nested execution checks the tool-owned definition; model wording belongs only to runtime declarations.

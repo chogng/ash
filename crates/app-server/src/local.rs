@@ -2437,7 +2437,7 @@ pub fn open_app_server_with_codebase_providers(
         .map(|mcp| mcp.status.clone())
         .unwrap_or_else(|| McpRuntimeStatusSnapshot::empty(1));
     let mcp = mcp
-        .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy))
+        .map(ToolPort::from_mcp)
         .transpose()
         .map_err(open_error)?;
     server = server.with_mcp_status_snapshot(mcp_status);
@@ -2884,7 +2884,7 @@ impl ToolConfigWatcher {
                     let (mcp, mcp_status) = match composition {
                         Ok(Some(mcp)) => {
                             let status = mcp.status.clone();
-                            match ToolPort::mcp(mcp.tools, mcp.policy) {
+                            match ToolPort::from_mcp(mcp) {
                                 Ok(port) => (Some(port), status),
                                 Err(error) => {
                                     env_tools.record_reconcile_failure(error.to_string());

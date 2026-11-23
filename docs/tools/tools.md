@@ -1332,10 +1332,12 @@ typed validation error，不以无限结果或静默全量 catalog 作为 fallba
 当前 App Server 的 exposure policy 是：built-in Directory 与 client-hosted dynamic port 直接暴露，
 extension executor 使用自身声明的 exposure；聚合 MCP port 先对排序后的 canonical definitions 做
 稳定估算。工具数 ≤15 且 `ceil(canonical JSON bytes / 4)` ≤5000 时全部直接暴露；任一阈值超限时，
-整个 MCP port 的模型工具以 `Deferred` 注册。首轮只暴露发现和转调入口，`tool_search` 命中后
-将精确定义加入下一次模型调用。仅供 MCP App 使用的工具保留隐藏路由。
+整个 MCP port 的模型工具以 `Deferred` 注册。`tool_search` 同时发现延迟加载的 MCP、内置及扩展工具，
+命中后将精确定义加入下一次模型调用。显式 Agent 角色通过完整的可选工具名单解析授权范围，随后按
+工具的直接或延迟加载规则暴露定义。使用精确白名单的角色需要将 `tool_search` 列入白名单才能搜索。
+仅供 MCP App 使用的工具保留隐藏路由。
 
-`search_tools` 使用同一注册表的词法索引，先按 MCP 来源和本轮范围筛选，再返回至多五个匹配。
+`search_tools` 是 MCP 兼容入口，使用同一注册表的词法索引，先按 MCP 来源和本轮范围筛选，再返回至多五个匹配。
 兼容转调 `call_mcp_tool` 要求回传目录和定义 digest。工具定义或 MCP 连接代次变化后，旧 digest
 失效。兼容搜索可在未配置或无法使用嵌入模型时运行。
 
@@ -1355,9 +1357,9 @@ extension executor 使用自身声明的 exposure；聚合 MCP port 先对排序
 向量或远端搜索只有在独立隐私、缓存和 failure contract 完成后加入。search index 不包含 secret、
 tool output、conversation history 或未经允许的 Plugin package content。
 
-当前默认模式是 `Lexical`：自然语言 query 使用 exact/substring name 优先和 snapshot-local BM25；
-调用方明确选择 `regex` strategy 时，使用有 query byte 上限的线性时间 Regex 匹配完整 search
-document。默认返回 8 个、硬上限 32 个。这条路径不调用模型，也不发送工具元数据到进程外。
+默认模式 `Lexical` 对自然语言查询使用当前快照的 BM25 索引，优先返回工具名的精确或子串匹配。
+`regex` 使用有查询长度上限的线性时间正则表达式匹配工具名和搜索文档，工具名匹配优先。
+默认返回 8 个结果，上限为 32 个。词法搜索全程在进程内运行。
 
 User Config 可把 `toolSearch.mode` 设为 `hybridEmbedding`，并用独立的
 `toolSearch.embeddingModel` 选择 exact `ModelRef`。App Server 通过 `SemanticModelProvider` 把该选择
@@ -1368,11 +1370,9 @@ provider/credential/runtime、请求失败、响应数量错误或零向量都�
 `config/read.toolSearch.embeddingStatus` 投影为 `unavailable`；自然语言搜索明确失败，不静默改用
 BM25。用户显式切回 `lexical` 后才恢复纯词法自然语言搜索。
 
-门禁通过后，自然语言搜索为 query 和当前 deferred tool documents 生成 embedding，再用
-reciprocal-rank fusion 与 BM25 排名合并；Regex 始终保持本地词法路径。向量只缓存在当前 registry
-generation 的内存中。后续真实 embedding 调用失败、返回数量/维度错误或向量无有效模长时，当前
-`tool_search` 直接返回明确错误，不静默回落到 BM25。模型调用继续属于 `model-provider`；
-snapshot-local 目录、输入准备、召回融合、generation 校验、过滤与截断仍属于 Tool Search owner。
+混合模式用 reciprocal-rank fusion 合并向量检索和 BM25 排名。正则查询仍在本地运行。向量只缓存在当前
+注册表快照的内存中。Turn 取消会传递给查询和工具文档的 embedding 请求。嵌入调用失败、向量数量或
+维度不符、向量模长无效时，`tool_search` 返回错误。模型调用归 `model-provider`，检索和加载归工具搜索服务。
 
 获得读取能力的本地目录还会注册 direct built-in `search_code`。它不属于 deferred Tool Search：Agent
 可以显式传入自然语言 query 与最多 20 条结果，App Server 使用 canonical CodebaseRetrieval 编排本地 FTS、
@@ -1391,9 +1391,15 @@ Host-executed flow：
 ```text
 model calls tool_search
 → Core durably records search call/result
-→ validate result binding against same registry generation
+→ revalidate each result's source and definition against the current catalog snapshot
 → next model invocation includes selected definitions
 ```
+
+同一 App Server 工具注册表刷新后，来源及定义一致的匹配继续有效。来源、定义或曝光策略变化的匹配
+需要重新搜索。MCP 来源包含目录和连接代次。模型请求和 Code Mode 单元使用完成校验的同一份注册表快照来绑定调用。
+
+延迟目录清空或转为直接曝光后，Core 用搜索和转调入口的固定定义验证回合原有工具清单。模型和 Code Mode
+只使用当前仍可调用的冻结工具和通过校验的搜索结果。目录刷新后新增的直接工具从下一回合起可用。
 
 如果 provider 原生支持 deferred tool loading，`ash-api` 可以把同一 `LoadableToolSpec` 编码成
 provider feature，但 provider 返回的 loaded tool 仍必须关联 frozen binding。Provider 不能加载

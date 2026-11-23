@@ -4,6 +4,7 @@ use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
+use ash_core::ToolActivationResult;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ActionDigest;
@@ -311,16 +312,231 @@ fn large_mcp_catalog_loads_one_bound_definition_through_shared_discovery() {
         };
         let payload: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(payload["tools"][0]["name"], target.as_str());
-        results.push(combined.tools.activated_tool_names(&call, &output).unwrap());
+        results.push(ToolActivationResult {
+            call,
+            binding: None,
+            text: output.into(),
+        });
     }
-    assert!(results[0].is_empty());
-    assert_eq!(results[1], vec![target.clone()]);
+    let compatibility = combined
+        .tools
+        .model_catalog_snapshot(&mut results[..1].iter())
+        .unwrap();
+    assert_eq!(compatibility.definitions(), before);
     let after = combined
         .tools
-        .model_definitions(&results.remove(1).into_iter().collect())
+        .model_catalog_snapshot(&mut results.iter())
         .unwrap();
-    assert_eq!(after.len(), before.len() + 1);
-    assert!(after.iter().any(|definition| definition.name == target));
+    assert_eq!(after.definitions().len(), before.len() + 1);
+    assert!(
+        after
+            .definitions()
+            .iter()
+            .any(|definition| definition.name == target)
+    );
+}
+
+#[test]
+fn tool_search_revalidates_bindings_and_the_turn_survives_catalog_removal() {
+    use std::sync::Mutex;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use ash_core::CreateThreadRequest;
+    use ash_core::InMemoryThreadStore;
+    use ash_core::StartTurnRequest;
+    use ash_core::ThreadController;
+    use ash_core::TurnExecutor;
+    use ash_protocol::ModelRequest;
+    use ash_protocol::ModelResponse;
+    use ash_protocol::ResponseItem;
+    use ash_protocol::StopReason;
+    use ash_protocol::ThreadItem;
+    use ash_protocol::TurnStatus;
+    use core_api::ModelService;
+    use core_api::SequenceExpectation;
+    use serde_json::json;
+
+    use crate::tool_composition::CombinedToolPorts;
+    use crate::tool_composition::ReloadableToolPorts;
+    use crate::tool_composition::combine_tool_ports_at_generation;
+
+    struct ReloadingModel {
+        ports: Arc<ReloadableToolPorts>,
+        replacement: Mutex<Option<CombinedToolPorts>>,
+        small_catalog: Mutex<Option<CombinedToolPorts>>,
+        requests: Mutex<Vec<ModelRequest>>,
+    }
+
+    impl ModelService for ReloadingModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            request: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            let mut requests = self.requests.lock().unwrap();
+            requests.push(request.clone());
+            let output = match requests.len() {
+                1 => {
+                    self.ports.replace(self.replacement.lock().unwrap().take());
+                    ResponseItem::ToolCall(ToolCall {
+                        id: ash_protocol::ToolCallId::new("find").unwrap(),
+                        name: ToolName::new("tool_search").unwrap(),
+                        arguments: json!({"query":"^server__tool_[012]$","strategy":"regex","limit":3}),
+                    })
+                }
+                2 => ResponseItem::ToolCall(ToolCall {
+                    id: ash_protocol::ToolCallId::new("read").unwrap(),
+                    name: ToolName::new("server__tool_0").unwrap(),
+                    arguments: json!({}),
+                }),
+                3 => {
+                    self.ports
+                        .replace(self.small_catalog.lock().unwrap().take());
+                    ResponseItem::Message(ash_protocol::AssistantMessage {
+                        id: "continue".into(),
+                        text: "Finishing the requested work.".into(),
+                        phase: Some(ash_protocol::MessagePhase::Commentary),
+                        citations: None,
+                    })
+                }
+                _ => ResponseItem::Text("done".into()),
+            };
+            let stop_reason = match &output {
+                ResponseItem::ToolCall(_) => StopReason::ToolUse,
+                _ => StopReason::Completed,
+            };
+            Ok(ModelResponse {
+                output: vec![output],
+                usage: None,
+                billing: None,
+                stop_reason,
+            })
+        }
+    }
+
+    let compose = |tools: CatalogTools, generation| {
+        combine_tool_ports_at_generation(
+            vec![ToolPort::mcp(Arc::new(tools), Arc::new(CatalogPolicy)).unwrap()],
+            ash_tools::ToolRegistryGeneration::new(generation),
+        )
+        .unwrap()
+    };
+    let ports = ReloadableToolPorts::new(compose(CatalogTools::with_count(20), 7));
+    let mut refreshed = CatalogTools::with_count(20);
+    refreshed.definitions[1].description = "Replacement definition".into();
+    refreshed.definitions.remove(2);
+    let model = Arc::new(ReloadingModel {
+        ports: ports.clone(),
+        replacement: Mutex::new(compose(refreshed, 8)),
+        small_catalog: Mutex::new(compose(CatalogTools::with_count(1), 9)),
+        requests: Mutex::new(Vec::new()),
+    });
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ash_protocol::ThreadId::new("reload-search").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: ash_protocol::SessionId::new("reload-search").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Search across reload".into(),
+        })
+        .unwrap();
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        ports.tools(),
+        ports.policy(),
+    );
+    let turn = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: ash_protocol::CommandId::new("start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: None,
+                policy_revision: executor.policy_revision(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "Find and use a tool.".into(),
+                }],
+            },
+        )
+        .unwrap();
+    executor.start(&thread_id, &turn.turn_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    let snapshot = loop {
+        let changed = threads.thread_changed(&thread_id).unwrap();
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        match snapshot.turns[0].status {
+            TurnStatus::Completed => break snapshot,
+            TurnStatus::Failed | TurnStatus::Interrupted => panic!("{:?}", snapshot.items),
+            _ => assert_eq!(
+                pollster::block_on(ash_async_utils::wait_until(
+                    changed,
+                    deadline,
+                    &cancellation
+                ))
+                .unwrap(),
+                ash_async_utils::WaitOutcome::Ready(()),
+                "{:?}",
+                snapshot.items
+            ),
+        }
+    };
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests[1]
+            .tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "call_mcp_tool",
+            "search_tools",
+            "server__tool_0",
+            "tool_search"
+        ]
+    );
+    assert!(requests[3].tools.is_empty());
+    let search_result = snapshot
+        .items
+        .iter()
+        .find_map(|item| match item {
+            ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } if tool_call_id.as_str() == "find" => {
+                serde_json::from_str::<serde_json::Value>(text).ok()
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(search_result["registry_generation"], 7);
+    assert_eq!(search_result["tools"].as_array().unwrap().len(), 3);
+    assert!(snapshot.items.iter().any(|item| matches!(item,
+        ThreadItem::ToolCall { name, binding: Some(binding), .. }
+            if name.as_str() == "server__tool_0" && binding.registry_generation == 8
+    )));
 }
 
 #[test]

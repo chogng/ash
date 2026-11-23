@@ -391,7 +391,7 @@ impl MultiAgentToolService {
         crate::resolve_launched_agent(
             &arguments.agent,
             identity.model(),
-            facts.delegation_tools().cloned().collect(),
+            facts.delegation_tool_catalog(),
             facts.activated_skills(),
             &agent_snapshots,
             &instruction_snapshots,

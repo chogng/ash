@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use agent_roles::AgentRole;
 use agent_roles::AgentRoleCatalogSnapshot;
+use core_api::AgentToolCatalog;
 use core_api::CoreError;
 use instructions::InstructionCatalogSnapshot;
 use protocol::AgentCapabilityScope;
@@ -40,7 +41,7 @@ pub fn resolve_agent_selection(
     resolve_launched_agent(
         requested,
         current_model,
-        tool_ceiling,
+        tool_ceiling.into(),
         active_skills,
         agents,
         instructions,
@@ -51,7 +52,7 @@ pub fn resolve_agent_selection(
 pub fn resolve_launched_agent(
     requested: &protocol::AgentRoleSelection,
     current_model: Option<&ModelRef>,
-    tool_ceiling: Vec<ToolName>,
+    tool_catalog: AgentToolCatalog,
     active_skills: &[FrozenSkillActivation],
     agents: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
     instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
@@ -62,14 +63,14 @@ pub fn resolve_launched_agent(
         return Ok(ResolvedAgentSelection {
             role: None,
             capability_scope: protocol::AgentCapabilityScope {
-                tools: tool_ceiling.clone(),
-                delegation_tools: tool_ceiling,
+                tools: tool_catalog.tools.clone(),
+                delegation_tools: tool_catalog.tools,
                 skills: active_skills.to_vec(),
             },
         });
     };
-    let tools = resolve_tools(definition, &tool_ceiling, AgentToolScope::Own)?;
-    let delegation_tools = resolve_tools(definition, &tool_ceiling, AgentToolScope::Delegation)?;
+    let tools = resolve_tools(definition, &tool_catalog, AgentToolScope::Own)?;
+    let delegation_tools = resolve_tools(definition, &tool_catalog, AgentToolScope::Delegation)?;
     let skills = resolve_skills(definition, active_skills)?;
     let role_instructions = resolve_role_instructions(definition, instructions)?;
     let model = definition
@@ -168,28 +169,56 @@ fn validate_launch(
 
 fn resolve_tools(
     definition: &AgentRole,
-    tool_ceiling: &[ToolName],
+    catalog: &AgentToolCatalog,
     scope: AgentToolScope,
 ) -> Result<Vec<ToolName>, CoreError> {
-    let available = tool_ceiling.iter().cloned().collect::<BTreeSet<_>>();
+    let available = catalog.tools.iter().cloned().collect::<BTreeSet<_>>();
     resolve_required_tools(definition, &available, scope)?;
     let mut resolved = match scope.tools(definition) {
         Some(tools) => tools
             .iter()
             .map(|reference| resolve_available_tool(definition, reference, &available))
             .collect::<Result<Vec<_>, _>>()?,
-        None => tool_ceiling.to_vec(),
+        None => catalog.tools.clone(),
     };
-    if !scope.disallowed_tools(definition).is_empty() {
-        let disallowed = scope
-            .disallowed_tools(definition)
-            .iter()
-            .map(|reference| {
-                ToolName::new(reference.clone())
-                    .map_err(|error| CoreError::InvalidInput(error.to_string()))
-            })
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        resolved.retain(|tool| !disallowed.contains(tool));
+    let disallowed = scope
+        .disallowed_tools(definition)
+        .iter()
+        .map(|reference| {
+            ToolName::new(reference.clone())
+                .map_err(|error| CoreError::InvalidInput(error.to_string()))
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    resolved.retain(|tool| !disallowed.contains(tool));
+    if matches!(scope, AgentToolScope::Own) {
+        for reference in definition.optional_tools() {
+            let name = ToolName::new(reference.clone())
+                .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+            if available.contains(&name) && !disallowed.contains(&name) && !resolved.contains(&name)
+            {
+                resolved.push(name);
+            }
+        }
+        for id in definition.tool_sets() {
+            let mut members = catalog
+                .sets
+                .iter()
+                .filter(|set| &set.id == id)
+                .flat_map(|set| &set.tools)
+                .filter(|name| available.contains(*name) && !disallowed.contains(*name))
+                .peekable();
+            if members.peek().is_none() {
+                return Err(CoreError::InvalidInput(format!(
+                    "Agent definition '{}' requires available tools from set '{id}'",
+                    definition.name()
+                )));
+            }
+            for name in members {
+                if !resolved.contains(name) {
+                    resolved.push(name.clone());
+                }
+            }
+        }
     }
     Ok(resolved)
 }
@@ -415,7 +444,7 @@ mod tests;
 pub fn resolve_root_agent(
     selection: &protocol::AgentRoleSelection,
     model: Option<protocol::ModelRef>,
-    tools: Vec<ToolName>,
+    tools: AgentToolCatalog,
     roles: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
     instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
     skills_runtime: Option<&skills_extension::SkillRuntime>,
@@ -471,13 +500,14 @@ pub fn resolve_root_agent(
             skills.push(activated.activation().clone());
         }
     }
-    let selected = resolve_agent_selection(
+    let selected = resolve_launched_agent(
         selection,
         model.as_ref(),
         tools,
         &skills,
         roles,
         instructions,
+        AgentLaunch::Session,
     )?;
     let selected_model = selected
         .role

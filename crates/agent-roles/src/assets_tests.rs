@@ -13,27 +13,17 @@ fn built_in_roles_are_packaged_as_validated_definitions() {
         .unwrap();
     assert_eq!(role.name(), "issue");
     assert_eq!(role.source(), &AgentRoleSource::BuiltIn);
-    assert_eq!(role.version(), Some(4));
+    assert_eq!(role.version(), Some(5));
     assert_eq!(
         role.tools().unwrap(),
-        [
-            "search_tools",
-            "call_mcp_tool",
-            "spawn_agent",
-            "send_agent_message",
-            "wait_agent",
-        ]
+        ["spawn_agent", "send_agent_message", "wait_agent"]
     );
     assert_eq!(
         role.required_tools(),
-        [
-            "search_tools",
-            "call_mcp_tool",
-            "spawn_agent",
-            "send_agent_message",
-            "wait_agent",
-        ]
+        ["spawn_agent", "send_agent_message", "wait_agent"]
     );
+    assert_eq!(role.optional_tools(), ["tool_search"]);
+    assert_eq!(role.tool_sets(), ["core.github.issues"]);
     assert_eq!(role.delegation_tools(), None);
     assert!(role.disallowed_delegation_tools().is_empty());
     assert!(role.required_delegation_tools().is_empty());

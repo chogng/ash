@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use ash_async_utils::CancellationToken;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
+use ash_model_provider::ModelProviderError;
 use ash_tools::ToolName;
 use ash_tools::ToolRegistrySnapshot;
 use ash_tools::ToolSearchQuery;
@@ -38,31 +40,40 @@ impl ToolSearchEmbeddingRuntime {
         &self,
         query: &ToolSearchQuery,
         excluded: &[ToolName],
-    ) -> Result<ToolSearchResult, String> {
-        let query_request = EmbeddingRequest::new(vec![query.text().to_owned()])
-            .map_err(|error| error.to_string())?;
+        cancellation: &CancellationToken,
+    ) -> Result<ToolSearchResult, ModelProviderError> {
+        let query_request = EmbeddingRequest::new(vec![query.text().to_owned()])?;
         let query_response = self
             .invoker
-            .embed(&query_request)
-            .map_err(|error| error.to_string())?;
-        let query_vector = query_response
-            .vectors()
-            .first()
-            .ok_or_else(|| "embedding model returned no query vector".to_owned())?;
+            .embed_with_cancellation(&query_request, cancellation)?;
+        let [query_vector] = query_response.vectors() else {
+            return Err(ModelProviderError::InvalidResponse(
+                "embedding model must return one query vector".into(),
+            ));
+        };
+        check_cancellation(cancellation)?;
+        let missing = {
+            let documents = self
+                .documents
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            self.registry
+                .search_documents()
+                .iter()
+                .filter(|document| {
+                    !excluded.contains(document.name()) && !documents.contains_key(document.name())
+                })
+                .collect::<Vec<_>>()
+        };
+        // Network calls must not hold the cache lock or block another Turn's cancellation.
+        let embedded = self.embed_documents(&missing, query_vector.values(), cancellation)?;
+        check_cancellation(cancellation)?;
         let mut documents = self
             .documents
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let missing = self
-            .registry
-            .search_documents()
-            .iter()
-            .filter(|document| {
-                !excluded.contains(document.name()) && !documents.contains_key(document.name())
-            })
-            .collect::<Vec<_>>();
-        for document in self.embed_documents(&missing)? {
-            documents.insert(document.name.clone(), document);
+        for document in embedded {
+            documents.entry(document.name.clone()).or_insert(document);
         }
         let mut ranked = documents
             .values()
@@ -72,6 +83,7 @@ impl ToolSearchEmbeddingRuntime {
                     .map(|score| (document.name.clone(), score))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        drop(documents);
         ranked.sort_by(|(left_name, left_score), (right_name, right_score)| {
             right_score
                 .total_cmp(left_score)
@@ -86,7 +98,9 @@ impl ToolSearchEmbeddingRuntime {
     fn embed_documents(
         &self,
         documents: &[&ash_tools::ToolSearchDocument],
-    ) -> Result<Vec<EmbeddedTool>, String> {
+        query_vector: &[f32],
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<EmbeddedTool>, ModelProviderError> {
         let mut embedded = Vec::with_capacity(documents.len());
         for chunk in documents.chunks(MAX_EMBEDDING_BATCH_ITEMS) {
             let request = EmbeddingRequest::new(
@@ -94,40 +108,43 @@ impl ToolSearchEmbeddingRuntime {
                     .iter()
                     .map(|document| document.text().to_owned())
                     .collect(),
-            )
-            .map_err(|error| error.to_string())?;
+            )?;
             let response = self
                 .invoker
-                .embed(&request)
-                .map_err(|error| error.to_string())?;
+                .embed_with_cancellation(&request, cancellation)?;
+            check_cancellation(cancellation)?;
             if response.vectors().len() != chunk.len() {
-                return Err(format!(
+                return Err(ModelProviderError::InvalidResponse(format!(
                     "embedding model returned {} document vectors for {} tools",
                     response.vectors().len(),
                     chunk.len()
-                ));
+                )));
             }
-            embedded.extend(
-                chunk
-                    .iter()
-                    .zip(response.into_vectors())
-                    .map(|(document, vector)| EmbeddedTool {
-                        name: document.name().clone(),
-                        values: vector.values().to_vec(),
-                    }),
-            );
+            for (document, vector) in chunk.iter().zip(response.into_vectors()) {
+                cosine_similarity(query_vector, vector.values())?;
+                embedded.push(EmbeddedTool {
+                    name: document.name().clone(),
+                    values: vector.values().to_vec(),
+                });
+            }
         }
         Ok(embedded)
     }
 }
 
-fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, String> {
+fn check_cancellation(cancellation: &CancellationToken) -> Result<(), ModelProviderError> {
+    cancellation
+        .check()
+        .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))
+}
+
+fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, ModelProviderError> {
     if left.len() != right.len() {
-        return Err(format!(
+        return Err(ModelProviderError::InvalidResponse(format!(
             "embedding dimensions differ: query={}, document={}",
             left.len(),
             right.len()
-        ));
+        )));
     }
     let dot = left
         .iter()
@@ -137,8 +154,10 @@ fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, String> {
     let left_norm = left.iter().map(|value| value * value).sum::<f32>().sqrt();
     let right_norm = right.iter().map(|value| value * value).sum::<f32>().sqrt();
     let denominator = left_norm * right_norm;
-    if denominator == 0.0 {
-        return Err("embedding vectors must have non-zero magnitude".into());
+    if !denominator.is_finite() || denominator == 0.0 {
+        return Err(ModelProviderError::InvalidResponse(
+            "embedding vectors must have finite, non-zero magnitude".into(),
+        ));
     }
     Ok(dot / denominator)
 }

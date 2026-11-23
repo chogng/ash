@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationSource;
+use ash_core::ToolActivationResult;
 use ash_core::ToolAuthorization;
 use ash_login::LoginError;
 
@@ -105,16 +106,23 @@ fn github_tools_are_deferred_and_reviewed_by_the_extension_policy() {
     else {
         panic!("GitHub PR read was not found");
     };
-    let activated = combined
-        .tools
-        .activated_tool_names(&search, &output)
-        .unwrap();
-    assert_eq!(activated, vec![name.clone()]);
+    let result = ToolActivationResult {
+        call: search,
+        binding: None,
+        text: output.into(),
+    };
     let loaded = combined
         .tools
-        .model_definitions(&activated.into_iter().collect())
+        .model_catalog_snapshot(&mut std::iter::once(&result))
         .unwrap();
-    assert!(loaded.iter().any(|tool| tool.name == name));
+    assert_eq!(
+        loaded
+            .definitions()
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        ["github_pr_read", "tool_search"]
+    );
     let call = ToolCall {
         id: ToolCallId::new("github-read").unwrap(),
         name,

@@ -1,4 +1,5 @@
 use crate::CoreError;
+use crate::ToolService;
 use crate::canonical_json::canonicalize_json;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolProfileSnapshot;
@@ -61,24 +62,61 @@ pub(crate) fn validate_tool_profile_snapshot(profile: &ToolProfileSnapshot) -> R
 pub(crate) fn validate_tool_profile_definitions(
     profile: &ToolProfileSnapshot,
     definitions: &[ToolDefinition],
+    tools: &dyn ToolService,
 ) -> Result<(), CoreError> {
     validate_tool_profile_snapshot(profile).map_err(CoreError::Context)?;
     let names = definitions
         .iter()
-        .map(|definition| definition.name.clone())
+        .map(|definition| &definition.name)
         .collect::<Vec<_>>();
-    if names != profile.tool_names
-        || tool_definition_digest(definitions)? != profile.definition_digest
-    {
-        return Err(CoreError::Context(format!(
-            "frozen tool profile {}@{} no longer matches the current tool definitions",
-            profile.id, profile.revision
-        )));
+    if names.iter().copied().eq(&profile.tool_names) {
+        if tool_definition_digest(definitions)? == profile.definition_digest {
+            return Ok(());
+        }
+    } else {
+        let conditional = tools.conditional_tool_definitions();
+        let exposure_changed = conditional.iter().any(|definition| {
+            profile.tool_names.contains(&definition.name) != names.contains(&&definition.name)
+        });
+        if exposure_changed {
+            // Verify the old surface in its original order. Missing discovery helpers can be
+            // reconstructed exactly, even when their catalog no longer has callable targets.
+            let mut current = definitions
+                .iter()
+                .filter(|definition| profile.tool_names.contains(&definition.name))
+                .peekable();
+            let original = profile
+                .tool_names
+                .iter()
+                .map(|name| {
+                    if current
+                        .peek()
+                        .is_some_and(|definition| &definition.name == name)
+                    {
+                        current.next()
+                    } else if !names.contains(&name) {
+                        conditional
+                            .iter()
+                            .find(|definition| &definition.name == name)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Option<Vec<_>>>();
+            if let Some(original) = original
+                && tool_definition_digest(&original)? == profile.definition_digest
+            {
+                return Ok(());
+            }
+        }
     }
-    Ok(())
+    Err(CoreError::Context(format!(
+        "frozen tool profile {}@{} no longer matches the current tool definitions",
+        profile.id, profile.revision
+    )))
 }
 
-fn tool_definition_digest(definitions: &[ToolDefinition]) -> Result<String, CoreError> {
+fn tool_definition_digest(definitions: &[impl serde::Serialize]) -> Result<String, CoreError> {
     let mut value = serde_json::to_value(definitions).map_err(|error| {
         CoreError::Context(format!("failed to serialize tool profile: {error}"))
     })?;

@@ -351,17 +351,19 @@ fn one_tool_can_override_its_source_default_exposure() {
 
 #[test]
 fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
+    let mut local = FakeTools::new("read_file", ActionSource::BuiltInTool, "local");
+    local
+        .definitions
+        .extend(FakeTools::new("agent_lookup", ActionSource::BuiltInTool, "local").definitions);
     let combined = combine_tool_ports_at_generation(
         vec![
-            ToolPort::local(
-                Arc::new(FakeTools::new(
-                    "read_file",
-                    ActionSource::BuiltInTool,
-                    "local",
-                )),
-                Arc::new(AskPolicy),
-            )
-            .unwrap(),
+            ToolPort::local(Arc::new(local), Arc::new(AskPolicy))
+                .unwrap()
+                .with_tool_exposure(
+                    &ToolName::new("agent_lookup").unwrap(),
+                    ToolExposure::Deferred,
+                )
+                .unwrap(),
             ToolPort::mcp(
                 Arc::new(FakeTools::catalog(
                     "external",
@@ -429,6 +431,21 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
     let output = serde_json::from_str::<serde_json::Value>(&output).unwrap();
     assert_eq!(output["tools"].as_array().unwrap().len(), 5);
     assert_eq!(output["tools"][0]["name"], "external_17");
+    assert!(
+        output["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|tool| tool["name"] != "agent_lookup")
+    );
+    assert_eq!(
+        execute_search(&combined, "^agent_lookup$", "regex"),
+        ["agent_lookup"]
+    );
+    assert_eq!(
+        execute_search(&combined, "^external_17$", "regex"),
+        ["external_17"]
+    );
 }
 
 enum TestEmbeddingBehavior {
@@ -616,6 +633,79 @@ fn hybrid_mode_gate_rejects_a_missing_or_unavailable_embedding_adapter() {
 
     assert!(error.to_string().contains("readiness probe failed"));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn hybrid_search_cancels_query_and_document_requests_with_the_turn() {
+    struct CancellingEmbedding {
+        source: Arc<ash_async_utils::CancellationSource>,
+        cancel_documents: bool,
+    }
+
+    impl EmbeddingInvoker for CancellingEmbedding {
+        fn embed(
+            &self,
+            request: &EmbeddingRequest,
+        ) -> Result<EmbeddingResponse, ModelProviderError> {
+            EmbeddingResponse::new(vec![
+                EmbeddingVector::new(vec![1.0])?;
+                request.inputs().len()
+            ])
+        }
+
+        fn embed_with_cancellation(
+            &self,
+            request: &EmbeddingRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<EmbeddingResponse, ModelProviderError> {
+            if (request.inputs().len() > 1) == self.cancel_documents {
+                self.source.cancel();
+            }
+            cancellation
+                .check()
+                .map_err(|signal| ModelProviderError::Cancelled(signal.reason().to_string()))?;
+            self.embed(request)
+        }
+    }
+
+    for cancel_documents in [false, true] {
+        let source = Arc::new(ash_async_utils::CancellationSource::new());
+        let options = ToolSearchOptions::new()
+            .with_embedding(Arc::new(CancellingEmbedding {
+                source: source.clone(),
+                cancel_documents,
+            }))
+            .unwrap()
+            .with_mode(ToolSearchModeConfig::HybridEmbedding)
+            .unwrap();
+        let combined = combine_tool_ports_at_generation_with_search(
+            external_catalog(),
+            ash_tools::ToolRegistryGeneration::new(1),
+            options,
+        )
+        .unwrap()
+        .unwrap();
+        let call = ToolCall {
+            id: ash_protocol::ToolCallId::new("cancel-search").unwrap(),
+            name: ToolName::new("tool_search").unwrap(),
+            arguments: serde_json::json!({"query":"external_17","limit":1,"strategy":"bm25"}),
+        };
+        let cancellation = source.token();
+        let request = combined.tools.prepare(&call).unwrap();
+        let ExecutionDecision::RunUnsandboxed { grant_id } =
+            combined.policy.decide(&request, &cancellation).unwrap()
+        else {
+            panic!("search requires the registry grant");
+        };
+        assert!(matches!(
+            combined.tools.execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant { grant_id },
+                &cancellation
+            ),
+            Err(CoreError::Cancelled(_))
+        ));
+    }
 }
 
 #[test]
@@ -1478,7 +1568,7 @@ fn model_catalog_snapshot_binds_response_to_the_generation_visible_to_the_model(
     let reloadable = ReloadableToolPorts::new(initial);
     let tools = scoped_tools(&reloadable, "thread", "turn");
     let catalog = tools
-        .model_catalog_snapshot(&std::collections::BTreeSet::new())
+        .model_catalog_snapshot(&mut std::iter::empty())
         .expect("freeze model catalog");
 
     reloadable.replace(
@@ -1724,10 +1814,9 @@ fn code_mode_catalog_excludes_direct_model_only_tools_after_reloadable_compositi
     .unwrap();
     let reloadable = ReloadableToolPorts::new(combined);
     let tools = reloadable.tools();
-    let activated = std::collections::BTreeSet::new();
     assert!(
         tools
-            .model_catalog_snapshot(&activated)
+            .model_catalog_snapshot(&mut std::iter::empty())
             .unwrap()
             .definitions()
             .iter()
@@ -1735,7 +1824,7 @@ fn code_mode_catalog_excludes_direct_model_only_tools_after_reloadable_compositi
     );
     assert!(
         !tools
-            .code_mode_catalog_snapshot(&activated)
+            .code_mode_catalog_snapshot(&mut std::iter::empty())
             .unwrap()
             .definitions()
             .iter()
@@ -1976,7 +2065,7 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
                     policy_revision: ports.policy().revision(),
                     approval_mode: ash_protocol::ApprovalMode::Manual,
                     tool_mode: ToolMode::CodeModeOnly,
-                    tool_profile: None,
+                    tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
                     activated_skills: Vec::new(),
                     input: vec![ash_protocol::UserInput::Text {
                         text: "discover and call current third-party tools".into(),

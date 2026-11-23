@@ -17,18 +17,22 @@ use ash_app_server_protocol::protocol::agent::ToolSourceDto;
 use ash_async_utils::CancellationToken;
 use ash_config::ToolSearchModeConfig;
 use ash_core::ModelToolCatalogSnapshot;
+use ash_core::ToolActivationResult;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_core::ToolService;
+use ash_mcp_extension::McpToolComposition;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
+use ash_model_provider::ModelProviderError;
 use ash_protocol::ActionDigest;
 use ash_protocol::ActionKind;
 use ash_protocol::ActionPolicyRevision;
 use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
 use ash_protocol::CapabilitySet;
+use ash_protocol::ContentDigest;
 use ash_protocol::ReviewEvidence;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolActivity;
@@ -43,6 +47,7 @@ use ash_protocol::ToolSourceProvenance;
 use ash_protocol::TurnId;
 use ash_tools::ProtocolToolAdapterError;
 use ash_tools::TOOL_SEARCH_TOOL_NAME;
+use ash_tools::ToolBinding;
 use ash_tools::ToolDefinition;
 use ash_tools::ToolExposure;
 use ash_tools::ToolInvocationKind;
@@ -59,6 +64,7 @@ use ash_tools::ToolSearchQuerySyntax;
 use ash_tools::from_protocol_tool_definition;
 use ash_tools::to_protocol_tool_definition;
 use core_api::ActionPolicyService;
+use core_api::AgentToolCatalog;
 use core_api::CoreError;
 
 use crate::tool_executor_adapter::ToolExecutorReviewer;
@@ -430,6 +436,26 @@ impl ToolPort {
                 ToolExposure::Hidden,
                 search.clone(),
             )?);
+        }
+        for contribution in &mut port.contributions {
+            if contribution.tool_set == Some(mcp_exposure::GITHUB_ISSUE_TOOL_SET) {
+                contribution.tool_set = None;
+            }
+        }
+        Ok(port)
+    }
+
+    pub(crate) fn from_mcp(composition: McpToolComposition) -> Result<Self, ToolCompositionError> {
+        let mut port = Self::mcp(composition.tools, composition.policy)?;
+        for contribution in &mut port.contributions {
+            if contribution.exposure != ToolExposure::Hidden
+                && mcp_exposure::is_github_issue_tool(
+                    &contribution.source_chain,
+                    &composition.status,
+                )
+            {
+                contribution.tool_set = Some(mcp_exposure::GITHUB_ISSUE_TOOL_SET);
+            }
         }
         Ok(port)
     }
@@ -853,6 +879,14 @@ impl ToolService for ReloadableToolService {
         self.ports.generation().tools.definitions()
     }
 
+    fn conditional_tool_definitions(&self) -> Vec<ProtocolToolDefinition> {
+        discovery_tool_definitions()
+    }
+
+    fn agent_tool_catalog(&self) -> AgentToolCatalog {
+        self.ports.generation().tools.agent_tool_catalog()
+    }
+
     fn tool_sets(&self) -> Vec<ash_protocol::ToolSetDefinition> {
         self.ports.generation().tools.tool_sets()
     }
@@ -877,24 +911,26 @@ impl ToolService for ReloadableToolService {
 
     fn model_catalog_snapshot(
         &self,
-        activated: &BTreeSet<ToolName>,
+        results: &mut dyn Iterator<Item = &ToolActivationResult<'_>>,
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
         let generation = self.ports.generation();
-        let definitions = generation.tools.model_definitions(activated)?;
+        let catalog = generation
+            .tools
+            .model_catalog_snapshot(&mut results.filter(|result| self.owns_result(result)))?;
         let tools = self.clone();
-        Ok(
-            ModelToolCatalogSnapshot::new(definitions).with_binder(move |call, caller| {
-                tools.bind_call_in_generation(&generation, call, caller)
-            }),
-        )
+        Ok(catalog.with_binder(move |call, caller| {
+            tools.bind_call_in_generation(&generation, call, caller)
+        }))
     }
 
     fn code_mode_catalog_snapshot(
         &self,
-        activated: &BTreeSet<ToolName>,
+        results: &mut dyn Iterator<Item = &ToolActivationResult<'_>>,
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
         let generation = self.ports.generation();
-        let catalog = generation.tools.code_mode_catalog_snapshot(activated)?;
+        let catalog = generation
+            .tools
+            .code_mode_catalog_snapshot(&mut results.filter(|result| self.owns_result(result)))?;
         let tools = self.clone();
         Ok(catalog.with_binder(move |call, caller| {
             tools.bind_call_in_generation(&generation, call, caller)
@@ -937,17 +973,6 @@ impl ToolService for ReloadableToolService {
             self.ports.pin_generation(turn, &call.id, &generation)?;
         }
         Ok(())
-    }
-
-    fn activated_tool_names(
-        &self,
-        call: &ToolCall,
-        result: &str,
-    ) -> Result<Vec<ToolName>, CoreError> {
-        self.ports
-            .generation()
-            .tools
-            .activated_tool_names(call, result)
     }
 
     fn execution_interaction(
@@ -1061,6 +1086,12 @@ impl ToolService for ReloadableToolService {
 }
 
 impl ReloadableToolService {
+    fn owns_result(&self, result: &ToolActivationResult<'_>) -> bool {
+        result.binding.as_ref().is_some_and(|binding| {
+            binding.registry_incarnation.as_deref() == Some(self.ports.incarnation.as_str())
+        })
+    }
+
     fn bind_call_in_generation(
         &self,
         generation: &Arc<ToolGeneration>,
@@ -1369,7 +1400,9 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         .collect::<Vec<_>>();
     let mut tool_sets = BTreeMap::<String, Vec<ToolName>>::new();
     for collected in &definitions {
-        if let Some(id) = collected.contribution.tool_set {
+        if let Some(id) = collected.contribution.tool_set
+            && (id != mcp_exposure::GITHUB_ISSUE_TOOL_SET || collected.kind == ToolPortKind::Mcp)
+        {
             tool_sets
                 .entry(id.into())
                 .or_default()
@@ -1654,6 +1687,10 @@ pub(crate) fn product_tool_profiles() -> Vec<ash_protocol::ToolProductProfile> {
 }
 
 impl ToolService for CompositeToolService {
+    fn conditional_tool_definitions(&self) -> Vec<ProtocolToolDefinition> {
+        discovery_tool_definitions()
+    }
+
     fn finish_call(&self, scope: &ToolCallScope) {
         for route in self.routes.values() {
             if let ToolContributionRuntime::Executor(executor) = route {
@@ -1836,9 +1873,28 @@ impl ToolService for CompositeToolService {
         definitions
     }
 
+    fn agent_tool_catalog(&self) -> AgentToolCatalog {
+        let tools = self
+            .registry
+            .entries()
+            .iter()
+            .filter(|entry| entry.exposure() != ToolExposure::Hidden)
+            .map(|entry| entry.definition().name().clone())
+            .chain(
+                self.search
+                    .iter()
+                    .map(|search| search.definition().name.clone()),
+            )
+            .collect();
+        AgentToolCatalog {
+            tools,
+            sets: self.tool_sets.clone(),
+        }
+    }
+
     fn code_mode_catalog_snapshot(
         &self,
-        activated: &BTreeSet<ToolName>,
+        results: &mut dyn Iterator<Item = &ToolActivationResult<'_>>,
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
         let eligible = ash_tools::CodeModeProjection::from_registry(&self.registry)
             .map_err(|error| CoreError::Policy(error.to_string()))?;
@@ -1847,9 +1903,10 @@ impl ToolService for CompositeToolService {
             .iter()
             .map(|binding| &binding.binding_id)
             .collect::<BTreeSet<_>>();
-        let definitions = self
-            .model_definitions(activated)?
-            .into_iter()
+        let catalog = self.model_catalog_snapshot(results)?;
+        let names = catalog
+            .definitions()
+            .iter()
             .filter(|definition| {
                 self.search
                     .as_ref()
@@ -1859,8 +1916,9 @@ impl ToolService for CompositeToolService {
                         .resolve(&definition.name)
                         .is_some_and(|entry| bindings.contains(entry.binding().id()))
             })
-            .collect();
-        Ok(ModelToolCatalogSnapshot::new(definitions))
+            .map(|definition| definition.name.clone())
+            .collect::<Vec<_>>();
+        Ok(catalog.restrict_to_names(&names))
     }
 
     fn bind_call(
@@ -1942,11 +2000,10 @@ impl ToolService for CompositeToolService {
 
     fn activated_tool_names(
         &self,
-        call: &ToolCall,
-        result: &str,
+        result: &ToolActivationResult<'_>,
     ) -> Result<Vec<ToolName>, CoreError> {
         match &self.search {
-            Some(search) => search.activated_tool_names(call, result),
+            Some(search) => search.activated_tool_names(result),
             None => Ok(Vec::new()),
         }
     }
@@ -2343,6 +2400,8 @@ struct ToolSearchOutputMatch {
     name: ToolName,
     description: String,
     definition_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_digest: Option<ContentDigest>,
     score: u64,
 }
 
@@ -2440,11 +2499,14 @@ impl ToolSearchRuntime {
         let query = self.query(call)?;
         let result = match (&self.state, query.syntax()) {
             (ToolSearchRuntimeState::Hybrid(embedding), ToolSearchQuerySyntax::NaturalLanguage) => {
-                embedding.search(&query, disabled).map_err(|error| {
-                    CoreError::Execution(format!(
-                        "hybrid embedding tool search is unavailable: {error}"
-                    ))
-                })?
+                embedding
+                    .search(&query, disabled, cancellation)
+                    .map_err(|error| match error {
+                        ModelProviderError::Cancelled(reason) => CoreError::Cancelled(reason),
+                        error => CoreError::Execution(format!(
+                            "hybrid embedding tool search is unavailable: {error}"
+                        )),
+                    })?
             }
             (
                 ToolSearchRuntimeState::Unavailable(reason),
@@ -2457,6 +2519,9 @@ impl ToolSearchRuntime {
             (ToolSearchRuntimeState::Lexical, ToolSearchQuerySyntax::NaturalLanguage)
             | (_, ToolSearchQuerySyntax::Regex) => self.registry.search_excluding(&query, disabled),
         };
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let output = ToolSearchOutput {
             registry_generation: result.registry_generation().get(),
             tools: result
@@ -2467,6 +2532,7 @@ impl ToolSearchRuntime {
                     name: matched.loadable().definition().name().clone(),
                     description: matched.loadable().definition().description().to_owned(),
                     definition_digest: matched.loadable().binding().definition_digest().to_string(),
+                    source_digest: Some(tool_search_source_digest(matched.loadable().binding())),
                     score: matched.score().get(),
                 })
                 .collect(),
@@ -2478,44 +2544,54 @@ impl ToolSearchRuntime {
 
     fn activated_tool_names(
         &self,
-        call: &ToolCall,
-        result: &str,
+        result: &ToolActivationResult<'_>,
     ) -> Result<Vec<ToolName>, CoreError> {
-        if call.name != self.definition.name {
+        if result.call.name != self.definition.name {
             return Ok(Vec::new());
         }
-        let output = serde_json::from_str::<ToolSearchOutput>(result).map_err(|error| {
+        let output = serde_json::from_str::<ToolSearchOutput>(&result.text).map_err(|error| {
             CoreError::Execution(format!("invalid durable tool search result: {error}"))
         })?;
-        if output.registry_generation != self.registry.generation().get() {
-            return Err(CoreError::Execution(format!(
-                "tool search result belongs to registry generation {}, current generation is {}",
-                output.registry_generation,
-                self.registry.generation()
-            )));
+        if result
+            .binding
+            .as_ref()
+            .is_some_and(|binding| output.registry_generation != binding.registry_generation)
+        {
+            return Err(CoreError::Execution(
+                "tool search result does not match its call's registry generation".into(),
+            ));
         }
-        output
+        let same_generation = output.registry_generation == self.registry.generation().get();
+        Ok(output
             .tools
             .into_iter()
-            .map(|matched| {
-                let entry = self.registry.resolve(&matched.name).ok_or_else(|| {
-                    CoreError::Execution(format!(
-                        "tool search returned unavailable tool {}",
-                        matched.name
-                    ))
-                })?;
+            .filter_map(|matched| {
+                let entry = self.registry.resolve(&matched.name)?;
                 if entry.exposure() != ToolExposure::Deferred
                     || entry.binding().definition_digest().as_str() != matched.definition_digest
                 {
-                    return Err(CoreError::Execution(format!(
-                        "tool search binding validation failed for {}",
-                        matched.name
-                    )));
+                    return None;
                 }
-                Ok(matched.name)
+                // Older results can only establish the source while their registry is current.
+                let same_source = match matched.source_digest {
+                    Some(digest) => digest == tool_search_source_digest(entry.binding()),
+                    None => same_generation,
+                };
+                same_source.then_some(matched.name)
             })
-            .collect()
+            .collect())
     }
+}
+
+fn tool_search_source_digest(binding: &ToolBinding) -> ContentDigest {
+    let bytes = serde_json::to_vec(binding.source_chain()).expect("serializable tool provenance");
+    ContentDigest::sha256(&bytes)
+}
+
+fn discovery_tool_definitions() -> Vec<ProtocolToolDefinition> {
+    let mut definitions = mcp_exposure::meta_definitions();
+    definitions.push(tool_search_definition());
+    definitions
 }
 
 fn tool_search_definition() -> ProtocolToolDefinition {

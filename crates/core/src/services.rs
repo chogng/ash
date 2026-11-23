@@ -22,9 +22,11 @@ use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::ToolSourceProvenance;
 use ash_sandboxing::SandboxPolicy;
+use core_api::AgentToolCatalog;
 use core_api::ThreadUpdateSink;
 use sha2::Digest;
 use sha2::Sha256;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -136,6 +138,23 @@ impl ExecPolicyToolGrant {
 type ModelToolCallBinder =
     dyn Fn(&ToolCall, ToolCallCaller) -> Result<Option<ToolCallBinding>, CoreError> + Send + Sync;
 
+/// A durable successful Tool Result and the exact call that produced it.
+pub struct ToolActivationResult<'a> {
+    pub call: ToolCall,
+    pub binding: Option<ToolCallBinding>,
+    pub text: Cow<'a, str>,
+}
+
+impl ToolActivationResult<'_> {
+    pub(crate) fn into_owned(self) -> ToolActivationResult<'static> {
+        ToolActivationResult {
+            call: self.call,
+            binding: self.binding,
+            text: Cow::Owned(self.text.into_owned()),
+        }
+    }
+}
+
 /// Frozen tool catalog selected for one model invocation safe point.
 ///
 /// Reloadable registries attach a binder that resolves model-produced calls against this exact
@@ -147,6 +166,7 @@ pub struct ModelToolCatalogSnapshot {
     // derived catalog uses copy-on-write so an in-flight generation remains immutable.
     definitions: Arc<Vec<ToolDefinition>>,
     binder: Option<Arc<ModelToolCallBinder>>,
+    activated: BTreeSet<ash_protocol::ToolName>,
 }
 
 impl ModelToolCatalogSnapshot {
@@ -155,6 +175,7 @@ impl ModelToolCatalogSnapshot {
         Self {
             definitions: Arc::new(definitions),
             binder: None,
+            activated: BTreeSet::new(),
         }
     }
 
@@ -179,6 +200,10 @@ impl ModelToolCatalogSnapshot {
         Arc::clone(&self.definitions)
     }
 
+    pub(crate) fn activated_names(&self) -> &BTreeSet<ash_protocol::ToolName> {
+        &self.activated
+    }
+
     /// Applies captured model wording without changing tool identity, binding or parameter contracts.
     pub(crate) fn with_model_descriptions(
         mut self,
@@ -192,7 +217,7 @@ impl ModelToolCatalogSnapshot {
     }
 
     /// Restricts a host-selected invocation while preserving its exact catalog binder.
-    pub(crate) fn restrict_to_names(mut self, names: &[ash_protocol::ToolName]) -> Self {
+    pub fn restrict_to_names(mut self, names: &[ash_protocol::ToolName]) -> Self {
         Arc::make_mut(&mut self.definitions).retain(|definition| names.contains(&definition.name));
         self
     }
@@ -201,6 +226,18 @@ impl ModelToolCatalogSnapshot {
     pub(crate) fn with_tool_scope(mut self, profile: &ash_protocol::ToolProfileSnapshot) -> Self {
         Arc::make_mut(&mut self.definitions)
             .retain(|definition| profile.allows_tool(&definition.name));
+        self
+    }
+
+    /// Keeps frozen direct tools and definitions activated through validated search results.
+    pub(crate) fn with_frozen_tool_names(
+        mut self,
+        profile: &ash_protocol::ToolProfileSnapshot,
+    ) -> Self {
+        Arc::make_mut(&mut self.definitions).retain(|definition| {
+            profile.tool_names.contains(&definition.name)
+                || self.activated.contains(&definition.name)
+        });
         self
     }
 
@@ -325,6 +362,24 @@ impl OneTimeToolGrant {
 /// never mutate Thread state directly.
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
+
+    /// Returns canonical definitions for infrastructure whose exposure depends on a live catalog.
+    /// These definitions may verify a frozen profile and grant no invocation authority.
+    fn conditional_tool_definitions(&self) -> Vec<ToolDefinition> {
+        Vec::new()
+    }
+
+    /// Returns the full Agent capability ceiling, including eligible deferred tools and sets.
+    fn agent_tool_catalog(&self) -> AgentToolCatalog {
+        AgentToolCatalog {
+            tools: self
+                .definitions()
+                .into_iter()
+                .map(|tool| tool.name)
+                .collect(),
+            sets: self.tool_sets(),
+        }
+    }
 
     /// Creates a view that pins in-flight calls independently of other Turns. Core keeps the view
     /// across approval waits and releases it on completion or interruption.
@@ -534,37 +589,40 @@ pub trait ToolService: Send + Sync {
         Ok(self.definitions())
     }
 
-    /// Freezes definitions and optional generation-bound binding authority for one model call.
+    /// Validates search results and freezes definitions and binding authority for one model call.
     ///
-    /// A reloadable implementation must override this method so a registry publication between
-    /// model request and response cannot rebind a returned call to a newer same-named tool.
+    /// Reloadable implementations resolve results and bind calls against the same immutable
+    /// registry snapshot, even when a replacement is published during the invocation.
     fn model_catalog_snapshot(
         &self,
-        activated: &BTreeSet<ash_protocol::ToolName>,
+        results: &mut dyn Iterator<Item = &ToolActivationResult<'_>>,
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
-        Ok(ModelToolCatalogSnapshot::new(
-            self.model_definitions(activated)?,
-        ))
+        let mut activated = BTreeSet::new();
+        for result in results {
+            activated.extend(self.activated_tool_names(result)?);
+        }
+        let mut snapshot = ModelToolCatalogSnapshot::new(self.model_definitions(&activated)?);
+        snapshot.activated = activated;
+        Ok(snapshot)
     }
 
     /// Freezes the tools eligible for nested execution in one cell. Registry-backed
     /// services must exclude hidden and direct-model-only tools before returning this catalog.
     fn code_mode_catalog_snapshot(
         &self,
-        activated: &BTreeSet<ash_protocol::ToolName>,
+        results: &mut dyn Iterator<Item = &ToolActivationResult<'_>>,
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
-        self.model_catalog_snapshot(activated)
+        self.model_catalog_snapshot(results)
     }
 
     /// Interprets one successful tool result as additive model-tool activation.
     ///
     /// Ordinary tools return no names. A tool-search implementation must validate its own result,
-    /// registry generation, binding identity, and definition digest before returning names. This
-    /// method never executes a tool or changes the live registry.
+    /// call binding, source identity and definition digest before returning names. Stale bindings
+    /// may be omitted when the current registry no longer offers the same source or contract.
     fn activated_tool_names(
         &self,
-        _: &ToolCall,
-        _: &str,
+        _: &ToolActivationResult<'_>,
     ) -> Result<Vec<ash_protocol::ToolName>, CoreError> {
         Ok(Vec::new())
     }
@@ -702,6 +760,7 @@ pub struct ToolExecutionFacts {
     read_paths: BTreeSet<PathBuf>,
     available_tools: BTreeSet<ash_protocol::ToolName>,
     delegation_tools: BTreeSet<ash_protocol::ToolName>,
+    delegation_tool_sets: Vec<ash_protocol::ToolSetDefinition>,
     scope_ceiling: Option<BTreeSet<ash_protocol::ToolName>>,
     activated_skills: Vec<ash_protocol::FrozenSkillActivation>,
 }
@@ -772,7 +831,7 @@ pub(crate) fn successful_read_paths<'a>(
 /// Pairs successful results with their exact calls, in transcript result order.
 pub(crate) fn tool_activation_results<'a>(
     items: impl IntoIterator<Item = &'a ThreadItem>,
-) -> Result<Vec<(ToolCall, &'a str)>, CoreError> {
+) -> Result<Vec<ToolActivationResult<'a>>, CoreError> {
     let mut calls = BTreeMap::new();
     let mut results = Vec::new();
     for item in items {
@@ -781,6 +840,7 @@ pub(crate) fn tool_activation_results<'a>(
                 tool_call_id,
                 name,
                 arguments_json,
+                binding,
                 ..
             } => {
                 let arguments = serde_json::from_str(arguments_json).map_err(|error| {
@@ -790,11 +850,14 @@ pub(crate) fn tool_activation_results<'a>(
                 })?;
                 calls.insert(
                     tool_call_id,
-                    ToolCall {
-                        id: tool_call_id.clone(),
-                        name: name.clone(),
-                        arguments,
-                    },
+                    (
+                        ToolCall {
+                            id: tool_call_id.clone(),
+                            name: name.clone(),
+                            arguments,
+                        },
+                        binding.clone(),
+                    ),
                 );
             }
             ThreadItem::ToolResult {
@@ -808,7 +871,14 @@ pub(crate) fn tool_activation_results<'a>(
     }
     Ok(results
         .into_iter()
-        .filter_map(|(id, text)| calls.remove(id).map(|call| (call, text)))
+        .filter_map(|(id, text)| {
+            let (call, binding) = calls.remove(id)?;
+            Some(ToolActivationResult {
+                call,
+                binding,
+                text: Cow::Borrowed(text),
+            })
+        })
         .collect())
 }
 
@@ -878,6 +948,7 @@ impl ToolExecutionFacts {
             ))),
             available_tools,
             delegation_tools,
+            delegation_tool_sets: Vec::new(),
             scope_ceiling: snapshot.agent_configuration().map(|seed| seed.capability_scope.tools.iter().cloned().collect()),
             activated_skills: turn.activated_skills.clone(),
         };
@@ -944,6 +1015,22 @@ impl ToolExecutionFacts {
     /// Returns the host-backed ceiling from which a child Agent's two tool scopes are derived.
     pub fn delegation_tools(&self) -> impl Iterator<Item = &ash_protocol::ToolName> {
         self.delegation_tools.iter()
+    }
+
+    pub(crate) fn with_delegation_tool_sets(
+        mut self,
+        sets: Vec<ash_protocol::ToolSetDefinition>,
+    ) -> Self {
+        self.delegation_tool_sets = sets;
+        self
+    }
+
+    /// Returns the catalog used to resolve a delegated role within the caller's frozen ceiling.
+    pub fn delegation_tool_catalog(&self) -> AgentToolCatalog {
+        AgentToolCatalog {
+            tools: self.delegation_tools().cloned().collect(),
+            sets: self.delegation_tool_sets.clone(),
+        }
     }
 
     /// Returns the exact Skill versions already frozen for the current Turn.

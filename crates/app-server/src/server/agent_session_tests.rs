@@ -1,6 +1,12 @@
 use super::*;
 use crate::model_catalog::ModelCatalog;
+use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::ExecutionDecision;
+use ash_action_policy::ResolvedAction;
+use ash_action_policy::SandboxCompatibility;
 use ash_core::InMemoryThreadStore;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
 use ash_protocol::AgentRoleSelection;
 use ash_protocol::AgentRoleSource;
 use ash_protocol::CommandId;
@@ -605,7 +611,7 @@ impl SkillConfigSnapshotProvider for SkillConfig {
 struct CatalogTools;
 impl ToolService for CatalogTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        ["read_file", "write_file", "grep", "glob", "board_read", "board_write", "search_tools", "call_mcp_tool", "spawn_agent", "send_agent_message", "wait_agent"].into_iter().map(|name| ToolDefinition {
+        ["read_file", "write_file", "grep", "glob", "board_read", "board_write", "spawn_agent", "send_agent_message", "wait_agent"].into_iter().map(|name| ToolDefinition {
             name: ToolName::new(name).unwrap(), description: name.into(), parameters: serde_json::json!({"type":"object", "properties":{}, "additionalProperties":false}), strict: true,
         }).collect()
     }
@@ -635,6 +641,130 @@ impl ActionPolicyService for UnusedPolicy {
     }
 }
 
+struct IssueMcpTools;
+
+impl ToolService for IssueMcpTools {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        [
+            "copilot__issue_read",
+            "copilot__create_repository",
+            "lookalike__issue_read",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .chain((0..14).map(|index| format!("lookalike__tool_{index}")))
+        .map(|name| ToolDefinition {
+            name: ToolName::new(&name).unwrap(),
+            description: name,
+            parameters: serde_json::json!({"type": "object"}),
+            strict: false,
+        })
+        .collect()
+    }
+
+    fn source_provenance(&self, tool: &ToolName) -> Vec<ash_protocol::ToolSourceProvenance> {
+        let (server, remote) = tool.as_str().split_once("__").unwrap();
+        vec![ash_protocol::ToolSourceProvenance::Mcp {
+            server_id: server.into(),
+            remote_name: remote.into(),
+            catalog_generation: 1,
+            connection_generation: 1,
+        }]
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ash_protocol::ActionDigest::from_canonical_bytes(call.name.as_str().as_bytes()),
+                ash_protocol::ActionKind::SystemOperation,
+                "Read a fixture issue",
+                ash_protocol::CapabilitySet::new([]),
+            ),
+            ActionProvenance::new(ActionSource::McpServer, "copilot"),
+            SandboxCompatibility::NotApplicable {
+                reason: "Local test fixture".into(),
+            },
+            ash_protocol::ActionPolicyRevision::new("test-mcp"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        call: &ToolCall,
+        _: &ash_core::ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ash_core::ToolExecutionOutput, CoreError> {
+        assert_eq!(call.name.as_str(), "copilot__issue_read");
+        Ok(ash_core::ToolExecutionOutput::Success(
+            "fixture issue details".into(),
+        ))
+    }
+}
+
+impl ActionPolicyService for IssueMcpTools {
+    fn revision(&self) -> String {
+        "test-mcp".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        assert_eq!(request.provenance().source_id(), "copilot");
+        Ok(ExecutionDecision::RunUnsandboxed {
+            grant_id: ash_action_policy::GrantId::new("read-fixture"),
+        })
+    }
+}
+
+struct IssueModel {
+    requests: mpsc::Sender<ModelRequest>,
+    step: std::sync::atomic::AtomicUsize,
+}
+
+impl ModelService for IssueModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.requests.send(request.clone()).unwrap();
+        let call = match self.step.fetch_add(1, std::sync::atomic::Ordering::Relaxed) {
+            0 => Some((
+                "find-issue",
+                "tool_search",
+                serde_json::json!({
+                    "query": "issue_read$", "strategy": "regex", "limit": 8
+                }),
+            )),
+            1 => Some(("read-issue", "copilot__issue_read", serde_json::json!({}))),
+            _ => None,
+        };
+        let (item, stop_reason) = match call {
+            Some((id, name, arguments)) => (
+                ResponseItem::ToolCall(ToolCall {
+                    id: ash_protocol::ToolCallId::new(id).unwrap(),
+                    name: ToolName::new(name).unwrap(),
+                    arguments,
+                }),
+                StopReason::ToolUse,
+            ),
+            None => (
+                ResponseItem::Text("Verified the issue".into()),
+                StopReason::Completed,
+            ),
+        };
+        Ok(ModelResponse {
+            output: vec![item],
+            usage: None,
+            billing: None,
+            stop_reason,
+        })
+    }
+}
+
 static REQUEST_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 fn call(
@@ -648,6 +778,13 @@ fn call(
 
 #[test]
 fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
+    use crate::tool_composition::ToolPort;
+    use crate::tool_composition::combine_tool_ports;
+    use ash_mcp_extension::McpRuntimeStatusSnapshot;
+    use ash_mcp_extension::McpServerRuntimeState;
+    use ash_mcp_extension::McpServerRuntimeStatus;
+    use ash_mcp_extension::McpToolComposition;
+
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir(root.path().join("github")).unwrap();
     let skill_path = root.path().join("github/SKILL.md");
@@ -669,9 +806,41 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         },
     ])
     .unwrap();
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(Arc::new(CatalogTools), Arc::new(UnusedPolicy)).unwrap(),
+        ToolPort::from_mcp(McpToolComposition {
+            tools: Arc::new(IssueMcpTools),
+            policy: Arc::new(IssueMcpTools),
+            status: McpRuntimeStatusSnapshot {
+                catalog_generation: 1,
+                servers: [
+                    ("copilot", "https://api.githubcopilot.com", 2),
+                    ("lookalike", "https://elsewhere.example", 15),
+                ]
+                .into_iter()
+                .map(|(id, origin, tool_count)| McpServerRuntimeStatus {
+                    server_id: id.into(),
+                    display_name: "GitHub".into(),
+                    state: McpServerRuntimeState::Connected,
+                    catalog_generation: 1,
+                    connection_generation: Some(1),
+                    tool_count,
+                    diagnostic: None,
+                    http_origin: Some(origin.into()),
+                })
+                .collect(),
+            },
+        })
+        .unwrap(),
+    ])
+    .unwrap()
+    .unwrap();
     let mut server = AppServer::new(
         threads.clone(),
-        Arc::new(CaptureModel(tx)),
+        Arc::new(IssueModel {
+            requests: tx,
+            step: Default::default(),
+        }),
         ash_app_server_diff::compute,
     )
     .with_model_instructions(catalog)
@@ -682,7 +851,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         None,
     )
     .unwrap()
-    .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
+    .with_tool_service(combined.tools, combined.policy);
     server.model_catalog = Arc::new(TestModels);
     let mut connection = server.connection();
     assert!(
@@ -709,12 +878,20 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
     assert!(root_thread.agent_context_seed.is_none());
     let configuration = root_thread.agent_configuration().unwrap();
     assert_eq!(configuration.role.as_ref().unwrap().name, "issue");
-    assert!(
-        !configuration
+    assert_eq!(
+        configuration
             .capability_scope
             .tools
             .iter()
-            .any(|tool| tool.as_str() == "write_file")
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        [
+            "spawn_agent",
+            "send_agent_message",
+            "wait_agent",
+            "tool_search",
+            "copilot__issue_read"
+        ]
     );
     assert!(
         configuration
@@ -745,10 +922,32 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
     assert!(rendered.contains("Issue coordinator"));
     assert!(rendered.contains("MODEL_GUIDANCE_MARKER"));
     assert!(
+        request
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "tool_search")
+    );
+    assert!(
         !request
             .tools
             .iter()
-            .any(|tool| tool.name.as_str() == "write_file")
+            .any(|tool| tool.name.as_str().ends_with("__issue_read"))
+    );
+    let after_search = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(
+        after_search
+            .tools
+            .iter()
+            .filter(|tool| tool.name.as_str().ends_with("__issue_read"))
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        ["copilot__issue_read"]
+    );
+    let after_read = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert!(
+        serde_json::to_string(&after_read)
+            .unwrap()
+            .contains("fixture issue details")
     );
     let snapshot = threads.read_thread(&thread_id).unwrap();
     assert!(matches!(

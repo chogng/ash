@@ -26,7 +26,7 @@ impl super::AppServer {
         agent::resolve_root_agent(
             selection,
             self.model_catalog.configured_default()?,
-            self.agent_runtime().tool_profile()?.tool_names,
+            self.agent_runtime().agent_tool_catalog(),
             &roles,
             &instructions,
             self.skills.as_deref(),

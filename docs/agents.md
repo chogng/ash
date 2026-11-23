@@ -110,6 +110,7 @@ delegates: []
 - 内置格式的 `version` 是定义内容版本；提示词、工具、Skill、模型、上下文、启动范围或能力上限变化都必须提升，并与完整内容摘要一起冻结。自定义来源继续使用 catalog generation 与内容摘要表达版本身份。
 - `specialties` 描述角色擅长解决的问题，用于路由和评测，不产生执行权限。
 - `tools` 省略时继承调用方的下放工具上限，存在时是精确白名单；`disallowedTools` 从继承或白名单结果中删除工具，任何形式都不能扩大调用方的下放上限。
+- `optionalTools` 在工具可用且获准时将其加入自身白名单。`toolSets` 在启动时把产品工具集展开为当前获准的精确工具名。每个指定工具集必须至少有一个成员通过调用方上限和角色禁用项的过滤。
 - `requiredTools` 只做启动前检查，缺少任一工具就不创建；它不授予工具，也不改变最终可见集合。
 - `delegationTools`、`disallowedDelegationTools` 和 `requiredDelegationTools` 使用相同的白名单、黑名单和启动门禁语义，但只决定该 Agent 能向直接子 Agent 下放的工具上限；省略 `delegationTools` 表示继承调用方的下放上限。自身 Tool 与下放 Tool 互不隐含，二者都不能越过任何祖先的下放上限。
 - 委托的 `skills` 省略时继承调用方已经激活的 Skill，存在时只保留列出的 Skill；根角色从已授权 catalog 解析声明的 Skill。`requiredSkills` 不授予权限，缺失时创建失败。
@@ -219,7 +220,9 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 `develop/acceptance` 的浏览器工具不是每次全部加载。工作流从已接受 Spec 的验证方法推导本次必需工具，并在创建时冻结实际子集；任何必需工具不可用时验收阻塞，不能删掉该验收项继续通过。
 
-表格中的 `browser_*` 是阅读缩写，实际 Role frontmatter 必须逐项列出允许的浏览器工具。当前 `ToolDefinition` 没有来源可信、可签名的“只读/修改”动作 metadata，因此通用专化角色不动态接入 Connector；`issue` 是明确绑定 GitHub Skill 的协调角色，仍只能从调用方当前已授权的 `search_tools` 与 `call_mcp_tool` 上限中收窄，具体外部写操作继续经过工具策略和批准。
+表格中的 `browser_*` 是阅读缩写，实际 Role frontmatter 必须逐项列出允许的浏览器工具。通用专化角色通过声明的工具范围使用 Connector。
+
+`issue` 绑定 GitHub Skill 和 `core.github.issues` 工具集。App Server 从已连接的[官方 GitHub MCP 服务](https://github.com/github/github-mcp-server#remote-github-mcp-server)识别 Issue 工具，角色启动时冻结当前获准的精确名称。延迟工具通过 `tool_search` 加载，MCP 调用沿用现有工具审批。旧版本的 Issue 会话需要重新选择角色创建会话才能使用该工具集。
 
 ### 5.3 Intent 私有角色
 

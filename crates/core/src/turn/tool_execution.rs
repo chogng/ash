@@ -528,15 +528,10 @@ impl ToolExecutionOrchestrator {
         authorization: &ToolAuthorization,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let snapshot = self.threads.read_thread(context.thread_id)?;
-        let facts = ToolExecutionFacts::for_turn(
-            &snapshot,
-            context.turn_id,
-            self.tools
-                .definitions()
-                .into_iter()
-                .map(|definition| definition.name),
-        )?
-        .with_reviewed_action(reviewed);
+        let catalog = self.tools.agent_tool_catalog();
+        let facts = ToolExecutionFacts::for_turn(&snapshot, context.turn_id, catalog.tools)?
+            .with_reviewed_action(reviewed)
+            .with_delegation_tool_sets(catalog.sets);
         if !facts.allows_tool(&call.name) {
             return Err(CoreError::Policy(format!(
                 "Tool '{}' is outside the current capability scope",

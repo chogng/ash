@@ -276,15 +276,16 @@ impl SearchIndex {
         self.documents
             .iter()
             .filter(|document| !excluded.contains(entries[document.entry_index].definition.name()))
-            .filter(|document| regex.is_match(&document.text))
-            .map(|document| {
+            .filter_map(|document| {
                 let name = entries[document.entry_index].definition.name().as_str();
                 let score = if regex.is_match(name) {
                     1_000_000
-                } else {
+                } else if regex.is_match(&document.text) {
                     100_000
+                } else {
+                    return None;
                 };
-                (document.entry_index, score)
+                Some((document.entry_index, score))
             })
             .collect()
     }

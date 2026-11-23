@@ -248,7 +248,7 @@ impl Runtime<'_> {
                     name: transition.work.stage.role().into(),
                 },
                 request.model.as_ref(),
-                ceiling,
+                ceiling.into(),
                 &request.activated_skills,
                 &[agent_roles::built_in_roles()],
                 &[],

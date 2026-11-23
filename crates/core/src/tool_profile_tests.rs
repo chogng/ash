@@ -28,10 +28,10 @@ fn profile_digest_is_stable_and_order_sensitive() {
         first.definition_digest,
         "sha256:25cfb1c83f13d99c467071270a386191fbe6697f16a76a1f7f0d631a2340ed77"
     );
-    assert!(validate_tool_profile_definitions(&first, &definitions).is_ok());
+    assert!(validate_tool_profile_definitions(&first, &definitions, &crate::NoTools).is_ok());
 
     let reversed = definitions.into_iter().rev().collect::<Vec<_>>();
-    assert!(validate_tool_profile_definitions(&first, &reversed).is_err());
+    assert!(validate_tool_profile_definitions(&first, &reversed, &crate::NoTools).is_err());
 }
 
 #[test]

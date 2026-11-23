@@ -309,7 +309,7 @@ fn root_agent_can_explicitly_reference_on_demand_user_instruction() {
             name: "reviewer".into(),
         },
         None,
-        Vec::new(),
+        Default::default(),
         &[roles],
         &contributions.instruction_snapshots(),
         None,

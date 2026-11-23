@@ -155,11 +155,11 @@ fn model_step_uses_only_its_own_items_when_turns_interleave() {
     assert_eq!(first_step.sequence, second_step.sequence);
     assert!(first_step.first_query.is_none());
     assert_eq!(first_step.read_paths, [PathBuf::from("first.rs")]);
-    let [(call, text)] = first_step.tool_results.as_slice() else {
+    let [result] = first_step.tool_results.as_slice() else {
         panic!("expected exactly one completed tool call");
     };
-    assert_eq!(call.id, first_call.tool_call_id);
-    assert_eq!(text, "first result");
+    assert_eq!(result.call.id, first_call.tool_call_id);
+    assert_eq!(result.text, "first result");
 }
 
 #[test]

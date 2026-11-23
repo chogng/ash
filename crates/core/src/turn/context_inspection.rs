@@ -98,11 +98,12 @@ impl TurnExecutor {
             },
             additional,
         );
-        let activated = match (snapshot.as_ref(), latest) {
-            (Some(snapshot), Some(turn)) => super::executor::activated_tool_names(
-                self.tools.as_ref(),
-                &snapshot.items,
-                &turn.turn_id,
+        let tool_results = match (snapshot.as_ref(), latest) {
+            (Some(snapshot), Some(turn)) => crate::services::tool_activation_results(
+                snapshot
+                    .items
+                    .iter()
+                    .filter(|item| item.turn_id() == &turn.turn_id),
             )?,
             _ => Default::default(),
         };
@@ -116,7 +117,7 @@ impl TurnExecutor {
             )
         });
         let catalog = self.context_tool_catalog(
-            &activated,
+            &tool_results,
             live_turn,
             request.tool_mode,
             Some(&request.instructions),

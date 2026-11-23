@@ -3874,10 +3874,9 @@ impl ToolService for DeferredWeatherTools {
 
     fn activated_tool_names(
         &self,
-        call: &ToolCall,
-        result: &str,
+        result: &ToolActivationResult<'_>,
     ) -> Result<Vec<ToolName>, CoreError> {
-        if call.name.as_str() == "tool_search" && result == "weather loaded" {
+        if result.call.name.as_str() == "tool_search" && result.text == "weather loaded" {
             Ok(vec![ToolName::new("weather").unwrap()])
         } else {
             Ok(Vec::new())
@@ -4429,43 +4428,40 @@ fn long_thread_model_step_benchmark() {
 
         let executor =
             TurnExecutor::without_tools(threads.clone(), Arc::new(ScriptedModel::new([])));
-        let read_full_snapshot = || {
-            let snapshot = threads.read_thread(&thread_id).unwrap();
-            let activated =
-                activated_tool_names(executor.tools.as_ref(), &snapshot.items, &turn_id).unwrap();
-            let turn = snapshot
-                .turns
-                .iter()
-                .find(|turn| turn.turn_id == turn_id)
-                .unwrap();
-            let catalog = executor
-                .context_tool_catalog(
-                    &activated,
-                    Some(turn),
-                    turn.tool_mode,
-                    turn.instructions.as_ref(),
+        let read_full_snapshot =
+            || {
+                let snapshot = threads.read_thread(&thread_id).unwrap();
+                let tool_results = crate::services::tool_activation_results(
+                    snapshot
+                        .items
+                        .iter()
+                        .filter(|item| item.turn_id() == &turn_id),
                 )
                 .unwrap();
-            let read_paths = crate::services::read_paths_for_turn(&snapshot, &turn_id);
-            // The active Turn already has a Tool Call, so it has no first-invocation query.
-            assert!(
-                snapshot.items.iter().any(|item| item.turn_id() == &turn_id
-                    && matches!(item, ThreadItem::ToolCall { .. }))
-            );
-            (catalog, read_paths, None)
-        };
+                let turn = snapshot
+                    .turns
+                    .iter()
+                    .find(|turn| turn.turn_id == turn_id)
+                    .unwrap();
+                let catalog = executor
+                    .context_tool_catalog(
+                        &tool_results,
+                        Some(turn),
+                        turn.tool_mode,
+                        turn.instructions.as_ref(),
+                    )
+                    .unwrap();
+                let read_paths = crate::services::read_paths_for_turn(&snapshot, &turn_id);
+                // The active Turn already has a Tool Call, so it has no first-invocation query.
+                assert!(snapshot.items.iter().any(|item| item.turn_id() == &turn_id
+                    && matches!(item, ThreadItem::ToolCall { .. })));
+                (catalog, read_paths, None)
+            };
         let read_step = || {
             let step = threads.read_model_step(&thread_id, &turn_id).unwrap();
-            let activated = activate_tools(
-                executor.tools.as_ref(),
-                step.tool_results
-                    .iter()
-                    .map(|(call, text)| (call, text.as_str())),
-            )
-            .unwrap();
             let catalog = executor
                 .context_tool_catalog(
-                    &activated,
+                    &step.tool_results,
                     Some(&step.turn),
                     step.turn.tool_mode,
                     step.turn.instructions.as_ref(),

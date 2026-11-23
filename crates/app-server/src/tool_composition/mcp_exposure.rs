@@ -37,6 +37,7 @@ use sha2::Sha256;
 
 pub(super) const MCP_SEARCH_TOOLS_NAME: &str = "search_tools";
 pub(super) const MCP_CALL_TOOL_NAME: &str = "call_mcp_tool";
+pub(super) const GITHUB_ISSUE_TOOL_SET: &str = "core.github.issues";
 const MCP_DIRECT_TOOL_LIMIT: usize = 15;
 const MCP_DIRECT_TOKEN_LIMIT: usize = 5_000;
 const MCP_SEARCH_RESULT_LIMIT: usize = 5;
@@ -46,6 +47,39 @@ const MCP_CATALOG_POLICY_REVISION: &str = "mcp-catalog-search-v1";
 pub(super) fn should_defer_mcp_catalog(definitions: &[ToolDefinition]) -> bool {
     definitions.len() > MCP_DIRECT_TOOL_LIMIT
         || estimate_definition_tokens(definitions) > MCP_DIRECT_TOKEN_LIMIT
+}
+
+pub(super) fn is_github_issue_tool(
+    sources: &[ToolSourceProvenance],
+    status: &ash_mcp_extension::McpRuntimeStatusSnapshot,
+) -> bool {
+    sources.iter().any(|source| {
+        let ToolSourceProvenance::Mcp {
+            server_id,
+            remote_name,
+            catalog_generation,
+            connection_generation,
+        } = source
+        else {
+            return false;
+        };
+        // The host obtains the origin from the configured transport. MCP tool metadata and
+        // user-chosen server names cannot claim membership in a product tool set.
+        matches!(
+            remote_name.as_str(),
+            "issue_read"
+                | "list_issues"
+                | "search_issues"
+                | "issue_write"
+                | "add_issue_comment"
+                | "get_label"
+        ) && status.server(server_id).is_some_and(|server| {
+            server.state == ash_mcp_extension::McpServerRuntimeState::Connected
+                && server.http_origin.as_deref() == Some("https://api.githubcopilot.com")
+                && server.catalog_generation == *catalog_generation
+                && server.connection_generation == Some(*connection_generation)
+        })
+    })
 }
 
 pub(super) fn decide_mcp_catalog_search(
@@ -496,7 +530,7 @@ fn digest_json(value: &impl serde::Serialize) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
-fn meta_definitions() -> Vec<ToolDefinition> {
+pub(super) fn meta_definitions() -> Vec<ToolDefinition> {
     // Catalog identity travels in search results and call arguments. Keeping it out of
     // declarations preserves the model's tool prefix when a new catalog is published.
     vec![

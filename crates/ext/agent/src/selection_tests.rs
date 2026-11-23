@@ -65,7 +65,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
             resolve_launched_agent(
                 &selection(name),
                 None,
-                tools.clone(),
+                tools.clone().into(),
                 &[],
                 &catalogs,
                 &[],
@@ -78,7 +78,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     let intent = resolve_launched_agent(
         &selection("develop/intent"),
         None,
-        tools.clone(),
+        tools.clone().into(),
         &[],
         &catalogs,
         &[],
@@ -93,7 +93,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         let investigator = resolve_launched_agent(
             &selection(name),
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &catalogs,
             &[],
@@ -116,7 +116,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         resolve_launched_agent(
             &protocol::AgentRoleSelection::Default,
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &catalogs,
             &[],
@@ -128,7 +128,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         resolve_launched_agent(
             &selection("develop/implementer"),
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &catalogs,
             &[],
@@ -144,7 +144,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         resolve_launched_agent(
             &selection("develop/researcher"),
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &catalogs,
             &[],
@@ -155,7 +155,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     let implementer = resolve_launched_agent(
         &selection("develop/implementer"),
         None,
-        tools.clone(),
+        tools.clone().into(),
         &[],
         &catalogs,
         &[],
@@ -165,7 +165,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     let team = resolve_launched_agent(
         &selection("team/coordinator"),
         None,
-        tools.clone(),
+        tools.clone().into(),
         &[],
         &catalogs,
         &[],
@@ -175,7 +175,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     let worker = resolve_launched_agent(
         &selection("team/implementer"),
         None,
-        tools.clone(),
+        tools.clone().into(),
         &[],
         &catalogs,
         &[],
@@ -195,7 +195,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         resolve_launched_agent(
             &selection("team/reviewer"),
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &catalogs,
             &[],
@@ -207,7 +207,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         resolve_launched_agent(
             &selection("develop/researcher"),
             None,
-            tools,
+            tools.into(),
             &[],
             &catalogs,
             &[],
@@ -447,17 +447,6 @@ fn missing_required_tool_rejects_the_role_before_spawn() {
 
 #[test]
 fn built_in_issue_role_freezes_github_and_coordination_capabilities() {
-    let tools = [
-        "read_file",
-        "search_tools",
-        "call_mcp_tool",
-        "spawn_agent",
-        "send_agent_message",
-        "wait_agent",
-    ]
-    .into_iter()
-    .map(|name| ToolName::new(name).unwrap())
-    .collect();
     let github = FrozenSkillActivation {
         id: SkillId::new(
             SkillSourceId::new("plugin:skill-source:github").unwrap(),
@@ -477,13 +466,14 @@ fn built_in_issue_role_freezes_github_and_coordination_capabilities() {
         reason: SkillActivationReason::Explicit,
     };
 
-    let selected = resolve_agent_selection(
+    let selected = super::resolve_launched_agent(
         &exact("issue"),
         None,
-        tools,
+        issue_tool_catalog(),
         &[github, rust],
         &[agent_roles::built_in_roles()],
         &[],
+        super::AgentLaunch::Session,
     )
     .unwrap();
 
@@ -491,16 +481,23 @@ fn built_in_issue_role_freezes_github_and_coordination_capabilities() {
     let frozen = selected.role.as_ref().unwrap().definition.clone().unwrap();
     assert_eq!(frozen.name, "issue");
     assert_eq!(frozen.source, AgentRoleSource::BuiltIn);
-    assert_eq!(frozen.version, Some(4));
-    assert_eq!(selected.capability_scope.tools.len(), 5);
-    assert!(
+    assert_eq!(frozen.version, Some(5));
+    assert_eq!(
         selected
             .capability_scope
             .tools
             .iter()
-            .all(|tool| tool.as_str() != "read_file")
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        [
+            "spawn_agent",
+            "send_agent_message",
+            "wait_agent",
+            "tool_search",
+            "copilot__issue_read"
+        ]
     );
-    assert_eq!(selected.capability_scope.delegation_tools.len(), 6);
+    assert_eq!(selected.capability_scope.delegation_tools.len(), 7);
     assert!(
         selected
             .capability_scope
@@ -517,6 +514,26 @@ fn built_in_issue_role_freezes_github_and_coordination_capabilities() {
             .instructions
             .contains("Issue coordinator")
     );
+}
+
+#[test]
+fn an_issue_role_cannot_select_set_members_outside_the_delegation_ceiling() {
+    let mut catalog = issue_tool_catalog();
+    catalog
+        .tools
+        .retain(|tool| tool.as_str() != "copilot__issue_read");
+    let error = super::resolve_launched_agent(
+        &exact("issue"),
+        None,
+        catalog,
+        &[],
+        &[agent_roles::built_in_roles()],
+        &[],
+        super::AgentLaunch::Delegation(None),
+    )
+    .err()
+    .expect("the Issue tool set has no authorized members");
+    assert!(error.to_string().contains("set 'core.github.issues'"));
 }
 
 #[test]
@@ -540,24 +557,14 @@ fn built_in_issue_role_does_not_capture_unrelated_delegation() {
 
 #[test]
 fn built_in_issue_role_requires_the_github_skill() {
-    let tools = [
-        "search_tools",
-        "call_mcp_tool",
-        "spawn_agent",
-        "send_agent_message",
-        "wait_agent",
-    ]
-    .into_iter()
-    .map(|name| ToolName::new(name).unwrap())
-    .collect();
-
-    let error = resolve_agent_selection(
+    let error = super::resolve_launched_agent(
         &exact("issue"),
         None,
-        tools,
+        issue_tool_catalog(),
         &[],
         &[agent_roles::built_in_roles()],
         &[],
+        super::AgentLaunch::Session,
     )
     .err()
     .expect("Issue role must require GitHub");
@@ -567,6 +574,27 @@ fn built_in_issue_role_requires_the_github_skill() {
             .to_string()
             .contains("requires inactive Skill 'github'")
     );
+}
+
+fn issue_tool_catalog() -> core_api::AgentToolCatalog {
+    core_api::AgentToolCatalog {
+        tools: [
+            "read_file",
+            "tool_search",
+            "spawn_agent",
+            "send_agent_message",
+            "wait_agent",
+            "copilot__issue_read",
+            "unrelated__issue_read",
+        ]
+        .into_iter()
+        .map(|name| ToolName::new(name).unwrap())
+        .collect(),
+        sets: vec![protocol::ToolSetDefinition {
+            id: "core.github.issues".into(),
+            tools: vec![ToolName::new("copilot__issue_read").unwrap()],
+        }],
+    }
 }
 
 fn exact(name: &str) -> protocol::AgentRoleSelection {

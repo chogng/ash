@@ -34,6 +34,8 @@ pub struct AgentRole {
     relative_path: PathBuf,
     model: Option<String>,
     tools: Option<Vec<String>>,
+    optional_tools: Vec<String>,
+    tool_sets: Vec<String>,
     disallowed_tools: Vec<String>,
     required_tools: Vec<String>,
     delegation_tools: Option<Vec<String>>,
@@ -57,6 +59,8 @@ pub(crate) struct AgentRoleFields {
     pub(crate) relative_path: PathBuf,
     pub(crate) model: Option<String>,
     pub(crate) tools: Option<Vec<String>>,
+    pub(crate) optional_tools: Vec<String>,
+    pub(crate) tool_sets: Vec<String>,
     pub(crate) disallowed_tools: Vec<String>,
     pub(crate) required_tools: Vec<String>,
     pub(crate) delegation_tools: Option<Vec<String>>,
@@ -82,6 +86,8 @@ impl AgentRole {
             relative_path: fields.relative_path,
             model: fields.model,
             tools: fields.tools,
+            optional_tools: fields.optional_tools,
+            tool_sets: fields.tool_sets,
             disallowed_tools: fields.disallowed_tools,
             required_tools: fields.required_tools,
             delegation_tools: fields.delegation_tools,
@@ -136,6 +142,14 @@ impl AgentRole {
 
     pub fn tools(&self) -> Option<&[String]> {
         self.tools.as_deref()
+    }
+
+    pub fn optional_tools(&self) -> &[String] {
+        &self.optional_tools
+    }
+
+    pub fn tool_sets(&self) -> &[String] {
+        &self.tool_sets
     }
 
     pub fn disallowed_tools(&self) -> &[String] {

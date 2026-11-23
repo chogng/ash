@@ -24,6 +24,10 @@ struct Frontmatter {
     model: Option<String>,
     tools: Option<Vec<String>>,
     #[serde(default)]
+    optional_tools: Vec<String>,
+    #[serde(default)]
+    tool_sets: Vec<String>,
+    #[serde(default)]
     disallowed_tools: Vec<String>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -124,6 +128,8 @@ pub(crate) fn parse(
         .any(|values| !valid_references(values))
         || [
             &data.disallowed_tools,
+            &data.optional_tools,
+            &data.tool_sets,
             &data.required_tools,
             &data.disallowed_delegation_tools,
             &data.required_delegation_tools,
@@ -173,6 +179,8 @@ pub(crate) fn parse(
         delegates: data.delegates,
         model: data.model,
         tools: data.tools,
+        optional_tools: data.optional_tools,
+        tool_sets: data.tool_sets,
         disallowed_tools: data.disallowed_tools,
         required_tools: data.required_tools,
         delegation_tools: data.delegation_tools,

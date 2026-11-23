@@ -205,7 +205,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                 name: "develop/intent".into(),
             },
             None,
-            tools.clone(),
+            tools.clone().into(),
             &[],
             &[agent_roles::built_in_roles()],
             &[],

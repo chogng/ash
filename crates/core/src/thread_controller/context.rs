@@ -4,6 +4,7 @@ use super::PrepareModelInvocationRequest;
 use super::ThreadController;
 use crate::ContextBudget;
 use crate::CoreError;
+use crate::ToolActivationResult;
 use crate::TurnSnapshot;
 use crate::context::CONTEXT_ESTIMATOR_REVISION;
 use crate::context::ContextCalibration;
@@ -26,7 +27,6 @@ use ash_protocol::ThreadCommand;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
-use ash_protocol::ToolCall;
 use ash_protocol::TurnId;
 use ash_thread_store::ThreadStoreError;
 use std::path::PathBuf;
@@ -44,7 +44,7 @@ pub(crate) struct ModelStepInputs {
     pub(crate) calibration: Option<ContextCalibration>,
     pub(crate) read_paths: Vec<PathBuf>,
     pub(crate) first_query: Option<String>,
-    pub(crate) tool_results: Vec<(ToolCall, String)>,
+    pub(crate) tool_results: Vec<ToolActivationResult<'static>>,
     pub(crate) needs_continuation_instruction: bool,
 }
 
@@ -71,7 +71,7 @@ impl ThreadController {
                 .collect();
             let tool_results = tool_activation_results(items.iter().copied())?
                 .into_iter()
-                .map(|(call, text)| (call, text.to_owned()))
+                .map(ToolActivationResult::into_owned)
                 .collect();
             let read_paths = successful_read_paths(items.iter().copied())
                 .into_iter()

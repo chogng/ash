@@ -331,11 +331,62 @@ fn repeated_turn_wakeups_remain_interruptible_through_rpc_and_allow_a_new_turn()
 
 #[test]
 fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
+    use crate::tool_composition::ToolPort;
+    use crate::tool_composition::combine_tool_ports;
+    use ash_core::ToolAuthorization;
+    use ash_core::ToolService;
+    use ash_protocol::ToolDefinition;
+    use ash_protocol::ToolExecutionOutput;
+    use ash_tools::ToolExposure;
+
+    struct RoleTools;
+
+    impl ToolService for RoleTools {
+        fn definitions(&self) -> Vec<ToolDefinition> {
+            ["read_pr", "app_only"]
+                .into_iter()
+                .map(|name| ToolDefinition {
+                    name: ToolName::new(name).unwrap(),
+                    description: name.into(),
+                    parameters: json!({"type": "object"}),
+                    strict: false,
+                })
+                .collect()
+        }
+
+        fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+            panic!("selecting a role does not prepare tool calls")
+        }
+
+        fn execute(
+            &self,
+            _: &ToolCall,
+            _: &ToolAuthorization,
+            _: &CancellationToken,
+        ) -> Result<ToolExecutionOutput, CoreError> {
+            panic!("selecting a role does not execute tools")
+        }
+    }
+
+    impl core_api::ActionPolicyService for RoleTools {
+        fn revision(&self) -> String {
+            "role-test".into()
+        }
+
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+            panic!("selecting a role does not authorize tool calls")
+        }
+    }
+
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".ash/agents")).unwrap();
     std::fs::write(
         root.path().join(".ash/agents/reviewer.md"),
-        "---\nname: reviewer\ndescription: Reviews changes\n---\n\nReview changes.",
+        "---\nname: reviewer\ndescription: Reviews changes\ntools: [tool_search, read_pr]\nrequiredTools: [read_pr]\n---\n\nReview changes.",
     )
     .unwrap();
     let grant = ash_file_access::Grant::for_environment(
@@ -349,11 +400,19 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
+    let tools = ToolPort::local(Arc::new(RoleTools), Arc::new(RoleTools))
+        .unwrap()
+        .with_tool_exposure(&ToolName::new("read_pr").unwrap(), ToolExposure::Deferred)
+        .unwrap()
+        .with_tool_exposure(&ToolName::new("app_only").unwrap(), ToolExposure::Hidden)
+        .unwrap();
+    let combined = combine_tool_ports(vec![tools]).unwrap().unwrap();
     let mut server = crate::AppServer::new(
         threads.clone(),
         Arc::new(TextModel),
         ash_app_server_diff::compute,
-    );
+    )
+    .with_tool_service(combined.tools, combined.policy);
     let contributions = super::dir_contributions::DirContributions::discover(
         root.path(),
         server.env_runtime_mut().dir_grants.clone(),
@@ -436,15 +495,23 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     let thread = threads
         .read_thread(&ThreadId::new(session_id).unwrap())
         .unwrap();
+    let agent = thread.agent_configuration().unwrap();
+    assert_eq!(agent.role.as_ref().unwrap().name, "reviewer");
     assert_eq!(
-        thread
-            .agent_configuration()
-            .unwrap()
-            .role
-            .as_ref()
-            .unwrap()
-            .name,
-        "reviewer"
+        agent
+            .capability_scope
+            .tools
+            .iter()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        ["tool_search", "read_pr"]
+    );
+    assert!(
+        !agent
+            .capability_scope
+            .delegation_tools
+            .iter()
+            .any(|name| name.as_str() == "app_only")
     );
     grant.revoke();
     let revoked = call(4, "agent/roles/list", json!({}));

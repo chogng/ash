@@ -74,6 +74,7 @@ pub use services::NoThreadUpdates;
 pub use services::NoTools;
 pub use services::OneTimeToolGrant;
 pub use services::PermissionBypassToolGrant;
+pub use services::ToolActivationResult;
 pub use services::ToolAuthorization;
 pub use services::ToolExecutionFacts;
 pub use services::ToolExecutionIdentity;

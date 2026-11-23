@@ -186,32 +186,21 @@ ToolProfile = 默认 coding profile + MCP 暴露策略
 编辑选择：
   跨位置、跨文件、函数重写、接口迁移 → apply_patch（默认）
   唯一字符串微编辑、单个常量、窄 patch 上下文失配 → edit（微编辑/降级）
-MCP（按 §6 阈值）：直接平铺 或 search_tools + call_mcp_tool
+MCP（按 §6 阈值）：直接加载或通过 tool_search 发现
 ```
 
 逐工具规格（schema、描述正文、校验、错误文案、限幅、capability 注记）：
 [`agent-tools-spec.md`](agent-tools-spec.md)。
 
-Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile，并把精确工具顺序、schema/description revision 和并行调用设置冻结进本 Turn。默认使用模型中立的 coding profile；切换模型本身不会推断或切换另一套编辑工具。若以后引入有证据支持的候选 profile，显式配置变化也只影响新 Turn；历史中的 Tool Call/Result 继续作为 transcript，只有当前可调用集合必须匹配冻结 profile。
+Host 在接受 Turn 时冻结 ToolProfile 中的工具顺序、schema、description revision 和并行调用设置。默认采用模型中立的 coding profile。延迟目录清空后，已隐藏的搜索和转调入口仍可用固定定义校验原清单。模型只收到当前可用的冻结工具和通过校验的搜索结果，历史 Tool Call 和 Tool Result 继续保留在 transcript 中。
 
 `parallel_tool_calls` 是 profile 属性：默认 coding profile 允许模型一次响应发多个 Tool Call，执行侧仍按现有调度器和 durable 调用顺序串行，避免并行写副作用。
 
 ## 6. 工具注册时机
 
-| 方案                           | 结论                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| 全量平铺（Codex 式）           | ✅ 内置工具 + 小规模 MCP 采用                                            |
-| 检索式（Claude ToolSearch 式） | ✅ MCP 超阈值采用                                                        |
-| 运行时动态增删                 | ❌ 不采纳：打破 Turn 冻结、每次变化击穿缓存、审批/恢复无法绑定稳定工具面 |
-
-规则：
-
-1. 内置工具静态平铺，Turn 接受时随 profile 冻结；
-2. MCP 聚合定义 ≤ 15 个工具且 ≤ 5k tokens 时平铺进冻结集；超阈值整体切检索式——注入
-   `search_tools` + `call_mcp_tool` 两个元工具，被发现的定义以 reminder append 进历史
-   （不改 tools 数组，保前缀）；
-3. 配置/MCP server 变化走 [工具系统](tools/tools.md) §7 的 registry snapshot，只在 Turn 边界
-   推进。
+- MCP 聚合目录最多 15 个工具且定义不超过 5,000 估算 tokens 时直接加载工具。超出任一阈值时延迟加载整个 MCP 目录。
+- `tool_search` 查找获准的延迟工具。通过校验的定义加入下一次模型请求。`search_tools` 和 `call_mcp_tool` 提供 MCP 兼容入口。
+- 配置和 MCP 服务变化在模型调用安全点应用。每次模型请求绑定一份工具目录快照。[工具系统](tools/tools.md)
 
 ## 7. Turn 内循环与失败策略
 

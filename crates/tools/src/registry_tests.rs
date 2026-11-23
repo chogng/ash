@@ -243,6 +243,14 @@ fn regex_search_matches_complete_deferred_documents() {
         result.matches()[0].loadable().definition().name().as_str(),
         "github_create_pull_request"
     );
+    let result = snapshot.search(
+        &ToolSearchQuery::regex("^github_list_issues$", ToolSearchLimit::default()).unwrap(),
+    );
+    assert_eq!(result.matches().len(), 1);
+    assert_eq!(
+        result.matches()[0].loadable().definition().name().as_str(),
+        "github_list_issues"
+    );
 }
 
 #[test]

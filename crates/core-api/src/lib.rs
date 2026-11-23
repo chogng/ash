@@ -81,6 +81,7 @@ pub use policy::ApprovalRecordEffect;
 pub use policy::ReviewEnvironmentService;
 pub use runtime::AcceptedCommand;
 pub use runtime::AgentRuntime;
+pub use runtime::AgentToolCatalog;
 pub use runtime::CompactThreadRequest;
 pub use runtime::ContextInspection;
 pub use runtime::ContextInspectionRequest;

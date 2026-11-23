@@ -34,11 +34,28 @@ use ash_protocol::ToolMode;
 use ash_protocol::ToolName;
 use ash_protocol::ToolProfileSnapshot;
 use ash_protocol::ToolScope;
+use ash_protocol::ToolSetDefinition;
 use ash_protocol::TurnId;
 use ash_protocol::TurnInstructions;
 use ash_protocol::TurnKind;
 use ash_protocol::UserInput;
 use std::collections::BTreeMap;
+
+/// Model-callable tools and product-authored sets available for Agent role selection.
+#[derive(Debug, Default)]
+pub struct AgentToolCatalog {
+    pub tools: Vec<ToolName>,
+    pub sets: Vec<ToolSetDefinition>,
+}
+
+impl From<Vec<ToolName>> for AgentToolCatalog {
+    fn from(tools: Vec<ToolName>) -> Self {
+        Self {
+            tools,
+            sets: Vec::new(),
+        }
+    }
+}
 
 /// Durable metadata for the messages visible in a Thread history snapshot.
 pub struct ThreadTranscriptMetadata {
@@ -365,6 +382,8 @@ pub trait AgentRuntime {
         reason: InteractionCancelReason,
     ) -> Result<(), CoreError>;
     fn tool_profile(&self) -> Result<ToolProfileSnapshot, CoreError>;
+    /// Returns the catalog from which a newly resolved Agent role can select tools.
+    fn agent_tool_catalog(&self) -> AgentToolCatalog;
     /// Resolves a product selection against this environment's complete tool catalog.
     fn resolve_tool_scope(&self, scope: &ToolScope) -> Result<Vec<ToolName>, CoreError>;
     fn recover_agents(&self) -> Result<usize, CoreError>;
