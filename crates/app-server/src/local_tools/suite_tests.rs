@@ -1674,6 +1674,45 @@ impl core_api::ModelService for DocumentWorkflowModel {
                 _ => None,
             })
             .collect::<Vec<_>>();
+        if matches!(&request.input[turn_start], ash_protocol::InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text == "find and rename symbol")))
+        {
+            let item = match results.as_slice() {
+                [] => ash_protocol::ResponseItem::ToolCall(tool_call(
+                    "find_symbol_references",
+                    json!({"path":self.path,"line":1,"column":1}),
+                )),
+                [lookup] => {
+                    assert!(!lookup.is_error, "{lookup:?}");
+                    let result = lookup
+                        .content
+                        .iter()
+                        .find_map(|part| match part {
+                            ash_protocol::ContentPart::Text(text) => {
+                                serde_json::from_str::<Value>(text).ok()
+                            }
+                            _ => None,
+                        })
+                        .expect("references result");
+                    assert_eq!(result["references"].as_array().unwrap().len(), 1);
+                    assert_eq!(result["references"][0]["line"], 1);
+                    ash_protocol::ResponseItem::ToolCall(tool_call(
+                        "rename_symbol",
+                        json!({"path":self.path,"line":1,"column":1,"symbol":"rewritten","new_name":"renamed"}),
+                    ))
+                }
+                [_, renamed] => {
+                    assert!(!renamed.is_error, "{renamed:?}");
+                    ash_protocol::ResponseItem::Text("renamed".into())
+                }
+                _ => panic!("unexpected symbol tool results: {results:?}"),
+            };
+            return Ok(ash_protocol::ModelResponse {
+                output: vec![item],
+                usage: None,
+                billing: None,
+                stop_reason: ash_protocol::StopReason::Completed,
+            });
+        }
         if matches!(&request.input[turn_start], ash_protocol::InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ash_protocol::ContentPart::Text(text) if text == "write without reading again")))
         {
             if results.is_empty() {
@@ -1798,7 +1837,7 @@ impl crate::model_catalog::ModelCatalog for SelectedDocumentModel {
 }
 
 #[test]
-fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originating_document() {
+fn rpc_agent_tools_use_unsaved_symbols_and_edit_through_the_originating_document() {
     use crate::server::AppServer;
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("file.txt");
@@ -1861,15 +1900,24 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
     );
     let mut live_text = "unsaved\r\n".to_string();
     let mut edits = 0;
-    for turn_index in 0..2 {
-        if turn_index == 1 {
+    let mut renames = 0;
+    let outside = tempfile::tempdir().unwrap();
+    for (turn_index, followup) in [
+        None,
+        Some("write without reading again"),
+        Some("find and rename symbol"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if let Some(followup) = followup {
             let snapshot = threads
                 .read_thread(&ash_protocol::ThreadId::new(session).unwrap())
                 .unwrap();
             call(
                 &mut origin,
                 "session/request",
-                json!({"commandId":"documents-next-turn","sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":snapshot.sequence,"input":[{"type":"text","text":"write without reading again"}]}}),
+                json!({"commandId":format!("documents-turn-{turn_index}"),"sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":snapshot.sequence,"input":[{"type":"text","text":followup}]}}),
             );
         }
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -1882,6 +1930,33 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
                     }
                     Some("textDocument/read") => {
                         json!({"kind":"document","snapshot":"snapshot-1","text":live_text})
+                    }
+                    Some("textDocument/references") => {
+                        assert_eq!(
+                            request["params"]["position"],
+                            json!({"lineIndex":0,"columnIndex":0})
+                        );
+                        let range = json!({"start":{"lineIndex":0,"columnIndex":0},"end":{"lineIndex":0,"columnIndex":9}});
+                        json!({"kind":"references","truncated":false,"locations":[
+                            {"path":request["params"]["path"],"range":range,"selectionRange":range},
+                            {"path":outside.path().join("private.txt"),"range":range,"selectionRange":range}
+                        ]})
+                    }
+                    Some("textDocument/prepareRename") => {
+                        assert_eq!(request["params"]["symbol"], "rewritten");
+                        assert_eq!(request["params"]["newName"], "renamed");
+                        json!({"kind":"prepared","paths":[request["params"]["target"]["path"]]})
+                    }
+                    Some("textDocument/applyRename") => {
+                        call(
+                            &mut origin,
+                            "textDocument/confirmRename",
+                            json!({"access":request["params"]["access"]}),
+                        );
+                        live_text = "renamed\r\n".into();
+                        fs::write(&path, &live_text).unwrap();
+                        renames += 1;
+                        json!({"kind":"applied"})
                     }
                     Some("textDocument/apply") => {
                         assert_eq!(request["params"]["changes"][0]["kind"], "update");
@@ -1942,8 +2017,8 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
             std::thread::sleep(Duration::from_millis(5));
         }
     }
-    assert_eq!((edits, live_text.as_str()), (2, "rewritten\r\n"));
-    assert_eq!(fs::read_to_string(&path).unwrap(), "rewritten\r\n");
+    assert_eq!((edits, renames, live_text.as_str()), (2, 1, "renamed\r\n"));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "renamed\r\n");
     server.close_connection(origin);
     server.close_connection(other);
 }

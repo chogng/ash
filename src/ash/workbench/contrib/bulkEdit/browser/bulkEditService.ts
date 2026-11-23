@@ -157,6 +157,10 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			&& edits.every((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && edit.resource.toString() === editorModel.uri.toString())) {
 			// Embedded inputs own their models, not a persisted file. Keep their text,
 			// cursor history and reference metadata on that exact model's undo stack.
+			if (options.validateBeforeCommit) {
+				await options.validateBeforeCommit();
+				throwIfCancelled(signal);
+			}
 			return this.applyToEmbeddedEditor(options.editor!, editorModel, edits, signal);
 		}
 		const binaryCreates = new Map<number, VSBuffer>();
@@ -258,6 +262,12 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				prepared.push(await this.preflight(entry, states, acquired, signal, binaryCreates.get(index)?.buffer));
 			}
 			const operations = prepared.filter(operation => operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies);
+			if (operations.length && options.validateBeforeCommit) {
+				const authoritySignal = options.token ?? signal;
+				throwIfCancelled(authoritySignal);
+				await options.validateBeforeCommit();
+				throwIfCancelled(authoritySignal);
+			}
 			const undo: UndoOperation[] = [];
 			progress?.report({ total: operations.length, increment: 0 });
 			try {

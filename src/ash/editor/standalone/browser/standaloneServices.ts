@@ -119,6 +119,12 @@ export class StandaloneBulkEditService implements IBulkEditService {
 			byModel.set(model, group);
 		}
 		if (options.token?.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
+		if (options.validateBeforeCommit) {
+			const versions = [...byModel.keys()].map(model => [model, model.getVersionId()] as const);
+			await options.validateBeforeCommit();
+			if (options.token?.aborted) return { ariaSummary: 'No edits were applied', isApplied: false };
+			if (versions.some(([model, version]) => model.getVersionId() !== version)) throw new Error('Workspace edit target changed');
+		}
 		const applied = new Map<ITextModel, { readonly text: string; readonly alternativeVersionId: number; }>();
 		try {
 			for (const [model, group] of byModel) {

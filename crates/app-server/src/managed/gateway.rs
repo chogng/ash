@@ -967,6 +967,7 @@ fn tag_route_response(response: String, route_id: usize) -> String {
 enum GatewayHandleKind {
     Resource,
     DocumentRead,
+    DocumentRename,
     GitRepository,
 }
 
@@ -975,6 +976,7 @@ impl GatewayHandleKind {
         match self {
             Self::Resource => "gateway-resource:",
             Self::DocumentRead => "gateway-document:",
+            Self::DocumentRename => "gateway-rename:",
             Self::GitRepository => "gateway-git:",
         }
     }
@@ -983,6 +985,7 @@ impl GatewayHandleKind {
         match self {
             Self::Resource => "/params/resourceId",
             Self::DocumentRead => "/params/readAccess",
+            Self::DocumentRename => "/params/access",
             Self::GitRepository => "/params/repositoryId",
         }
     }
@@ -1011,6 +1014,7 @@ impl GatewayHandleKind {
             "fs/readFile" if request.pointer(Self::DocumentRead.field())?.is_string() => {
                 Some(Self::DocumentRead)
             }
+            "textDocument/confirmRename" => Some(Self::DocumentRename),
             "resource/metadata" | "resource/read" | "resource/release" | "pdf/openResource" => {
                 Some(Self::Resource)
             }
@@ -1031,6 +1035,7 @@ impl GatewayHandleKind {
         let (code, name) = match self {
             Self::Resource => (-32000, AppServerErrorName::ResourceNotOwner),
             Self::DocumentRead => (-32041, AppServerErrorName::FileSystemOperationFailed),
+            Self::DocumentRename => (-32044, AppServerErrorName::FileSystemPermissionDenied),
             Self::GitRepository => (-32602, AppServerErrorName::GitRepositoryNotFound),
         };
         serde_json::to_string(&JsonRpcFailure::new(
@@ -1351,13 +1356,23 @@ fn tag_host_request(raw: String, route_id: usize) -> String {
         if let Some(id) = message.get("id").and_then(Value::as_str) {
             let tagged = format!("browser-host:gateway:{route_id}:{id}");
             message["id"] = Value::String(tagged);
-            if message["method"] == "textDocument/read" {
-                if let Some(access) = message.pointer_mut("/params/readAccess") {
-                    if let Some(value) = access.as_str() {
-                        *access =
-                            Value::String(GatewayHandleKind::DocumentRead.encode(route_id, value));
-                    }
+            let proof = match message["method"].as_str() {
+                Some("textDocument/read" | "textDocument/references") => {
+                    Some((GatewayHandleKind::DocumentRead, "/params/readAccess"))
                 }
+                Some("textDocument/prepareRename") => {
+                    Some((GatewayHandleKind::DocumentRead, "/params/target/readAccess"))
+                }
+                Some("textDocument/applyRename") => {
+                    Some((GatewayHandleKind::DocumentRename, "/params/access"))
+                }
+                _ => None,
+            };
+            if let Some((kind, field)) = proof
+                && let Some(access) = message.pointer_mut(field)
+                && let Some(value) = access.as_str()
+            {
+                *access = Value::String(kind.encode(route_id, value));
             }
             return message.to_string();
         }

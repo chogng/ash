@@ -1,5 +1,7 @@
 use crate::JsonSchema;
 use crate::TS;
+use crate::protocol::language::LanguageLocationDto;
+use crate::protocol::language::LanguagePositionDto;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use serde::Deserialize;
@@ -20,6 +22,66 @@ pub enum TextDocumentReadResult {
     Document { snapshot: String, text: String },
     NotFound,
     Failed { message: String },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextDocumentSymbolParams {
+    pub path: String,
+    pub read_access: String,
+    pub position: LanguagePositionDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum TextDocumentReferencesResult {
+    /// Renderer locations have absolute paths. The tool filters them against the caller's grants.
+    References {
+        #[schemars(length(max = 1024))]
+        locations: Vec<LanguageLocationDto>,
+        truncated: bool,
+    },
+    Unavailable,
+    Conflict,
+    Failed {
+        message: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextDocumentPrepareRenameParams {
+    pub snapshot: String,
+    pub target: TextDocumentSymbolParams,
+    pub symbol: String,
+    pub new_name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum TextDocumentPrepareRenameResult {
+    Prepared {
+        #[schemars(length(min = 1, max = 128))]
+        paths: Vec<std::path::PathBuf>,
+    },
+    Unavailable,
+    Conflict,
+    Failed {
+        message: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextDocumentApplyRenameParams {
+    pub snapshot: String,
+    pub access: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextDocumentConfirmRenameParams {
+    pub access: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

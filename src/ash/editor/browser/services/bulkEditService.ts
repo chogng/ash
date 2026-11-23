@@ -105,6 +105,8 @@ export interface IBulkEditOptions {
 	readonly editor?: ICodeEditor;
 	readonly progress?: { report(value: unknown): void; };
 	readonly token?: AbortSignal;
+	/** Checks application authority after preview and preflight, immediately before mutation. */
+	readonly validateBeforeCommit?: () => Promise<void>;
 	readonly showPreview?: boolean;
 	readonly label?: string;
 	readonly code?: string;

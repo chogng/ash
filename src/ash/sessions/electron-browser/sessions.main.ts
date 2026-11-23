@@ -318,6 +318,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'workbench.contrib.bulkEditPreview',
 					'sessions.artifactAutoSave',
 					'sessions.docs.resourceOpener',
 					'sessions.docs.backup',

@@ -56,6 +56,105 @@ fn next_request(outbound: &NotificationQueue) -> Value {
 }
 
 #[test]
+fn references_are_requested_only_from_the_turns_editor() {
+    let (clients, host, outbound, thread_id, turn) = bound_host();
+    let docs = host
+        .connection_for_turn(&thread_id, &turn)
+        .unwrap()
+        .unwrap();
+    let dir = ash_file_access::Dir::open_local(std::env::current_dir().unwrap()).unwrap();
+    let path = dir.canonical_path().join("source.rs");
+    let grant = ash_file_access::Grant::for_environment(
+        dir,
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+    );
+    let authorization = grant
+        .authorize(ash_file_access::Permission::ReadFiles)
+        .unwrap();
+    let worker = thread::spawn(move || {
+        docs.references(
+            &path,
+            LanguagePositionDto {
+                line_index: 2,
+                column_index: 5,
+            },
+            &authorization,
+            &CancellationSource::new().token(),
+        )
+    });
+    let request = next_request(&outbound);
+    assert_eq!(request["method"], "textDocument/references");
+    assert_eq!(
+        request["params"]["position"],
+        json!({"lineIndex":2,"columnIndex":5})
+    );
+    let response = json!({"jsonrpc":"2.0", "id":request["id"], "result":{"kind":"references","locations":[],"truncated":false}});
+    assert!(clients.handle_response(8, response.clone()).is_err());
+    clients.handle_response(7, response).unwrap();
+    assert!(
+        matches!(worker.join().unwrap().unwrap(), TextDocumentReferencesResult::References { locations, truncated: false } if locations.is_empty())
+    );
+}
+
+#[test]
+fn rename_commit_requires_the_owning_editor_and_a_live_write_grant() {
+    let (clients, host, outbound, thread_id, turn) = bound_host();
+    let directory = tempfile::tempdir().unwrap();
+    let dir = ash_file_access::Dir::open_local(directory.path()).unwrap();
+    let relative = PathBuf::from("symbol.rs");
+    let target = dir.canonical_path().join(&relative);
+    std::fs::write(&target, "fn old_name() {}").unwrap();
+    for revoked in [false, true] {
+        let docs = host
+            .connection_for_turn(&thread_id, &turn)
+            .unwrap()
+            .unwrap();
+        let grant = ash_file_access::Grant::for_environment(
+            dir.clone(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([ash_file_access::Permission::WriteFiles]),
+        );
+        let authorization = grant
+            .authorize(ash_file_access::Permission::WriteFiles)
+            .unwrap();
+        let write_target = RenameWriteTarget {
+            relative: relative.clone(),
+            canonical: target.clone(),
+            authorization,
+        };
+        let worker = thread::spawn(move || {
+            docs.apply_rename(
+                "prepared".into(),
+                vec![write_target],
+                &CancellationSource::new().token(),
+            )
+        });
+        let request = next_request(&outbound);
+        assert_eq!(request["method"], "textDocument/applyRename");
+        let access = request["params"]["access"].as_str().unwrap();
+        assert!(host.confirm_rename(8, access).is_err());
+        if revoked {
+            grant.revoke();
+        }
+        assert_eq!(host.confirm_rename(7, access).is_err(), revoked);
+        assert!(host.confirm_rename(7, access).is_err());
+        clients
+            .handle_response(
+                7,
+                json!({"jsonrpc":"2.0", "id":request["id"], "result":{"kind":"applied"}}),
+            )
+            .unwrap();
+        let result = worker.join().unwrap();
+        if revoked {
+            assert!(matches!(result, Err(TextDocumentError::Failed(_))));
+        } else {
+            assert!(matches!(result, Ok(TextDocumentApplyResult::Applied)));
+        }
+    }
+}
+
+#[test]
 fn document_reads_and_commits_use_the_exact_initiating_connection() {
     let (clients, host, outbound, thread_id, turn) = bound_host();
     let editor = authorized_editor(host.for_turn(&thread_id, &turn).unwrap().unwrap());

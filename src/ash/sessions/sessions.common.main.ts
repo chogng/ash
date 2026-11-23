@@ -70,6 +70,7 @@ import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.
 import '../workbench/contrib/comments/browser/comments.contribution.js';
 import '../workbench/contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
+import { registerBulkEditView } from '../workbench/contrib/bulkEdit/browser/preview/bulkEdit.contribution.js';
 import '../workbench/contrib/trace/browser/trace.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
@@ -116,6 +117,7 @@ import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
 import { registerMemoryManagement } from '../workbench/contrib/memories/browser/memories.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
+import { ViewContainerLocation } from '../workbench/common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
 import { MenusRegistry } from '../platform/actions/common/actions.js';
 import { ICommandService } from '../platform/commands/common/commands.js';
@@ -148,6 +150,7 @@ activateEditorFeatures();
 
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);
+registerBulkEditView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);

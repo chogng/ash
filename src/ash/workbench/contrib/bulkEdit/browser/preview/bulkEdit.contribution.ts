@@ -5,7 +5,7 @@ import { IBulkEditService, type ResourceEdit } from '../../../../../editor/brows
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
-import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { BulkEditPane } from './bulkEditPane.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -41,9 +41,9 @@ for (const action of previewActions) {
 	});
 }
 
-/** Registers the Workbench panel that hosts the transient bulk-edit preview. */
-export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: 'Refactor Preview', localizationKey: { bundle: 'ash.views', key: 'refactorPreview' }, location: ViewContainerLocation.Panel, order: 2.75, hideIfEmpty: true });
+/** Registers the transient preview in the view catalog and location chosen by the host. */
+export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry, location = ViewContainerLocation.Panel): void {
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: 'Refactor Preview', localizationKey: { bundle: 'ash.views', key: 'refactorPreview' }, location, order: 2.75, hideIfEmpty: true });
 	registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [{
 		id: BulkEditPane.ID,
 		title: 'Refactor Preview',
@@ -64,6 +64,7 @@ export class BulkEditPreviewContribution extends Disposable {
 		@IViewsService private readonly views: IViewsService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IViewDescriptorService private readonly descriptors: IViewDescriptorService,
 	) {
 		super();
 		this.enabledContext = contextKeys.createKey('refactorPreview.enabled', false);
@@ -76,6 +77,9 @@ export class BulkEditPreviewContribution extends Disposable {
 
 	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
 		if (signal.aborted) return [];
+		const container = this.descriptors.getViewContainerForView(BulkEditPane.ID);
+		const location = container && this.descriptors.getViewContainerLocation(container);
+		if (location === null || location === undefined) throw new Error('Bulk edit preview view is not available');
 		const previous = this.activeSession;
 		if (previous) {
 			const confirmed = await this.dialogs.confirm({
@@ -94,7 +98,7 @@ export class BulkEditPreviewContribution extends Disposable {
 		// Replacement previews inherit the original destination, never the transient panel.
 		const session: PreviewSession = {
 			controller,
-			previousPanelId: previous ? previous.previousPanelId : this.views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id,
+			previousPanelId: previous ? previous.previousPanelId : this.views.getVisibleViewContainer(location)?.id,
 			previousFocus: previous ? previous.previousFocus : getActiveElement(),
 		};
 		this.activeSession = session;
@@ -121,8 +125,6 @@ export class BulkEditPreviewContribution extends Disposable {
 		}
 	}
 }
-
-registerBulkEditView();
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({

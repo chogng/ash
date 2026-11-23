@@ -28,7 +28,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../platform/registry/common/platform.js';
 import { OpenWorkspaceAction, OpenWorkspaceConfigFileAction, AddRootFolderAction, RemoveRootFolderAction, SaveWorkspaceAsAction, CloseWorkspaceAction, OpenFolderAction, OpenFolderViaWorkspaceAction, SwitchFolderLocationAction } from './actions/workspaceActions.js';
 import { ShowAboutDialogAction, ReloadWindowAction } from './actions/windowActions.js';
-import '../contrib/bulkEdit/browser/preview/bulkEdit.contribution.js';
+import { registerBulkEditView } from '../contrib/bulkEdit/browser/preview/bulkEdit.contribution.js';
 import '../contrib/markdown/browser/markdown.contribution.js';
 import '../contrib/webviewPanel/browser/webviewPanel.contribution.js';
 import '../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
@@ -98,6 +98,7 @@ registerProblemsView();
 registerRemoteViews();
 registerTerminalView();
 registerOutputView();
+registerBulkEditView();
 registerAction2(OpenFolderAction);
 registerAction2(OpenFolderViaWorkspaceAction);
 registerAction2(CloseWorkspaceAction);

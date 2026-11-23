@@ -23,6 +23,48 @@ import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 const renameInputVisible = CONTEXT_RENAME_INPUT_VISIBLE;
 const RenameCommandId = 'editor.action.rename';
 
+/** Finds a rename provider and verifies its preparation against the captured model. */
+export async function prepareRenameAtPosition(
+	registry: ILanguageFeaturesService['renameProvider'],
+	context: languages.LanguageRenameRequest,
+	onError: (error: unknown) => void,
+): Promise<{ readonly provider: languages.LanguageRenameProvider; readonly preparation: languages.LanguageRenamePreparation; } | undefined> {
+	const { model, position, signal } = context;
+	for (const provider of registry.ordered(model)) {
+		if (!languages.isLanguageFeatureRequestCurrent(context)) return undefined;
+		try {
+			let preparation: languages.LanguageRenamePreparation | undefined;
+			if (provider.prepareRename) {
+				preparation = await provider.prepareRename(context, signal);
+			} else {
+				const word = model.getWordAtPosition(position);
+				if (word) {
+					preparation = { range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn), placeholder: word.word };
+				}
+			}
+			if (!languages.isLanguageFeatureRequestCurrent(context)) return undefined;
+			if (!preparation) continue;
+			if (!Range.isIRange(preparation.range) || typeof preparation.placeholder !== 'string'
+				|| !Range.equalsRange(model.validateRange(preparation.range), preparation.range)
+				|| !Range.containsPosition(preparation.range, position) || Range.isEmpty(preparation.range)) {
+				throw new TypeError('Rename preparation must describe a valid range at the requested position');
+			}
+			return { provider, preparation };
+		} catch (error) {
+			if (languages.isLanguageFeatureRequestCurrent(context)) onError(error);
+		}
+	}
+	return undefined;
+}
+
+export function renameEditOptions(newName: string): IBulkEditOptions {
+	return {
+		label: localize('bulkEdit.renameLabel', 'Rename to {0}', newName),
+		code: 'undoredo.rename', respectAutoSaveConfig: true,
+		reason: EditSources.rename(undefined, newName),
+	};
+}
+
 /** Owns provider requests and applies edits; RenameWidget owns input and focus. */
 class RenameController extends Disposable {
 	static readonly ID = 'editor.contrib.renameController';
@@ -95,35 +137,13 @@ class RenameController extends Disposable {
 			resource: model.uri,
 			position,
 		});
-		for (const provider of this.languageFeaturesService.renameProvider.ordered(model)) {
-			if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-			try {
-				let preparation: languages.LanguageRenamePreparation | undefined;
-				if (provider.prepareRename) {
-					preparation = await provider.prepareRename(context, context.signal);
-				} else {
-					const word = model.getWordAtPosition(position);
-					if (word) {
-						preparation = {
-							range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-							placeholder: word.word,
-						};
-					}
-				}
-				if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-				if (!preparation) continue;
-				if (!Range.isIRange(preparation.range) || typeof preparation.placeholder !== 'string'
-					|| !Range.equalsRange(model.validateRange(preparation.range), preparation.range)
-					|| !Range.containsPosition(preparation.range, position) || Range.isEmpty(preparation.range)) {
-					throw new TypeError('Rename preparation must describe a valid range at the requested position');
-				}
-				this.provider = provider;
-				this.inputRange = Range.lift(preparation.range);
-				this.showInput(preparation.placeholder, context);
-				return;
-			} catch (error) {
-				if (languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
-			}
+		const target = await prepareRenameAtPosition(this.languageFeaturesService.renameProvider, context, this.onError);
+		if (!languages.isLanguageFeatureRequestCurrent(context)) return;
+		if (target) {
+			this.provider = target.provider;
+			this.inputRange = Range.lift(target.preparation.range);
+			this.showInput(target.preparation.placeholder, context);
+			return;
 		}
 		if (languages.isLanguageFeatureRequestCurrent(context)) {
 			this.viewport.announceAccessibilityStatus(localize('rename.notAvailable', 'Rename is not available at this position.'));
@@ -161,20 +181,14 @@ class RenameController extends Disposable {
 					this.previewing = true;
 					editDispatched = true;
 					await this.bulkEditService.apply(edit, {
-						editor: this.editor, label: localize('bulkEdit.renameLabel', 'Rename to {0}', newName),
-						code: 'undoredo.rename', respectAutoSaveConfig: true, showPreview: true,
-						token: context.signal, reason: EditSources.rename(undefined, newName),
+						...renameEditOptions(newName), editor: this.editor, showPreview: true, token: context.signal,
 					});
 					return;
 				}
 				if (this.applyWorkspaceEdit) {
 					editDispatched = true;
 					await this.applyWorkspaceEdit(edit, {
-						editor: this.editor,
-						label: localize('bulkEdit.renameLabel', 'Rename to {0}', newName),
-						code: 'undoredo.rename',
-						respectAutoSaveConfig: true,
-						reason: EditSources.rename(undefined, newName),
+						...renameEditOptions(newName), editor: this.editor,
 					});
 					return;
 				}

@@ -627,6 +627,9 @@ impl ClientHost {
 
         let max_timeout = match method {
             HostMethod::BrowserPerform => Duration::from_secs(185),
+            HostMethod::TextDocumentApplyRename => {
+                crate::text_document_host::RENAME_PREVIEW_TIMEOUT
+            }
             _ => REQUEST_TIMEOUT,
         };
         let deadline = Instant::now() + timeout.min(max_timeout);

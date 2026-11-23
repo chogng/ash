@@ -1234,21 +1234,56 @@ fn host_request_route_restores_the_issuing_server_id() {
 }
 
 #[test]
-fn document_read_routes_preserve_nested_gateway_proofs() {
-    let request = serde_json::json!({
-        "jsonrpc":"2.0", "id":"document-read", "method":"textDocument/read",
-        "params":{"path":"/workspace/file.txt", "readAccess":"operation-proof"}
-    });
-    let inner = tag_host_request(request.to_string(), 0);
-    let outer: Value = serde_json::from_str(&tag_host_request(inner, 7)).unwrap();
-    let callback = serde_json::json!({"params":outer["params"]});
-    let (route, access) = GatewayHandleKind::DocumentRead
-        .decode(callback["params"]["readAccess"].as_str().unwrap())
+fn document_callbacks_preserve_nested_gateway_proofs() {
+    use serde_json::json;
+
+    let cases = [
+        (
+            "textDocument/read",
+            json!({"readAccess":"proof"}),
+            "/params/readAccess",
+            "fs/readFile",
+        ),
+        (
+            "textDocument/references",
+            json!({"readAccess":"proof"}),
+            "/params/readAccess",
+            "fs/readFile",
+        ),
+        (
+            "textDocument/prepareRename",
+            json!({"target":{"readAccess":"proof"}}),
+            "/params/target/readAccess",
+            "fs/readFile",
+        ),
+        (
+            "textDocument/applyRename",
+            json!({"access":"proof"}),
+            "/params/access",
+            "textDocument/confirmRename",
+        ),
+    ];
+    for (method, params, host_field, callback_method) in cases {
+        let request = json!({"jsonrpc":"2.0", "id":"document", "method":method, "params":params});
+        let nested: Value = serde_json::from_str(&tag_host_request(
+            tag_host_request(request.to_string(), 0),
+            7,
+        ))
         .unwrap();
-    assert_eq!(route, 7);
-    let (route, access) = GatewayHandleKind::DocumentRead.decode(access).unwrap();
-    assert_eq!(route, 0);
-    assert_eq!(access, "operation-proof");
+        let routed_proof = nested.pointer(host_field).unwrap().as_str().unwrap();
+        let callback = match callback_method {
+            "fs/readFile" => {
+                json!({"method":callback_method, "params":{"readAccess":routed_proof}})
+            }
+            _ => json!({"method":callback_method, "params":{"access":routed_proof}}),
+        };
+        let kind = GatewayHandleKind::for_request(&callback).unwrap();
+        let (route, inner_proof) = kind
+            .decode(callback.pointer(kind.field()).unwrap().as_str().unwrap())
+            .unwrap();
+        assert_eq!(route, 7, "{method}");
+        assert_eq!(kind.decode(inner_proof), Some((0, "proof")), "{method}");
+    }
 }
 
 #[cfg(unix)]

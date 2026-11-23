@@ -108,7 +108,7 @@ Clean external reloads apply model edits and EOL changes in one undo step, keepi
 
 ## Agent document requests
 
-Code Workbench and Agents windows advertise `textDocuments: { version: 1 }`.
+Code Workbench and Agents windows advertise `textDocuments: { version: 2 }`.
 `read_file`, `write_file`, `edit`, `apply_patch` and `grep` use the Rust tool-facing
 `TextDocumentEditor` port for a product Turn bound to such a connection.
 `AppServerTextDocumentHost` converts generated server requests to the existing
@@ -116,6 +116,14 @@ Code Workbench and Agents windows advertise `textDocuments: { version: 1 }`.
 It owns only snapshot references; the editor services retain document state, undo,
 working copies and saves. Chat Editing owns the accepted baseline and review decisions,
 then applies workspace edits through `IBulkEditService`.
+
+`find_symbol_references` uses the initiating editor's reference providers and unsaved
+model. Relative paths resolve in the turn's working directory, including managed
+checkouts. The App Server returns only locations covered by the turn's read grants.
+`rename_symbol` prepares text edits to existing files through the same providers as
+editor rename. Workbench and Agents windows use the same Bulk Edit preview. After
+selection, the App Server rechecks target write grants before the editor commits
+the versioned edits.
 
 Reads include the current unsaved text and return an opaque version-bound lease.
 Applying consumes the referenced leases and rechecks versions inside the workspace

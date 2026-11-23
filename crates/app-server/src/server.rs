@@ -4764,6 +4764,20 @@ impl AppServer {
             Some(ClientMethod::FsReadFile) => self
                 .fs_processor()
                 .fs_read_file(connection.connection_id, &request.params),
+            Some(ClientMethod::TextDocumentConfirmRename) => {
+                let params: ash_app_server_protocol::protocol::text_document::TextDocumentConfirmRenameParams =
+                    decode(&request.params)?;
+                self.text_document_host
+                    .confirm_rename(connection.connection_id, &params.access)
+                    .map_err(|error| {
+                        RpcError::with_details(
+                            -32044,
+                            AppServerErrorName::FileSystemPermissionDenied,
+                            error.to_string(),
+                        )
+                    })?;
+                result(&())
+            }
             Some(ClientMethod::ArtifactCatalogRegister) => self
                 .artifact_catalog_processor
                 .register(connection.authority, &request.params, &self.updates),

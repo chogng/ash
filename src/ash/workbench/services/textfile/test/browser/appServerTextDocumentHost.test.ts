@@ -7,6 +7,8 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
+import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
@@ -53,6 +55,8 @@ class Transport implements AppServerTransport {
 	private readonly replies = new Map<string, (result: unknown) => void>();
 	private sequence = 0;
 	public readonly fileReads: FsReadFileParams[] = [];
+	public renameConfirmations = 0;
+	public denyRename = false;
 	public readFile!: (params: FsReadFileParams) => Promise<FsReadFileResult>;
 	public on(event: string, listener: (value: unknown) => void): void {
 		const listeners = this.listeners.get(event) ?? new Set();
@@ -112,6 +116,12 @@ class Transport implements AppServerTransport {
 				result => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) }),
 				error => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32043, message: String(error), data: { kind: error instanceof FileNotFoundError ? 'FileSystemNotFound' : 'FileSystemPermissionDenied' } } }) }),
 			);
+		} else if (request.method === 'textDocument/confirmRename') {
+			this.renameConfirmations++;
+			const reply = this.denyRename
+				? { error: { code: -32043, message: 'Denied', data: { kind: 'FileSystemPermissionDenied' } } }
+				: { result: null };
+			this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, ...reply }) });
 		} else if (typeof request.id === 'string') {
 			this.replies.get(request.id)?.(request.result ?? request.error);
 			this.replies.delete(request.id);
@@ -164,6 +174,12 @@ class Files extends Disposable implements IFileSystemProvider {
 		this.contents.set(target.toString(), new TextDecoder('utf8', { ignoreBOM: true }).decode(content.bytes));
 	}
 	public async delete(resource: URI): Promise<void> { this.contents.delete(resource.toString()); }
+	public async deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void> {
+		const revision = this.contents.get(resource.toString());
+		if (revision === undefined) { throw new FileNotFoundError(resource); }
+		if (revision !== expectedRevision) { throw new FileRevisionConflictError(resource); }
+		this.contents.delete(resource.toString());
+	}
 }
 
 class TestLifecycleService extends AbstractLifecycleService { }
@@ -184,6 +200,8 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(IBulkEditService, bulk);
+	const languages = lifetime.add(new LanguageFeaturesService());
+	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerInstance(IFileService, fileService);
@@ -209,7 +227,7 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 	lifetime.add(toDisposable(() => client.dispose()));
 	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
 	await client.connect();
-	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, cues, storage, backend, lifecycle, notifications, ...toDisposable(() => { lifetime.dispose(); dom.window.close(); }) };
+	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, cues, storage, backend, lifecycle, notifications, languages, ...toDisposable(() => { lifetime.dispose(); dom.window.close(); }) };
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {
@@ -222,6 +240,87 @@ async function snapshot(transport: Transport, resource: URI): Promise<string> {
 function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService['acquire']>>): IWorkingCopy {
 	return { resource: reference.resource, backupKind: 'text', get isDirty() { return reference.isDirty; }, get hasExternalChange() { return reference.hasExternalChange; }, onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange, onDidChangeContent: listener => reference.model.onDidChangeContent(() => listener()), backup: () => reference.model.getText(), restoreBackup: content => reference.model.reset(content), save: signal => reference.save(signal), saveAs: async () => { }, revert: signal => reference.revert(signal), ...toDisposable(() => { }) };
 }
+
+test('Agent references use the live editor model and discard a stale provider result', async () => {
+	using host = await fixture();
+	const resource = URI.file('/workspace/references.txt');
+	host.files.contents.set(resource.toString(), 'diskName\n');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	reference.model.applyOperations([{ range: new Range(1, 1, 1, 9), text: 'editorName' }]);
+	let stale = false;
+	using provider = host.languages.referenceProvider.register('*', {
+		provideReferences(request) {
+			assert.equal(request.model.getValue(), 'editorName\n');
+			assert.equal(request.position.column, 2);
+			if (stale) { reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'x' }]); }
+			return [{ resource, range: new Range(1, 1, 1, 11) }];
+		},
+	});
+	const args = { path: resource.fsPath, readAccess: 'test-read-access', position: { lineIndex: 0, columnIndex: 1 } };
+	const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 10 } };
+	assert.deepEqual(await host.transport.call('textDocument/references', args), {
+		kind: 'references', truncated: false, locations: [{ path: resource.fsPath, range, selectionRange: range }],
+	});
+	assert.equal(host.transport.fileReads.length, 0);
+	stale = true;
+	assert.deepEqual(await host.transport.call('textDocument/references', args), { kind: 'conflict' });
+});
+
+test('Agent symbol rename uses the localized Bulk Edit preview and confirms authority before writing', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using host = await fixture();
+		const source = URI.file('/workspace/source.txt');
+		const target = URI.file('/workspace/target.txt');
+		host.files.contents.set(source.toString(), 'oldName\n');
+		host.files.contents.set(target.toString(), 'oldName\n');
+		using sourceRef = await host.models.acquire({ resource: source }, new AbortController().signal);
+		const range = new Range(1, 1, 1, 8);
+		using provider = host.languages.renameProvider.register('*', {
+			prepareRename: () => ({ range, placeholder: 'oldName' }),
+			provideRenameEdits: request => {
+				assert.equal(request.newName, 'newName');
+				const edits = [{ range, text: request.newName! }];
+				return {
+					entries: [
+						{ kind: 'textDocument', resource: source, edits },
+						{ kind: 'textDocument', resource: target, edits, expectedText: 'oldName\n' },
+					]
+				};
+			},
+		});
+		let accept = false;
+		using preview = host.bulk.setPreviewHandler(async (edits, options) => {
+			assert.equal(options?.label, '重命名为 newName');
+			assert.equal(sourceRef.model.getText(), 'oldName\n');
+			assert.equal(host.files.contents.get(target.toString()), 'oldName\n');
+			return accept ? edits : [];
+		});
+		const rename = async (id: string) => {
+			assert.deepEqual(await host.transport.call('textDocument/prepareRename', {
+				snapshot: id,
+				target: { path: source.fsPath, readAccess: 'test-read-access', position: { lineIndex: 0, columnIndex: 1 } },
+				symbol: 'oldName', newName: 'newName',
+			}), { kind: 'prepared', paths: [source.fsPath, target.fsPath] });
+			return host.transport.call('textDocument/applyRename', { snapshot: id, access: 'test-write-access' });
+		};
+		assert.deepEqual(await rename('cancelled'), { kind: 'cancelled' });
+		assert.equal(host.transport.renameConfirmations, 0);
+		accept = true;
+		host.transport.denyRename = true;
+		assert.equal((await rename('denied')).kind, 'failed');
+		assert.equal(host.transport.renameConfirmations, 1);
+		assert.equal(sourceRef.model.getText(), 'oldName\n');
+		assert.equal(host.files.contents.get(target.toString()), 'oldName\n');
+		host.transport.denyRename = false;
+		assert.deepEqual(await rename('accepted'), { kind: 'applied' });
+		assert.equal(host.transport.renameConfirmations, 2);
+		assert.equal(sourceRef.model.getText(), 'newName\n');
+		assert.equal(host.files.contents.get(target.toString()), 'newName\n');
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('Agent review rejects one hunk, accepts another, saves the baseline and retains user edits', async () => {
 	using host = await fixture();

@@ -3,10 +3,16 @@ use super::ShellCommandRequest;
 use super::read_only_sandbox;
 use crate::dir_grants::CommandAuthorization;
 use crate::dir_grants::DirGrants;
+use crate::text_document_host::ConnectionDocuments;
+use crate::text_document_host::RenameWriteTarget;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::FileWriteReview;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
+use ash_app_server_protocol::protocol::language::LanguagePositionDto;
+use ash_app_server_protocol::protocol::text_document::TextDocumentApplyResult;
+use ash_app_server_protocol::protocol::text_document::TextDocumentPrepareRenameResult;
+use ash_app_server_protocol::protocol::text_document::TextDocumentReferencesResult;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
@@ -206,7 +212,7 @@ pub(crate) struct LocalToolSuite<B> {
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
     permission_requests: Option<super::permission_requests::PermissionRequests>,
-    documents: Option<Arc<dyn TextDocumentEditorProvider>>,
+    documents: Option<Arc<crate::text_document_host::TextDocumentHost>>,
     document_reads: Mutex<std::collections::BTreeMap<(String, PathBuf), DocumentRead>>,
 }
 
@@ -289,10 +295,231 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
 
     pub(super) fn with_text_document_editor(
         mut self,
-        documents: Arc<dyn TextDocumentEditorProvider>,
+        documents: Arc<crate::text_document_host::TextDocumentHost>,
     ) -> Self {
+        self.definitions.push(definition(
+            "find_symbol_references",
+            "Find references to the symbol at a file position using the initiating editor's language provider, including unsaved text. Supply a 1-based line and UTF-16 column.",
+            r#"{"type":"object","properties":{"path":{"type":"string"},"line":{"type":"integer","minimum":1,"maximum":4294967295},"column":{"type":"integer","minimum":1,"maximum":4294967295}},"required":["path","line","column"],"additionalProperties":false}"#,
+        ));
+        self.definitions.push(definition(
+            "rename_symbol",
+            "Rename a code symbol using the initiating editor's language provider. Give the current symbol, its exact 1-based line and UTF-16 column, and the new name. Text edits require approval in the editor's Bulk Edit preview.",
+            r#"{"type":"object","properties":{"path":{"type":"string"},"line":{"type":"integer","minimum":1,"maximum":4294967295},"column":{"type":"integer","minimum":1,"maximum":4294967295},"symbol":{"type":"string","minLength":1},"new_name":{"type":"string","minLength":1}},"required":["path","line","column","symbol","new_name"],"additionalProperties":false}"#,
+        ));
         self.documents = Some(documents);
         self
+    }
+
+    fn execute_references(
+        &self,
+        call: &ToolCall,
+        identity: &ash_core::ToolExecutionIdentity,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let path = string_arg(&call.arguments, "path")?;
+        let position = symbol_position(&call.arguments)?;
+        let resolve = |path: &str| {
+            self.resolve(
+                path,
+                false,
+                Some(identity.session_id()),
+                Some(identity.thread_id()),
+                DirPermission::ReadFiles,
+            )
+        };
+        let resolved = resolve(&path).map_err(CoreError::Policy)?;
+        let documents = self.symbol_documents(identity)?;
+        let result = documents
+            .references(
+                &resolved.absolute,
+                position,
+                &resolved.authorization,
+                cancellation,
+            )
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let TextDocumentReferencesResult::References {
+            locations,
+            truncated,
+        } = result
+        else {
+            return Ok(ToolExecutionOutput::Failure(match result {
+                TextDocumentReferencesResult::Unavailable => {
+                    "No language reference provider is available for this document".into()
+                }
+                TextDocumentReferencesResult::Conflict => {
+                    "The document changed during symbol lookup. Read it again before retrying"
+                        .into()
+                }
+                TextDocumentReferencesResult::Failed { message } => message,
+                TextDocumentReferencesResult::References { .. } => unreachable!(),
+            }));
+        };
+        let locations = locations
+            .into_iter()
+            .filter(|location| location.path.is_absolute())
+            .filter_map(|location| {
+                let target = resolve(location.path.to_str()?).ok()?;
+                let start = location.selection_range.start;
+                let end = location.selection_range.end;
+                Some(json!({
+                    "path": target.absolute,
+                    "line": u64::from(start.line_index) + 1,
+                    "column": u64::from(start.column_index) + 1,
+                    "end_line": u64::from(end.line_index) + 1,
+                    "end_column": u64::from(end.column_index) + 1,
+                }))
+            })
+            .take(101)
+            .collect::<Vec<_>>();
+        Ok(ToolExecutionOutput::Success(
+            json!({
+                "truncated": truncated || locations.len() > 100,
+                "references": &locations[..locations.len().min(100)],
+            })
+            .to_string(),
+        ))
+    }
+
+    fn symbol_documents(
+        &self,
+        identity: &ash_core::ToolExecutionIdentity,
+    ) -> Result<ConnectionDocuments, CoreError> {
+        let unavailable =
+            || CoreError::Execution("Symbol tools require an editor bound to this turn".into());
+        self.documents
+            .as_ref()
+            .ok_or_else(unavailable)?
+            .connection_for_turn(identity.thread_id(), identity.turn_id())
+            .map_err(|error| CoreError::Execution(error.to_string()))?
+            .ok_or_else(unavailable)
+    }
+
+    fn execute_rename(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+        identity: &ash_core::ToolExecutionIdentity,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let path = string_arg(&call.arguments, "path")?;
+        let position = symbol_position(&call.arguments)?;
+        let names = (
+            symbol_name(&call.arguments, "symbol")?,
+            symbol_name(&call.arguments, "new_name")?,
+        );
+        let session = Some(identity.session_id());
+        let thread = Some(identity.thread_id());
+        let source = self
+            .resolve(&path, true, session, thread, DirPermission::WriteFiles)
+            .map_err(CoreError::Policy)?;
+        let reviewed = facts
+            .reviewed_action()
+            .and_then(|(_, write)| write)
+            .ok_or_else(|| {
+                CoreError::Policy("Rename requires a reviewed source document".into())
+            })?;
+        if reviewed.directory_id != source.root.id().to_string()
+            || reviewed.targets.as_slice() != std::slice::from_ref(&source.absolute)
+        {
+            return Err(CoreError::Policy(
+                "Rename source changed after review".into(),
+            ));
+        }
+        let documents = self.symbol_documents(identity)?;
+        let (snapshot, result) = documents
+            .prepare_rename(
+                &source.absolute,
+                position,
+                names,
+                &source.authorization,
+                cancellation,
+            )
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let paths = match result {
+            TextDocumentPrepareRenameResult::Prepared { paths } => paths,
+            TextDocumentPrepareRenameResult::Unavailable => {
+                return Ok(ToolExecutionOutput::Failure(
+                    "Semantic rename is unavailable at this position".into(),
+                ));
+            }
+            TextDocumentPrepareRenameResult::Conflict => {
+                return Ok(ToolExecutionOutput::Failure(
+                    "The source changed during rename preparation. Read it again before retrying"
+                        .into(),
+                ));
+            }
+            TextDocumentPrepareRenameResult::Failed { message } => {
+                return Ok(ToolExecutionOutput::Failure(message));
+            }
+        };
+        let targets = (|| {
+            source
+                .authorization
+                .ensure_active()
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+            if paths.is_empty() || paths.len() > 128 {
+                return Err(CoreError::Policy(
+                    "Rename requires between 1 and 128 file targets".into(),
+                ));
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            paths
+                .into_iter()
+                .map(|path| {
+                    let path_text =
+                        path.to_str()
+                            .filter(|_| path.is_absolute())
+                            .ok_or_else(|| {
+                                CoreError::Policy(
+                                    "Rename target must be an absolute file path".into(),
+                                )
+                            })?;
+                    let resolved = self
+                        .resolve(path_text, true, session, thread, DirPermission::WriteFiles)
+                        .map_err(CoreError::Policy)?;
+                    if super::is_protected_write_path(&path)
+                        || super::is_protected_write_path(&resolved.absolute)
+                        || !seen.insert(resolved.absolute.clone())
+                    {
+                        return Err(CoreError::Policy(
+                            "Rename includes a protected or repeated file".into(),
+                        ));
+                    }
+                    Ok(RenameWriteTarget {
+                        relative: resolved.relative,
+                        canonical: resolved.absolute,
+                        authorization: resolved.authorization,
+                    })
+                })
+                .collect::<Result<Vec<_>, CoreError>>()
+        })();
+        let targets = match targets {
+            Ok(targets) => targets,
+            Err(error) => {
+                documents.release(vec![snapshot]);
+                return Err(error);
+            }
+        };
+        match documents.apply_rename(snapshot, targets, cancellation) {
+            Ok(TextDocumentApplyResult::Applied) => Ok(ToolExecutionOutput::Success(
+                "Semantic rename applied in the editor".into(),
+            )),
+            Ok(TextDocumentApplyResult::Cancelled) | Err(TextDocumentError::Cancelled) => Ok(
+                ToolExecutionOutput::Failure("Rename preview was cancelled".into()),
+            ),
+            Ok(TextDocumentApplyResult::Conflict) => Ok(ToolExecutionOutput::Failure(
+                "A rename target changed. Read it again before retrying".into(),
+            )),
+            Ok(TextDocumentApplyResult::Failed { message }) => {
+                Ok(ToolExecutionOutput::Failure(message))
+            }
+            Ok(TextDocumentApplyResult::OutcomeUnknown { message })
+            | Err(TextDocumentError::OutcomeUnknown(message)) => {
+                Ok(ToolExecutionOutput::OutcomeUnknown(message))
+            }
+            Err(error) => Err(CoreError::Execution(error.to_string())),
+        }
     }
 
     fn execute_document_tool(
@@ -742,7 +969,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 thread_id,
                 if write {
                     DirPermission::WriteFiles
-                } else if matches!(call.name.as_str(), "read_file" | "pdf_read") {
+                } else if matches!(
+                    call.name.as_str(),
+                    "read_file" | "pdf_read" | "find_symbol_references"
+                ) {
                     DirPermission::ReadFiles
                 } else {
                     if call.name.as_str() == "grep" {
@@ -1511,8 +1741,10 @@ impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuit
 impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
     fn tool_set(&self, name: &ToolName) -> Option<&'static str> {
         match name.as_str() {
-            "read_file" | "write_file" | "edit" | "pdf_read" | "pdf_annotate" => Some("core.files"),
-            "grep" | "glob" => Some("core.search"),
+            "read_file" | "write_file" | "edit" | "pdf_read" | "pdf_annotate" | "rename_symbol" => {
+                Some("core.files")
+            }
+            "grep" | "glob" | "find_symbol_references" => Some("core.search"),
             "shell-command" | "shell-session" => Some("core.execution"),
             _ => None,
         }
@@ -1522,8 +1754,8 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         use ash_protocol::ToolCategory;
         match name.as_str() {
             "read_file" | "pdf_read" => Some(ToolCategory::Read),
-            "write_file" | "edit" | "pdf_annotate" => Some(ToolCategory::Edit),
-            "grep" | "glob" => Some(ToolCategory::Search),
+            "write_file" | "edit" | "pdf_annotate" | "rename_symbol" => Some(ToolCategory::Edit),
+            "grep" | "glob" | "find_symbol_references" => Some(ToolCategory::Search),
             "shell-command" | "shell-session" => Some(ToolCategory::Execute),
             _ => None,
         }
@@ -1562,7 +1794,10 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                 pattern: string_arg(&call.arguments, "pattern").ok()?,
                 path: path()?,
             }),
-            "write_file" | "edit" => Some(ToolActivity::FileEdit {
+            "find_symbol_references" => Some(ToolActivity::Search {
+                target: string_arg(&call.arguments, "path").ok()?,
+            }),
+            "write_file" | "edit" | "rename_symbol" => Some(ToolActivity::FileEdit {
                 path: string_arg(&call.arguments, "path").ok()?,
             }),
             "shell-command" => self.shell.activity(call),
@@ -1597,8 +1832,12 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             return self.review_shell_session(call, None, None);
         }
         match call.name.as_str() {
-            "read_file" | "grep" | "glob" | "pdf_read" => self.review(call, false, None, None),
-            "write_file" | "edit" | "pdf_annotate" => self.review(call, true, None, None),
+            "read_file" | "grep" | "glob" | "pdf_read" | "find_symbol_references" => {
+                self.review(call, false, None, None)
+            }
+            "write_file" | "edit" | "pdf_annotate" | "rename_symbol" => {
+                self.review(call, true, None, None)
+            }
             _ => Err(CoreError::Policy(format!(
                 "tool is not available: {}",
                 call.name
@@ -1657,13 +1896,13 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             );
         }
         match call.name.as_str() {
-            "read_file" | "grep" | "glob" | "pdf_read" => self.review(
+            "read_file" | "grep" | "glob" | "pdf_read" | "find_symbol_references" => self.review(
                 call,
                 false,
                 Some(identity.session_id()),
                 Some(identity.thread_id()),
             ),
-            "write_file" | "edit" | "pdf_annotate" => self.review(
+            "write_file" | "edit" | "pdf_annotate" | "rename_symbol" => self.review(
                 call,
                 true,
                 Some(identity.session_id()),
@@ -1714,6 +1953,12 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         })?;
         let scope = format!("{}:{}", identity.thread_id(), identity.turn_id());
         let session_id = identity.session_id();
+        if call.name.as_str() == "find_symbol_references" {
+            return self.execute_references(call, identity, cancellation);
+        }
+        if call.name.as_str() == "rename_symbol" {
+            return self.execute_rename(call, facts, identity, cancellation);
+        }
         if matches!(call.name.as_str(), "pdf_read" | "pdf_annotate") {
             return self.execute_pdf(
                 call,
@@ -2072,6 +2317,31 @@ fn session_outcome_json(
         }),
     };
     serde_json::to_string_pretty(&value).map_err(|error| CoreError::Execution(error.to_string()))
+}
+
+fn symbol_position(arguments: &Value) -> Result<LanguagePositionDto, CoreError> {
+    let index = |name: &str| {
+        arguments
+            .get(name)
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .and_then(|value| value.checked_sub(1))
+            .ok_or_else(|| CoreError::Policy(format!("{name} must be a positive 1-based position")))
+    };
+    Ok(LanguagePositionDto {
+        line_index: index("line")?,
+        column_index: index("column")?,
+    })
+}
+
+fn symbol_name(arguments: &Value, name: &str) -> Result<String, CoreError> {
+    let value = string_arg(arguments, name)?;
+    if value.trim().is_empty() || value.len() > 1024 || value.chars().any(char::is_control) {
+        return Err(CoreError::Policy(format!(
+            "{name} must contain a single non-empty symbol name"
+        )));
+    }
+    Ok(value)
 }
 
 fn string_arg(arguments: &Value, name: &str) -> Result<String, CoreError> {

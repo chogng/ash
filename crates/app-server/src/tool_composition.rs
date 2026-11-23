@@ -1476,8 +1476,8 @@ fn tool_authority(tool: &CollectedToolDefinition) -> ToolAuthorityDto {
         };
     }
     match tool.contribution.definition.name().as_str() {
-        "read_file" | "grep" | "glob" => ToolAuthorityDto::DirectoryRead,
-        "write_file" | "edit" | "apply_patch" => ToolAuthorityDto::DirectoryWrite,
+        "read_file" | "grep" | "glob" | "find_symbol_references" => ToolAuthorityDto::DirectoryRead,
+        "write_file" | "edit" | "apply_patch" | "rename_symbol" => ToolAuthorityDto::DirectoryWrite,
         "shell-command" | "shell-session" => ToolAuthorityDto::ProcessExecution,
         _ => ToolAuthorityDto::ProductService,
     }

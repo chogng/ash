@@ -16,9 +16,9 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { BulkFileOperations } from '../../browser/preview/bulkEditPreview.js';
 import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
-import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId, WorkbenchViewRegistry } from '../../../../common/views.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
+import { BulkEditPreviewContribution, registerBulkEditView } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
 import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { SaveReason } from '../../../../common/editor.js';
@@ -150,6 +150,13 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 			browser.window.document.body.append(previousFocus);
 			previousFocus.focus();
 			const enabled = () => contextKeys.contextMatchesRules(ContextKeyExpr.has('refactorPreview.enabled'));
+			const location = outcome === 'accept' ? ViewContainerLocation.AuxiliaryBar : ViewContainerLocation.Panel;
+			using registry = new WorkbenchViewRegistry({ registerActions: false });
+			registerBulkEditView(registry, location);
+			services.registerInstance(IViewDescriptorService, {
+				getViewContainerForView: () => registry.getViewContainer(WorkbenchViewContainerId.BulkEdit),
+				getViewContainerLocation: () => location,
+			} as unknown as IViewDescriptorService);
 			services.registerInstance(IViewsService, {
 				openView: async () => {
 					assert.equal(enabled(), true, 'activate the conditional view before opening it');
@@ -157,7 +164,10 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 					return pane;
 				},
 				getViewWithId: () => pane,
-				getVisibleViewContainer: () => selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null,
+				getVisibleViewContainer: (requestedLocation: ViewContainerLocation) => {
+					assert.equal(requestedLocation, location);
+					return selectedPanelId ? { id: selectedPanelId, location } : null;
+				},
 				openViewContainer: async (id: string) => { selectedPanelId = id; return null; },
 				closeViewContainer: () => { selectedPanelId = undefined; },
 				focusView: async () => { pane.focus(); return true; },
@@ -165,8 +175,8 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 			using bulkEdits = services.createInstance(BulkEditService);
 			services.registerInstance(IBulkEditService, bulkEdits);
 			using contribution = services.createInstance(BulkEditPreviewContribution);
-			const descriptor = ViewsRegistry.getView(BulkEditPane.ID)!;
-			assert.equal(ViewsRegistry.getViewContainer(WorkbenchViewContainerId.BulkEdit)!.hideIfEmpty, true);
+			const descriptor = registry.getView(BulkEditPane.ID)!;
+			assert.equal(registry.getViewContainer(WorkbenchViewContainerId.BulkEdit)!.hideIfEmpty, true);
 			assert.equal(contextKeys.contextMatchesRules(descriptor.when), false);
 			const waitForInput = () => new Promise<void>(resolve => {
 				const observer = new browser.window.MutationObserver(() => {

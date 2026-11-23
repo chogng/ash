@@ -282,9 +282,13 @@ use crate::protocol::symphony::SymphonySubmitParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentApplyRenameParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentChangeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentConfirmRenameParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentContentDto;
 #[cfg(any(test, feature = "export"))]
@@ -292,11 +296,19 @@ use crate::protocol::text_document::TextDocumentListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentPrepareRenameParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentPrepareRenameResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentReadResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentReferencesResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentReleaseParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::text_document::TextDocumentSymbolParams;
 use crate::protocol::text_document::TextDocumentTurnFinished;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentTurnOutcome;
@@ -5304,6 +5316,11 @@ client_methods! {
         response: FsReadFileResult,
         serialization: GlobalSharedRead,
     },
+    TextDocumentConfirmRename => "textDocument/confirmRename" {
+        params: TextDocumentConfirmRenameParams,
+        response: (),
+        serialization: None,
+    },
     BackupWorkspaces => "backup/workspaces" { params: BackupWorkspacesParams, response: BackupWorkspacesResult, serialization: None, },
     BackupList => "backup/list" { params: BackupListParams, response: BackupListResult, serialization: None, },
     BackupListPage => "backup/listPage" { params: BackupListPageParams, response: BackupListPageResult, serialization: None, },
@@ -6336,6 +6353,9 @@ host_methods! {
     HostResourceRead => "hostResource/read" { params: crate::protocol::host_resource::HostResourceReadParams, response: crate::protocol::host_resource::HostResourceReadResult, },
     HostResourceRelease => "hostResource/release" { params: crate::protocol::host_resource::HostResourceReleaseParams, response: (), },
     TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
+    TextDocumentReferences => "textDocument/references" { params: TextDocumentSymbolParams, response: TextDocumentReferencesResult, },
+    TextDocumentPrepareRename => "textDocument/prepareRename" { params: TextDocumentPrepareRenameParams, response: TextDocumentPrepareRenameResult, },
+    TextDocumentApplyRename => "textDocument/applyRename" { params: TextDocumentApplyRenameParams, response: TextDocumentApplyResult, },
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
     TextDocumentRelease => "textDocument/release" { params: TextDocumentReleaseParams, response: (), },
     BrowserList => "browser/list" { params: BrowserListParams, response: BrowserListResult, },
@@ -7019,6 +7039,12 @@ typescript_bindings! {
     crate::protocol::host_resource::HostResourceReleaseParams,
     TextDocumentReadParams,
     TextDocumentReadResult,
+    TextDocumentSymbolParams,
+    TextDocumentReferencesResult,
+    TextDocumentPrepareRenameParams,
+    TextDocumentPrepareRenameResult,
+    TextDocumentApplyRenameParams,
+    TextDocumentConfirmRenameParams,
     TextDocumentApplyParams,
     TextDocumentTurnFinished,
     TextDocumentTurnOutcome,

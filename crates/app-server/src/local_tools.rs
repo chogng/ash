@@ -309,7 +309,7 @@ pub(crate) fn compose_local_tools_with_config(
     dir_grants: Arc<DirGrants>,
     grep: Arc<grep::Service>,
     file_search: Arc<file_search::Service>,
-    documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
+    documents: Option<Arc<crate::text_document_host::TextDocumentHost>>,
     threads: Arc<ash_core::ThreadController>,
     session_environments: Arc<crate::session_environment::SessionEnvironments>,
 ) -> Result<LocalToolComposition, LocalToolError> {
@@ -383,7 +383,7 @@ pub(crate) fn compose_local_tools_with_config(
     )
     .map_err(LocalToolError::definition)?;
     if let Some(documents) = &documents {
-        apply_patch = apply_patch.with_text_document_editor(Arc::clone(documents));
+        apply_patch = apply_patch.with_text_document_editor(documents.clone());
     }
     let apply_patch_executor: Arc<dyn ash_tools::ToolExecutor> = Arc::new(apply_patch);
     let policy = LocalShellPolicy {
@@ -1902,6 +1902,18 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             "local-read-file",
             "read_file",
             ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-find-symbol-references",
+            "find_symbol_references",
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::Continue,
+        ),
+        local_rule(
+            "local-rename-symbol",
+            "rename_symbol",
+            ExecPolicyActionKind::FileSystemMutation,
             ExecPolicyEffect::Continue,
         ),
         local_rule(

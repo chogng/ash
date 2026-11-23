@@ -4,13 +4,19 @@ import { isCancellationError, onUnexpectedError } from '../../../../base/common/
 import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { Schemas } from '../../../../base/common/network.js';
-import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { type IRange } from '../../../../editor/common/core/range.js';
+import { getReferencesAtPosition } from '../../../../editor/contrib/gotoSymbol/browser/goToSymbol.js';
+import { prepareRenameAtPosition, renameEditOptions } from '../../../../editor/contrib/rename/browser/rename.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, normalizeLanguageWorkspaceEdit, type LanguageRenameRequest, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
+import { TextModel } from '../../../../editor/common/model/textModel.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type TextDocumentReadParams, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type LanguageLocationDto, type LanguageRangeDto, type TextDocumentReadParams, type TextDocumentApplyParams, type TextDocumentApplyRenameParams, type TextDocumentApplyResult, type TextDocumentPrepareRenameParams, type TextDocumentPrepareRenameResult, type TextDocumentReadResult, type TextDocumentSymbolParams, type TextDocumentReferencesResult, type TextDocumentListResult } from '../../../../../../.build/protocol/typescript/index.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
-import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
+import { IBulkEditService, WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../chat/common/chatService.js';
 
@@ -25,21 +31,37 @@ interface DocumentSnapshot extends IDisposable {
 	readonly version: number;
 }
 
+interface RenameSnapshot extends IDisposable {
+	readonly context: LanguageRenameRequest;
+	readonly newName: string;
+	readonly edit: LanguageWorkspaceEdit;
+}
+
 /** Holds protocol snapshot leases; document state, undo and persistence stay in editor services. */
 export class AppServerTextDocumentHost extends Disposable {
 	private readonly snapshots = this._register(new DisposableMap<string, DocumentSnapshot>());
+	private readonly renames = this._register(new DisposableMap<string, RenameSnapshot>());
 
-	constructor(private readonly client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
+	constructor(private readonly client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract, @ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService, @IBulkEditService private readonly bulkEdits: IBulkEditService) {
 		super();
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/references'], (params, context) => this.references(params, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/prepareRename'], (params, context) => this.prepareRename(params, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/applyRename'], (params, context) => this.applyRename(params, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) => this.apply(params, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/release'], params => {
-			for (const snapshot of params.snapshots) { this.snapshots.deleteAndDispose(snapshot); }
+			for (const snapshot of params.snapshots) {
+				this.snapshots.deleteAndDispose(snapshot);
+				this.renames.deleteAndDispose(snapshot);
+			}
 			return null;
 		}));
 		this._register(client.onStateChange(state => {
-			if (state !== 'ready') { this.snapshots.clearAndDisposeAll(); }
+			if (state !== 'ready') {
+				this.snapshots.clearAndDisposeAll();
+				this.renames.clearAndDisposeAll();
+			}
 		}));
 		this._register(client.onNotification(notification => {
 			if (notification.method === 'textDocument/turnFinished') {
@@ -62,21 +84,7 @@ export class AppServerTextDocumentHost extends Disposable {
 		try {
 			throwIfCancelled(signal);
 			const resource = documentResource(params.path);
-			reference = await this.models.createModelReference(resource, {
-				readFile: async (target, encoding, options, readSignal) => {
-					throwIfCancelled(signal);
-					throwIfCancelled(readSignal);
-					const { candidateGuessEncodings, ...decoding } = options ?? {};
-					const result = await this.client.request(APP_SERVER_METHODS['fs/readFile'], {
-						path: params.path, readAccess: params.readAccess, encoding,
-						...decoding,
-						...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
-					});
-					throwIfCancelled(signal);
-					throwIfCancelled(readSignal);
-					return { resource: target, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
-				},
-			});
+			reference = await this.resolveDocument(resource, params, signal);
 			// Resolution is not cancellable. Closing must also release a late result.
 			throwIfCancelled(signal);
 			this.assertNotDisposed();
@@ -95,6 +103,138 @@ export class AppServerTextDocumentHost extends Disposable {
 			return { kind: 'failed', message: String(error) };
 		} finally {
 			reference?.dispose();
+		}
+	}
+
+	private resolveDocument(resource: URI, params: TextDocumentReadParams, signal: AbortSignal): Promise<IReference<IResolvedTextEditorModel>> {
+		return this.models.createModelReference(resource, {
+			readFile: async (target, encoding, options, readSignal) => {
+				throwIfCancelled(signal);
+				throwIfCancelled(readSignal);
+				const { candidateGuessEncodings, ...decoding } = options ?? {};
+				const result = await this.client.request(APP_SERVER_METHODS['fs/readFile'], {
+					path: params.path, readAccess: params.readAccess, encoding,
+					...decoding,
+					...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
+				});
+				throwIfCancelled(signal);
+				throwIfCancelled(readSignal);
+				return { resource: target, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
+			},
+		});
+	}
+
+	private async references(params: TextDocumentSymbolParams, signal: AbortSignal): Promise<TextDocumentReferencesResult> {
+		try {
+			throwIfCancelled(signal);
+			const resource = documentResource(params.path);
+			using reference = await this.resolveDocument(resource, params, signal);
+			throwIfCancelled(signal);
+			this.assertNotDisposed();
+			const model = reference.object.textEditorModel;
+			const position = new Position(params.position.lineIndex + 1, params.position.columnIndex + 1);
+			if (!(model instanceof TextModel)) { return { kind: 'unavailable' }; }
+			if (!model.validatePosition(position).equals(position)) { return { kind: 'failed', message: 'Symbol position is outside the document' }; }
+			if (!this.languageFeatures.referenceProvider.has(model)) { return { kind: 'unavailable' }; }
+			const version = model.getVersionId();
+			const languageId = model.getLanguageId();
+			const failures: unknown[] = [];
+			const references = await getReferencesAtPosition(this.languageFeatures.referenceProvider, model, position, false, false, signal, error => failures.push(error));
+			throwIfCancelled(signal);
+			if (model.isDisposed() || model.getVersionId() !== version || model.getLanguageId() !== languageId) { return { kind: 'conflict' }; }
+			if (failures.length && !references.length) { return { kind: 'failed', message: String(failures[0]) }; }
+			const locations = new Map<string, LanguageLocationDto>();
+			for (const reference of references) {
+				if (reference.uri.scheme !== Schemas.file || reference.uri.query || reference.uri.fragment) { continue; }
+				const target = reference.targetSelectionRange ?? reference.range;
+				const key = `${reference.uri.toString()}:${target.toString()}`;
+				if (locations.has(key)) { continue; }
+				if (locations.size === 1024) { return { kind: 'references', locations: [...locations.values()], truncated: true }; }
+				locations.set(key, { path: reference.uri.fsPath, range: toLanguageRange(reference.range), selectionRange: toLanguageRange(target) });
+			}
+			return { kind: 'references', locations: [...locations.values()], truncated: failures.length > 0 };
+		} catch (error) {
+			if (isCancellationError(error)) { throw error; }
+			return { kind: 'failed', message: String(error) };
+		}
+	}
+
+	private async prepareRename(params: TextDocumentPrepareRenameParams, signal: AbortSignal): Promise<TextDocumentPrepareRenameResult> {
+		let reference: IReference<IResolvedTextEditorModel> | undefined;
+		try {
+			throwIfCancelled(signal);
+			if (!this.bulkEdits.hasPreviewHandler()) { return { kind: 'unavailable' }; }
+			const resource = documentResource(params.target.path);
+			reference = await this.resolveDocument(resource, params.target, signal);
+			throwIfCancelled(signal);
+			this.assertNotDisposed();
+			const model = reference.object.textEditorModel;
+			const position = new Position(params.target.position.lineIndex + 1, params.target.position.columnIndex + 1);
+			if (!(model instanceof TextModel)) { return { kind: 'unavailable' }; }
+			if (!model.validatePosition(position).equals(position)) { return { kind: 'failed', message: 'Symbol position is outside the document' }; }
+			const context = Object.freeze({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource, position });
+			const failures: unknown[] = [];
+			const target = await prepareRenameAtPosition(this.languageFeatures.renameProvider, context, error => failures.push(error));
+			throwIfCancelled(signal);
+			if (!isLanguageFeatureRequestCurrent(context)) { return { kind: 'conflict' }; }
+			if (!target) { return failures.length ? { kind: 'failed', message: String(failures[0]) } : { kind: 'unavailable' }; }
+			if (model.getValueInRange(target.preparation.range) !== params.symbol) { return { kind: 'conflict' }; }
+			const result = await target.provider.provideRenameEdits(Object.freeze({ ...context, newName: params.newName }), signal);
+			throwIfCancelled(signal);
+			if (!isLanguageFeatureRequestCurrent(context)) { return { kind: 'conflict' }; }
+			const entries: LanguageWorkspaceEditEntry[] = [];
+			const paths = new Set<string>();
+			for (const entry of normalizeLanguageWorkspaceEdit(result).entries) {
+				if (entry.kind !== 'textDocument' || entry.resource.scheme !== Schemas.file || entry.resource.query || entry.resource.fragment) {
+					return { kind: 'failed', message: 'Agent rename requires text edits to existing files' };
+				}
+				if (!entry.edits.length) { continue; }
+				const source = documentComparisonResource(resource).toString() === documentComparisonResource(entry.resource).toString();
+				if (!source && entry.version === undefined && entry.expectedText === undefined) {
+					return { kind: 'failed', message: 'The rename provider omitted a document revision' };
+				}
+				paths.add(entry.resource.fsPath);
+				entries.push(source ? { ...entry, version: entry.version ?? model.getVersionId() } : entry);
+			}
+			if (!paths.size) { return { kind: 'unavailable' }; }
+			if (paths.size > 128 || this.renames.size >= 16 || this.renames.has(params.snapshot)) {
+				return { kind: 'failed', message: 'Rename snapshot or target limit reached' };
+			}
+			const ownedReference = reference;
+			this.renames.set(params.snapshot, Object.assign(toDisposable(() => ownedReference.dispose()), {
+				context, newName: params.newName, edit: { entries },
+			}));
+			reference = undefined;
+			return { kind: 'prepared', paths: [...paths] };
+		} catch (error) {
+			if (isCancellationError(error)) { throw error; }
+			return { kind: 'failed', message: String(error) };
+		} finally {
+			reference?.dispose();
+		}
+	}
+
+	private async applyRename(params: TextDocumentApplyRenameParams, signal: AbortSignal): Promise<TextDocumentApplyResult> {
+		using plan = this.renames.deleteAndLeak(params.snapshot);
+		if (!plan || !isLanguageFeatureRequestCurrent(plan.context)) { return { kind: 'conflict' }; }
+		try {
+			const result = await this.bulkEdits.apply(plan.edit, {
+				...renameEditOptions(plan.newName),
+				showPreview: true,
+				token: signal,
+				validateBeforeCommit: async () => {
+					throwIfCancelled(signal);
+					if (!isLanguageFeatureRequestCurrent(plan.context)) { throw new WorkspaceEditConflictError(); }
+					await this.client.request(APP_SERVER_METHODS['textDocument/confirmRename'], { access: params.access }, { signal });
+					if (!isLanguageFeatureRequestCurrent(plan.context)) { throw new WorkspaceEditConflictError(); }
+				},
+			});
+			return { kind: result.isApplied ? 'applied' : 'cancelled' };
+		} catch (error) {
+			if (error instanceof WorkspaceEditConflictError) { return { kind: 'conflict' }; }
+			if (error instanceof AggregateError) { return { kind: 'outcomeUnknown', message: String(error) }; }
+			if (isCancellationError(error)) { return { kind: 'cancelled' }; }
+			return { kind: 'failed', message: String(error) };
 		}
 	}
 
@@ -162,6 +302,13 @@ function documentComparisonResource(resource: URI): URI {
 function documentResource(path: string): URI {
 	if (!/^(?:[a-zA-Z]:[\\/]|\\\\|\/)/u.test(path)) { throw new TypeError('Document path must be absolute'); }
 	return URI.file(path);
+}
+
+function toLanguageRange(range: IRange): LanguageRangeDto {
+	return {
+		start: { lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 },
+		end: { lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 },
+	};
 }
 
 function claimResource(resources: Set<string>, resource: URI): void {
