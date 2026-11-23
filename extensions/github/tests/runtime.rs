@@ -1,5 +1,5 @@
 //! Exercises the product adapter against the actual independently built executable.
-#[path = "../../../crates/app-server/src/github_extension.rs"]
+#[path = "../../../crates/app-server/src/github_extension/runtime.rs"]
 mod host;
 
 use ash_async_utils::CancellationSource;
@@ -146,8 +146,6 @@ impl Fixture {
         let credentials = Arc::new(Credentials::default());
         let http = Arc::new(Http::default());
         let provider = runtime.provider(Some(credentials.clone()), http.clone());
-        // Resolution is restricted to an installed product; this test uses an explicit executable.
-        let _ = host::product_executable();
         Self {
             _profile: profile,
             policy,

@@ -31,12 +31,11 @@ sha2.workspace = true
 ash-external-ext.workspace = true
 external-ext-protocol.workspace = true
 ash-core-plugins.workspace = true
-ash-install-context.workspace = true
 tempfile.workspace = true
 
 [lints]
 workspace = true
 
 [package.metadata.cargo-shear]
-# runtime.rs compiles the product adapter by path; these imports are outside this package.
-ignored = ["ash-install-context", "external-ext-protocol", "sha2"]
+# tests/runtime.rs compiles the product adapter by path; its imports are outside this package.
+ignored = ["external-ext-protocol", "sha2"]
