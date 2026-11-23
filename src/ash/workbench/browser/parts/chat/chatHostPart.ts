@@ -38,27 +38,25 @@ export class ChatHostPart extends Part {
 		return this.content?.preferredWidth;
 	}
 
-	/** Mounts new content and returns a lease that can only detach this mount. */
-	setContent(content: Part, focus: () => void): IDisposable {
+	/** Borrows content until it is replaced or this host is disposed. */
+	setContent(content: Part, focus: () => void): void {
+		this.assertNotDisposed();
 		this.mount.clear();
 		this.content = content;
 		this.focus = focus;
 		this.contentDomNode.append(content.domNode);
 		const listener = content.onDidChangeConstraints(() => this.notifyConstraintsChanged());
-		const lease = toDisposable(() => {
+		this.mount.value = toDisposable(() => {
 			listener.dispose();
-			if (this.content !== content) return;
 			this.content = undefined;
 			this.focus = undefined;
 			content.setVisible(false);
 			content.domNode.remove();
 			this.notifyConstraintsChanged();
 		});
-		this.mount.value = lease;
 		content.setVisible(!this.domNode.hidden);
 		if (this.dimension) content.layout(this.dimension);
 		this.notifyConstraintsChanged();
-		return lease;
 	}
 
 	focusContent(): void {

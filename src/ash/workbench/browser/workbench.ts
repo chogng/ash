@@ -1483,7 +1483,6 @@ export class Workbench extends Disposable {
 			[ViewContainerLocation.AgentSidebar, agentSidebar],
 		]);
 		if (chatAvailable) {
-			const chat = this._register(services.createInstance(ChatHostPart, workbenchRoot));
 			const content = this._register(services.createInstance(PaneCompositePart, workbenchRoot, {
 				openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 				viewDescriptorService: viewDescriptors,
@@ -1497,11 +1496,13 @@ export class Workbench extends Disposable {
 				compositeBarVisible: false,
 				titleActions: { menuService: menus, contextMenuProvider: contextMenus, menuId: MenuId.ChatHostTitle },
 			}));
+			// Dispose the host first so it can detach its borrowed content.
+			const chat = this._register(services.createInstance(ChatHostPart, workbenchRoot));
 			content.domNode.removeAttribute('aria-label');
-			this._register(chat.setContent(content, () => {
+			chat.setContent(content, () => {
 				const active = content.activeCompositeId;
 				if (active) content.getComposite(active)?.focus();
-			}));
+			});
 			parts.set('chat', chat);
 			paneParts.set(ViewContainerLocation.Chat, content);
 		}

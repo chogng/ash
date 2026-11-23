@@ -268,9 +268,8 @@ test('The Chat part borrows content and restores the editor when its focused con
 		const second = disposables.add(new TestPart('auxiliarybar', root));
 		const input = dom.window.document.createElement('input');
 		second.domNode.append(input);
-		using oldMount = chat.setContent(first, () => assert.fail('The replaced Chat received focus'));
-		using mount = chat.setContent(second, () => input.focus());
-		oldMount.dispose();
+		chat.setContent(first, () => assert.fail('The replaced Chat received focus'));
+		chat.setContent(second, () => input.focus());
 		assert.equal(first.domNode.isConnected, false);
 		assert.equal(first.isDisposed, false);
 		assert.equal(second.domNode.hidden, true);
@@ -306,6 +305,9 @@ test('The Chat part borrows content and restores the editor when its focused con
 		assert.equal(dom.window.document.activeElement, editorFocus);
 		assert.equal(second.domNode.hidden, true);
 		assert.equal(chat.domNode.contains(second.domNode), true);
+		chat.dispose();
+		assert.equal(second.domNode.parentElement, null);
+		assert.equal(second.isDisposed, false);
 	} finally {
 		harness.disposables.dispose();
 		dom.window.close();
