@@ -8,7 +8,7 @@ export function sourceOffset(source, position) {
 	return offset;
 }
 
-export function inputEdit(source, value) {
+export function inputEdit(source, value, eol = source.includes('\r\n') ? '\r\n' : '\n') {
 	const normalized = source.replace(/\r\n?/gu, '\n');
 	let start = 0;
 	while (start < normalized.length && start < value.length && normalized[start] === value[start]) start++;
@@ -19,7 +19,7 @@ export function inputEdit(source, value) {
 	if (end < normalized.length && /[\uDC00-\uDFFF]/u.test(normalized[end])) { end++; nextEnd++; }
 	return {
 		start: sourceOffset(source, start), end: sourceOffset(source, end),
-		text: value.slice(start, nextEnd).replaceAll('\n', source.includes('\r\n') ? '\r\n' : '\n'),
+		text: value.slice(start, nextEnd).replaceAll('\n', eol),
 	};
 }
 

@@ -28,6 +28,7 @@ import { asWebviewUri } from '../../webview/common/webview.js';
 export interface CustomTextEditorDocument {
 	readonly uri: string;
 	readonly text: string;
+	readonly eol: string;
 	readonly languageId: string;
 	readonly version: number;
 	readonly readOnly: boolean;
@@ -127,7 +128,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				this.renderRequest.value = toDisposable(() => controller.abort());
 				const renderSignal = AbortSignal.any([inputSignal, controller.signal]);
 				try {
-					const document = { uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly };
+					const document = { uri: input.resource.toString(), text: reference.model.getText(), eol: reference.model.getEOL(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly };
 					const content = await this.provider.render(document, renderSignal);
 					if (renderSignal.aborted || this.model !== model) {
 						return;
@@ -247,7 +248,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		}
 		if (message.type !== 'edit' && message.type !== 'undo' && message.type !== 'redo') return;
 		if (!('version' in message) || !Number.isSafeInteger(message.version) || message.version !== model.getVersionId() || this.readOnly) {
-			webview.postMessage({ type: 'editRejected', reason: this.readOnly ? 'readonly' : 'conflict', document: { uri: model.uri.toString(), text: model.getText(), languageId: model.getLanguageId(), version: model.getVersionId(), readOnly: this.readOnly } });
+			webview.postMessage({ type: 'editRejected', reason: this.readOnly ? 'readonly' : 'conflict', document: { uri: model.uri.toString(), text: model.getText(), eol: model.getEOL(), languageId: model.getLanguageId(), version: model.getVersionId(), readOnly: this.readOnly } });
 			this.refreshView?.();
 			return;
 		}
@@ -256,27 +257,36 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				webview.postMessage({ type: 'editRejected', reason: 'invalid' });
 				return;
 			}
-			const previous = model.getText();
 			let start = 0;
-			let end = previous.length;
+			let end = model.getValueLength();
 			let replacement = message.text;
 			const delta = 'start' in message || 'end' in message;
 			if (delta) {
 				if (!('start' in message) || !('end' in message)
 					|| typeof message.start !== 'number' || typeof message.end !== 'number'
 					|| !Number.isSafeInteger(message.start) || !Number.isSafeInteger(message.end)
-					|| message.start < 0 || message.end < message.start || message.end > previous.length
-					|| previous.length - (message.end - message.start) + replacement.length > 16 * 1024 * 1024) {
+					|| message.start < 0 || message.end < message.start || message.end > end
+					|| end - (message.end - message.start) + replacement.length > 16 * 1024 * 1024) {
 					webview.postMessage({ type: 'editRejected', reason: 'invalid' });
 					return;
 				}
 				start = message.start; end = message.end;
 			} else {
+				const previous = model.getText();
 				while (start < previous.length && start < replacement.length && previous[start] === replacement[start]) start++;
 				let nextEnd = replacement.length;
 				while (end > start && nextEnd > start && previous[end - 1] === replacement[nextEnd - 1]) { end--; nextEnd--; }
 				replacement = replacement.slice(start, nextEnd);
 			}
+			const appliedVersion = model.getVersionId() + 1;
+			let appliedAsRequested = false;
+			// A version-only acknowledgement promises that the requested offsets and text
+			// describe the model exactly. Read the committed change, including EOL normalization.
+			using listener = model.onDidChangeContent(change => {
+				const [edit] = change.changes;
+				appliedAsRequested = change.version === appliedVersion && change.changes.length === 1
+					&& edit.rangeOffset === start && edit.rangeLength === end - start && edit.text === replacement;
+			});
 			this.applyingEdit = true;
 			try {
 				if (start !== end || replacement.length > 0) {
@@ -285,7 +295,9 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					model.pushStackElement();
 				}
 			} finally { this.applyingEdit = false; }
-			webview.postMessage({ type: 'accepted', version: model.getVersionId(), ...(delta ? {} : { text: model.getText() }) });
+			const version = model.getVersionId();
+			const correction = delta && appliedAsRequested && version === appliedVersion ? {} : { text: model.getText(), eol: model.getEOL() };
+			webview.postMessage({ type: 'accepted', version, ...correction });
 			this.refreshView?.();
 		} else {
 			if (message.type === 'undo') model.undo(); else model.redo();

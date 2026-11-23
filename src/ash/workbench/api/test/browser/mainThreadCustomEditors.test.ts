@@ -28,7 +28,7 @@ test('Rust custom editor resources stay within their enabled package and follow 
 	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages, { getExtensionPointContributions: () => [] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
 	using registration = adapter.registerCustomTextEditorProvider({ kind: 'customTextEditor', registrationId: 'test.rust.editor', viewType: 'test.rust.editor', displayName: 'Test', selectors: ['*.md'], priority: 'option' }, async () => ({ html: '<main></main>', resources: { script: path, style: 'media/view.css' } }), { id: 'test.rust', version: '1' });
 	await EditorPanes.getEditorPanes().find(pane => pane.id === 'test.rust.editor')!.create({});
-	const document = { uri: 'untitled:/view.md', version: 1, languageId: 'markdown', text: '', readOnly: false };
+	const document = { uri: 'untitled:/view.md', version: 1, languageId: 'markdown', text: '', eol: '\n', readOnly: false };
 	const signal = new AbortController().signal;
 	await provider!.render(document, signal);
 	await provider!.render(document, signal);
@@ -625,7 +625,7 @@ test('a restored custom editor activates on first render and survives dormant-to
 	const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType)!;
 	assert.ok(descriptor, 'Restoration discovers the declared view before a process exists');
 	await descriptor.create({});
-	const document = { uri: 'untitled:/draft.md', version: 3, languageId: 'markdown', text: 'unsaved', readOnly: false };
+	const document = { uri: 'untitled:/draft.md', version: 3, languageId: 'markdown', text: 'unsaved', eol: '\n', readOnly: false };
 	const signal = new AbortController().signal;
 	assert.equal((await provider!.render(document, signal)).html, '<main>restored unsaved document</main>');
 	assert.strictEqual(EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType), descriptor);

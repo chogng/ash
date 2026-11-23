@@ -18,6 +18,10 @@ test('a Chinese input commit changes only its source range and retains CRLF', ()
 	assert.equal(sourceOffset('a\r\n中😀', 3), 4);
 });
 
+test('a single-line input uses the model EOL when inserting a line break', () => {
+	assert.deepEqual(inputEdit('First', 'First\nSecond', '\r\n'), { start: 5, end: 5, text: '\r\nSecond' });
+});
+
 test('emoji replacement does not split surrogate pairs or alter surrounding Markdown', () => {
 	const source = '**😀**\r\n[id]: https://example.com\r\n';
 	assert.equal(apply(source, '**😁**\n[id]: https://example.com\n'), '**😁**\r\n[id]: https://example.com\r\n');

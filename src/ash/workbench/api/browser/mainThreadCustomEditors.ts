@@ -150,7 +150,7 @@ export class MainThreadCustomEditors extends Disposable {
 			create: options => this.instantiation.createInstance(WebviewEditor, {
 				viewType: registration.viewType,
 				displayName: registration.displayName,
-				render: async (document, signal) => {
+				render: async ({ eol, ...document }, signal) => {
 					const result = await invoke('resolveCustomTextEditor', { document: { ...document } }, signal);
 					if (typeof result !== 'object' || result === null || Array.isArray(result) || !('html' in result) || typeof result.html !== 'string') {
 						throw new TypeError('Custom editor provider must return HTML');
@@ -169,8 +169,8 @@ export class MainThreadCustomEditors extends Disposable {
 					const update = result.update;
 					if ('editable' in result && typeof result.editable !== 'boolean') throw new TypeError('Custom editor editable policy must be boolean');
 					const editable = 'editable' in result ? result.editable as boolean : undefined;
-					// Readonly policy belongs to the editor model owner, including after configuration changes.
-					return 'update' in result ? { html, editable, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update } : { html, editable };
+					// The editor model owns the metadata used to apply edits to this snapshot.
+					return 'update' in result ? { html, editable, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly, eol } : update } : { html, editable };
 				},
 				onDidChange: this.packages.onDidChange ?? Event.None,
 			} satisfies CustomTextEditorProvider, options.onSave),

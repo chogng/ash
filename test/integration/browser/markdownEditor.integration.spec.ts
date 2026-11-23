@@ -339,6 +339,46 @@ test('keyboard formatting and whole-source edits preserve unrelated CRLF and ref
 	await expect(frame.getByRole('textbox', { name: 'Edit document source', exact: true })).toBeFocused();
 });
 
+for (const staleEOL of [false, true]) {
+	test(`table insertion and queued typing save at the correct CRLF offsets${staleEOL ? ' after host normalization' : ''}`, async ({ page }) => {
+		if (staleEOL) {
+			await page.addInitScript(() => {
+				// Give the view a stale EOL policy to exercise the host's correction.
+				window.addEventListener('message', event => {
+					if (event.source === parent && event.data?.type === 'document') event.data.eol = '\n';
+				}, true);
+			});
+		}
+		const frame = await openHost(page);
+		const initial = await page.evaluate(() => window.ashMarkdownHost.text);
+		await frame.getByRole('button', { name: 'Edit document source', exact: true }).click();
+		const input = frame.getByRole('textbox', { name: 'Edit document source', exact: true });
+		await input.evaluate((element: HTMLTextAreaElement) => {
+			const start = element.value.indexOf('中文段落');
+			element.setSelectionRange(start, start);
+			const buttons = [...document.querySelectorAll('button')];
+			// All three actions run before the iframe can receive the table acknowledgement.
+			buttons.find(button => button.textContent === 'Table')!.click();
+			const end = element.value.indexOf('原有换行。') + '原有换行。'.length;
+			element.setRangeText('紧接😀', end, end, 'end');
+			element.dispatchEvent(new InputEvent('input', { bubbles: true }));
+			buttons.find(button => button.textContent === 'Save')!.click();
+		});
+		const table = '\r\n\r\n| Header | Header |\r\n| --- | --- |\r\n| Cell | Cell |\r\n\r\n';
+		const withTable = initial.replace('中文段落', `${table}中文段落`);
+		const expected = withTable.replace('原有换行。', '原有换行。紧接😀');
+		await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.saved)).toBe(expected);
+		const edits = await page.evaluate(() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit'));
+		expect(edits).toEqual([
+			expect.objectContaining({ text: staleEOL ? table.replaceAll('\r\n', '\n') : table }),
+			expect.objectContaining({ start: withTable.indexOf('原有换行。') + '原有换行。'.length, text: '紧接😀' }),
+		]);
+		await expect(input).toHaveValue(expected.replaceAll('\r\n', '\n'));
+		await expect(input).toBeFocused();
+		await expect(frame.getByRole('status')).toBeEmpty();
+	});
+}
+
 test('readonly Markdown remains inert and blocks HTML, unsafe links and remote image requests', async ({ page }) => {
 	const requests: string[] = [];
 	await page.route('https://audit-image.invalid/**', async route => { requests.push(route.request().url()); await route.abort(); });

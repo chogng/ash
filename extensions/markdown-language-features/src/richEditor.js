@@ -1,6 +1,7 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputbox.js';
+import { normalizeTextToEOL } from '../../../src/ash/editor/common/core/misc/eolCounter.js';
 import '../../markdown-math/src/styles.js';
 import { inputEdit, sourceOffset, normalizedOffset, textEdit } from './sourceEdits.js';
 import '../media/richEditor.css';
@@ -32,6 +33,11 @@ function draftBlocks(parsed, text) {
 	];
 }
 
+function documentEOL({ eol, text }) {
+	if (eol === '\r\n' || eol === '\n') return eol;
+	return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
 /** A transient view and draft. The existing host owns versions, undo and saving. */
 class MarkdownEditor extends Disposable {
 	constructor(initial) {
@@ -39,6 +45,7 @@ class MarkdownEditor extends Disposable {
 		this.api = acquireVsCodeApi();
 		this.messages = initial.messages;
 		this.text = this.confirmed = initial.text;
+		this.eol = documentEOL(initial);
 		this.version = initial.version;
 		this.latest = initial;
 		this.parsed = initial;
@@ -47,6 +54,7 @@ class MarkdownEditor extends Disposable {
 		this.historyPending = false;
 		this.saving = this.conflict = this.composing = false;
 		this.pending = undefined;
+		this.correction = undefined;
 		this.inputLifetime = this._register(new DisposableStore());
 		this._register(toDisposable(() => { for (const entry of this.renderedBlocks ?? []) entry.lifetime.dispose(); }));
 		this.toolbar = document.createElement('div');
@@ -283,7 +291,7 @@ class MarkdownEditor extends Disposable {
 	commitInput() {
 		if (!this.active || this.composing || this.updating) return;
 		const { start, end, input } = this.active;
-		const edit = inputEdit(this.text.slice(start, end), input.value);
+		const edit = inputEdit(this.text.slice(start, end), input.value, this.eol);
 		if (edit.start === edit.end && !edit.text) return;
 		this.text = this.text.slice(0, start + edit.start) + edit.text + this.text.slice(start + edit.end);
 		this.active.end += edit.text.length - (edit.end - edit.start); this.flush();
@@ -301,6 +309,7 @@ class MarkdownEditor extends Disposable {
 
 	replace(value, selection = this.selection()) {
 		if (!selection || this.readOnly || this.conflict || this.composing) return;
+		value = normalizeTextToEOL(value, this.eol);
 		this.patch(selection.start, selection.end, value);
 		this.active.end += value.length - (selection.end - selection.start);
 		this.updating = true; this.active.input.value = this.text.slice(this.active.start, this.active.end); this.updating = false;
@@ -320,15 +329,16 @@ class MarkdownEditor extends Disposable {
 	prefix(marker) {
 		const selection = this.selection(); if (!selection) return;
 		const start = this.text.lastIndexOf('\n', selection.start - 1) + 1;
-		const end = this.text.indexOf('\n', Math.max(selection.start, selection.end - 1));
-		const text = this.text.slice(start, end === -1 ? this.text.length : end);
+		const newline = this.text.indexOf('\n', Math.max(selection.start, selection.end - 1));
+		const end = newline === -1 ? this.text.length : this.text[newline - 1] === '\r' ? newline - 1 : newline;
+		const text = this.text.slice(start, end);
 		const lines = text.split('\n');
 		const remove = lines.every(line => line.startsWith(marker));
 		const replacement = lines.map(line => {
 			const existing = marker === '# ' ? /^#{1,6} /u.exec(line)?.[0] : line.startsWith(marker) ? marker : '';
 			return (remove ? '' : marker) + line.slice(existing?.length ?? 0);
 		}).join('\n');
-		this.replace(replacement, { start, end: start + text.length });
+		this.replace(replacement, { start, end });
 	}
 
 	openLinkForm() {
@@ -375,6 +385,25 @@ class MarkdownEditor extends Disposable {
 
 	flush() {
 		if (this.composing || this.pending !== undefined || this.historyPending || this.conflict) return;
+		if (this.correction !== undefined) {
+			const submitted = this.correction;
+			this.correction = undefined;
+			if (normalizeTextToEOL(submitted, this.eol) === this.confirmed) {
+				// The textarea already presents logical newlines. Convert the queued draft
+				// and restore its selection before computing offsets on the confirmed text.
+				const normalized = normalizeTextToEOL(this.text, this.eol);
+				if (normalized !== this.text) {
+					const start = this.active && sourceOffset(normalized, normalizedOffset(this.text, this.active.start));
+					this.text = normalized;
+					this.renderWithInput(start);
+				}
+			} else if (this.text === submitted) {
+				this.adopt(this.latest);
+			} else {
+				this.reject({ reason: 'conflict' });
+				return;
+			}
+		}
 		if (this.text !== this.confirmed) {
 			this.pending = this.text;
 			this.api.postMessage({ type: 'edit', version: this.version, ...textEdit(this.confirmed, this.text) });
@@ -390,22 +419,36 @@ class MarkdownEditor extends Disposable {
 
 	adopt(snapshot) {
 		if (!snapshot || this.composing) return;
-		const focused = document.activeElement;
-		const previous = this.active && { start: this.active.start, whole: this.active.whole, caret: this.active.input.inputElement.selectionStart };
-		this.pending = undefined; this.conflict = false;
+		this.pending = this.correction = undefined; this.conflict = false;
 		this.version = snapshot.version; this.text = this.confirmed = snapshot.text; this.readOnly = snapshot.readOnly;
-		this.status.textContent = ''; this.reload.hidden = true; this.render();
+		this.eol = documentEOL(snapshot);
+		this.status.textContent = ''; this.reload.hidden = true;
+		this.renderWithInput();
+	}
+
+	renderWithInput(start = this.active?.start) {
+		const focused = document.activeElement;
+		const previous = this.active;
+		const input = previous?.input.inputElement;
+		const selection = input && { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };
+		this.render();
 		if (previous && !this.readOnly) {
-			const block = this.blocks.find(block => block.start <= previous.start && previous.start < block.end) ?? this.blocks.at(-1);
-			this.activate(block.start, block.end, previous.whole);
-			if (this.active) this.active.input.select({ start: Math.min(previous.caret, this.active.input.value.length), end: Math.min(previous.caret, this.active.input.value.length) });
+			if (previous.whole) this.activate(0, this.text.length, true);
+			else {
+				const block = this.blocks.find(block => block.start <= start && start < block.end) ?? this.blocks.at(-1);
+				if (block) this.activate(block.start, block.end);
+			}
+			if (this.active) {
+				const shift = normalizedOffset(this.text.slice(this.active.start), Math.max(0, start - this.active.start));
+				this.active.input.inputElement.setSelectionRange(selection.start + shift, selection.end + shift, selection.direction);
+			}
 		}
 		// A delayed history response must not steal focus from the toolbar or link form.
 		if (focused?.isConnected && focused !== document.body) focused.focus();
 	}
 
 	reject(message) {
-		this.pending = undefined; this.saving = false; this.conflict = true; this.historyPending = false; this.historyQueue = [];
+		this.pending = this.correction = undefined; this.saving = false; this.conflict = true; this.historyPending = false; this.historyQueue = [];
 		if (message.document) this.latest = message.document;
 		this.status.textContent = message.reason === 'readonly' ? this.messages.readonly : this.messages.conflict;
 		this.reload.hidden = false; this.updateButtons();
@@ -418,12 +461,20 @@ class MarkdownEditor extends Disposable {
 		if (!Number.isSafeInteger(message.version) || message.version < this.version) return;
 		if (message.type === 'accepted' && !this.conflict) {
 			if (this.pending === undefined) return;
-			this.confirmed = this.pending; this.pending = undefined; this.version = message.version;
+			this.confirmed = typeof message.text === 'string' ? message.text : this.pending;
+			this.version = message.version;
+			if (this.confirmed !== this.pending) {
+				this.eol = documentEOL({ eol: message.eol, text: this.confirmed });
+				this.latest = { version: this.version, text: this.confirmed, eol: this.eol, readOnly: this.readOnly };
+				this.correction = this.pending;
+			}
+			this.pending = undefined;
 			this.flush();
 		} else if (message.type === 'document' && typeof message.text === 'string') {
 			this.latest = message; this.historyPending = false;
 			this.parsed = message;
 			if (message.version === this.version && message.text === this.confirmed) {
+				this.eol = documentEOL(message);
 				if (!this.active && !this.composing && !this.conflict && this.text === message.text) { this.status.textContent = ''; this.render(); }
 				this.readOnly = message.readOnly; this.updateButtons(); this.flush();
 			} else if (this.pending !== undefined || this.text !== this.confirmed || this.composing) this.reject({ reason: 'conflict', document: message });
