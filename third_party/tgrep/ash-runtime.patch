@@ -14,7 +14,7 @@ index f7988f3..df71783 100644
 +[target.'cfg(all(target_os = "windows", target_arch = "aarch64"))']
 +rustflags = ["-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static", "-Clink-args=/DYNAMICBASE"]
 diff --git a/Cargo.lock b/Cargo.lock
-index 01d5102..4be4dff 100644
+index eb7eddc..22abd64 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -922,6 +922,15 @@ dependencies = [
@@ -37,8 +37,8 @@ index 01d5102..4be4dff 100644
 
  [[package]]
  name = "tgrep-cli"
--version = "1.2.7"
-+version = "1.2.7-ash.70c3b0a.1"
+-version = "1.2.8"
++version = "1.2.8-ash.1a846b3.1"
  dependencies = [
   "anyhow",
   "assert_cmd",
@@ -54,8 +54,8 @@ index 01d5102..4be4dff 100644
 
  [[package]]
  name = "tgrep-core"
--version = "1.2.7"
-+version = "1.2.7-ash.70c3b0a.1"
+-version = "1.2.8"
++version = "1.2.8-ash.1a846b3.1"
  dependencies = [
   "anyhow",
   "blake3",
@@ -73,15 +73,15 @@ index 01d5102..4be4dff 100644
  name = "unicode-xid"
  version = "0.2.6"
 diff --git a/Cargo.toml b/Cargo.toml
-index 2202054..3cadb4a 100644
+index 23d1f46..6f3184d 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -4,7 +4,7 @@ exclude = ["vendor/ignore"]
  resolver = "2"
 
  [workspace.package]
--version = "1.2.7"
-+version = "1.2.7-ash.70c3b0a.1"
+-version = "1.2.8"
++version = "1.2.8-ash.1a846b3.1"
  edition = "2024"
  rust-version = "1.88"
  license = "MIT"
@@ -855,7 +855,7 @@ index c18593b..1f10e16 100644
                  .map(|mb| mb.saturating_mul(1024 * 1024))
                  .unwrap_or_else(mem::default_memory_cap_bytes);
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
-index c397498..4aa2fda 100644
+index 3d237d9..2968eb3 100644
 --- a/tgrep-cli/src/serve.rs
 +++ b/tgrep-cli/src/serve.rs
 @@ -549,6 +549,7 @@ impl RecentReindexCache {
@@ -903,7 +903,7 @@ index c397498..4aa2fda 100644
      // Start auto-save thread
      let save_state = Arc::clone(&state);
      thread::spawn(move || auto_save_loop(save_state));
-@@ -1697,11 +1721,18 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+@@ -1697,7 +1721,6 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
          let line = match read_bounded_line(&mut reader) {
              Ok(Some(line)) => line,
              Ok(None) => break,
@@ -911,7 +911,11 @@ index c397498..4aa2fda 100644
              Err(error) if is_timeout(&error) => break,
              Err(error) => return Err(error),
          };
--        let response = process_request(&line, state);
+@@ -1710,7 +1733,15 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+             part_lost.set(!sent);
+             sent
+         };
+-        let response = process_request_streaming(&line, state, &send_part);
 +        let envelope: serde_json::Value =
 +            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
 +        let enabled = crate::ash_request::enabled(
@@ -919,27 +923,36 @@ index c397498..4aa2fda 100644
 +            envelope["cancellable"] == true,
 +        );
 +        let response = crate::ash_request::run(&writer, enabled, |cancellation| {
-+            Ok(process_request(&line, state, cancellation))
++            Ok(process_request_streaming(&line, state, &send_part, cancellation))
 +        })?;
-         writeln!(writer, "{}", with_instance(&response, instance))?;
-         writer.flush()?;
-     }
-@@ -1735,7 +1766,11 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
-     }
+         if part_lost.get() {
+             // Nobody is left to read the rest of the reply.
+             break;
+@@ -1750,7 +1781,12 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
+
+ #[cfg(test)]
+ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+-    process_request_streaming(request, state, &|_| true)
++    process_request_streaming(
++        request,
++        state,
++        &|_| true,
++        &crate::ash_request::Cancellation::Disabled,
++    )
  }
 
--fn process_request(request: &str, state: &Arc<ServerState>) -> String {
-+fn process_request(
-+    request: &str,
-+    state: &Arc<ServerState>,
+ /// Serve one request. `send_part` sends an early part of a reply that the
+@@ -1761,6 +1797,7 @@ fn process_request_streaming(
+     request: &str,
+     state: &Arc<ServerState>,
+     send_part: &dyn Fn(&str) -> bool,
 +    cancellation: &crate::ash_request::Cancellation<'_>,
-+) -> String {
+ ) -> String {
      let req: serde_json::Value = match serde_json::from_str(request) {
          Ok(v) => v,
-         Err(e) => {
-@@ -1753,12 +1788,65 @@ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+@@ -1779,12 +1816,65 @@ fn process_request_streaming(
      match method {
-         "search" => handle_search(id, &params, state),
+         "search" => handle_search_streaming(id, &params, state, send_part),
          "files" => handle_files(id, &params, state),
 +        "files/page" => handle_file_page(id, &params, state, cancellation),
 +        "files/fuzzy" => file_page_response(
@@ -1003,10 +1016,10 @@ index c397498..4aa2fda 100644
  fn handle_files(
      id: Option<serde_json::Value>,
      params: &serde_json::Value,
-@@ -2153,6 +2241,20 @@ fn parse_search_params(params: &serde_json::Value) -> std::result::Result<Search
- /// single broad query holds at once, while keeping enough files per batch to
- /// occupy every search thread.
- const SEARCH_CHUNK_FILES: usize = 2048;
+@@ -2195,6 +2285,21 @@ const SEARCH_CHUNK_FILES: usize = 2048;
+ /// up to [`SEARCH_CHUNK_FILES`].
+ const STREAM_FIRST_CHUNK_FILES: usize = 64;
+
 +// Ash's limit is global and distinct from ripgrep's per-file max_count.
 +// A bounded request uses ordered matching so later files never consume its row budget.
 +pub(super) fn global_result_limit(params: &serde_json::Value) -> Result<Option<usize>, String> {
@@ -1021,10 +1034,11 @@ index c397498..4aa2fda 100644
 +        })
 +        .transpose()
 +}
-
++
+ #[cfg(test)]
  fn handle_search(
      id: Option<serde_json::Value>,
-@@ -2169,13 +2271,17 @@ fn handle_search(
+@@ -2238,13 +2343,17 @@ fn search_with_budget(
          Err(e) => return json_rpc_error(id, -32602, &e),
      };
 
@@ -1043,7 +1057,7 @@ index c397498..4aa2fda 100644
      let pattern = req.pattern;
      let case_insensitive = req.case_insensitive;
      let scope = req.scope;
-@@ -2190,7 +2296,7 @@ fn handle_search(
+@@ -2260,7 +2369,7 @@ fn search_with_budget(
 
      // Collect candidates and their paths/full_paths while holding the index lock briefly
      let t_index = Instant::now();
@@ -1052,51 +1066,174 @@ index c397498..4aa2fda 100644
          let index = state.index.read().unwrap();
          // Check the same generation whose candidates and visibility we read.
          if state.indexing.load(Ordering::SeqCst) || !state.hidden_complete.load(Ordering::SeqCst) {
-@@ -2401,11 +2507,43 @@ fn handle_search(
+@@ -2354,19 +2463,20 @@ fn search_with_budget(
+     // Resolve file contents from cache (LRU) or disk.
+     // Two-phase approach: read-lock for cache hits, then disk I/O outside the
+     // lock, then a single write-lock to promote hits and insert misses.
++    let max_filesize = opts.max_filesize;
+     let read_candidate = |rel_path: &str, opened: std::io::Result<std::fs::File>| {
+         let read = (|| -> std::io::Result<Option<Vec<u8>>> {
+             let mut file = opened?;
+             let length = file.metadata()?.len();
+-            if opts.max_filesize.is_some_and(|limit| length > limit) {
++            if max_filesize.is_some_and(|limit| length > limit) {
+                 return Ok(None);
+             }
+             let bytes = crate::search::read_bytes_with_limit(
+                 &mut file,
+-                opts.max_filesize,
++                max_filesize,
+                 length.min(1 << 20) as usize,
+             )?;
+-            if let Some(limit) = opts.max_filesize
++            if let Some(limit) = max_filesize
+                 && file.metadata()?.len() > limit
+             {
+                 return Ok(None);
+@@ -2460,7 +2570,7 @@ fn search_with_budget(
+             let cache = state.cache.read().unwrap();
+             for (rel_path, _) in chunk {
+                 if let Some(cached) = cache.peek(rel_path).filter(|cached| {
+-                    opts.max_filesize
++                    max_filesize
+                         .is_none_or(|limit| cached.source_bytes <= limit)
+                 }) {
+                     hit_keys.push(rel_path.clone());
+@@ -2511,6 +2621,13 @@ fn search_with_budget(
      let mut matches = Vec::new();
      let mut file_stats = Vec::new();
      let mut search_stats = Vec::new();
 +    let mut ordered_budget = JsonBudget {
-+        remaining: tgrep_core::managed::MAX_RESPONSE_BYTES,
++        remaining: reply_budget,
 +    };
 +    let per_file_limit = opts.max_count;
 +    if limit.is_some() {
 +        candidate_info.sort_unstable_by(|left, right| left.0.cmp(&right.0));
 +    }
-     for chunk in candidate_info.chunks(SEARCH_CHUNK_FILES) {
-         let t_resolve = Instant::now();
+     let mut sent_rows = 0usize;
+     let mut searched = 0usize;
+     // Whether a chunk has been searched whose rows are not yet with the client.
+@@ -2550,6 +2667,7 @@ fn search_with_budget(
+                 return json_rpc_error(id, -32000, "search abandoned: the client stopped reading");
+             }
+             remaining.store(reply_budget, Ordering::Release);
++            ordered_budget.remaining = reply_budget;
+         }
+         let (chunk, later) = unsearched.split_at(chunk_files.min(unsearched.len()));
+         unsearched = later;
+@@ -2558,39 +2676,63 @@ fn search_with_budget(
          let candidate_contents = resolve_chunk(chunk);
          resolve_time += t_resolve.elapsed();
 
-+        if let Some(limit) = limit {
-+            let t_search = Instant::now();
-+            for (path, content) in &candidate_contents {
-+                let remaining = limit - matches.len();
-+                opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
-+                let file = match search_file_matches_bounded(
-+                    path, content, &matcher, &opts, Some(&mut ordered_budget),
-+                ) {
-+                    Ok(file) => file,
-+                    Err(error) => return json_rpc_error(id, -32603, &error.to_string()),
-+                };
-+                matches.extend(file.rows.into_iter().take(remaining));
-+                file_stats.extend(file.stats);
-+                search_stats.extend(file.search_stats);
-+                if matches.len() == limit {
-+                    break;
-+                }
-+            }
-+            search_time += t_search.elapsed();
-+            if matches.len() == limit {
-+                break;
-+            }
-+            continue;
-+        }
-+
-         // Parallel regex matching across candidate files
+-        // Parallel regex matching across candidate files
          let t_search = Instant::now();
-         let per_file: anyhow::Result<Vec<FileSearchResult>> = candidate_contents
-@@ -2879,12 +3017,15 @@ fn collect_match_rows_bounded(
+-        let per_file: anyhow::Result<Vec<FileSearchResult>> = candidate_contents
+-            .par_iter()
+-            .map(|(rel_path, content)| {
+-                let cap = remaining.load(Ordering::Acquire);
+-                let mut budget = JsonBudget { remaining: cap };
+-                let found = search_file_matches_bounded(
+-                    rel_path,
+-                    content,
+-                    &matcher,
+-                    &opts,
+-                    Some(&mut budget),
+-                )?;
+-                let used = cap - budget.remaining;
+-                let mut left = remaining.load(Ordering::Acquire);
+-                loop {
+-                    let next = left
+-                        .checked_sub(used)
+-                        .ok_or_else(|| anyhow::Error::from(ResponseLimit))?;
+-                    match remaining.compare_exchange_weak(
+-                        left,
+-                        next,
+-                        Ordering::AcqRel,
+-                        Ordering::Acquire,
+-                    ) {
+-                        Ok(_) => break,
+-                        Err(actual) => left = actual,
++        // Keep the ordered chunk local so a smaller retry cannot duplicate published rows.
++        let per_file: anyhow::Result<Vec<FileSearchResult>> = if let Some(limit) = limit {
++            (|| {
++                let mut rows_left = limit - sent_rows - matches.len();
++                let mut results = Vec::new();
++                for (path, content) in &candidate_contents {
++                    opts.max_count = Some(per_file_limit.unwrap_or(rows_left).min(rows_left));
++                    let mut file = search_file_matches_bounded(
++                        path,
++                        content,
++                        &matcher,
++                        &opts,
++                        Some(&mut ordered_budget),
++                    )?;
++                    file.rows.truncate(rows_left);
++                    rows_left -= file.rows.len();
++                    results.push(file);
++                    if rows_left == 0 {
++                        break;
+                     }
+                 }
+-                Ok(found)
+-            })
+-            .collect();
++                Ok(results)
++            })()
++        } else {
++            candidate_contents
++                .par_iter()
++                .map(|(rel_path, content)| {
++                    let cap = remaining.load(Ordering::Acquire);
++                    let mut budget = JsonBudget { remaining: cap };
++                    let found = search_file_matches_bounded(
++                        rel_path,
++                        content,
++                        &matcher,
++                        &opts,
++                        Some(&mut budget),
++                    )?;
++                    let used = cap - budget.remaining;
++                    let mut left = remaining.load(Ordering::Acquire);
++                    loop {
++                        let next = left
++                            .checked_sub(used)
++                            .ok_or_else(|| anyhow::Error::from(ResponseLimit))?;
++                        match remaining.compare_exchange_weak(
++                            left,
++                            next,
++                            Ordering::AcqRel,
++                            Ordering::Acquire,
++                        ) {
++                            Ok(_) => break,
++                            Err(actual) => left = actual,
++                        }
++                    }
++                    Ok(found)
++                })
++                .collect()
++        };
+         search_time += t_search.elapsed();
+         let per_file = match per_file {
+             Ok(per_file) => per_file,
+@@ -2604,6 +2746,7 @@ fn search_with_budget(
+                 unsearched = &candidate_info[searched..];
+                 chunk_files = chunk.len() / 2;
+                 remaining.store(reply_budget, Ordering::Release);
++                ordered_budget.remaining = reply_budget;
+                 continue;
+             }
+             Err(e) => return json_rpc_error(id, -32603, &format!("{e}")),
+@@ -2613,6 +2756,9 @@ fn search_with_budget(
+             file_stats.extend(file.stats);
+             search_stats.extend(file.search_stats);
+         }
++        if limit == Some(sent_rows + matches.len()) {
++            break;
++        }
+         if stream {
+             part_ready = true;
+             chunk_files = (chunk_files * 4).min(SEARCH_CHUNK_FILES);
+@@ -3048,12 +3194,15 @@ fn collect_match_rows_bounded(
  }
 
  fn handle_status(id: Option<serde_json::Value>, state: &ServerState) -> String {
@@ -1112,7 +1249,7 @@ index c397498..4aa2fda 100644
          "num_files": index.num_files(),
          "num_trigrams": index.num_trigrams(),
          "cache_size": cache.len(),
-@@ -3452,6 +3593,17 @@ fn start_file_watcher_using(
+@@ -3621,6 +3770,17 @@ fn start_file_watcher_using(
                          .paths
                          .retain(|path| !path.starts_with(&callback_state.index_dir));
                      if !event.paths.is_empty() || event.need_rescan() {
@@ -1130,7 +1267,7 @@ index c397498..4aa2fda 100644
                          enqueue_watcher_event(
                              &tx,
                              &callback_overflow,
-@@ -3467,6 +3619,7 @@ fn start_file_watcher_using(
+@@ -3636,6 +3796,7 @@ fn start_file_watcher_using(
                  // watcher stopped working" from the outside, and silence makes it
                  // impossible to tell apart from a bug in our own filtering.
                  Err(e) => {
@@ -1138,7 +1275,7 @@ index c397498..4aa2fda 100644
                      eprintln!("[trace] warning: file watcher error: {e}");
                      if native_capacity_error(&e) {
                          request_polling(&callback_state, watch_failure_reason(&e));
-@@ -9952,6 +10105,13 @@ mod tests {
+@@ -10121,6 +10282,13 @@ mod tests {
      fn test_server_state_from_index(root: &Path, index_dir: &Path) -> Arc<ServerState> {
          let hybrid = HybridIndex::open(index_dir, root).expect("open index");
          Arc::new(ServerState {
@@ -1152,36 +1289,41 @@ index c397498..4aa2fda 100644
              index: RwLock::new(hybrid),
              visibility: RwLock::new(Default::default()),
              hidden_complete: std::sync::atomic::AtomicBool::new(true),
-@@ -10270,7 +10430,11 @@ mod tests {
-             .insert("asset.bin".to_string());
-         state.filename_index_ready.store(true, Ordering::SeqCst);
-
--        let response = process_request(r#"{"jsonrpc":"2.0","method":"files","id":1}"#, &state);
-+        let response = process_request(
-+            r#"{"jsonrpc":"2.0","method":"files","id":1}"#,
-+            &state,
-+            &crate::ash_request::Cancellation::Disabled,
-+        );
-         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
-         assert_eq!(
-             value.pointer("/result/files").unwrap(),
-diff --git a/tgrep-cli/src/serve/poll_tests.rs b/tgrep-cli/src/serve/poll_tests.rs
-index 367f38a..30b730f 100644
---- a/tgrep-cli/src/serve/poll_tests.rs
-+++ b/tgrep-cli/src/serve/poll_tests.rs
-@@ -69,7 +69,11 @@ impl Fixture {
+@@ -10275,6 +10443,34 @@ mod tests {
+         assert_eq!(row_files(&tight), expected);
      }
 
-     fn assert_files(&self, expected: &[&str]) {
--        let response = process_request(r#"{"jsonrpc":"2.0","method":"files","id":1}"#, &self.state);
-+        let response = process_request(
-+            r#"{"jsonrpc":"2.0","method":"files","id":1}"#,
-+            &self.state,
-+            &crate::ash_request::Cancellation::Disabled,
++    #[test]
++    fn streamed_search_keeps_the_global_result_limit_after_splitting_chunks() {
++        const FILES: usize = 300;
++        const LIMIT: usize = 100;
++        let (_temp, _root, _index_dir, state) = needle_files(FILES);
++        let mut expected = needle_order(&state);
++        expected.sort_unstable();
++        expected.truncate(LIMIT);
++
++        let replies = std::cell::RefCell::new(Vec::new());
++        let last = search_with_budget(
++            None,
++            &serde_json::json!({"pattern": "needle", "stream": true, "max_results": LIMIT}),
++            &state,
++            &|part| {
++                replies.borrow_mut().push(serde_json::from_str(part).unwrap());
++                true
++            },
++            2048,
 +        );
-         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
-         let actual: BTreeSet<_> = value["result"]["files"]
-             .as_array()
++        let mut replies = replies.into_inner();
++        assert!(replies.len() > 1);
++        let last: serde_json::Value = serde_json::from_str(&last).unwrap();
++        assert_eq!(last["result"]["num_matches"], LIMIT, "{last}");
++        replies.push(last);
++        assert_eq!(row_files(&replies), expected);
++    }
++
+     /// A file whose own rows overflow one reply cannot be sent, so the search
+     /// ends with an error, after parts with every file ahead of it.
+     #[test]
 diff --git a/tgrep-cli/src/serve/shared/managed.rs b/tgrep-cli/src/serve/shared/managed.rs
 index 8e7ad65..c3d4c58 100644
 --- a/tgrep-cli/src/serve/shared/managed.rs

@@ -4,7 +4,7 @@
 
 ## 安装与生命周期
 
-- 固定正式版 1.2.7 上游提交 `70c3b0a7cd2c3becae0d613fc08df6b74a483731`，Ash 包内版本为 `1.2.7-ash.70c3b0a.1`。保留上游的托管任务调度、独立查询线程池、范围内候选筛选和无效监听事件过滤。引擎在构建时编译。[源码和补丁校验值](../../third_party/tgrep/runtime-lock.json)
+- 固定正式版 1.2.8 上游提交 `1a846b3abc9bf3a196a426b23e547a91e803aecb`，Ash 包内版本为 `1.2.8-ash.1a846b3.1`。保留上游的托管任务调度、独立查询线程池、范围内候选筛选和无效监听事件过滤。引擎在构建时编译。[源码和补丁校验值](../../third_party/tgrep/runtime-lock.json)
 - 开发准备、发布构建与 Remote runtime 都包含 `ash-resources/tgrep/tgrep[.exe]`。查询不联网下载，不搜索系统 `PATH`。显式 `ASH_TGREP_PATH` 可指定开发 executable；覆盖路径无效时直接报错。
 - `just test` / `scripts/cargo.py run` 对依赖本 crate 的开发目标准备锁定的 executable；普通产品从安装目录解析。
 - 进程池按 executable 与仓库存储键协调首次启动，全局表锁只做查找；同键等待检查取消，不同仓库可并行启动。池仅保存进程弱引用，最后一个 Session 释放后不会留住进程。

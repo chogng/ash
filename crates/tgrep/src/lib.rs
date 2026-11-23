@@ -24,7 +24,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.2.7-ash.70c3b0a.1";
+pub const VERSION: &str = "1.2.8-ash.1a846b3.1";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 

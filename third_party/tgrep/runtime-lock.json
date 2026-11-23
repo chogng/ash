@@ -1,16 +1,16 @@
 {
   "schemaVersion": 2,
   "runtime": "tgrep",
-  "version": "1.2.7-ash.70c3b0a.1",
+  "version": "1.2.8-ash.1a846b3.1",
   "source": {
     "repository": "https://github.com/microsoft/tgrep",
-    "commit": "70c3b0a7cd2c3becae0d613fc08df6b74a483731",
+    "commit": "1a846b3abc9bf3a196a426b23e547a91e803aecb",
     "file": "source.tar.gz",
-    "sha256": "5733dea369a9452c3b7ff15ad5281e0c6e2eddbbf780ae1054cdcd43a2bcfaa2"
+    "sha256": "60034d7ebdeec57b28ae889913ca0a1e46c00545b61eebe347afd1f4558efc22"
   },
   "patch": {
     "file": "ash-runtime.patch",
-    "sha256": "1224ecb79bc231ec94fe82527a34cc62e65f7f7fc836c425be927abf0a9a68c8"
+    "sha256": "3232e87032f81cdf9b74737aeda497770bf35f61707b70278d4e6048fb875165"
   },
   "targets": [
     "aarch64-apple-darwin",
