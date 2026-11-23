@@ -15,6 +15,45 @@
 	display: none;
 }
 
+@media (forced-colors: none) {
+	.ash-multi-editor-tabs-control > .ash-tab-list.has-tabs-to-left {
+		--ash-editor-tabs-fade-left: 1;
+	}
+
+	.ash-multi-editor-tabs-control > .ash-tab-list.has-tabs-to-right {
+		--ash-editor-tabs-fade-right: 1;
+	}
+
+	/* Fade the clipped tab content while keeping the scrollbar and focus outlines clear.
+	 * Windows opt in by supplying a fade width. */
+	.ash-multi-editor-tabs-control
+		> .ash-tab-list:is(.has-tabs-to-left, .has-tabs-to-right):not(
+			:focus-within
+		)
+		> .ash-scrollbar-viewport {
+		--ash-editor-tabs-fade-extent: min(
+			var(--ash-editor-tabs-edge-fade-width),
+			25%
+		);
+
+		mask-image: linear-gradient(
+			to right,
+			transparent,
+			black
+				calc(
+					var(--ash-editor-tabs-fade-left, 0) *
+						var(--ash-editor-tabs-fade-extent)
+				),
+			black
+				calc(
+					100% - var(--ash-editor-tabs-fade-right, 0) *
+						var(--ash-editor-tabs-fade-extent)
+				),
+			transparent
+		);
+	}
+}
+
 /* Keep the tab strip's lower edge clear where it meets the editor. */
 :is(
 		.modern-ui

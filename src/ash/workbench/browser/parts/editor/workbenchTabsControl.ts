@@ -110,22 +110,28 @@ export class WorkbenchTabsControl<T> extends Disposable {
 	}
 
 	private updateClipping(): void {
+		const viewport = this.tabList.scrollableElement;
+		const { scrollLeft, scrollWidth, clientWidth } = viewport;
+		// Scroll extents are rounded to whole CSS pixels even when the position is fractional.
+		const position = Math.round(scrollLeft);
+		this.tabList.element.classList.toggle('has-tabs-to-left', position > 0);
+		this.tabList.element.classList.toggle('has-tabs-to-right', position + clientWidth < scrollWidth);
+
 		const tab = this.connectedTab;
 		if (!tab || !this.connected) {
 			clearConnectedTabClipping(tab, this.tabList.element);
 			return;
 		}
-		const viewport = this.tabList.scrollableElement;
 		const bounds = tab.getBoundingClientRect();
 		const viewportBounds = viewport.getBoundingClientRect();
 		updateConnectedTabClipping({
 			tab,
 			overflowEdge: this.tabList.element,
-			fillLeft: bounds.left - viewportBounds.left + viewport.scrollLeft,
-			fillRight: bounds.right - viewportBounds.left + viewport.scrollLeft,
+			fillLeft: bounds.left - viewportBounds.left + scrollLeft,
+			fillRight: bounds.right - viewportBounds.left + scrollLeft,
 			viewportLeft: 0,
-			viewportRight: viewport.clientWidth,
+			viewportRight: clientWidth,
 			shoulderExtent: 6,
-		}, viewport.scrollLeft);
+		}, scrollLeft);
 	}
 }
