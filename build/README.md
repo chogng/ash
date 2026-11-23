@@ -17,6 +17,19 @@ Product entrypoints compose the shared package tools for development and release
 Runtime discovery, Tool policy, sandbox enforcement, notarization, installer
 formats, and update delivery belong to their respective owners.
 
+## Optional MarkItDown runtime
+
+Run `python3 -B build/markitdown/package.py --output .build/markitdown/release`
+on the target host with `uv` installed. The command builds a separate, hashed
+runtime archive from a locked CPython distribution and wheel set. Pass
+`--artifact-url` with the final HTTPS asset URL to emit its capability descriptor.
+
+After extracting the archive, run its `python/bin/python3.12` executable
+(`python/python.exe` on Windows) with `-I -B -X utf8 convert.py <file>` from the
+extracted directory. The worker writes UTF-8 Markdown to standard output for
+local PDF, DOCX, PPTX, and XLSX files. Desktop release assembly and import flows
+do not consume the archive yet.
+
 Root `remote-server/` owns Remote delivery requirements; `lib/` owns common package
 assembly, validation and immutable generation storage. `prepare.py` prepares
 the shared development package; `desktop/` owns incremental Desktop selection.

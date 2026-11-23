@@ -22,6 +22,7 @@ class BuildCommandTests(unittest.TestCase):
             "prepare.py": "--javascript-runtime",
             "sign.py": "--verify-only",
             "darwin/notarize.py": "--staple",
+            "markitdown/package.py": "--artifact-url",
         }
         with tempfile.TemporaryDirectory() as temporary:
             for script, option in commands.items():
