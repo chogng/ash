@@ -3,7 +3,7 @@
 > [阶段产物与验收规则](development-workflow.md)仅适用于用户显式使用 `/develop`，不适用于日常评估、修复和实现。本文拥有 `/develop` 产品系统，分别注明当前实现与后续设计；使用 `intent.md` 等记录本身不能证明产品已经实现。
 
 > 状态：已实现命令与阶段运行的纵向流程（2026-09-22），其余目标按下文标注。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `agents.md` 维护。
-> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 任务的关系。持久 Team 的成员与生命周期由 [`Agent Team`](../crates/docs/agent-teams.md) 维护；内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
+> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 任务的关系。持久 Team 的成员与生命周期由 [`Agent Team`](../crates/teams/README.md) 维护；内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
 
 `ASH.md` 已由 Agent 运行时读取。当前阶段产物保存在工作流领域数据库；`intent.md`、`spec.md` 和 `plan.md` 的文件导出仍属后续设计，不用于把当前系统设计拆成四份自我描述的文档。
 
@@ -280,7 +280,7 @@ Intent v1 accepted
 
 ## 9. Team 与阶段执行
 
-`/develop` 创建和管理开发工作；流程协调内核判断当前处于哪个阶段；Plan 决定工作是否具备可独立拆分的证据。执行可使用单 Agent、临时多 Agent 协作，或选择一个已有 Team 的成员。Team 长期保存成员关系，本次阶段的执行、取消与结果仍属于一个 Session 的 Agent 树；完整成员契约见 [Agent Team](../crates/docs/agent-teams.md)。当前 `/team` 命令只有临时多 Agent 协作，尚不能选择持久 Team。
+`/develop` 创建和管理开发工作；流程协调内核判断当前处于哪个阶段；Plan 决定工作是否具备可独立拆分的证据。执行可使用单 Agent、临时多 Agent 协作，或选择一个已有 Team 的成员。Team 长期保存成员关系，本次阶段的执行、取消与结果仍属于一个 Session 的 Agent 树；完整成员契约见 [Agent Team](../crates/teams/README.md)。当前 `/team` 命令只有临时多 Agent 协作，尚不能选择持久 Team。
 
 适合多人执行的情况包括：
 

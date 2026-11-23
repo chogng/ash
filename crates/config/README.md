@@ -15,7 +15,7 @@ Plugin 包标识与版本直接复用 `ash-plugin` 的类型和校验，配置�
 just test ash-config
 ```
 
-用户文件 schemaVersion 2 移除旧 Issue 执行配置，只保留 `issues.autoRefreshMinutes`；SQLite 配置文档版本 10 继续支持从版本 7 起的既有记录。Root Role、模型指导与委托通过通用 Agent 系统处理，见 [指令组合](../docs/agent-instructions.md)。
+用户文件 schemaVersion 2 移除旧 Issue 执行配置，只保留 `issues.autoRefreshMinutes`；SQLite 配置文档版本 10 继续支持从版本 7 起的既有记录。Root Role、模型指导与委托通过通用 Agent 系统处理，见 [指令组合](../prompts/docs/agent-instructions.md)。
 
 ## Feature 与 Schema
 

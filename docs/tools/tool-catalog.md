@@ -218,12 +218,11 @@ ToolSet：`instructions`（目标）。
 
 ToolSet：`modes`（目标）。
 
-定义：[模式切换](../../crates/app-server/src/server/switch_mode_tool.rs)。
-只改变工作方式；离开 Plan／Ask 的确认、Turn 状态与权限上限继续按原契约处理。
+定义见 [App Server 实现](../../crates/app-server/src/server/switch_mode_tool.rs)。
 
-| 工具          | 用途／主要操作                             | ToolSet（目标） | 执行归属与条件                                                                      |
-| ------------- | ------------------------------------------ | --------------- | ----------------------------------------------------------------------------------- |
-| `switch_mode` | 在 agent、plan、debug、swarm、ask 之间切换 | `modes`         | ThreadController；离开 plan／ask 进入执行模式需工具内用户决策；不扩大工具或角色上限 |
+| 工具          | 用途／主要操作       | ToolSet（目标） | 执行归属与条件                                                        |
+| ------------- | -------------------- | --------------- | --------------------------------------------------------------------- |
+| `switch_mode` | 切换当前 Turn 的模式 | `modes`         | ThreadController。见[切换与确认规则](tools.md#当前-turn-的模式切换)。 |
 
 ### 14. 顾问咨询（1）
 

@@ -106,7 +106,7 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 `parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn
 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
-Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../crates/docs/agent-teams.md)。
+Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../crates/teams/README.md)。
 
 Memory 是独立 profile 持久化领域。Code 与 Chat 项目记忆按命名空间隔离。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
 
@@ -1492,7 +1492,7 @@ TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随�
 
 Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存储已退出生产调用链；这些旧 method 返回 MethodNotFound。配置文件 schemaVersion 1 升级到 2 时移除 issues.repositories、recommendMerge 和 analysisModel，保留浏览刷新偏好；SQLite 配置文档版本为 10。已有用户数据库中的旧 Issue 表不会在后台被自动删除。
 
-指令组合和外部参考见 [Agent 指令系统](../crates/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
+指令组合和外部参考见 [Agent 指令系统](../crates/prompts/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
 
 ## GitHub 仓库管理
 

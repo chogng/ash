@@ -62,6 +62,12 @@ App Server 在接受每轮执行时，用同一目录快照计算预算并绑定
 - 工具输出限额只作用于发往模型的副本，每个工具结果的所有文本部分共用一个预算，原始历史和持久记录保持完整。tokens 模式使用共享输出工具的 UTF-8 字节近似，不代表 tokenizer 实测值。
 - ChatGPT 远端目录导入明确返回的模态、参数支持与默认值、并行工具、原图能力、容量和截断策略；本地 Codex `model/list` 没有返回的字段保持未声明。
 
+### Ultra 与推理档位
+
+桌面 Chat 按连接和型号保存 Ultra 开关。当前连接必须支持 `xhigh`。OpenAI 开启时用 `xhigh` 覆盖请求档位，Anthropic 将 `xhigh` 用作默认值并优先使用显式档位。模型目录发布开关状态和生效档位。Chat 滑块在覆盖开始时移到对应档位，选择其他档位会关闭 Ultra 并应用新值，直接关闭开关会恢复原档位。
+
+Ultra 调整模型请求，由当前模式指导任务委托。[Swarm 的执行边界](../agent-mode-templates/README.md#swarm-的执行边界)
+
 ## 内部接口地图
 
 | Symbol                                             | 可见性                 | 当前职责                                                            | 方向约束                                             |
@@ -183,8 +189,6 @@ WebSocket eligibility 由独立的 `WebSocketApiProfile` 声明，不能从
 模型目录读取按供应商放在 `src/catalog/`：`openai.rs` 管 OpenAI API 目录，其下的 `chatgpt.rs` 管 ChatGPT 订阅目录，并优先读取 Codex 当前账户校验后的本地目录；`xai.rs` 读取已登录账户的模型目录，`kimi.rs` 提供已支持的 Kimi Code 型号，`ollama.rs` 读取本地 Ollama。各来源只返回标准化观察结果，缓存由 `ash-models-manager` 按供应商写入 Ash profile。更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。
 
 ChatGPT subscription 通过 `ash-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Ash Core `TurnExecutor` 持有。该订阅接口拒绝公开 API 的 `prompt_cache_breakpoint` 字段；runtime 选择明确的 `ApiEndpoint::ChatGptResponses`，不改写缓存字段或组装路由头。`ash-api` 统一处理这些协议规则，完整结果、流式调用和认证重试共用同一 API 入口。
-
-Ash 按连接和型号保存独立的 Ultra 开关。支持 Ultra 的 OpenAI 模型在开启后以 `xhigh` 覆盖请求档位。模型还需在当前连接支持 `xhigh`。Anthropic 在没有显式档位时使用该值作为默认值，显式档位继续生效。模型目录向客户端提供开关状态和生效的请求档位覆盖。Chat 滑块在覆盖开始时移到对应档位。此时选择其他档位会关闭 Ultra 并应用新档位，直接关闭开关会恢复普通档位。见 [Swarm、Ultra 与 Ultracode](../agent-mode-templates/agent-modes.md#swarmultra-与-ultracode)。
 
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。

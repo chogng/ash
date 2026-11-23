@@ -22,45 +22,45 @@ IDE 与 TUI 共享编码流程。TUI 的呈现方式和编辑器上下文通常�
 
 首版将共同规则、界面规则和任务流程分别写成可审阅的正文。每个单元只有一个目的，避免同时加载无关流程。
 
-| 单元               | 草案                                                                | 负责的决定                                                   |
-| ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 共同核心           | [core.md](crates/prompts/drafts/core.md)                            | 身份、意图、事实与来源、行动边界、持续执行、沟通、记忆和续接 |
-| IDE 界面           | [ide.md](crates/prompts/drafts/surfaces/ide.md)                     | 如何使用编辑器上下文以及呈现代码结果                         |
-| Agents Window 界面 | [agents-window.md](crates/prompts/drafts/surfaces/agents-window.md) | 如何在多个任务、项目、会话与成果之间保持方向                 |
-| TUI 界面           | [tui.md](crates/prompts/drafts/surfaces/tui.md)                     | 如何在终端中使用和呈现实际能力                               |
-| 对话               | [chat.md](crates/prompts/drafts/workflows/chat.md)                  | 讨论、解释、建议和创意对话的交付标准                         |
-| 编码               | [coding.md](crates/prompts/drafts/workflows/coding.md)              | 调查、实现、调试、审查与代码核验                             |
-| Cowork             | [cowork.md](crates/prompts/drafts/workflows/cowork.md)              | 研究、数据、文件和文档成果的完整交付                         |
-| Design             | [design.md](crates/prompts/drafts/workflows/design.md)              | 将设计要求变成合适的视觉或交互成果并核验                     |
-| 个人助手           | [assistant.md](crates/prompts/drafts/workflows/assistant.md)        | 个人上下文、承诺、记忆、外部行动与受托的主动工作             |
+| 单元               | 草案                                                    | 负责的决定                                                   |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------ |
+| 共同核心           | [core.md](../drafts/core.md)                            | 身份、意图、事实与来源、行动边界、持续执行、沟通、记忆和续接 |
+| IDE 界面           | [ide.md](../drafts/surfaces/ide.md)                     | 如何使用编辑器上下文以及呈现代码结果                         |
+| Agents Window 界面 | [agents-window.md](../drafts/surfaces/agents-window.md) | 如何在多个任务、项目、会话与成果之间保持方向                 |
+| TUI 界面           | [tui.md](../drafts/surfaces/tui.md)                     | 如何在终端中使用和呈现实际能力                               |
+| 对话               | [chat.md](../drafts/workflows/chat.md)                  | 讨论、解释、建议和创意对话的交付标准                         |
+| 编码               | [coding.md](../drafts/workflows/coding.md)              | 调查、实现、调试、审查与代码核验                             |
+| Cowork             | [cowork.md](../drafts/workflows/cowork.md)              | 研究、数据、文件和文档成果的完整交付                         |
+| Design             | [design.md](../drafts/workflows/design.md)              | 将设计要求变成合适的视觉或交互成果并核验                     |
+| 个人助手           | [assistant.md](../drafts/workflows/assistant.md)        | 个人上下文、承诺、记忆、外部行动与受托的主动工作             |
 
-这里的工作类型是写作与评测单元，不是新增的协议枚举、Role 或产品菜单。识别任务类型不会选择一个拥有更多权限的 Agent，也不会自动切换Agent 模式。
+这里的工作类型是写作与评测单元，不是新增的协议枚举、Role 或产品菜单。识别任务类型不会选择一个拥有更多权限的 Agent，也不会自动切换 Agent 模式。
 
 语义上的组合示例：
 
 ```text
-IDE 修复代码：       core + ide + coding + 当前Agent 模式/Role/实际工具与上下文
-TUI 修复同一问题：   core + tui + coding + 当前Agent 模式/Role/实际工具与上下文
-Agents 整理报告：    core + agents-window + cowork + 当前Agent 模式/Role/实际工具与上下文
-Agents 讨论架构：    core + agents-window + chat + 当前Agent 模式/Role/实际工具与上下文
+IDE 修复代码：       core + ide + coding + 当前 Agent 模式/Role/实际工具与上下文
+TUI 修复同一问题：   core + tui + coding + 当前 Agent 模式/Role/实际工具与上下文
+Agents 整理报告：    core + agents-window + cowork + 当前 Agent 模式/Role/实际工具与上下文
+Agents 讨论架构：    core + agents-window + chat + 当前 Agent 模式/Role/实际工具与上下文
 Agents 制作交互页：  core + agents-window + design + coding（确有实现工作时）+ 既有运行约束
-Agents 安排日程：    core + agents-window + assistant + 当前Agent 模式/Role/实际工具与上下文
+Agents 安排日程：    core + agents-window + assistant + 当前 Agent 模式/Role/实际工具与上下文
 ```
 
 这是正文职责的组合图，不是新的指令优先级或已实现的加载器。以主要成果选择流程，只加入完成该成果所需的支撑流程。制作网页需要编码，讨论设计概念通常不需要；写报告中的计算代码属于内部制作手段，不会把整个任务转为软件工程。
 
 ### 界面、任务、模式、Role 和模型分别决定什么
 
-| 维度       | 决定什么                                               | 不由它决定的内容                        |
-| ---------- | ------------------------------------------------------ | --------------------------------------- |
-| 界面       | 上下文来源、用户如何看到和操作结果                     | 工具授权、任务身份、完成与否            |
-| 任务流程   | 当前目标所需的调查、制作与核验                         | 宿主能力、持久 Role、自动后台工作       |
-| Agent 模式 | 当前 Turn 按 Ask、Plan、Agent、Debug 或 Swarm 怎样工作 | 产品窗口、用户成果的种类、额外权限      |
-| Role       | 根或子 Agent 的职责、报告关系和能力上限                | 用户意图、已撤销权限、其他 Agent 的职责 |
-| 模型指导   | 为准确模型选择合适的完整基础正文及专用表达             | 产品身份、工具协议、用户授权            |
-| 工具与环境 | 实际可调用操作、执行位置、来源与运行限制               | 模型可以凭文字自行扩充的能力            |
+| 维度       | 决定什么                                   | 不由它决定的内容                        |
+| ---------- | ------------------------------------------ | --------------------------------------- |
+| 界面       | 上下文来源、用户如何看到和操作结果         | 工具授权、任务身份、完成与否            |
+| 任务流程   | 当前目标所需的调查、制作与核验             | 宿主能力、持久 Role、自动后台工作       |
+| Agent 模式 | 当前 Turn 的工作方式                       | 产品窗口、用户成果的种类、额外权限      |
+| Role       | 根或子 Agent 的职责、报告关系和能力上限    | 用户意图、已撤销权限、其他 Agent 的职责 |
+| 模型指导   | 为准确模型选择合适的完整基础正文及专用表达 | 产品身份、工具协议、用户授权            |
+| 工具与环境 | 实际可调用操作、执行位置、来源与运行限制   | 模型可以凭文字自行扩充的能力            |
 
-这些边界延续 [Agent 指令组合](crates/docs/agent-instructions.md)、[Agent 模式](crates/agent-mode-templates/README.md) 和 [Role](crates/agent-roles/README.md) 的现有契约。例如，在 Ask 模式下识别到 coding 任务，仍然只能在该模式允许的范围内回答；切到 Code 布局也不会自动获得实施授权。
+这些边界延续 [Agent 指令组合](agent-instructions.md)、[Agent 模式](../../agent-mode-templates/README.md) 和 [Role](../../agent-roles/README.md) 的现有契约。例如，在 Ask 模式下识别到 coding 任务，仍然只能在该模式允许的范围内回答；切到 Code 布局也不会自动获得实施授权。
 
 ## 共同核心为什么这样写
 
@@ -131,7 +131,7 @@ Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文
 
 因此，`core.md` 首先是共同规则的写作与评测基线，不能直接再叠到所有已有完整基础正文上。首轮接入应按这份基线修订适用模型的完整正文和默认正文，保留有证据的模型表达差异；界面与任务说明的选择、归属和预算需进入真实组装链路的验证。若以后改为共同核心加精简模型指导，需要单独修改组合契约并评测，不通过文本草案暗中完成迁移。
 
-本轮不修改现有运行时正文、模型 JSON、Role、模式或工具协议。新正文放在 `drafts/`，不从 Rust 导出、不自动加载、不放进当前编译模板目录。阅读入口放在 [Prompts README](crates/prompts/README.md)，现有架构事实继续由 [Agent Harness](docs/agent-harness.md) 和 [Agent 指令组合](crates/docs/agent-instructions.md) 维护。
+本轮不修改现有运行时正文、模型 JSON、Role、模式或工具协议。新正文放在 `drafts/`，不从 Rust 导出、不自动加载、不放进当前编译模板目录。阅读入口放在 [Prompts README](../README.md)，现有架构事实继续由 [Agent Harness](../../../docs/agent-harness.md) 和 [Agent 指令组合](agent-instructions.md) 维护。
 
 ## 参考与采用理由
 
@@ -196,7 +196,7 @@ OpenAI、Anthropic 和 Cursor 是用户指定的三家重点参考；Delta 保�
 | 来源与材料                                                                                                                                                                                                                                                                                                                                                   | 重点学习什么                                                                              | 对 Ash 的设计要求                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | OpenAI：[Agents SDK Tracing](https://github.com/openai/openai-agents-python/blob/main/docs/tracing.md)、[Agent Improvement Loop](https://developers.openai.com/cookbook/examples/agents_sdk/agent_improvement_loop)、[Macro Evals](https://developers.openai.com/cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems) | 生命周期与采集职责；从 Trace 和反馈形成评测，再提出可检验的修改；跨运行寻找反复出现的问题 | 关联已有运行身份与原始证据；反馈、评分和修改假设归评测派生结果；群体分析保留分母、覆盖与代表性 Trace         |
-| Anthropic：上面的 agent evals 和工具评测文章，以及本地 [build-eval](../skills/skills/claude-api/shared/evals/build-eval.md)、[eval-audit](../skills/skills/claude-api/shared/evals/eval-audit.md)、[eval-hillclimb](../skills/skills/claude-api/shared/evals/eval-hillclimb.md)                                                                              | 真实任务、独立验收、评分器校准与保留测试集；同时优化工具、上下文和 loop                   | 成果、评分与 Trace 对应同一次试次；通过已知正确和错误成果检查评分器；逐项记录改动与回归                      |
+| Anthropic：上面的 agent evals 和工具评测文章，以及下文固定版本的 `../skills` 中的 `skills/claude-api/shared/evals/build-eval.md`、`skills/claude-api/shared/evals/eval-audit.md`、`skills/claude-api/shared/evals/eval-hillclimb.md`                                                                                                                         | 真实任务、独立验收、评分器校准与保留测试集；同时优化工具、上下文和 loop                   | 成果、评分与 Trace 对应同一次试次；通过已知正确和错误成果检查评分器；逐项记录改动与回归                      |
 | Cursor：[Continually Improving Our Agent Harness](https://cursor.com/blog/continually-improving-agent-harness)、[CursorBench](https://cursor.com/blog/cursorbench)                                                                                                                                                                                           | 用实际任务持续迭代整个 harness；结合离线评测和线上反馈；按工具与模型建立错误基线          | 保留自然用户输入并允许多种正确实现；比较相同任务版本；工具错误记录调用分母和恢复结果，界面与模型差异分别报告 |
 
 OpenAI 的 Improvement Loop 示例将 Trace、反馈、生成的评测、验证和修改建议串联起来，并在提出建议前区分缺少要求、已有要求未被遵守、运行时或可观测性缺陷。这直接影响我们的修改记录：先确认问题归属，再选择正文、工具或运行机制。示例中的 Promptfoo 和第三方 HALO 是可选实现；生成的评测通过只说明已覆盖条件，仍需独立任务和评分器校准。Macro Evals 是官方 Cookbook 中的合作方示例，聚类与关系分析用于发现重复模式和待检查的上游因素，不自动证明因果。
@@ -209,13 +209,13 @@ Cursor 的 [Token Efficiency](https://cursor.com/blog/improved-token-efficiency)
 
 Delta 的 [Beyond Pass Rate](https://delta.dev/blog/beyond-pass-rate) 补充了通过任务后的可审阅性、工具失败与调度开销；[Delta & Git](https://delta.dev/docs/concepts/delta-and-git) 提供会话与文件演变关联的产品思路。其同一 system prompt 的实验支持检验共同正文这一假设，不能据此排除必要的模型适配。文件历史、并发版本与真实等待边界继续归现有 owner。
 
-本地参考已核对到具体提交：`../codex` 为 `c9e0fffbbc05c36478686444f6ab1edbadfe2768`，`../skills` 为 `683bc88e56f3e09ba94f7055977f3d3aa499f202`，`../zed` 为 `9ab0715969e9854f2efe61a9d782e7698e5fe6d2`。Codex 的 [rollout recorder](../codex/codex-rs/rollout/src/recorder.rs)、[保存策略](../codex/codex-rs/rollout/src/policy.rs) 与 [OTel 入口](../codex/codex-rs/otel/README.md) 用于核对历史与遥测职责；Zed 的 [工具评测](../zed/crates/agent/src/tools/evals.rs) 提供相关实现。
+下列相邻检出路径以仓库根目录为基准。本地参考均记录到具体提交。`../codex` 为 `c9e0fffbbc05c36478686444f6ab1edbadfe2768`，`../skills` 为 `683bc88e56f3e09ba94f7055977f3d3aa499f202`，`../zed` 为 `9ab0715969e9854f2efe61a9d782e7698e5fe6d2`。Codex 的 [rollout recorder](../../../../codex/codex-rs/rollout/src/recorder.rs)、[保存策略](../../../../codex/codex-rs/rollout/src/policy.rs) 与 [OTel 入口](../../../../codex/codex-rs/otel/README.md) 用于核对历史与遥测职责；Zed 的 [工具评测](../../../../zed/crates/agent/src/tools/evals.rs) 提供相关实现。
 
-新增本地参考也已实际阅读：`../openai-agents-python` 为 `125efa029b4bfd84238bd2c4fd69c3406f802663`，重点是 [scope](../openai-agents-python/src/agents/tracing/scope.py)、[span](../openai-agents-python/src/agents/tracing/spans.py)、[provider](../openai-agents-python/src/agents/tracing/provider.py) 和 [processors](../openai-agents-python/src/agents/tracing/processors.py)。其作用域、生命周期和处理器失败隔离值得学习；队列溢出、导出失败或结束超时可能丢失诊断，Ash 仍须分别报告任务结果与证据覆盖，沿用当前本地录制契约。
+新增本地参考也已实际阅读：`../openai-agents-python` 为 `125efa029b4bfd84238bd2c4fd69c3406f802663`，重点是 `src/agents/tracing/scope.py`、`src/agents/tracing/spans.py`、`src/agents/tracing/provider.py` 和 `src/agents/tracing/processors.py`。其作用域、生命周期和处理器失败隔离值得学习；队列溢出、导出失败或结束超时可能丢失诊断，Ash 仍须分别报告任务结果与证据覆盖，沿用当前本地录制契约。
 
-`../claude-cookbooks` 为 `d7265d6ae994ccd8429db0594b000073b2f9ad43`，已核对 [Tool Evaluation](../claude-cookbooks/tool_evaluation/tool_evaluation.ipynb) 与 [Agentic Search Benchmark](../claude-cookbooks/evals/agentic_search/reproduce_agentic_search_benchmarks.ipynb) 的示例。前者的简化 loop 和模型自述帮助理解评测；后者展示响应块续接、容器状态、暂停与压缩的处理。Ash 的效果评测继续运行真实产品入口、读取宿主事实并独立验收，示例中的少量样本不能证明公布的完整基准结果。
+`../claude-cookbooks` 为 `d7265d6ae994ccd8429db0594b000073b2f9ad43`，已核对 `tool_evaluation/tool_evaluation.ipynb` 与 `evals/agentic_search/reproduce_agentic_search_benchmarks.ipynb` 的示例。前者的简化 loop 和模型自述帮助理解评测；后者展示响应块续接、容器状态、暂停与压缩的处理。Ash 的效果评测继续运行真实产品入口、读取宿主事实并独立验收，示例中的少量样本不能证明公布的完整基准结果。
 
-[OpenAI Cookbook](https://github.com/openai/openai-cookbook) 也已补到本地，`../openai-cookbook` 为 `0eac1447d4e24d06e47c459ca5e98f248b9413cf`；已核对 [Improvement Loop](../openai-cookbook/examples/agents_sdk/agent_improvement_loop.ipynb) 与 [Macro Evals](../openai-cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems.ipynb) 的代码结构。Cursor 的 [Evals SDK](https://cursor.com/docs/evals) 可作为整体系统的黑盒对照入口；公开 SDK 和文章不等于完整生产 harness 或完整 CursorBench 数据已开源。黑盒比较需记录已暴露的模型、能力、环境与预算差异，不能把不可控的内部差异归为纯提示词效果。
+[OpenAI Cookbook](https://github.com/openai/openai-cookbook) 也已补到本地，`../openai-cookbook` 为 `0eac1447d4e24d06e47c459ca5e98f248b9413cf`；已核对 `examples/agents_sdk/agent_improvement_loop.ipynb` 与 `examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems.ipynb` 的代码结构。Cursor 的 [Evals SDK](https://cursor.com/docs/evals) 可作为整体系统的黑盒对照入口；公开 SDK 和文章不等于完整生产 harness 或完整 CursorBench 数据已开源。黑盒比较需记录已暴露的模型、能力、环境与预算差异，不能把不可控的内部差异归为纯提示词效果。
 
 ### 整体评测与组件实验怎样配合
 
@@ -231,7 +231,7 @@ Delta 的 [Beyond Pass Rate](https://delta.dev/blog/beyond-pass-rate) 补充了�
 
 先比较一个明确变化。需要研究交互作用时，再比较基线、只改 Prompt、只改工具、两者都改四组；每组重复运行并检查回归与保留任务。四组比较在条件可比时提供贡献与交互的证据，不替代足够样本，也不能从一次运行推导普遍原因。任务集更新后建立新版本基线；评分规则变更时，对两侧已保存成果重新评分，避免把评分器变化当成产品收益。
 
-现有 runner 保存任务、配置、模型、产品摘要、权限、重复数和环境。默认比较仍拒绝 `profileConfigDigest` 不同；显式使用 `--experiment` 时，两侧必须声明相同实验、假设和允许变化的条件，并通过配置语义叶项哈希检查实际变化。任务／评分器摘要、权限、期限与重复数始终固定，工具或上下文配置实验可以受控比较；不能只取消摘要检查。产品二进制摘要变化只能证明产品不同，不能证明只改了某个组件。冻结正文摘要、实际请求、当前工具和上下文策略的关联仍从各自 owner 取得；缺少记录时明确证据缺口。
+对照需要固定任务、评分器、权限、期限和重复数。产品摘要只标识产物，具体组件仍需按冻结正文、实际工具和请求确认。[实验声明和预检](../../../test/agent-eval/README.md#运行与比较)
 
 ### Trace 后续优先补什么
 
@@ -247,80 +247,13 @@ Delta 的 [Beyond Pass Rate](https://delta.dev/blog/beyond-pass-rate) 补充了�
 
 这些设计与现有只读分析衔接，不另建运行状态或事件总线。自动生成用例、模型评分、聚类、线上 A/B 与外部 SDK 对照尚未接入；本轮核对资料和源码，没有运行其付费模型示例。后续只在明确问题与受控评测证明收益时增加流程复杂度。
 
-### 从可查看的 Trace 到日常可用的改进流程
-
-用户要求达到正常使用、能实际改进 harness 的程度。仅记录事件还不能回答“该改哪里”和“改完是否更好”，
-因此在现有 runner 上增加独立的[评测审阅入口](scripts/agent_eval_review.py)，具体操作见[任务评测](test/agent-eval/README.md)。
-执行、事实采集和评分仍归原有 owner；审阅工具只产生派生报告、人工假设及声明文件，不进入普通 Turn。
-
-先用同一个 verifier 验证已知正确和初始错误成果，原因是 Agent 分数低也可能来自题目或评分器。
-`referenceSolution` 与 grader 不复制到 Agent 工作区，audit 另建独立目录运行正反例。它能识别已知错误
-却通过和正确成果却失败，但不能机械证明评分器覆盖所有合理解；真实任务仍须人工校准。
-
-比较条件现在在启动模型之前检查。suite、任务选择、权限、时间和重复数不变，实际变化不得超出声明；
-基线缺少试次或记录了非法指标也拒绝新的批次。`--preflight-only` 只校验输入和条件，不探测在线服务
-或费用。原因是实验不成立时继续消耗模型额度不会产生可解释的结果。
-
-suite 摘要 V2 只冻结语义任务声明、实际文件、参考成果和评分器资源；顶层 README 改写与 JSON 排版
-不改变实验。评分器兄弟文件纳入同一摘要，额外规则由 `gradingResources` 显式登记。原因是普通说明
-修改不应迫使重新消耗模型额度，而实际题目与评分依赖改变必须建立新基线；旧摘要不与 V2 混用。
-
-离线审阅重新读取原始 Trace、核对执行事件与原通过判定并重算汇总；失败、评分设施错误、覆盖缺口和成功后的
-工具错误分别保留证据与试次分母。分组依据已记录的观察，不自动把“工具失败”写成“提示词错误”。
-人工 finding 必须说明观察、候选原因、修改对象和验收条件，绑定报告与产物 SHA-256，事件引用必须
-实际存在。交接另外保存双方实验声明；原始报告不为新的假设事后改名或重写。
-
-成果改进 gate 要求至少一个失败试次恢复且无已通过试次回归；保留任务使用只检查回归的 gate。
-资源 gate 只比较双方都通过且测量完整的试次，保留排除分母，避免把更快的失败或未知用量解释为
-优化。所有 gate 都是批次观察，没有显著性或自动发布含义。当前种子按 development／holdout 分开
-选择是机制演示，不冒充具有代表性且从未用于调优的真实质量集。
-
-受控 HTTP 模型已经经过真实 Ash CLI，验证正反例校准、独立评分、条件预检、候选比较、审阅和交接，
-并继续覆盖模型失败、重试和超时部分输出。只说完成的 control 验收失败，通过工具修改文件的 candidate
-验收通过，说明循环可用；这不是实际模型或生产 harness 的质量提升数据。真实收益仍由固定模型、
-预算、实际任务和保留案例的重复实验判断。Prompt 文本与设计依据继续保持草案阶段，不在本轮接入运行时。
-
 ### Trace 的可选性和扩展边界
 
-用户提出普通使用不需要 Trace，并要求在改造前明确扩展定位。我们建议保留运行时已有业务事实，将详细采集作为默认关闭的 Rust 诊断组件，界面作为按需加载的 TS contribution，评测独立启动。历史、授权、取消、续接、必要计量与 Changes 不随 Trace 停用；诊断和评分保持派生证据。
+详细采集默认关闭，避免普通任务为诊断复制正文或持续查询。业务历史、授权、取消、续接、必要计量与 Changes 随运行时契约保留。提示词只定义任务行为和交付要求。诊断通过观察既有运行事实取得证据。
 
-Rust 实现后端与 TS 实现界面是职责分工，不自动要求新的插件类型。`crates/ext` 的 Agent 贡献与可安装的 TS/JS Editor Extension 采用不同契约；采集不需要额外工具或提示词。当前公共 SDK 没有 Trace API，仅搬目录不能完成扩展运行。本次已解除 Core／core-api 对具体 Trace 实现的生产依赖，使用中立观察契约，由 App Server 组合采集与只读查询；以后再以实际需求决定是否提取官方 TS 扩展。
+需要公开扩展时，先明确可读取的捕获、正文权限、取消和资源释放。Rust 采集和 TypeScript 界面可以独立演进，沿用各自的宿主契约。[诊断所有权与扩展边界](../../rollout-trace/docs/trace.md#2-扩展定位与-rusttypescript-分工)
 
-[Agent 诊断与评测](docs/trace.md)记录设计依据、依赖、采集生命周期和证据边界。`rollout-trace` 负责后端采集与派生读取，前端统一由 Chat Debug 承载，`IChatDebugService` 复用现有连接；编辑器和解析器按需加载，不保留独立 Agent Trace 服务或常驻导航。评测 runner 独立验收成果并消费 rollout Trace。OTel Trace viewer 继续负责性能 span，业务历史、Changes 的 fail-closed 边界、RPC 方法和外层 V3 格式保留。
-
-`modelAttemptAccounted` 来自真实提交后的 invocation ID 和历史序号，原因是数量相等或时间接近不能证明两条证据属于同一次调用。V2 诊断和分析保留待写数量、未关联 attempt 与未观察到账目的缺口；旧 V1 不补造关联。`--experiment` 明确假设、变体和允许变化的模型／产品／配置条件，未声明的变化拒绝比较；配置叶项仅记录语义哈希，评分设施失败单独计数。这样才能区分一次可复核实验与多项变化后的印象。真实模型质量集、独立元数据策略与公开 SDK 提取仍需后续证据。
-
-窗口重开和退出可能让异步退订晚于连接关闭。共享 Chat 服务因此在退订前读取所属连接的状态，并在等待后重新核对 owner 与 generation；已关闭连接自动释放订阅，仍活跃连接的错误继续报告。这样 Trace 与会话使用同一订阅 owner，迟到清理不会释放另一窗口新取得的订阅，也不会把正常退出误报为工作台错误。
-
-### 本次已实现的只读分析
-
-[Trace 分析层](scripts/agent_eval_trace.py) 从导出的 V3 Trace 派生指标和证据位置，[runner](scripts/agent_eval.py) 负责独立验收、重复运行与比较。分析层不修改 Trace、执行工具或替代持久事件，Workbench 已有导入入口继续读取原始文件。
-
-| 分析内容       | 本次行为                                                                                                   | 防止的误判                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 用量           | 按输入、输出、缓存与推理维度记录实报小计、已报告调用数、缺失数及完整度；完全未报告时为 `null`              | 未知数据被当成零成本，估算值被当成供应商实报                               |
-| 诊断覆盖       | 保留关闭／不可用状态，统计丢失记录、遗漏／缺失／截断正文和缺失 attempt 起止                                | 正文保存或录制开启被当成完整证据                                           |
-| 工具与循环     | 按 Thread、Turn、调用身份区分结果，保留工具错误、未匹配结果和原始循环决策                                  | 嵌套或跨任务调用被重复合并，工具错误被当成任务失败                         |
-| 实际指令选择   | 保存冻结组合的摘要、身份、revision、模式、模型、工具 profile 和选择事件位置                                | 同一 revision 的正文或共享指导变化被忽略，选中的正文与实际模型输入混为一谈 |
-| 重复运行与比较 | 展示本批次至少一次通过与全部通过；比较校验相同任务及每次重复身份，只在两侧证据完整的对应运行上计算过程差值 | 缺少试次仍参与对照，偶然成功被当成稳定能力，缺失数据导致虚假的用量下降     |
-
-冻结组合摘要使用键排序、紧凑 UTF-8 JSON 编码后的 SHA-256，覆盖共享指导、模型指导与模式正文；这是分析标识，不替代协议已有的正文摘要，也不证明每条指导实际进入某次模型请求。后者仍须查对应语义请求。报告格式升级为 V2；旧 V1 报告可参与结果对照，但未声明新分析完整度的过程字段不参与差值。
-
-真实产品契约测试显示，失败或取消的 attempt 不一定产生持久用量账目；一次失败后重试成功可以同时有三个 attempt 和两个用量账目。`usageComplete` 因而只描述保留账目的字段覆盖，不能证明整段执行的总用量已知。分析另外使用 `usageComparisonComplete` 排除含失败／取消／放弃或证据缺口的运行，保留实报小计供审阅。已补的关联由现有模型调用与计量 owner 提供提交回执；缺少回执或旧证据没有关联时，仍不凭计数或时间戳补造账目。
-
-报告保留每项观察的 Thread、Turn、事件 ID、本地 sequence 和来源，读者可以从报告进入对应文件，再在 Chat Debug 中按事件 ID 过滤。显示页最多列出每次运行的 40 项观察并标明数量，完整证据位置保留在 `result.json`。比较另外列出实际记录到的模型、产品摘要与环境变化；多项同时变化时不归因于单一提示词。重复编号只是对应实验样本的身份，不使随机模型输出成为同一随机样本，也不提供显著性证明。
-
-下一阶段仍需真实失败与成功但低效的任务、人工审阅和保留测试集。三个当前用例只覆盖 `ash exec` 编码任务；IDE 的编辑器状态、TUI 交互、Agents Window 的 chat／cowork／design／assistant 需要不同验收与宿主上下文证据。现有分析不声称已经测得这些界面的质量、完整货币成本、HTTP 重试或执行关键路径。
-
-### 已有的证据链与覆盖边界
-
-[任务评测 runner](test/agent-eval/README.md) 已保存配置、`events.jsonl`、`trace.json`、本轮不可变文件变更、还原后的成果及独立 verifier 结果。报告中的运行可以关联到对应 rollout Trace，并在 Chat Debug 中导入查看。验收依据是保存成果的实际属性，模型自己的完成声明不能代替 verifier。
-
-[Rollout Trace](crates/rollout-trace/README.md) 汇集同一 Session tree 中各 Thread 的持久事件和保留的历史前缀，保留各流原有顺序。详细诊断可另外保存 Core 请求、ModelService 准备后的语义请求、模型响应和失败或取消前的部分输出；执行关系图从这些证据派生。`ModelResponseEvaluated` 中的循环动作、停止原因和消息阶段属于持久历史，关闭详细诊断仍可检查。导出条件与不可变成果的边界见 [Exec](docs/exec.md)。
-
-当前能力有明确范围：语义请求不是供应商 HTTP 字节，Core 到 ModelService 的 attempt 不能等同于供应商内部实际请求或重试次数；没有保存逐个 streaming chunk。Trace 中的模型输出也不能还原模型未暴露的内部推理。文件对象由现有变更与文件存储契约提供，单独一份历史 Trace 不保证能够重建工作目录。
-
-任务结果与证据完整度分别记录。核对 `diagnosticRecordingStatus`、`diagnosticEvidenceComplete`、`evidenceCoverage`、关系图 warnings 和每个用量维度的完整度；诊断关闭或缺失时，未知计数不能证明没有失败或调用，缺失用量不能当作零成本。当前 runner 已有结果验收、重复运行汇总、过程指标与对照，但三个种子用例和这些字段尚未构成完整成本、执行关键路径或产品质量基线。
+提示词改进使用已经保存的 Trace、真实成果和独立验收。先用正反例校准评分器，再核对失败、评分设施错误与诊断覆盖。只改一个已记录的变量，并用保留任务检查回归。[评测审阅与交接](../../../test/agent-eval/README.md#审阅反馈与实验交接) · [Trace 指标与覆盖](../../../test/agent-eval/README.md#trace-证据与评测结论)
 
 ### 用 Trace 决定修改哪里
 

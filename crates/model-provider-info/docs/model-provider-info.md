@@ -6,16 +6,16 @@
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
 >   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
 >   仍待实现
-> - Crate 实现与修改路径：[`crates/model-provider-info/README.md`](../crates/model-provider-info/README.md)
-> - 六家官方接口对照与字段提案：[通用模型声明规范](../crates/model-provider-info/docs/model-template.md)
-> - Provider runtime：[`model-provider.md`](model-provider.md)
-> - API 协议层：[`model-api.md`](model-api.md)
+> - Crate 实现与修改路径：[`crates/model-provider-info/README.md`](../README.md)
+> - 六家官方接口对照与字段提案：[通用模型声明规范](model-template.md)
+> - Provider runtime：[`model-provider.md`](../../../docs/model-provider.md)
+> - API 协议层：[`model-api.md`](../../../docs/model-api.md)
 
 ## 快速理解
 
 `model-provider-info` 统一保存模型规格、完整基础提示词、供应商与接入声明，并校验和规范化接入配置。目录刷新、缓存与模型选择归 `models-manager`，认证、客户端与模型请求归 `model-provider`。
 
-内置模型固定登记，接入独立配置，每次调用为每个厂商选择一条已就绪连接。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `glm` 模型厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入；实际选择由运行时根据凭据状态决定。规则见[登录与账户系统](login.md#1-结论)。
+内置模型固定登记，接入独立配置，每次调用为每个厂商选择一条已就绪连接。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `glm` 模型厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入；实际选择由运行时根据凭据状态决定。规则见[登录与账户系统](../../../docs/login.md#1-结论)。
 
 | 读者首先会问                | 直接答案                                                                                        | 深入阅读                                  |
 | --------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
@@ -154,7 +154,7 @@ definition 声明 `OpenAiResponses`；xAI 的 definition 已使用 Responses HTT
 WebSocket profile，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
 HTTP compatibility 推导 WebSocket。
 
-`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](model-api.md#46-端点归属与-websocket-实现)。
+`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](../../../docs/model-api.md#46-端点归属与-websocket-实现)。
 
 `TranscriptionApiProfile::{Unavailable, OpenAiRealtime, XaiStt}` 单独声明流式语音转写协议。OpenAI 直接 API 接入使用 Realtime 转写，xAI 直接 API 接入使用 STT WebSocket；ChatGPT 和 Super Grok 订阅接入不提供这项能力。缺少 `transcriptionApiProfile` 的定义默认不可用。语音转写始终使用对应供应商的直接 API 凭据，与当前文字模型接入无关。
 
@@ -231,13 +231,13 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-产品内置文本模型的唯一声明来源是 [`crates/model-provider-info/models/`](../crates/model-provider-info/models/) 下按 `provider_id` 分开的 JSON 文件；API 和订阅共享厂商条目。`STATIC_MODEL_CATALOG` 按显式登记的文件顺序一次聚合、校验并提供共享数据。每个条目包含厂商、模型 ID、显示名和可独立修改的完整基础提示词；冻结资产 revision 由 `models-manager` 根据正文摘要生成，不填写在目录中。`context_window` 是默认上下文预算，`max_context_window` 声明可启用的最大预算。省略容量或能力表示未知，不代表不支持。`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
+产品内置文本模型的唯一声明来源是 [`crates/model-provider-info/models/`](../models/) 下按 `provider_id` 分开的 JSON 文件；API 和订阅共享厂商条目。`STATIC_MODEL_CATALOG` 按显式登记的文件顺序一次聚合、校验并提供共享数据。每个条目包含厂商、模型 ID、显示名和可独立修改的完整基础提示词；冻结资产 revision 由 `models-manager` 根据正文摘要生成，不填写在目录中。`context_window` 是默认上下文预算，`max_context_window` 声明可启用的最大预算。省略容量或能力表示未知，不代表不支持。`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../README.md#统一静态模型清单)。
 
-模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和Agent 模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
+模型指令由 `models-manager` 按准确身份选择，未登记模型使用 `prompts/templates/agent/base_prompt.md`。模板与权限、Role 和模式的关系见 [Agent 指令组合](../../prompts/docs/agent-instructions.md#组合契约)。
 
 `builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 将保存的内置接入、已注册供应商和完整自定义声明组装为 registry；未知供应商返回 `UnknownProvider`。端点和默认参数由 `normalize` / `normalize_for` 规范化；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
 
-动态目录观察不注册接入定义。Config 在保存、导入和严格读取时校验连接，接入规则见 [模型接入配置](config.md#模型接入配置)。字段扩展的设计建议见 [通用模型声明规范](../crates/model-provider-info/docs/model-template.md)；该建议尚未成为当前 JSON 格式。
+动态目录观察不注册接入定义。Config 在保存、导入和严格读取时校验连接，接入规则见 [模型接入配置](../../../docs/config.md#模型接入配置)。字段扩展的设计建议见 [通用模型声明规范](model-template.md)；该建议尚未成为当前 JSON 格式。
 
 `model/list` 返回固定内置目录，不接受视图分支。远端目录由 `models-manager` 管理，作为接入范围内的观察和自定义接入发现能力，不作为内置模型调用许可。没有远端记录的内置模型仍能发请求，服务返回的认证、权限或模型错误直接交给调用方。
 

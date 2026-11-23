@@ -2,7 +2,7 @@
 
 Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事实，Rust 组件按需采集和读取证据，TypeScript 工作台按需呈现，评测工具独立运行。后续根据实际 SDK 需求和收益决定哪些分析或界面适合发布为扩展。
 
-已实现后端采集、真实调用与账目关联、Chat Debug 按需加载，以及独立的评测审阅与实验比较。使用方式见 [Agent Debug Logs](chat-session-inspector.md#agent-debug-logs)、[配置](config.md#执行轨迹记录)、[rollout-trace](../crates/rollout-trace/README.md) 和[任务评测](../test/agent-eval/README.md)。未完成与未验证的范围集中在[第 9 节](#9-未完成与未验证的范围)，设计原因见 [MIND.md](../MIND.md#trace-的可选性和扩展边界)。
+已实现后端采集、真实调用与账目关联、Chat Debug 按需加载，以及独立的评测审阅与实验比较。使用方式见 [Agent Debug Logs](../../../docs/chat-session-inspector.md#agent-debug-logs)、[配置](../../../docs/config.md#执行轨迹记录)、[rollout-trace](../README.md) 和[任务评测](../../../test/agent-eval/README.md)。未完成与未验证的范围集中在[第 9 节](#9-未完成与未验证的范围)，设计原因见 [提示词设计依据](../../prompts/docs/prompt-design.md#trace-的可选性和扩展边界)。
 
 本文记录已实现的边界、设计依据与后续验收。具体契约以对应 owner 的源码为准；标明后续的能力不作为已可调用的 API。
 
@@ -34,16 +34,16 @@ Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事�
 
 实现语言、是否按需启用、是否允许用户安装，以及是否允许第三方参与是不同问题。后端由 Rust 实现、前端由 TypeScript 实现，并不要求它们组成一个新的插件类型。
 
-| 名称                     | Ash 当前含义                                                                                                                                    | 对 Trace 的处理                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Agent Extension          | [crates/ext](../crates/docs/extensions.md) 中的 Rust 能力，通过贡献接口参与提示、工具、上下文、生命周期等                                       | 采集主要观察已有行为，不需要增加模型能力；不为目录统一而迁入 ext，也不默认贡献 Trace 工具或提示词 |
-| Editor Extension／Plugin | [Electron/Rust-V8 TS/JS 与独立 Rust 扩展](editor-extensions.md#01-两类目标运行时与迁移边界)，Plugin bundle 是可选来源，安装、授权和运行分别管理 | 后续可以承载分析器、报告查看器或受限诊断客户端；安装扩展不授予完整会话读取和录制权限              |
-| 内置诊断组件             | Rust 领域实现，由可信宿主组合                                                                                                                   | 本方案采用这一定位，保持采集、存储、读取和资源生命周期的明确 owner                                |
-| Workbench contribution   | 产品提供的 TS 界面和命令                                                                                                                        | Chat Debug 在 Chat contribution 中按需加载；有完整标准 API 契约时再考虑提取成官方扩展             |
+| 名称                     | Ash 当前含义                                                                                                                                                  | 对 Trace 的处理                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Agent Extension          | [crates/ext](../../docs/extensions.md) 中的 Rust 能力，通过贡献接口参与提示、工具、上下文、生命周期等                                                         | 采集主要观察已有行为，不需要增加模型能力；不为目录统一而迁入 ext，也不默认贡献 Trace 工具或提示词 |
+| Editor Extension／Plugin | [Electron/Rust-V8 TS/JS 与独立 Rust 扩展](../../../docs/editor-extensions.md#01-两类目标运行时与迁移边界)，Plugin bundle 是可选来源，安装、授权和运行分别管理 | 后续可以承载分析器、报告查看器或受限诊断客户端；安装扩展不授予完整会话读取和录制权限              |
+| 内置诊断组件             | Rust 领域实现，由可信宿主组合                                                                                                                                 | 本方案采用这一定位，保持采集、存储、读取和资源生命周期的明确 owner                                |
+| Workbench contribution   | 产品提供的 TS 界面和命令                                                                                                                                      | Chat Debug 在 Chat contribution 中按需加载；有完整标准 API 契约时再考虑提取成官方扩展             |
 
-现有[标准扩展 API 兼容层](../crates/external-js-ext/README.md)没有公开 Trace 业务 API。Chat Debug 编辑器直接使用 Workbench 服务，不能只移动到扩展目录就成为可运行的 SDK 扩展。迁移需要补足读取范围、取消、注册释放、视图承载、错误与兼容性；不能以开放任意 App Server RPC 作为捷径。
+现有[标准扩展 API 兼容层](../../external-js-ext/README.md)没有公开 Trace 业务 API。Chat Debug 编辑器直接使用 Workbench 服务，不能只移动到扩展目录就成为可运行的 SDK 扩展。迁移需要补足读取范围、取消、注册释放、视图承载、错误与兼容性；不能以开放任意 App Server RPC 作为捷径。
 
-Rust 内部贡献接口也不是可下载 Rust 动态库或稳定插件 ABI。当前 [LifecycleObserver 和 ToolLifecycleContributor](../crates/ext/extension-api/src/lifecycle.rs) 观察已提交的部分事实，不覆盖完整模型请求、准备后的请求和每次失败 attempt。为 Trace 扩大整个 Agent Extension API 会增加无关耦合。
+Rust 内部贡献接口也不是可下载 Rust 动态库或稳定插件 ABI。当前 [LifecycleObserver 和 ToolLifecycleContributor](../../ext/extension-api/src/lifecycle.rs) 观察已提交的部分事实，不覆盖完整模型请求、准备后的请求和每次失败 attempt。为 Trace 扩大整个 Agent Extension API 会增加无关耦合。
 
 推荐先实现运行时可选和前端按需加载。若以后有包体积要求，再评估构建 feature 或单独发行诊断工具；静态打包、关闭执行和从安装包移除应分别测量，不能由“插件化”推定节省内存或启动时间。现在没有建立第三方 Rust 加载框架的具体需求。
 
@@ -51,20 +51,20 @@ Rust 内部贡献接口也不是可下载 Rust 动态库或稳定插件 ABI。�
 
 这一节记录迁移前的问题；所链接的 owner 源码已经更新，实施结果见第 4、10 节。原同步路径、具体依赖和默认导航不再代表当前实现。
 
-| 现状                                                         | 实际代码或文档                                                                                                                                                                            | 改造含义                                                                             |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Core 和 core-api 直接依赖 rollout-trace                      | [Core Cargo](../crates/core/Cargo.toml)、[core-api Cargo](../crates/core-api/Cargo.toml)、[AgentRuntime](../crates/core-api/src/runtime.rs)                                               | Core 的公共读取接口暴露 Trace 类型；仅移动 crate 不能解除耦合                        |
-| ThreadController 持有具体采集器，并负责 Trace 查询和关系归纳 | [ThreadController](../crates/core/src/thread_controller.rs)                                                                                                                               | 执行事实 owner 与可选诊断实现混在同一个入口，应分离具体采集和派生查询职责            |
-| 模型边界有真实语义证据                                       | [DiagnosticStream](../crates/core/src/diagnostic_model.rs)、[ModelStreamSink](../crates/core-api/src/model.rs)                                                                            | 复用 prepared-request 和真实流事件边界，保留取消前输出；不让界面事后猜测输入         |
-| 详细记录关闭时模型正文不会由 start_attempt 序列化            | [Recorder](../crates/rollout-trace/src/recorder.rs)                                                                                                                                       | 保留快速关闭路径；另外检查 Hook 调用方等是否已在开关前构造 JSON 或复制正文           |
-| 启用时同步序列化、写文件和更新 manifest                      | 同一 Recorder 的 payload、append_event 和终态路径                                                                                                                                         | 存储故障不会直接改写成功结果，但慢盘仍可能增加延迟；需要有界后台处理和实测           |
-| 采集配置归 profile runtime，修改需重启 App Server            | [配置契约](config.md#执行轨迹记录)、[组合入口](../crates/app-server/src/local.rs)                                                                                                         | 第一阶段保留生效时机，两个窗口共享实际状态；热切换不能由某个窗口单独实现             |
-| 视图已有正文按需读取和关闭释放，代码注册仍在启动入口         | [Chat Debug action](../src/ash/workbench/contrib/chat/browser/actions/chatOpenAgentDebugPanelAction.ts)、[编辑器](../src/ash/workbench/contrib/chat/browser/chatDebug/chatDebugEditor.ts) | 运行中按需读取和模块按需加载是两件事；保留现有释放行为，再减少启动加载和默认导航占用 |
-| 任务评测已有独立 verifier、重复运行和证据覆盖                | [runner](../scripts/agent_eval.py)、[分析层](../scripts/agent_eval_trace.py)                                                                                                              | 在此基础上补实验条件和评分，不替换真实 Ash loop                                      |
+| 现状                                                         | 实际代码或文档                                                                                                                                                                                        | 改造含义                                                                             |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Core 和 core-api 直接依赖 rollout-trace                      | [Core Cargo](../../core/Cargo.toml)、[core-api Cargo](../../core-api/Cargo.toml)、[AgentRuntime](../../core-api/src/runtime.rs)                                                                       | Core 的公共读取接口暴露 Trace 类型；仅移动 crate 不能解除耦合                        |
+| ThreadController 持有具体采集器，并负责 Trace 查询和关系归纳 | [ThreadController](../../core/src/thread_controller.rs)                                                                                                                                               | 执行事实 owner 与可选诊断实现混在同一个入口，应分离具体采集和派生查询职责            |
+| 模型边界有真实语义证据                                       | [DiagnosticStream](../../core/src/diagnostic_model.rs)、[ModelStreamSink](../../core-api/src/model.rs)                                                                                                | 复用 prepared-request 和真实流事件边界，保留取消前输出；不让界面事后猜测输入         |
+| 详细记录关闭时模型正文不会由 start_attempt 序列化            | [Recorder](../src/recorder.rs)                                                                                                                                                                        | 保留快速关闭路径；另外检查 Hook 调用方等是否已在开关前构造 JSON 或复制正文           |
+| 启用时同步序列化、写文件和更新 manifest                      | 同一 Recorder 的 payload、append_event 和终态路径                                                                                                                                                     | 存储故障不会直接改写成功结果，但慢盘仍可能增加延迟；需要有界后台处理和实测           |
+| 采集配置归 profile runtime，修改需重启 App Server            | [配置契约](../../../docs/config.md#执行轨迹记录)、[组合入口](../../app-server/src/local.rs)                                                                                                           | 第一阶段保留生效时机，两个窗口共享实际状态；热切换不能由某个窗口单独实现             |
+| 视图已有正文按需读取和关闭释放，代码注册仍在启动入口         | [Chat Debug action](../../../src/ash/workbench/contrib/chat/browser/actions/chatOpenAgentDebugPanelAction.ts)、[编辑器](../../../src/ash/workbench/contrib/chat/browser/chatDebug/chatDebugEditor.ts) | 运行中按需读取和模块按需加载是两件事；保留现有释放行为，再减少启动加载和默认导航占用 |
+| 任务评测已有独立 verifier、重复运行和证据覆盖                | [runner](../../../scripts/agent_eval.py)、[分析层](../../../scripts/agent_eval_trace.py)                                                                                                              | 在此基础上补实验条件和评分，不替换真实 Ash loop                                      |
 
 改造前 Recorder 限制单正文 8 MiB、单 capture 128 MiB 和 32,000 条诊断事件，闲置 writer 缓存驱逐目标为 16，尚未约束整个 profile 和活跃正文。当前配额见第 10 节。图形界面导入／导出为 64 MiB，不能据此承诺任意完整 capture 都可装入单文件。
 
-已有[存储故障回归](../crates/core/src/turn/diagnostic_trace_tests.rs)检查成功 Turn 不被诊断写入失败改变。这不能证明采集没有延迟、锁竞争或分配开销；性能结论需要另行测量。
+已有[存储故障回归](../../core/src/turn/diagnostic_trace_tests.rs)检查成功 Turn 不被诊断写入失败改变。这不能证明采集没有延迟、锁竞争或分配开销；性能结论需要另行测量。
 
 ## 4. 依赖与观察契约
 
@@ -170,36 +170,9 @@ Wire Log 的导出先确认后端采集停止，再读取全部保留帧；当�
 
 ## 8. 评测体系怎样使用 Trace
 
-采用三家材料的共同方法，保留 Ash 自己的执行链路：
+评测使用真实产品入口和独立验收。Trace 提供事件、覆盖及原始来源，审阅工具从保存的试次中提出可检验的修改假设。各工具、模型与界面的过程指标保留分母，并能回查代表性记录。[评测方法与固定参考版本](../../prompts/docs/prompt-design.md#三家的学习重点和本地参考)
 
-| 参考                                                                                                                                                                       | 采用的方法                                                   | 在 Ash 中落到哪里                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| [OpenAI Agent Improvement Loop](https://developers.openai.com/cookbook/examples/agents_sdk/agent_improvement_loop)                                                         | Trace 与反馈生成可检验的改进，再用评测和回归确认             | runner、独立评分、改动假设与报告；不强制引入示例中的 Promptfoo 或第三方 HALO |
-| [OpenAI Macro Evals](https://developers.openai.com/cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems)                             | 跨运行区分任务条件、终态、局部发现与重复模式，回查代表性记录 | 在已保存报告上汇总与筛选；相关性形成原因假设                                 |
-| [Anthropic Agent Evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) 和 [Tools](https://www.anthropic.com/engineering/writing-tools-for-agents) | 验收实际成果、校准评分器、重复运行、保留未用于调优的任务     | 真实产品任务、正反例、人工审阅与独立验收                                     |
-| [Cursor Harness](https://cursor.com/blog/continually-improving-agent-harness) 与 [CursorBench](https://cursor.com/blog/cursorbench)                                        | 真实任务、模型与工具错误基线、离线和实际使用反馈互相验证     | 版本化任务、条件可比的实验和有分母的过程指标                                 |
-
-OpenAI Cookbook 已在本地，提交为 0eac1447d4e24d06e47c459ca5e98f248b9413cf；已阅读 [Improvement Loop](../../openai-cookbook/examples/agents_sdk/agent_improvement_loop.ipynb) 与 [Macro Evals](../../openai-cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems.ipynb) 的代码结构。SDK、Anthropic Skills 和 Claude Cookbooks 的本地版本见 [MIND](../MIND.md#三家的学习重点和本地参考)。来源中的模拟反馈、生成样本或追加分析 span 不直接变成 Ash 原始事实。
-
-每次实验沿用现有 configuration 与 report，补明确假设、允许变化的因素和不变条件。记录任务／评分器版本、初始文件与上下文、准确模型及推理设置、工具和模式、权限、预算、产品摘要、采集策略及环境。必要条件未知时说明限制，不声称单因素收益。
-
-默认基线比较仍拒绝 profileConfigDigest 不同；显式使用 `--experiment` 时，两侧必须声明相同实验、假设和允许变化的因素，再检查配置语义叶项哈希，拒绝未声明的变化。任务／评分器摘要、权限、期限与重复数始终固定。先比较一个变化，需要研究相互作用时再运行基线、仅改 Prompt、仅改工具、两者都改四组。模型和整个产品同时变化只支持整体比较。
-
-候选运行已在创建输出及启动产品／模型前预检条件和基线试次；`--preflight-only` 可以只做这项校验。
-任务选择通过 `--split` 与 `caseSelection` 固定，development 用于调优，holdout 用于冻结候选后的
-回归检查；原有默认 all 保留兼容。suite 摘要 V2 冻结语义声明、实际输入、参考成果和评分器资源，
-JSON 排版与顶层说明文档不使基线失效；额外规则用 `gradingResources` 声明，旧摘要另建基线。
-预检不探测 provider 或在线服务，也不估算成本。
-
-[评测审阅工具](../scripts/agent_eval_review.py) 已提供四个实际入口：`audit-suite` 在独立目录以同一
-verifier 检查初始与已知正确成果；`review` 从原始文件重新派生观察并生成反馈模板；`handoff` 核对
-报告／产物摘要与事件后保存人工假设、验收和双方实验声明；`compare` 离线对照保存报告，输出明确
-goal 的批次 gate。后三者不调用模型、不改写原始 Trace 或评分；audit 的已知正确成果也不会复制到
-Agent 工作区。缺少完整原始材料时保留不可用状态，不补造指标或归因。
-
-质量 gate 检查恢复与回归；保留任务使用只检查回归的 gate。资源 gate 要求没有验收回归，且双方都
-通过的试次具备完整测量，另列排除分母；不能把更快的失败当作优化。评分或证据不足为 inconclusive。
-这些是批次筛选契约，不是统计显著性、根因证明或自动发布决定。具体参数和反馈格式由[任务评测](../test/agent-eval/README.md#审阅反馈与实验交接)维护。
+评测的校准、预检、实验声明和结果比较由[任务评测](../../../test/agent-eval/README.md)维护。诊断设定是实验条件之一。比较采集开销时，保持任务和成果验收一致，分别测关闭采集、仅元数据和正文模式下的任务、启动、录制／flush 与分析耗时。
 
 成果由程序、人工或校准后的模型评分器验收，评分来源、规则版本和证据分别保存。评分报错／无法解析属于评分状态；未知不能转为零分。模型评分与运行模型分开，记录评测成本；评分器更换后两侧保存成果重新评分。原始 Trace 只读，反馈与假设保存在派生评测结果。
 
@@ -209,11 +182,7 @@ Agent 工作区。缺少完整原始材料时保留不可用状态，不补造�
 
 编码检查行为和测试，不要求唯一补丁；Cowork 检查内容、来源和可用文件；Design 检查 brief、既有约束和目标媒介，并校准审阅；个人助手使用受控外部服务，检查准备、发送与实际授权。IDE 的未保存状态和 TUI 的交互不能由无界面 exec 用例冒充覆盖。
 
-分别报告任务通过、观察到的重复稳定性、成果质量、误操作或无依据声明、工具错误与恢复、延迟及实报用量。每项都列分母和覆盖。现有“至少一次通过／全部通过”保持观察值，不能当作一般化 pass@k／pass^k 概率。用量未知不算零成本，耗时改进须维持成果质量。
-
-过程对照继续只使用条件可比、双方测量完整的试次，并展示排除数量和对应任务结果。失败运行更容易缺少用量，不能用剩余成功样本的均值掩盖缺口或失败上升；所有试次的成果验收仍单独参与结果报告。
-
-任务耗时、启动耗时、录制／flush 和分析耗时分开测量；比较保持相同采集策略，另外对不采集／元数据／正文做独立开销实验。脚本化模型用于确定性契约和性能开销，真实模型用于质量结论，不相互替代。
+评测报告分别记录成果通过、观察到的稳定性、过程开销和诊断覆盖。只比较对应且测量完整的过程样本，并报告排除数量。脚本化模型检查运行契约，真实模型对照用于评估质量。[报告字段与比较口径](../../../test/agent-eval/README.md#trace-证据与评测结论)
 
 真实模型运行前固定任务、模型、重复数、期限与成本范围，使用专用 profile。Cursor SDK 可在相同初始环境与独立验收下作为整体系统对照；内部不可控部分明确记录，公开 SDK 不等于完整 harness 或评测集已开源。线上保留率与追问是代理指标，需要实际反馈解释，未追问不证明满意。
 

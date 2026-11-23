@@ -9,7 +9,7 @@
 >   materialization 已有 host-injected `SecretStore` 路径；独立 WebSocket transport 与显式 provider
 >   capability 已落地，Responses WebSocket 和公共 Realtime GA 已提供显式 runtime 会话入口
 > - Crate 实现与 adapter 调用图：[`crates/model-provider/README.md`](../crates/model-provider/README.md)
-> - 声明配置层：[`model-provider-info.md`](model-provider-info.md)
+> - 声明配置层：[`model-provider-info.md`](../crates/model-provider-info/docs/model-provider-info.md)
 > - API 协议层：[`model-api.md`](model-api.md)
 > - Operation client：[`model-client.md`](model-client.md)
 > - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)

@@ -20,19 +20,20 @@
 
 输入交互的设计缘由见[为什么 Ash 把上下文放进正文](blog/inline-context-references.md)，说明附件标签如何表达材料顺序、与 VS Code 的职责对应，以及当前发送链路的实现边界。
 
-[提权保存](../src/ash/workbench/services/textfile/README.md#windows-uac-regression)与[上传文件验证](browser-foundation.md#浏览器上传文件访问验证)的回归步骤随功能维护，平台剩余验收由 TODO 维护。编辑器和 Work 的目标契约继续保留在 [design](design/editor-roadmap.md) 中，研究快照与测量证据保留原路径。
+[提权保存](../src/ash/workbench/services/textfile/README.md#windows-uac-regression)与[上传文件验证](browser-foundation.md#浏览器上传文件访问验证)的回归步骤随功能维护，平台剩余验收由 TODO 维护。编辑器和 Work 的目标契约见 [design](design/editor-roadmap.md)。
 
 ## 理解系统
 
 - **界面与宿主：** [Desktop 架构](desktop-architecture.md)、[前后端连接](frontend-app-server-boundary.md)、[Sessions 布局与 Changes](sessions.md)、[工作台与文档](workbench.md)、[编辑器架构](editor-architecture.md)、[远程开发](remote-development.md)。
 - **后端与执行：** [Rust 架构](rust-architecture.md)、[Agent 运行时](agent-runtime.md)、[Core](core.md)、[上下文管理](core-context.md)、[多 Agent](core-multi-agent.md)、[进程执行](exec.md)。
+- **Agent 与提示词：** [Agent 定义](agents.md)、[Agent 模式](../crates/agent-mode-templates/README.md)、[Agent Team](../crates/teams/README.md)、[共享提示词](../crates/prompts/README.md)。
 - **协议与接口：** [领域身份](domain-model.md)、[协议](protocol.md)、[App Server API](app-server-api.md)、[客户端](app-server-client.md)、[工具契约](agent-tools-spec.md)、[工具系统](tools/tools.md)、[完整工具目录](tools/tool-catalog.md)。
-- **模型调用：** [模型 API](model-api.md)、[模型调用客户端](model-client.md)、[Provider](model-provider.md)、[模型目录](models-manager.md)。
+- **模型调用：** [模型 API](model-api.md)、[模型调用客户端](model-client.md)、[Provider](model-provider.md)、[模型与供应商声明](../crates/model-provider-info/docs/model-provider-info.md)、[模型目录](models-manager.md)。
 - **配置：** [配置](config.md)、[模型接入](model-provider.md)、[登录](login.md)、[Agent 定制](agent-customizations.md)。
 - **Extensions（扩展）：** [产品层级与扩展架构](editor-extensions.md#extensions-的产品层级)；包含 [Skills](skills.md)、[MCP](mcp.md)、[Connectors](connectors.md)、[LSP / 语言服务器](lsp.md)、编辑器扩展、主题和语言包等能力。[包管理](../crates/docs/core-plugins.md)与 [Plugin 包及来源授权](plugins.md)说明底层安装和授权契约。
 - **权限与安全：** [权限](permissions.md)、[沙箱](sandboxing.md)、[环境访问](environment-access.md)、[工作区安全](workspace-security.md)、[凭据](secrets.md)。
 - **界面开发：** [浏览器基础](browser-foundation.md)、[Preferences 与 Settings](preferences-and-settings.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](pane-composites.md)、[菜单](menu-system.md)、[本地化](localization.md)。
-- **Agent 诊断与评测：** [rollout-trace、Chat Debug 与评测分工](trace.md)、[Agent Debug Logs 用法](chat-session-inspector.md#agent-debug-logs)、[任务评测](../test/agent-eval/README.md)。
+- **Agent 诊断与评测：** [rollout-trace、Chat Debug 与评测分工](../crates/rollout-trace/docs/trace.md)、[Agent Debug Logs 用法](chat-session-inspector.md#agent-debug-logs)、[任务评测](../test/agent-eval/README.md)。
 - **外部运行时研究：** [Codex Owl 运行时调查与 Ash 性能优化参考](codex-owl-runtime-investigation.md)，包含定版安装包、进程与事件循环、任务分配、JSON／IPC、证据快照和隔离小测。
 - **数据链路性能：** [Ash app-server 到 Renderer 的大响应链路审计](ash-app-server-data-path-audit.md)，记录解析、复制和背压的实际问题与优化优先级。
 

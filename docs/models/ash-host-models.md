@@ -22,7 +22,9 @@ Kimi K2.7 Code 与 Highspeed 的思考常开、不能关闭；K2.6 才支持开�
 
 这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
 
-Ash 的模型选择器按有效模型目录显示推理档位。Chat 的 Ultra 开关按型号和连接保存。GPT 开启时使用 `xhigh`，Claude 开启时默认使用 `xhigh`，显式选择的普通档位继续生效。见 [Swarm、Ultra 与 Ultracode](../../crates/agent-mode-templates/agent-modes.md#swarmultra-与-ultracode)。
+Ash 的模型选择器按有效模型目录显示推理档位。桌面 Chat 开关的行为见 [Ultra 与推理档位](../../crates/model-provider/README.md#ultra-与推理档位)。
+
+2026-10-03 的产品参考记录中，ChatGPT Work / Codex 的 Ultra 与 Claude Code 的 Ultracode 都结合推理投入和任务委托。Claude Code 在所选 effort 下由自身运行时组织工作流。[ChatGPT Work / Codex Ultra](https://learn.chatgpt.com/docs/models#know-when-to-use-max-or-ultra) · [Claude Code effort 与 Ultracode](https://code.claude.com/docs/en/model-config#adjust-effort-level) · [Claude Code 工作流](https://code.claude.com/docs/en/workflows#let-claude-decide-with-ultracode)
 
 ### 思考开关与 Ash 接入端点
 

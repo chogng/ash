@@ -268,9 +268,27 @@ inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务�
 
 [completion/view.rs](src/thread/composer/input/completion/view.rs) 同时绘制候选与整行背景，背景包括左右留白，避免露出被覆盖页面的旧文字。前缀含义与提交规则见 [README](README.md#命令与补全)。
 
-### 居中弹窗
+### 推理档位选择器
 
-`/effort` 的 fullscreen 编辑器位于底部，不使用居中外框；[fullscreen/modal.rs](src/app/fullscreen/modal.rs) 分配底部区域，头部复用 [widgets/panel.rs](src/widgets/panel.rs) 的布局和绘制：标题嵌入顶部横线，下一行留空，再放正文；操作提示由页面底部 hintline 绘制。[effort_selector.rs](src/models/effort_selector.rs) 负责档位、Swarm 暂选、说明和文字动画。档位数量、顺序和默认值直接来自当前模型目录。相邻档位中心的标准间距为 12 列，轴长按档位数量和标签宽度计算；标签围绕对应刻度居中，单档位居中显示。空间不足时先等距压缩，标签仍放不下时只显示一段档位，左右选择自动移动可见范围。宽屏将轴线和右侧 Swarm 开关作为一组居中；窄屏将开关单独居中放到轴线下方。轴线两端显示 `Faster` / `Smarter`，不另加当前档位或执行方说明。说明文本限制为 84 列，文本区及换行后的每一行文字都居中。选中档位不铺背景，以加粗文字和同色箭头标识；各档位的固定主题色见 [命令与补全](README.md#命令与补全)。未选档位和说明使用灰色，鼠标悬停和按下仍保留交互反馈。开关为 `on` / `off` 预留相同宽度，切换时不改变轴线位置；开启 Swarm 播放文字颜色波纹，指向 `max` 时文字播放彩虹变化，箭头跟随首字母颜色，两者独立停止；其他档位使用固定颜色。绘制、鼠标命中和内容高度使用同一布局。背景草稿保留但不接收输入；确认或取消后恢复原页面焦点。选择器接管输入框及以下的底部聊天区域，`tipline` 移到选择器上方，复制等临时反馈仍在右侧显示；底部操作提示使用 `hintline`。正文区域止于 `tipline` 上沿，不被选择器遮挡。具体按键和提交约定见 [命令与补全](README.md#命令与补全)。
+fullscreen 底部选择器由 [modal.rs](src/app/fullscreen/modal.rs) 分配空间，[panel.rs](src/widgets/panel.rs) 将标题嵌入上边线。选择器接管输入框及以下区域，保留原草稿，关闭后恢复焦点。正文结束于选择器上方的 `tipline`，复制等反馈仍在右侧，操作提示使用底部 `hintline`。
+
+[effort_selector.rs](src/models/effort_selector.rs) 为绘制、鼠标命中和内容高度共用一套布局。档位按模型目录排序，相邻刻度中心标准间距为 12 列，空间不足时先等距压缩，再随选择移动可见范围。单档位居中。宽屏将轴线与 Swarm 开关作为一组居中，窄屏将开关移到轴线下方。`on` / `off` 占用相同宽度。轴线两端标注 `Faster` / `Smarter`（中文为“更快”/“更聪明”），说明最多 84 列，逐行居中。
+
+选中档位使用加粗文字和同色箭头，未选档位与说明使用灰色。选中颜色按档位绑定主题 token，随终端色深和用户主题适配。鼠标悬停和按下保留反馈。指向 `max` 时箭头跟随彩虹文字的首字母颜色，Swarm 开启时开关文字播放颜色波纹，两种动画独立停止。
+
+| 档位      | 选中文字与箭头             | 主题颜色                                                                   |
+| --------- | -------------------------- | -------------------------------------------------------------------------- |
+| `none`    | 正文色，默认深色主题为浅灰 | `foreground`                                                               |
+| `minimal` | 绿色                       | `success`                                                                  |
+| `low`     | 黄色 / 琥珀色              | `warning`                                                                  |
+| `medium`  | 蓝色                       | `accent`                                                                   |
+| `high`    | 蓝紫色                     | `focus`                                                                    |
+| `xhigh`   | 紫色                       | `function`                                                                 |
+| `max`     | 彩虹变化                   | 轮流使用 `danger`、`warning`、`success`、`accent`、`function`、`modeSwarm` |
+
+命令和快捷键见 [推理档位与 Swarm](README.md#推理档位与-swarm)。
+
+### 居中弹窗
 
 模型、设置和帮助等命令面板覆盖当前页面。外框由 [widgets/modal.rs](src/widgets/modal.rs) 的 `ModalLayout` 计算，内容由 [fullscreen/modal.rs](src/app/fullscreen/modal.rs) 组合：
 
@@ -435,7 +453,7 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 ### 任务模式选择与显示
 
-任务模式和 fullscreen / inline 是两项独立选择：前者决定下一条任务的工作方式，后者决定终端怎样显示页面。五种任务模式使用 `/mode` 选择，也支持 `/mode agent|plan|debug|swarm|ask`。参数直接按协议中的稳定 ID 解析，不随界面语言或显示名称变化；命令输入不区分 ASCII 大小写。请求、队列和历史继续使用 `AgentMode` 强类型保存。共享行为见[五种任务模式](../agent-mode-templates/agent-modes.md)。
+`/mode` 打开模式选择器，也可传入稳定 ID。参数按 ASCII 不区分大小写。模式和队列契约见 [Agent 模式](../agent-mode-templates/README.md)。
 
 输入框聚焦时，Shift+Tab 按 Agent、Plan、Debug、Swarm、Ask 的顺序循环。切换只影响下一条消息；运行中选择其他模式后，Ctrl+Enter 也会排队。弹层继续使用所属组件自己的按键处理。
 

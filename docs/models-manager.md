@@ -125,7 +125,7 @@ model provider 负责“如何用已选模型执行一次调用”
 - capability/workload/visibility filter；
 - `(ProviderId, ModelId)` 的解析、校验和稳定排序；
 - 启动前的 provider 无关模型选择：请求模型、同 provider 候选、跨 provider 候选、兼容性检查和替换说明；
-- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `ash-prompts` 拥有，详见 [指令组合](../crates/docs/agent-instructions.md)；
+- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `ash-prompts` 拥有，详见 [指令组合](../crates/prompts/docs/agent-instructions.md)；
 - immutable `ModelCatalogSnapshot` 及 generation 变化；
 - cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
 

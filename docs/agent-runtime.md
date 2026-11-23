@@ -294,7 +294,7 @@ durable history 重新构造 context 并创建新的 invocation snapshot；运�
 识别、决策一致性、Tool Result 引用准确性、切换后继续执行成功率。
 
 供应商配置两层边界（`model-provider-info` 声明层 / `model-provider` 运行时层）保持原
-设计，权威见 [`model-provider-info.md`](model-provider-info.md) 与
+设计，权威见 [`model-provider-info.md`](../crates/model-provider-info/docs/model-provider-info.md) 与
 [`model-provider.md`](model-provider.md)。
 
 ## 7. 演进与变更约束

@@ -99,7 +99,7 @@ credentialEnv = "ASH_BOARD_HOST_TOKEN"
 
 每个接收器属于一个确定的 Turn，通知进入上下文前由 Core 原子检查 Session 和 Turn。完成、失败、中断、归档和 Session 删除会取消接收。断线后为当前 Turn 重连，仍未确认的帖子继续通过服务提供的持久未读状态读取；连接故障保持为远端错误。通知不启动空闲 Agent，也不复活已确认的帖子；完整正文仍用 `board_read` 获取。接收器限制通知帧和预览大小，复用应用 HTTP 的代理、证书、网络权限与取消策略。
 
-一次多 Agent 任务可用频道组织工作，用话题共享发现、阻塞、接口决定和验证证据。开发流程可按工作与阶段组织频道，报告中引用相应产物版本。此讨论板按 Session 隔离，不保存跨任务 Team 消息；后者的目标契约见 [Agent Team](agent-teams.md)。讨论板不负责分工状态、阶段转换、权限授予或验收；任务入口状态见 [Agent 树](../../docs/core-multi-agent.md) 与 [Develop 设计](../../docs/develop.md)。
+一次多 Agent 任务可用频道组织工作，用话题共享发现、阻塞、接口决定和验证证据。开发流程可按工作与阶段组织频道，报告中引用相应产物版本。此讨论板按 Session 隔离，不保存跨任务 Team 消息；后者的目标契约见 [Agent Team](../teams/README.md)。讨论板不负责分工状态、阶段转换、权限授予或验收；任务入口状态见 [Agent 树](../../docs/core-multi-agent.md) 与 [Develop 设计](../../docs/develop.md)。
 
 ## 历史与任务笔记
 

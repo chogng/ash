@@ -12,4 +12,4 @@
 
 选择 Markdown 是因为角色的主要内容是长篇提示词；工具、版本、启动限制保留为严格类型的 frontmatter。未知字段、无效引用和冲突权限均报错，不再维护另一套 TOML 角色格式。`host` 角色由专用产品入口消费，不进入普通会话或委托选择。
 
-设计与评测见 [Agent 指令组合](../docs/agent-instructions.md)，完整角色产品契约见 [Agent 定义](../../docs/agents.md)。验证：`just test ash-agent-roles`、`just check ash-agent-roles`。
+设计与评测见 [Agent 指令组合](../prompts/docs/agent-instructions.md)，完整角色产品契约见 [Agent 定义](../../docs/agents.md)。验证：`just test ash-agent-roles`、`just check ash-agent-roles`。

@@ -42,7 +42,7 @@ Team 的任务列表从 `TeamRunId` 关联和所属 Session 的事实构成。�
 
 长期产品入口分别提供 Team 的创建、成员管理、讨论、任务启动和历史查看。Agents Window 展示 Team 列表、成员、团队讨论和关联任务；进入某次任务后继续使用现有 Agent 树视图。直接与某个成员交谈时，明确选择 Team 和成员，建立归属于该成员的新 Thread，而不修改其旧 Thread。
 
-`/team <任务>`、`/team status|resume|cancel` 管理一次有协调、实施和审查角色的协作工作流。Swarm 模式由当前 Agent 直接委托并行任务。两者的执行契约见 [Swarm 的执行边界](../agent-mode-templates/agent-modes.md#swarm-的执行边界)。历史 `/team` 工作记录保持原 Session 和委托事实，不推断或补造 Team 成员身份。`/develop` 的阶段工作可以选择一个已有 Team；阶段版本和验收仍由 `/develop` 管理。
+`/team <任务>`、`/team status|resume|cancel` 管理一次有协调、实施和审查角色的协作工作流。历史 `/team` 记录保留原 Session 和委托事实。`/develop` 的阶段工作可使用已有 Team，版本和验收由 `/develop` 管理。当前 Agent 直接委托并行任务的行为见 [Swarm](../agent-mode-templates/README.md#swarm-的执行边界)。
 
 ## 所有权与接口
 

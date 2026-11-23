@@ -12,12 +12,12 @@
 
 Core 按实际运行状态选择模板、分配上下文预算并组装请求。角色正文归 `agent-roles`，完整模型正文登记在 `model-provider-info/models/<provider>.json`，由 `models-manager` 选择并冻结；本 crate 不读取配置、访问 Git、判断授权或调用模型。
 
-下一版的共同核心、IDE／Agents Window／TUI 界面说明及任务流程在 [`drafts/`](drafts/) 中审阅，设计理由与逐项入口见根目录 [`MIND.md`](../../MIND.md)。这些文件是未接入的文本草案，不替换上述运行时资产，也不自动进入模型请求；后续接入须沿用准确模型正文、Role、模式、授权和工具的组合契约。
+下一版的共同核心、IDE／Agents Window／TUI 界面说明及任务流程在 [`drafts/`](drafts/) 中审阅，设计理由与逐项入口见[提示词设计依据](docs/prompt-design.md)。这些文件是未接入的文本草案，不替换上述运行时资产，也不自动进入模型请求；后续接入须沿用准确模型正文、Role、模式、授权和工具的组合契约。
 
 权限说明按 Turn 已保存的 `approval_mode` 选择。Ash 的沙箱和授权按每次工具调用判定，因此使用自身的动作授权模板。不会注入 Codex 的 `sandbox_permissions`、`prefix_rule` 等参数，也不会把批准旁路说明为全盘访问。
 
 审查结果继续保留在原 Assistant 消息中；结束模板只说明实际状态。摘要正文与 ID 做标记转义，来源摘要保持可追溯；Core 在接受压缩结果和规划后续请求时计入编码后的正文、续接说明和包装开销。
 
-Codex `prompts` 的逐项参考、实时语音差异、实际调用位置与维护规则见 [共享模板对应关系](../docs/agent-instructions.md#共享模板与-codex-的对应关系)。共享库中的模板按场景使用，不会全部注入每个请求。
+指令组合、调用位置和维护规则见 [Agent 指令组合](docs/agent-instructions.md)。历史测量与原始样本见 [benchmark 记录](benchmarks/agent-instructions-2026-09-09.md)。
 
 验证：`just test ash-prompts`、`just check ash-prompts`；真实上下文组装与恢复由 `just test ash-core` 覆盖。编译资源由 `BUILD.bazel` 的 `templates/**` 清单维护。

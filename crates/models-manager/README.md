@@ -198,4 +198,4 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 
 现有模型的初始正文来自原共同规则与对应模型指导的组合，后续可逐模型调优。旧 `templates/instructions/*.md`、模板枚举和 Rust 模型条目已退场；新归属为 `model-provider-info/models/<provider>.json`。默认 `prompts/templates/agent/common.md` 改为 `base_prompt.md`。
 
-JSON 与 Markdown 均编译嵌入，资源清单和 LF 行尾属性随所属 crate 维护。正文上限 64 KiB；本接口不包含运行时模板语言。质量、延迟和成本收益尚未实测；来源和后续评测见 [模型初版指导](../docs/agent-instructions.md#内置模型指导初版)。供应商请求参数、推理元数据、历史重放与工具协议仍归 provider adapter 和 Core。
+JSON 与 Markdown 均编译嵌入，资源清单和 LF 行尾属性随所属 crate 维护。正文上限 64 KiB；本接口不包含运行时模板语言。质量、延迟和成本收益尚未实测；来源和后续评测见 [模型初版指导](../prompts/docs/agent-instructions.md#内置模型指导初版)。供应商请求参数、推理元数据、历史重放与工具协议仍归 provider adapter 和 Core。
