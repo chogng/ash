@@ -22,7 +22,7 @@ import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/
 import { chatGPTWritingSource, decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import { chatGPTResourceKey, mergeChatGPTResources, type ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../../common/chatWorkspace.js';
 import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import type { ChatEntityDetailsSource } from '../../chat/browser/chatEntityDetails.js';
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';

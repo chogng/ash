@@ -126,8 +126,8 @@ for (const chatSurface of ['code', 'chat'] as const) {
 				const { ISessionProviderScopeService } = await import(moduleUrl('sessions/browser/agentHost/sessionProviderScopeService.ts'));
 				const { IAgentSessionActionsService } = await import(moduleUrl('workbench/contrib/chat/browser/agentSessions/agentSessionsService.ts'));
 				const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
-				const { writeNewChatDraftState } = await import(moduleUrl('sessions/contrib/chat/common/newChatDraftState.ts'));
-				const chatInputStatePersistence = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.ts'));
+				const { writeNewChatDraftState } = await import(moduleUrl('workbench/contrib/sessions/common/newChatDraftState.ts'));
+
 				const scope = new DisposableStore();
 				const services = scope.add(createTestEditorServices());
 				services.registerInstance(IAgentVoiceService, undefined);
@@ -180,7 +180,7 @@ for (const chatSurface of ['code', 'chat'] as const) {
 					untitledSessionId: `draft-${index}`, kind: 'code', title: `Draft ${index}`, model: undefined, agent: undefined, workspace: { type: 'current' },
 				}));
 				for (const draft of drafts) {
-					writeNewChatDraftState(storage, { mode: 'agent', text: draft.title, contexts: [] }, `untitled:${draft.untitledSessionId}`, chatInputStatePersistence);
+					writeNewChatDraftState(storage, { mode: 'agent', text: draft.title, contexts: [] }, `untitled:${draft.untitledSessionId}`);
 				}
 				const selection = { kind: 'untitled', session: drafts[3]! };
 				services.registerInstance(ISessionsManagementService, { onDidChange: changes.event, sessions: [], untitledSessions: drafts, state: 'ready' });

@@ -9,7 +9,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { getChatCodeBlockCardAccessibilityHelp, getChatLinkPreviewAccessibilityHelp, getChatRequestAccessibilityHelp, getChatTableAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { experimentalChatGPTSelected } from '../common/chatGPTNative.js';
-import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
+import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../../common/chatWorkspace.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import { getChatBrowserAccessibilityHelp } from '../../chat/browser/chatViewFactory.js';
 

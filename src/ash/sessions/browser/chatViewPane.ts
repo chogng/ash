@@ -3,7 +3,6 @@ import { logSessionHistoryBinding } from '../services/sessions/browser/sessionOp
 import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from './agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
-import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { ChatChangesStatistics } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableMap, DisposableStore } from '../../base/common/lifecycle.js';
@@ -37,7 +36,7 @@ import { IContextKeyService } from '../../platform/contextkey/browser/contextKey
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { createSessionItemActions, createSessionWorkspaceActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
 import { ChatWidgetModel, type ChatWidgetSelection } from './chatWidgetModel.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -50,7 +49,7 @@ import { IViewsService } from '../../workbench/services/views/common/viewsServic
 import { CHAT_VIEW_CONTAINER_ID } from '../../workbench/contrib/chat/common/chat.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
-import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../contrib/chat/common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from './chatPresentation.js';
 
 let chatPaneInstanceId = 0;
 const chatHistoryVirtualizeFrom = constObservable(CHAT_HISTORY_VIRTUALIZE_FROM);
@@ -491,8 +490,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			if (!pane) {
 				pane = this.createChatPane({ kind: 'untitled', session: untitledSession }, this.embeddedOptions.get(untitledSession.untitledSessionId));
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
+					read: identity => readNewChatDraftState(this.storage, identity),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
@@ -518,8 +517,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			if (!pane) {
 				pane = this.createChatPane({ kind: 'session', active: selection });
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
+					read: identity => readNewChatDraftState(this.storage, identity),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);

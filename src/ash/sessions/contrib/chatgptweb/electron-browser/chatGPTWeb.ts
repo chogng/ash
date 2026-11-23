@@ -21,7 +21,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
-import { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../../common/chatWorkspace.js';
 import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../../chat/browser/chatViewFactory.js';
 import { chatGPTModelEntries, ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
 import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';

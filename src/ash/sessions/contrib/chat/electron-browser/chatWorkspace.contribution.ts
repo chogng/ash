@@ -31,7 +31,7 @@ import { ISessionPrimaryProviderServices, type SessionProviderServices } from '.
 import { AshChatModel } from '../browser/ashChatModel.js';
 import { registerChatEntityDetails } from '../browser/chatEntityDetails.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../common/chatWorkspace.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
 import { registerNativeConversationSharing } from '../browser/nativeConversationShare.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
@@ -40,7 +40,7 @@ import { ISessionsEntryService, type ISessionsEntry } from '../../../services/la
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { DocumentConversation } from '../browser/documentConversation.js';
-import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
+import { INativeChatModelPreferencesService } from '../browser/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
 
 const ashChatViewSource = {

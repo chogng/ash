@@ -13,14 +13,13 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import * as inputPersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IExtensionService } from '../../../../../workbench/services/extensions/common/extensionService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { readNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import '../../browser/createSessionFromPullRequestAction.js';
 
 test('New Session from Pull Request prepares the selected commit and opens the saved snapshot', async () => {
@@ -94,7 +93,7 @@ test('New Session from Pull Request prepares the selected commit and opens the s
 					assert.ok(created);
 					assert.equal(sessionId, 'new-session');
 					assert.equal(threadId, 'new-thread');
-					const draft = readNewChatDraftState(storage, threadId, inputPersistence);
+					const draft = readNewChatDraftState(storage, threadId);
 					assert.equal(draft?.contexts[0]?.kind, 'transcriptContext');
 					assert.equal(draft?.contexts[0]?.resource, pr.url);
 					const snapshot = JSON.parse(draft!.contexts[0]!.content);

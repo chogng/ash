@@ -3,7 +3,7 @@ import { suite, test } from 'mocha';
 import {
 	deserializeUntitledInputAttachments, deserializeUntitledInputState,
 	serializeUntitledInputAttachments, serializeUntitledInputState,
-} from '../../../../browser/widget/input/chatInputStatePersistence.js';
+} from '../../common/chatInputStatePersistence.js';
 
 suite('Chat input state persistence codec', () => {
 	test('image data stays out of input state and resource spellings survive a round trip', () => {

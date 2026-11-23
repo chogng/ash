@@ -4,11 +4,10 @@ import { localize } from '../../../../nls.js';
 import type { GitHubRepository } from '../../../../platform/github/common/githubService.js';
 import { ProgressLocation, type IProgressService } from '../../../../platform/progress/common/progress.js';
 import type { IStorageService } from '../../../../platform/storage/common/storage.js';
-import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IPullRequestContext } from '../../../../workbench/contrib/sessions/browser/github/fetchers/githubPullRequestContextFetcher.js';
 import type { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { writeNewChatDraftState } from '../../chat/common/newChatDraftState.js';
+import { writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 
 interface IPullRequestSessionOptions {
 	readonly root: string;
@@ -51,7 +50,7 @@ export async function createAndOpenPullRequestSession(
 		mode: 'agent', text: '', contexts: [{
 			id: 'initial-pr:' + active.threadId, kind: 'transcriptContext', name: label, content: snapshot.content, resource: snapshot.url,
 		}]
-	}, active.threadId, chatInputStatePersistence);
+	}, active.threadId);
 	if (sessions.navigationRevision === navigationRevision) {
 		await sessions.openThread(active.session.sessionId, active.threadId);
 	}

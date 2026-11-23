@@ -1,4 +1,3 @@
-import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { captureSessionActionTarget, resolveSessionThreadSelection } from '../../../../browser/sessionActionsService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -19,7 +18,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
-import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { writeNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { pickSessionDestination } from '../sessionsPicker.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -49,7 +48,7 @@ registerAction2(class CloseSessionAction extends Action2 {
 		if (!selection) return;
 		sessions.closeVisibleSelection(selection);
 		if (selection.kind === 'untitled') {
-			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`, chatInputStatePersistence);
+			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`);
 		}
 	}
 });

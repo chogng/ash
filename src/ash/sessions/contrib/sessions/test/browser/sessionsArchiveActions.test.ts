@@ -1,9 +1,8 @@
 import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import assert from 'node:assert/strict';
@@ -529,7 +528,7 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		const draft = sessions.createUntitledSession('Unsent target');
 		const other = sessions.createUntitledSession('Foreground draft');
 		const text = { mode: 'plan' as const, text: 'Do not send this', contexts: [{ id: 'attachment', kind: 'file', name: 'note.txt', content: 'Synthetic attachment' }] };
-		writeNewChatDraftState(storage, text, `untitled:${draft.untitledSessionId}`, chatInputStatePersistence);
+		writeNewChatDraftState(storage, text, `untitled:${draft.untitledSessionId}`);
 		services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
 		quickInput.input = async () => 'Named before sending';
 		const project: Project = { id: 'project', name: 'Project', revision: 1, archived: false, description: '', materials: [], sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
@@ -560,8 +559,8 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		await operation;
 		assert.deepEqual(provider.created, ['created-0']);
 		assert.equal(sessions.activeUntitledSession?.untitledSessionId, other.untitledSessionId);
-		assert.deepEqual(readNewChatDraftState(storage, 'created-0-root', chatInputStatePersistence), text);
-		assert.equal(readNewChatDraftState(storage, `untitled:${draft.untitledSessionId}`, chatInputStatePersistence), undefined);
+		assert.deepEqual(readNewChatDraftState(storage, 'created-0-root'), text);
+		assert.equal(readNewChatDraftState(storage, `untitled:${draft.untitledSessionId}`), undefined);
 		assert.equal(sessions.untitledSessions.some(value => value.untitledSessionId === draft.untitledSessionId), false);
 		if (action === 'sessions.list.togglePin') {
 			assert.equal(storage.getBoolean('sessions.list.pinned.created-0', StorageScope.PROFILE), true);
@@ -572,7 +571,7 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		else if (action === 'agentSession.archive') {
 			assert.deepEqual(provider.archived, ['created-0']);
 			await commands.executeCommand('agentSession.restore', 'created-0');
-			assert.deepEqual(readNewChatDraftState(storage, 'created-0-root', chatInputStatePersistence), text);
+			assert.deepEqual(readNewChatDraftState(storage, 'created-0-root'), text);
 		} else if (action === 'agentSession.addToProject') assert.deepEqual(linked, ['created-0']);
 		else assert.deepEqual(moved, ['created-0']);
 	});

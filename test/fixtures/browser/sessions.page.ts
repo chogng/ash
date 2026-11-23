@@ -234,7 +234,7 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 	const scopes = new Map<string, ProjectScope>();
 	if (projectPdfPreview) {
 		const { registerChatWorkspaceNavigation } = await import('../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js');
-		const { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_CHAT_WORKSPACE_COMMAND } = await import('../../../src/ash/sessions/contrib/chat/common/constants.js');
+		const { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_CHAT_WORKSPACE_COMMAND } = await import('../../../src/ash/sessions/common/chatWorkspace.js');
 		const { ISessionsEntryService } = await import('../../../src/ash/sessions/services/layout/common/sessionsEntryService.js');
 		const { InMemoryFileSystemProvider } = await import('../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js');
 		const { DisposableStore } = await import('../../../src/ash/base/common/lifecycle.js');

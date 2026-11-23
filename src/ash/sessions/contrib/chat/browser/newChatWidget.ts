@@ -24,7 +24,7 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
-import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../../../browser/chatPresentation.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesProvider } from './sessionTurnChanges.js';

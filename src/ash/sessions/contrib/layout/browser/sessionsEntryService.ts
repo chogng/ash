@@ -30,7 +30,7 @@ import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLa
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../common/chatWorkspace.js';
 import { parseEditorWorkingSet, type EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
 
 export const documentEntry: ISessionsEntry = {

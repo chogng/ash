@@ -5,8 +5,8 @@ import { IAccessibilityService } from '../../../../platform/accessibility/common
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../common/constants.js';
-import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfiguration } from '../common/welcomePhrases.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../../../workbench/contrib/sessions/common/chatConstants.js';
+import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfiguration } from '../../../../workbench/contrib/sessions/common/welcomePhrases.js';
 
 /** Projects the Chat greeting for either reply source. An Ash handoff keeps the current phrase. */
 export class ChatWelcomeTitle extends Disposable {

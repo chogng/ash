@@ -126,9 +126,9 @@ Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, 
 ## Key Constraint
 
 The Chat contribution owns the native welcome layout and model preferences
-for Chat and Collaboration. It supplies these to the native Sessions Chat
-model and the Workbench Chat widget. Workbench owns transcript rendering, input
-operations and the draft storage lifecycle. The Sessions Part hosts the separate
+for Chat and Collaboration. The Workbench Sessions contribution owns welcome
+phrase resolution and draft persistence. Workbench Chat owns transcript rendering
+and input operations. The Sessions Part hosts the separate
 presentations through pane factories supplied by window composition.
 
 ```

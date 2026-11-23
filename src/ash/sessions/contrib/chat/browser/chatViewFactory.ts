@@ -33,7 +33,7 @@ import { BrowserEditorInput } from '../../../../workbench/contrib/browserView/co
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../../../browser/chatPresentation.js';
 
 export function getChatBrowserAccessibilityHelp(): string {
 	return localize({ bundle: 'ash', key: 'sessions.chat.browserHelp' }, 'Press Enter on a web link to open it in the browser beside Chat. Browser tabs stay with Chat when switching to Code. Close the last browser tab to return to the full conversation. The browser toolbar also offers Open in External Browser. In Settings > Browser, turn on Browser follows session to keep separate tabs for each conversation.');

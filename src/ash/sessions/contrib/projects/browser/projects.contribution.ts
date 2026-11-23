@@ -25,7 +25,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../common/chatWorkspace.js';
 import { groupChatList, IChatListCatalog } from '../../chat/browser/chatListModel.js';
 import { ProjectsEditorPane } from './projectsEditor.js';
 import { ProjectTitleBarContribution } from './projectTitleBarWidget.js';

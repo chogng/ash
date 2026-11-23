@@ -20,7 +20,8 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../platfo
 import { localize, localize2 } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, OPEN_CHAT_CREATION_COMMAND_ID } from '../common/constants.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../../../workbench/contrib/sessions/common/chatConstants.js';
+import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../../common/sessionCommands.js';
 
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { isChatCreationKind } from '../../../common/chatCreation.js';
@@ -33,16 +34,13 @@ import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chat
 
 import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import { SessionsChatCopyActionRendering } from './chatCopyActionRendering.js';
-import { NativeChatModelPreferences } from '../common/nativeChatModelPreferences.js';
-import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
-import { NativeChatModelPreferencesService } from './nativeChatModelPreferencesService.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { INativeChatModelPreferencesService, NativeChatModelPreferencesService } from './nativeChatModelPreferencesService.js';
 
 registerWorkbenchContribution(SessionsChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SessionsChatCopyActionRendering));
 
 registerSingleton(IChatViewFactory, ChatViewFactory, InstantiationType.Delayed);
 registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, InstantiationType.Delayed);
-registerSingleton(INativeChatModelPreferencesService, new SyncDescriptor(NativeChatModelPreferencesService, [NativeChatModelPreferences], true));
+registerSingleton(INativeChatModelPreferencesService, NativeChatModelPreferencesService, InstantiationType.Delayed);
 
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);

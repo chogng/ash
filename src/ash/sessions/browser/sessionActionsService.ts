@@ -1,5 +1,4 @@
 import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
-import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { isRecord } from '../../base/common/types.js';
 import { localize } from '../../nls.js';
 import { IStorageService } from '../../platform/storage/common/storage.js';
@@ -13,7 +12,7 @@ import {
 } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../services/sessions/common/session.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import type { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
@@ -46,10 +45,10 @@ export function captureSessionActionTarget(sessions: ISessionsManagementService,
 					// Park an unmounted composer's draft before the catalog removes its
 					// local identity. Mounted composers retain and migrate their live input.
 					const key = `untitled:${draftId}`;
-					const input = readNewChatDraftState(storage, key, chatInputStatePersistence);
-					if (input) writeNewChatDraftState(storage, input, active.threadId, chatInputStatePersistence);
+					const input = readNewChatDraftState(storage, key);
+					if (input) writeNewChatDraftState(storage, input, active.threadId);
 					sessions.promoteUntitledSession(draftId, active);
-					writeNewChatDraftState(storage, undefined, key, chatInputStatePersistence);
+					writeNewChatDraftState(storage, undefined, key);
 				}
 				return sessions.sessions.find(session => session.sessionId === active.session.sessionId) ?? active.session;
 			},
@@ -146,7 +145,7 @@ export class SessionActionsService implements IAgentSessionActionsService {
 		if (typeof draftId !== 'string') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		if (this.sessionsOwner.untitledSessions.some(session => session.untitledSessionId === draftId)) {
 			this.sessionsOwner.discardUntitledSession(draftId);
-			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`, chatInputStatePersistence);
+			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`);
 		}
 		return true;
 	}

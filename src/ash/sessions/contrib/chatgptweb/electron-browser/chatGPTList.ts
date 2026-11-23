@@ -17,7 +17,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../../common/chatWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { CatalogProjectDetails, ChatListEntry, ChatListForkReference, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator } from '../../sessions/browser/views/sessionsCatalogList.js';

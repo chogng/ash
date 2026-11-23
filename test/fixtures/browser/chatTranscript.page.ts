@@ -4,7 +4,6 @@ import { ISessionsProvidersService, SessionsProvidersService } from '../../../sr
 import './chatFixtureLocalization.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
-import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { IChatWindowService } from '../../../src/ash/workbench/contrib/chatWindow/browser/chatWindow.js';
@@ -35,7 +34,7 @@ import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.con
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
-import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
+import { readNewChatDraftState } from '../../../src/ash/workbench/contrib/sessions/common/newChatDraftState.js';
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { NativeChatWidget } from '../../../src/ash/sessions/contrib/chat/browser/widget/nativeChatWidget.js';
 import { ReplyChatInputFactory } from '../../../src/ash/sessions/contrib/chat/browser/replyChatInput.js';
@@ -1686,7 +1685,7 @@ window.ashChatTranscriptIntegration = {
 	appImagePending: () => completeImageDecode !== undefined,
 	delayAppImages: () => { window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => new Promise<ImageBitmap>((resolve, reject) => { completeImageDecode = () => { window.createImageBitmap = createBitmap; void createBitmap(...args).then(resolve, reject); }; })) as typeof createImageBitmap; },
 	finishAppImages: () => { completeImageDecode?.(); completeImageDecode = undefined; },
-	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread, chatInputStatePersistence),
+	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
 	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
 	chatDraftContexts: async () => (await appChat?.captureDraft())?.draft.contexts,
 	chatDraftContextNames: async () => (await appChat?.captureDraft())?.draft.contexts.map(context => context.name) ?? [],

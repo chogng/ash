@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../common/constants.js';
-import { getNewSessionWelcomePhrases, NEW_SESSION_WELCOME_NAME_PLACEHOLDER, resolveWelcomePhraseTemplate } from '../../common/welcomePhrases.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../../../../workbench/contrib/sessions/common/chatConstants.js';
+import { getNewSessionWelcomePhrases, NEW_SESSION_WELCOME_NAME_PLACEHOLDER, resolveWelcomePhraseTemplate } from '../../../../../workbench/contrib/sessions/common/welcomePhrases.js';
 import '../../browser/chat.contribution.js';
 
 suite('New session welcome phrases', () => {

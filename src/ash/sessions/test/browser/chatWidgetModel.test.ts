@@ -30,7 +30,7 @@ import type { IAppServerApi, AppServerConnectionState } from '../../../platform/
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import type { INativeChatModelPreferencesService } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
+import type { INativeChatModelPreferencesService } from '../../contrib/chat/browser/nativeChatModelPreferencesService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';

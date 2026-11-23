@@ -46,7 +46,7 @@ import { ISessionChangesService } from '../../../changes/common/sessionChangesSe
 import { SessionsEntryService, documentEntry } from '../../browser/sessionsEntryService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
-import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../../common/chatWorkspace.js';
 
 suite('SessionsEntryService lifecycle and focus', () => {
 	test('Chat browser editors stay in Chat and retain a separate group across Code switches', async () => {

@@ -1,4 +1,4 @@
-import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
+import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 
 type InputState = NonNullable<IOpenAgentsWindowOptions['draft']>;
 type InputAttachments = InputState['contexts'];

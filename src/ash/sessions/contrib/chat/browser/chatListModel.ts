@@ -6,7 +6,7 @@ import { ISessionGroupsService, type SessionGroup } from '../../../services/sess
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { canOpenThreadInCode, type IChat, type ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../common/chatWorkspace.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 import type { Event } from '../../../../base/common/event.js';
@@ -24,7 +24,6 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
-import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';

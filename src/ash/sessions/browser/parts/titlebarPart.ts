@@ -30,7 +30,7 @@ import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
 import { titleBarBackground } from '../../../workbench/common/theme.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../contrib/chat/common/constants.js';
+import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../common/chatWorkspace.js';
 
 /** The titlebar surface to the right of the sidebar also backs the window controls. */
 export function getSessionsTitlebarBackground(theme: IColorTheme): string | undefined {

@@ -27,17 +27,16 @@ import { IOpenerService, type IOpener } from '../../../../../platform/opener/com
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { LanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
-import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../../common/chatWorkspace.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
 import type { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import type { ISession, IUntitledChatSession, ModelRef } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { readNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTViewSource, experimentalChatGPTViewSource, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTNativeTransport, IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import { IChatGPTNativeService, IChatGPTService, linkedTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
@@ -495,7 +494,7 @@ suite('ChatGPT entry', () => {
 		assert.ok(selected?.kind === 'draft');
 		assert.deepEqual(selected.model, model);
 		assert.equal(management.untitledSessions.find(draft => draft.untitledSessionId === selected.id)?.creationKind, 'slides');
-		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`, chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
+		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
 		assert.deepEqual(loadChatSelection(storage), selected);
 
 		experimental = true;
@@ -510,7 +509,7 @@ suite('ChatGPT entry', () => {
 		const experimentalSelection = selection.chatSelection.get();
 		assert.ok(experimentalSelection?.kind === 'draft');
 		assert.deepEqual(experimentalSelection.model, model);
-		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`, chatInputStatePersistence), { text: 'Experimental prompt', mode: 'agent', contexts: [] });
+		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`), { text: 'Experimental prompt', mode: 'agent', contexts: [] });
 	});
 
 	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {

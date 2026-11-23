@@ -2,7 +2,8 @@ import { buildOpenSessionLinkUri } from '../../../../platform/agentHost/common/o
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
+import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID } from '../../../common/sessionCommands.js';
+import { OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../../common/chatWorkspace.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';

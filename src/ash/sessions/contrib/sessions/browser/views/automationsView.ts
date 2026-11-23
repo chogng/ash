@@ -15,7 +15,7 @@ import { Menus } from '../../../../browser/menus.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID, SCHEDULED_CUSTOM_VIEW_ID, belongsToAutomationView } from '../automationsConstants.js';
-import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../../../common/chatWorkspace.js';
 import { automationRunStatusLabel, registerAutomationsAccessibility } from './automationsAccessibility.js';
 import { addDisposableListener, getActiveElement, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';

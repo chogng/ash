@@ -14,7 +14,6 @@ import { IChatEntitlementService } from '../../../workbench/services/chat/common
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
 import { createTestArtifactCatalogService, createTestDocsService } from '../common/testArtifactCatalogService.js';
-import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { IProjectService } from '../../../platform/projects/common/projectService.js';
@@ -68,10 +67,8 @@ import { ActionWidgetService, IActionWidgetService } from '../../../platform/act
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
-import { NativeChatModelPreferences } from '../../contrib/chat/common/nativeChatModelPreferences.js';
 import { AshChatModel } from '../../contrib/chat/browser/ashChatModel.js';
-import { INativeChatModelPreferencesService as INativeChatModelPreferences } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
-import { NativeChatModelPreferencesService } from '../../contrib/chat/browser/nativeChatModelPreferencesService.js';
+import { INativeChatModelPreferencesService as INativeChatModelPreferences, NativeChatModelPreferences, NativeChatModelPreferencesService } from '../../contrib/chat/browser/nativeChatModelPreferencesService.js';
 import { migrateSettings } from '../../../workbench/services/configuration/browser/configuration.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
@@ -407,7 +404,7 @@ function createSessionAshChatModel(services: InstantiationService, chat: IChatSe
 	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, undefined);
 	return services.createInstance(AshChatModel, selection, 'session');
 }
-const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
+const { readNewChatDraftState, writeNewChatDraftState } = await import('../../../workbench/contrib/sessions/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
 	'../../../workbench/contrib/preferences/browser/preferences.contribution.js'
@@ -1588,8 +1585,8 @@ test('Sessions composer restores an unsent Multitask draft and its attachment as
 
 	input.appendToDraft('Keep this edit');
 	const editedText = `${draft.text}\n\nKeep this edit`;
-	await waitFor(() => readNewChatDraftState(storage, identity, chatInputStatePersistence)?.text === editedText);
-	assert.deepEqual(readNewChatDraftState(storage, identity, chatInputStatePersistence), { ...restored, text: editedText });
+	await waitFor(() => readNewChatDraftState(storage, identity)?.text === editedText);
+	assert.deepEqual(readNewChatDraftState(storage, identity), { ...restored, text: editedText });
 });
 
 test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {
@@ -1603,7 +1600,7 @@ test('Sessions composer retains corrupt storage through visibility changes until
 	assert.equal(notices.model.getNotifications().length, 1);
 	assert.match(notices.model.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
 	input.appendToDraft('A new draft');
-	assert.deepEqual(readNewChatDraftState(storage, identity, chatInputStatePersistence), { mode: 'agent', text: 'A new draft', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(storage, identity), { mode: 'agent', text: 'A new draft', contexts: [] });
 });
 
 test('Chinese Sessions draft recovery and accessibility help use the product language catalog', async () => {
@@ -1674,7 +1671,7 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	await source.error(new Error('Source unavailable'));
 	await rejected;
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
-	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
 });
 
 test('a Code draft checkpoint saves edits made while its attachment is resolving', async () => {
@@ -1689,7 +1686,7 @@ test('a Code draft checkpoint saves edits made while its attachment is resolving
 	await saving;
 	fixture.widget.dispose();
 
-	const draft = readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence);
+	const draft = readNewChatDraftState(fixture.storage, fixture.identity);
 	assert.match(draft?.text ?? '', /Keep this later edit/u);
 	assert.equal(draft?.contexts[0]?.content, 'Source snapshot');
 });
@@ -1715,7 +1712,7 @@ test('Sessions composer waits for file paste before sending and clears only the 
 	await sending;
 	assert.deepEqual(sent, ['selected contents']);
 	assert.equal(await fixture.input.captureDraft(), undefined);
-	assert.equal(readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence), undefined);
+	assert.equal(readNewChatDraftState(fixture.storage, fixture.identity), undefined);
 });
 
 test('Sessions composer cancellation keeps the text and prevents a late file from entering the reopened draft', async () => {
@@ -1926,8 +1923,8 @@ for (const background of [false, true]) test(background
 		assert.equal(widget.sessionId, 'session-1');
 		assert.equal(codeView.model, widgetModel);
 		assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
-		assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`, chatInputStatePersistence), restoredChatDraft);
-		assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+		assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), restoredChatDraft);
+		assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 		codeView.dispose();
 		assert.equal(widget.isDisposed, true);
 		assert.equal(widgetModel.isDisposed, true);
@@ -1938,7 +1935,7 @@ for (const background of [false, true]) test(background
 		view.openSession('session-1', 'thread-1');
 		assert.equal(view.activeSelection?.kind, 'session');
 		assert.equal(await widget.captureDraft(), undefined);
-		assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+		assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 
 		const selection = view.getSelection().activeSelection;
 		assert.ok(selection?.kind === 'session');
@@ -3480,7 +3477,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService);
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
@@ -3585,7 +3582,7 @@ test('Chat and Code keep independent defaults and model choices for the same dra
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
-	using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+	using preferences = services.createInstance(NativeChatModelPreferencesService);
 	assert.equal(storage.get(NativeChatModelPreferences.selectedModelStorageKey, StorageScope.PROFILE), 'auto');
 	assert.equal(storage.get('cowork.currentLanguageModel', StorageScope.PROFILE), undefined);
 	services.registerInstance(INativeChatModelPreferences, preferences);
@@ -3604,7 +3601,7 @@ test('Chat and Code keep independent defaults and model choices for the same dra
 	assert.deepEqual([code.selectedReasoningEffort, cowork.selectedReasoningEffort], [undefined, 'high']);
 	await configuration.updateValue(NativeChatModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
-	using restoredCoworkPreferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+	using restoredCoworkPreferences = services.createInstance(NativeChatModelPreferencesService);
 	const catalog = await modelsFor(chat).listModels();
 	assert.deepEqual([modelsFor(chat).getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
 	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
@@ -3977,7 +3974,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(IConfigurationService, configuration);
 		using storage = createTestStorage();
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService);
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
@@ -4015,7 +4012,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService);
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
@@ -5527,7 +5524,7 @@ for (const kind of ['Code', 'Cowork', 'Code and Cowork']) {
 		services.registerInstance(IStorageService, storage);
 		const models = modelsFor(chat);
 		services.registerInstance(ILanguageModelsService, models);
-		using cowork = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		using cowork = services.createInstance(NativeChatModelPreferencesService);
 		const visibility = kind === 'Code' ? models : cowork;
 		const first = visibility.setModelVisible(entries[0]!.model, true);
 		await started.p;
@@ -6344,7 +6341,7 @@ for (const locale of ['en', 'zh-CN']) test(`Chat editor borrows one composer and
 		typeChatText(dom.window, input, 'Keep the unsent draft');
 		let resolutions = 0;
 		pane.addContext({ id: 'canvas-snapshot', kind: 'file', name: 'draft.txt', resolve: async () => { resolutions++; return { name: 'draft.txt', content: 'Captured unsaved code' }; } });
-		await waitFor(() => readNewChatDraftState(storage, beforeThread, chatInputStatePersistence)?.contexts.length === 1);
+		await waitFor(() => readNewChatDraftState(storage, beforeThread)?.contexts.length === 1);
 		const draft = (await pane.captureActiveDraft())!.draft;
 		const host = dom.window.document.createElement('div');
 		dom.window.document.body.append(host);
@@ -7423,7 +7420,7 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 	using sessions = new SessionsManagementService(fake.api);
 	using contextView = new BrowserContextViewService(document.body);
 	using services = createInputServices(contextView, chat);
-	using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+	using preferences = services.createInstance(NativeChatModelPreferencesService);
 	services.registerInstance(INativeChatModelPreferences, preferences);
 	using model = createSessionAshChatModel(services, chat, { kind: 'session', active: { session: durable, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
@@ -7452,10 +7449,10 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 test('The original draft codec preserves terminal snapshots and rejects malformed stored geometry', () => {
 	using storage = createTestStorage();
 	const draft = { mode: 'agent' as const, text: 'Check this output', contexts: [{ id: 'terminal:saved', kind: 'terminal', name: 'Saved terminal', content: 'Context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved output', columns: 80 } }] };
-	writeNewChatDraftState(storage, draft, 'thread', chatInputStatePersistence);
-	assert.deepEqual(readNewChatDraftState(storage, 'thread', chatInputStatePersistence), draft);
+	writeNewChatDraftState(storage, draft, 'thread');
+	assert.deepEqual(readNewChatDraftState(storage, 'thread'), draft);
 	storage.store('sessions.inputDraft:thread', JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.throws(() => readNewChatDraftState(storage, 'thread', chatInputStatePersistence), /Invalid terminal snapshot/);
+	assert.throws(() => readNewChatDraftState(storage, 'thread'), /Invalid terminal snapshot/);
 });
 
 for (const locale of ['en', 'zh-CN']) {
@@ -7572,7 +7569,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		services.registerInstance(IConfigurationService, configuration);
 		using storage = createTestStorage();
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService);
 		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));

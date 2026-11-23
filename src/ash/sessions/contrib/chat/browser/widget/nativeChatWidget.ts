@@ -13,7 +13,7 @@ import { ChatWidget, type IChatWidgetModel } from '../../../../../workbench/cont
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { constObservable } from '../../../../../base/common/observable.js';
-import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../../common/constants.js';
+import { CHAT_HISTORY_VIRTUALIZE_FROM } from '../../../../browser/chatPresentation.js';
 import './media/nativeChat.css';
 import './media/nativeChatList.css';
 

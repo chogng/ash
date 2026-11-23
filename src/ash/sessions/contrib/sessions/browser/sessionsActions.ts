@@ -16,7 +16,7 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { groupSessionsForPicker, pickSessionDestination, type ISessionPickItem } from './sessionsPicker.js';
 import { runSessionsListMove } from './views/sessionsListChatMove.js';
 import { Menus } from '../../../browser/menus.js';
-import { SHOW_ASH_CHAT_COMMAND } from '../../chat/common/constants.js';
+import { SHOW_ASH_CHAT_COMMAND } from '../../../common/chatWorkspace.js';
 import { SessionsMenuCanMoveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 export const SHOW_SESSIONS_PICKER_COMMAND_ID = 'sessions.showSessionsPicker';

@@ -14,7 +14,9 @@ import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../../contrib/sessions/browser/
 import '../../browser/actions/sessionsChatActions.js';
 import '../../contrib/sessions/browser/sessionDetailsAction.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
-import { NEW_SESSION_ACTION_ID, OPEN_CHAT_CREATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND } from '../../contrib/chat/common/constants.js';
+import { NEW_SESSION_ACTION_ID } from '../../../workbench/contrib/sessions/common/chatConstants.js';
+import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../common/sessionCommands.js';
+import { SHOW_ASH_CHAT_COMMAND } from '../../common/chatWorkspace.js';
 import '../../contrib/chat/browser/chat.contribution.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';

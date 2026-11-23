@@ -15,7 +15,6 @@ import { ISessionSectionOrderService, SessionSectionOrderService } from '../serv
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
-import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
@@ -172,7 +171,7 @@ import './media/workbench.css';
 import './media/notifications.css';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../contrib/sessions/browser/sessionsActions.js';
 import './actions/sessionsChatActions.js';
-import { NEW_SESSION_ACTION_ID } from '../contrib/chat/common/constants.js';
+import { NEW_SESSION_ACTION_ID } from '../../workbench/contrib/sessions/common/chatConstants.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -214,7 +213,7 @@ import { NativeChatPaneFactory } from '../contrib/chat/browser/nativeChatPaneFac
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
 import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
-import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
@@ -488,7 +487,7 @@ export abstract class Workbench extends Disposable {
 		const accountMenu = services.createInstance(SessionsAccountMenu, preferences);
 		const { titlebar, sidebar, flatLayout } = this.createNavigationParts(services, options);
 		const notifications = services.get(INotificationService);
-		const recoveredDrafts = migrateNewChatDraftState(storage, chatInputStatePersistence,
+		const recoveredDrafts = migrateNewChatDraftState(storage,
 			error => notifications.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this.registerConversationCommands(services);
 		const commandService = services.get(ICommandService);
@@ -1268,7 +1267,7 @@ export abstract class Workbench extends Disposable {
 			if (!conversationVisible.read(reader) || active?.kind !== 'untitled' || active.session.forkSource) return false;
 			draftChanged.read(reader);
 			try {
-				const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`, chatInputStatePersistence);
+				const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`);
 				return !draft || (!draft.text.trim() && draft.contexts.length === 0);
 			} catch { /* The composer owns reporting unreadable drafts. */ }
 			return false;
@@ -1755,7 +1754,7 @@ export abstract class Workbench extends Disposable {
 		const selected = view.activeSelection!;
 		for (const recovered of recoveredDrafts) {
 			const session = view.openNewSession(undefined, { sideBySide: true, source: 'restore' });
-			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`, chatInputStatePersistence);
+			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`);
 			this.sessionsPart.restoreDraft(recovered.draft);
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}

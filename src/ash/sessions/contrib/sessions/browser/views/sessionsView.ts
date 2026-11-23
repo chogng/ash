@@ -10,7 +10,7 @@ import { localize } from '../../../../../nls.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
 import type { SessionsCatalogAccessibility, SessionsCatalogListInput } from './sessionsCatalogList.js';
-import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../chat/common/constants.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../../common/chatWorkspace.js';
 import { IProjectDialogService, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';

@@ -2,7 +2,6 @@ import { IGitHubService } from '../../github/browser/githubService.js';
 import { attachSessionGitHubReference } from './sessionChatInputToolbar.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
@@ -18,13 +17,13 @@ import { ChatInputPart, type ChatInputPartOptions } from '../../../../workbench/
 import type { IChatInputEditorProvider } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
+import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../../../browser/chatPresentation.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
@@ -126,8 +125,8 @@ export class SharedChatInputComposer extends Disposable {
 			if (event.affectsConfiguration(AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING)) updateHistoryScope();
 		}));
 		this.saveState = input.bindDraftStorage(model, {
-			read: identity => readNewChatDraftState(storage, identity, chatInputStatePersistence),
-			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
+			read: identity => readNewChatDraftState(storage, identity),
+			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
 	}

@@ -3,7 +3,6 @@ import { sessionIdentity } from '../../services/sessions/common/sessionIdentity.
 import type { ISession } from '../../services/sessions/common/session.js';
 import { SessionSectionOrderService } from '../../services/sessions/browser/sessionSectionOrderService.js';
 import { SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
-import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
@@ -52,7 +51,7 @@ import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../../contrib/sessions/browser/sessionHoverContent.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
 
@@ -384,7 +383,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 		{ untitledSessionId: 'second', title: 'Second' },
 	];
 	for (const session of untitledSessions) {
-		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`, chatInputStatePersistence);
+		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
 	}
 	const sessionService = {
 		get untitledSessions() { return untitledSessions; },
@@ -492,10 +491,10 @@ for (const mode of ['chat', 'code'] as const) {
 				for (const session of sessions) {
 					assert.equal(list.domNode.querySelector(`[data-item="session:${session.sessionId}"]`)?.getAttribute('data-parent-section'), 'recent');
 				}
-				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
+				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank');
 				assertRows();
 
-				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank');
 				assertRows('blank');
 				const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:blank"] .ash-sessions-list-item')!;
 				const label = locale === 'zh-CN' ? '新建会话（草稿）' : 'New Session (draft)';
@@ -503,24 +502,24 @@ for (const mode of ['chat', 'code'] as const) {
 				assert.equal(button.getAttribute('aria-label'), label);
 				assert.equal(button.getAttribute('aria-current'), 'page');
 				button.focus();
-				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank');
 				assert.equal(dom.window.document.activeElement, button);
 				assert.equal(list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'), button);
 
 				// The attachment-only draft is parked outside the visible arrangement.
-				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment', chatInputStatePersistence);
+				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment');
 				assertRows('blank', 'attachment');
 				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
 				assert.deepEqual(opened, ['attachment']);
 				storage.store('sessions.inputDraft:untitled:corrupt', 'invalid JSON', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				assertRows('blank', 'attachment');
 
-				writeNewChatDraftState(storage, undefined, 'untitled:blank', chatInputStatePersistence);
+				writeNewChatDraftState(storage, undefined, 'untitled:blank');
 				assertRows('attachment');
 				drafts = [blank, corrupt];
 				changes.fire();
 				assertRows();
-				assert.equal(readNewChatDraftState(storage, 'untitled:attachment', chatInputStatePersistence)?.contexts[0]?.name, 'source.txt');
+				assert.equal(readNewChatDraftState(storage, 'untitled:attachment')?.contexts[0]?.name, 'source.txt');
 			} finally { resetNlsResolver(); }
 		});
 	}
@@ -773,7 +772,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 		}
 	});
 	let drafts = [{ untitledSessionId: 'feedback', title: 'Synthetic feedback' }];
-	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback', chatInputStatePersistence);
+	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback');
 	const sessions = { sessions: [], get untitledSessions() { return drafts; }, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const views = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;

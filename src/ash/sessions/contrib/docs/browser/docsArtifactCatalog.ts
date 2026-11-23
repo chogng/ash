@@ -2,7 +2,7 @@ import { IDocsService } from '../common/docsService.js';
 import { Event } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
-import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
+import { OPEN_ARTIFACT_CONVERSATION_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { basename } from '../../../../base/common/resources.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';

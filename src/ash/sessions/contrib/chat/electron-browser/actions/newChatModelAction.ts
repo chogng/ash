@@ -3,14 +3,13 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../../platform/models/common/agentModels.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import type { ChatCreationKind } from '../../../../common/chatCreation.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { SHOW_ASH_CHAT_COMMAND } from '../../common/constants.js';
-import { writeNewChatDraftState } from '../../common/newChatDraftState.js';
+import { SHOW_ASH_CHAT_COMMAND } from '../../../../common/chatWorkspace.js';
+import { writeNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 
 /** The source revalidates its draft after model discovery and returns undefined if the handoff is stale. */
 export async function openAshChatWithModel(accessor: ServicesAccessor, selection: ModelRef, readDraft: () => { readonly text: string; readonly creationKind?: ChatCreationKind; } | undefined): Promise<void> {
@@ -32,7 +31,7 @@ export async function openAshChatWithModel(accessor: ServicesAccessor, selection
 
 	await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
 	view.openChatDraft(selection, id => {
-		if (draft.text.trim()) writeNewChatDraftState(storage, { text: draft.text, mode: 'agent', contexts: [] }, `ash-chat:untitled:${id}`, chatInputStatePersistence);
+		if (draft.text.trim()) writeNewChatDraftState(storage, { text: draft.text, mode: 'agent', contexts: [] }, `ash-chat:untitled:${id}`);
 		if (draft.creationKind) sessions.setUntitledSessionCreationKind(id, draft.creationKind);
 	});
 }

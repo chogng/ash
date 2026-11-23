@@ -5,7 +5,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { chatCreationKinds } from '../../../common/chatCreation.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
-import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../chat/common/constants.js';
+import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../../common/sessionCommands.js';
 import './newArtifactWidget.css';
 
 /** Artifact creation shortcuts that start a chat with the selected artifact context. */

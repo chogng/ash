@@ -18,12 +18,11 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputPart, type ChatInputPartOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
-import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ChatInputArtifactPill, getChatCreationHelp, type ChatCreationModel } from './chatInputArtifactPill.js';
-import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
+import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../../../browser/chatPresentation.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { getNativeChatAccessibilityHelp } from './nativeChatAccessibilityHelp.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
@@ -163,8 +162,8 @@ export class ReplyChatInputFactory {
 
 	private bindDraft(input: ChatInputPart, model: IChatWidgetModel, key: (identity: string) => string): void {
 		input.bindDraftStorage(model, {
-			read: identity => readNewChatDraftState(this.storage, key(identity), chatInputStatePersistence),
-			write: (identity, draft) => writeNewChatDraftState(this.storage, draft, key(identity), chatInputStatePersistence),
+			read: identity => readNewChatDraftState(this.storage, key(identity)),
+			write: (identity, draft) => writeNewChatDraftState(this.storage, draft, key(identity)),
 			flush: () => this.storage.flush(),
 		}, this.lifecycle.onWillShutdown);
 	}

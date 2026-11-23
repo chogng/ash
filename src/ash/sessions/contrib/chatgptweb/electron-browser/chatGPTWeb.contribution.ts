@@ -29,7 +29,7 @@ import { signInChatGPT } from '../browser/chatGPTLogin.js';
 import { ChatGPTList, ChatGPTNativeList } from './chatGPTList.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { canUseAshModels } from './chatGPTWidgetModel.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../chat/common/constants.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID } from '../../../common/chatWorkspace.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 

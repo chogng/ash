@@ -3,7 +3,6 @@ import { CodeConversationPageContext, SessionsMenuCanMoveConversationContext, Se
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping, type SidebarProjectTypeFilter } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
-import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -69,7 +68,7 @@ import { ISessionProviderScopeService } from '../../../../browser/agentHost/sess
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { createSessionItemActions, getSessionWorkspaceMenuState } from '../../../../browser/agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
-import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { readNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
@@ -1405,7 +1404,7 @@ export class SessionsList extends DomWidget {
 		for (const session of this.catalog ? [] : this.sessionService.untitledSessions) {
 			if (session.kind === 'chat') continue;
 			let draft: ReturnType<typeof readNewChatDraftState>;
-			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
+			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
 			if (!session.forkSource && (!draft || (!draft.text.trim() && draft.contexts.length === 0))) continue;
 			if (!this.search.matches(session.title)) continue;

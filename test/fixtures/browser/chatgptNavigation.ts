@@ -53,7 +53,7 @@ import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '.
 import { artifactSourceKey, type ArtifactResource } from '../../../src/ash/platform/artifactCatalog/common/artifactCatalog.js';
 import { IArtifactCatalogService } from '../../../src/ash/sessions/services/artifactCatalog/common/artifactCatalogService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/common/chatWorkspace.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import { IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';

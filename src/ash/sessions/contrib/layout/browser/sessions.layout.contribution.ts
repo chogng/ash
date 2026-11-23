@@ -9,7 +9,7 @@ import { IPreferencesService } from '../../../../workbench/services/preferences/
 import { COLLAB_CONTAINER_ID } from '../../../../workbench/contrib/collab/common/collab.js';
 import { SessionsEntryService, documentEntry } from './sessionsEntryService.js';
 import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
-import { CHAT_WORKSPACE_ENTRY_REQUEST } from '../../chat/common/constants.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST } from '../../../common/chatWorkspace.js';
 
 class SessionsLayoutContribution extends Disposable {
 	constructor(@ISessionsEntryService layout: ISessionsEntryService) {
