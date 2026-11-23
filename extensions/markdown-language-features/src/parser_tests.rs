@@ -38,6 +38,53 @@ fn math_tables_and_tasks_are_structured_and_html_is_inert() {
 }
 
 #[test]
+fn embedded_editors_resolve_closed_fences_and_keep_exact_json_token_ranges() {
+    let source = "- [x] checked\r\n- [ ] pending\r\n\r\n```widget:task-progress\r\n```\r\n\r\n~~~widget:json\r\n{ \"中文😀\": \"草稿\", \"attempts\" : 1.00, \"enabled\": false }\r\n~~~\r\n\r\n```widget:json\r\n{\"unclosed\":true}\r\n";
+    let document = parse(source).unwrap();
+    assert_eq!(document.task_progress, [1, 2]);
+    let blocks = serde_json::to_value(document.blocks).unwrap();
+    let editors: Vec<_> = blocks
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|block| block[2][0] == "embedded")
+        .collect();
+    assert_eq!(editors.len(), 2);
+    assert_eq!(editors[0][2][1]["kind"], "taskProgress");
+    let form = &editors[1];
+    assert_eq!(form[2][1]["kind"], "jsonForm");
+    let start = form[0].as_u64().unwrap() as usize;
+    let units: Vec<_> = source.encode_utf16().collect();
+    let fields = form[2][1]["fields"].as_array().unwrap();
+    for (field, (name, token)) in fields.iter().zip([
+        ("中文😀", "\"草稿\""),
+        ("attempts", "1.00"),
+        ("enabled", "false"),
+    ]) {
+        assert_eq!(field["name"], name);
+        let from = start + field["start"].as_u64().unwrap() as usize;
+        let to = start + field["end"].as_u64().unwrap() as usize;
+        assert_eq!(String::from_utf16(&units[from..to]).unwrap(), token);
+    }
+    assert_eq!(fields.len(), 3);
+}
+
+#[test]
+fn embedded_editor_leaves_unsupported_payload_as_code() {
+    for source in [
+        "```widget:task-progress\n- [x] This is source\n```",
+        "```widget:json\n{\"nested\": {\"value\": 1}}\n```",
+        "```widget:json\n{\"broken\": true,}\n```",
+        "```widget:unknown\n{}\n```",
+    ] {
+        let rendered = serde_json::to_value(parse(source).unwrap()).unwrap();
+        assert_eq!(rendered["blocks"][0][2][0], "el", "{source}");
+        assert_eq!(rendered["blocks"][0][2][1], "pre", "{source}");
+        assert_eq!(rendered["task_progress"], serde_json::json!([0, 0]));
+    }
+}
+
+#[test]
 fn empty_documents_and_deep_nesting_are_editable() {
     assert_eq!(parse("").unwrap().blocks.len(), 1);
     let source = format!("{}text\n", "> ".repeat(256));

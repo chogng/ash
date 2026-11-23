@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type FrameLocator, type Page } from '@playwright/test';
 import { startMarkdownExtension } from '../../fixtures/markdownExtension.js';
 import { createLargeMarkdownDocument } from '../../fixtures/browser/markdownLargeDocument.js';
 import { createHash } from 'node:crypto';
@@ -7,6 +7,19 @@ import { captureDocumentStyles } from '../../fixtures/documentStyles.js';
 
 let parser: Awaited<ReturnType<typeof startMarkdownExtension>>;
 let chinese: Awaited<ReturnType<typeof startMarkdownExtension>>;
+
+async function selectInline(frame: FrameLocator, text: string, start = text.length, end = start) {
+	const leaf = frame.locator('[data-md-start]').filter({ hasText: text }).first();
+	await leaf.click();
+	await leaf.evaluate((element, selection) => {
+		const node = element.firstChild!;
+		const offset = node.textContent!.indexOf(selection.text);
+		document.getSelection()!.setBaseAndExtent(node, offset + selection.start, node, offset + selection.end);
+	}, { text, start, end });
+	const editor = frame.locator('.ash-markdown-content');
+	await expect(editor).toBeFocused();
+	return editor;
+}
 test.beforeAll(async () => { test.setTimeout(600000); parser = await startMarkdownExtension(); chinese = await startMarkdownExtension('zh-CN'); });
 test.afterAll(async () => { await Promise.all([parser?.dispose(), chinese?.dispose()]); });
 test.beforeEach(async ({ page }) => {
@@ -186,17 +199,44 @@ test('rich updates retain unchanged blocks and send only versioned range edits',
 	await page.evaluate(() => { const text = window.ashMarkdownHost.text; const start = text.indexOf('中文段落'); window.ashMarkdownHost.edit(start, start + 4, '更新段落'); });
 	await expect(frame.locator('.ash-markdown-content')).toContainText('更新段落');
 	await expect(heading).toHaveAttribute('data-retained', 'true');
-	await frame.locator('.ash-markdown-block').filter({ hasText: '更新段落' }).click();
-	const input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-	await input.press('End');
+	const input = await selectInline(frame, '更新段落');
 	await input.pressSequentially('x');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit').length)).toBe(1);
 	const message = await page.evaluate(() => window.ashMarkdownHost.messages.find((message: any) => message.type === 'edit')) as { start: number; end: number; text: string; version: number; };
 	expect(message.text).toBe('x');
 	expect(message.start).toBe(message.end);
 	expect(message.version).toBeGreaterThan(1);
-	await input.press('Escape');
+	await expect(input).toContainText('更新段落x');
+	await expect(frame.locator('textarea')).toHaveCount(0);
 	await expect(heading).toHaveAttribute('data-retained', 'true');
+});
+
+test('Markdown code block editors update progress and undo localized JSON edits', async ({ page }) => {
+	const frame = await openHost(page, 'zh-CN');
+	const source = [
+		'# 中文😀', '', '- [ ] 发布', '', '```widget:task-progress', '```', '',
+		'```widget:json', '{ "渠道😀" : "预览", "审核": false, "重试": 1.00 }', '```', '',
+		'```widget:json', '{ "nested": [] }', '```', '',
+	].join('\r\n');
+	await page.evaluate(text => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, text), source);
+	const progress = frame.getByRole('progressbar', { name: '任务进度' });
+	await expect(progress).toHaveAttribute('aria-valuetext', '已完成 0 项，共 1 项');
+	await frame.getByRole('checkbox', { name: '已完成任务' }).check();
+	await expect(progress).toHaveAttribute('aria-valuetext', '已完成 1 项，共 1 项');
+	const toggled = source.replace('[ ]', '[x]');
+	const form = frame.getByRole('form', { name: 'JSON 表单' });
+	await expect(frame.locator('pre')).toHaveText('{ "nested": [] }\n');
+	await form.getByRole('textbox', { name: '渠道😀' }).fill('稳定 "版本"');
+	await form.getByRole('checkbox', { name: '审核' }).check();
+	await form.getByRole('button', { name: '应用更改' }).press('Enter');
+	const edited = toggled.replace('"预览"', JSON.stringify('稳定 "版本"')).replace('false', 'true');
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(edited);
+	await expect(form.getByRole('textbox', { name: '重试' })).toHaveValue('1.00');
+	await expect(form.getByRole('button', { name: '应用更改' })).toBeFocused();
+	await form.getByRole('button', { name: '应用更改' }).press('Control+z');
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(toggled);
+	await expect(form.getByRole('textbox', { name: '渠道😀' })).toHaveValue('预览');
+	await expect(progress).toHaveAttribute('aria-valuetext', '已完成 1 项，共 1 项');
 });
 
 test('preview updates keep the sandbox, focus, selection and scroll while rendering metadata, anchors and math', async ({ page }) => {
@@ -261,10 +301,7 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 	const frame = await openHost(page);
 	const initial = await page.evaluate(() => window.ashMarkdownHost.text);
 	const savedInitial = await page.evaluate(() => window.ashMarkdownHost.saved);
-	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
-	const input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-	await expect(input).toBeFocused();
-	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落') + 4; element.setSelectionRange(offset, offset); });
+	const input = await selectInline(frame, '中文段落');
 	const session = await context.newCDPSession(page);
 	await session.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 });
 	expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
@@ -280,15 +317,15 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 	await input.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.dirty)).toBe(true);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/中文段落 \*\*保留加粗\*\*/u);
-	await frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true }).press('Control+Shift+z');
+	await expect(input).not.toContainText('中文输入😀');
+	await input.press('Control+Shift+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(expected);
 	// The source view's undo acts on exactly the same history as the rich view.
 	await page.evaluate(() => window.ashMarkdownHost.undo());
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await page.evaluate(() => window.ashMarkdownHost.redo());
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(expected);
-	await frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true }).press('Escape');
+	await expect(input).toContainText('中文段落中文输入😀');
 	await expect(frame.locator('strong')).toContainText('保留加粗');
 	await expect(frame.getByRole('link', { name: '引用' })).toHaveAttribute('href', 'https://example.com');
 	expect(errors).toEqual([]);
@@ -298,8 +335,7 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 
 test('external edits during composition retain the draft and never overwrite the shared source', async ({ page, context }) => {
 	const frame = await openHost(page, 'zh-CN');
-	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
-	const input = frame.getByRole('textbox', { name: '编辑 Markdown 段落', exact: true });
+	const input = await selectInline(frame, '中文段落');
 	const session = await context.newCDPSession(page);
 	await session.send('Input.imeSetComposition', { text: '保留草稿', selectionStart: 4, selectionEnd: 4 });
 	const external = await page.evaluate(() => {
@@ -308,39 +344,34 @@ test('external edits during composition retain the draft and never overwrite the
 	});
 	await expect(frame.getByRole('status')).toContainText('草稿');
 	await session.send('Input.insertText', { text: '保留草稿' });
-	await expect(input).toHaveValue(/保留草稿/u);
+	await expect(input).toContainText('保留草稿');
 	expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(external);
-	await expect(input).toHaveAttribute('readonly', '');
+	await expect(input).toHaveAttribute('aria-readonly', 'true');
 	await frame.getByRole('button', { name: '重新载入文档', exact: true }).click();
-	await expect(frame.getByRole('status')).toBeEmpty();
+	await expect(frame.locator('.ash-markdown-status')).toBeEmpty();
 	expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(external);
 	await session.detach();
 });
 
-test('keyboard formatting and whole-source edits preserve unrelated CRLF and reference definitions', async ({ page }) => {
+test('inline formatting preserves unrelated CRLF and reference definitions without a toolbar', async ({ page }) => {
 	const frame = await openHost(page);
 	const initial = await page.evaluate(() => window.ashMarkdownHost.text);
-	await frame.getByRole('button', { name: 'Edit document source', exact: true }).click();
-	const input = frame.getByRole('textbox', { name: 'Edit document source', exact: true });
-	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落'); element.setSelectionRange(offset, offset + 4); });
+	const input = await selectInline(frame, '中文段落', 0, 4);
 	await input.press('Control+b');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial.replace('中文段落', '**中文段落**'));
+	await expect(frame.locator('strong').filter({ hasText: '中文段落' })).toBeVisible();
 	await input.press('Control+b');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await input.press('Control+b');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial.replace('中文段落', '**中文段落**'));
 	await input.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
-	await frame.getByRole('textbox', { name: 'Edit document source', exact: true }).press('Alt+F10');
-	await expect(frame.getByRole('button', { name: 'Bold', exact: true })).toBeFocused();
-	await frame.getByRole('button', { name: 'Bold', exact: true }).press('ArrowRight');
-	await expect(frame.getByRole('button', { name: 'Italic', exact: true })).toBeFocused();
-	await frame.getByRole('button', { name: 'Italic', exact: true }).press('Escape');
-	await expect(frame.getByRole('textbox', { name: 'Edit document source', exact: true })).toBeFocused();
+	await expect(frame.getByRole('toolbar')).toHaveCount(0);
+	await expect(input).toBeFocused();
 });
 
 for (const staleEOL of [false, true]) {
-	test(`table insertion and queued typing save at the correct CRLF offsets${staleEOL ? ' after host normalization' : ''}`, async ({ page }) => {
+	test(`inline paragraph split and queued typing save at the correct CRLF offsets${staleEOL ? ' after host normalization' : ''}`, async ({ page }) => {
 		if (staleEOL) {
 			await page.addInitScript(() => {
 				// Give the view a stale EOL policy to exercise the host's correction.
@@ -351,31 +382,25 @@ for (const staleEOL of [false, true]) {
 		}
 		const frame = await openHost(page);
 		const initial = await page.evaluate(() => window.ashMarkdownHost.text);
-		await frame.getByRole('button', { name: 'Edit document source', exact: true }).click();
-		const input = frame.getByRole('textbox', { name: 'Edit document source', exact: true });
-		await input.evaluate((element: HTMLTextAreaElement) => {
-			const start = element.value.indexOf('中文段落');
-			element.setSelectionRange(start, start);
-			const buttons = [...document.querySelectorAll('button')];
-			// All three actions run before the iframe can receive the table acknowledgement.
-			buttons.find(button => button.textContent === 'Table')!.click();
-			const end = element.value.indexOf('原有换行。') + '原有换行。'.length;
-			element.setRangeText('紧接😀', end, end, 'end');
-			element.dispatchEvent(new InputEvent('input', { bubbles: true }));
-			buttons.find(button => button.textContent === 'Save')!.click();
+		const input = await selectInline(frame, '原有换行。');
+		await input.evaluate(element => {
+			// No host acknowledgement can arrive between these input events.
+			element.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertParagraph', bubbles: true, cancelable: true }));
+			element.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: '紧接😀', bubbles: true, cancelable: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
 		});
-		const table = '\r\n\r\n| Header | Header |\r\n| --- | --- |\r\n| Cell | Cell |\r\n\r\n';
-		const withTable = initial.replace('中文段落', `${table}中文段落`);
-		const expected = withTable.replace('原有换行。', '原有换行。紧接😀');
+		const newline = '\r\n\r\n';
+		const withBreak = initial.replace('原有换行。', '原有换行。' + newline);
+		const expected = withBreak.replace('原有换行。' + newline, '原有换行。' + newline + '紧接😀');
 		await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.saved)).toBe(expected);
 		const edits = await page.evaluate(() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit'));
 		expect(edits).toEqual([
-			expect.objectContaining({ text: staleEOL ? table.replaceAll('\r\n', '\n') : table }),
-			expect.objectContaining({ start: withTable.indexOf('原有换行。') + '原有换行。'.length, text: '紧接😀' }),
+			expect.objectContaining({ text: staleEOL ? '\n\n' : newline }),
+			expect.objectContaining({ start: initial.indexOf('原有换行。') + '原有换行。'.length + newline.length, text: '紧接😀' }),
 		]);
-		await expect(input).toHaveValue(expected.replaceAll('\r\n', '\n'));
+		await expect(input).toContainText('紧接😀');
 		await expect(input).toBeFocused();
-		await expect(frame.getByRole('status')).toBeEmpty();
+		await expect(frame.locator('.ash-markdown-status')).toBeEmpty();
 	});
 }
 
@@ -384,26 +409,26 @@ test('readonly Markdown remains inert and blocks HTML, unsafe links and remote i
 	await page.route('https://audit-image.invalid/**', async route => { requests.push(route.request().url()); await route.abort(); });
 	await page.goto('/markdownEditor.html');
 	await expect(page.locator('.ash-markdown-content')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeDisabled();
+	await expect(page.getByRole('textbox', { name: 'Markdown Editor' })).toHaveAttribute('aria-readonly', 'true');
 	await expect(page.getByRole('checkbox')).toBeDisabled();
 	const text = '# Safe\n\n<script>window.auditExecuted=true</script>\n\n[unsafe](javascript:alert(1))\n\n![tracking](https://audit-image.invalid/pixel)\n\n- [ ] Readonly';
 	await page.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
 	await expect(page.getByRole('heading', { name: 'Safe', exact: true })).toBeVisible();
 	await expect(page.locator('.ash-markdown-content script, .ash-markdown-content img, .ash-markdown-content a')).toHaveCount(0);
 	await page.getByRole('heading', { name: 'Safe', exact: true }).click();
-	await expect(page.locator('.ash-markdown-input')).toHaveCount(0);
+	await expect(page.locator('.ash-markdown-content')).toHaveAttribute('contenteditable', 'false');
 	expect(requests).toEqual([]);
 });
 
 test('a Chinese Rust Markdown view preserves exact source saves and undo', async ({ page }) => {
 	const frame = await openHost(page, 'zh-CN');
-	await frame.getByRole('button', { name: '编辑全文源码', exact: true }).click();
-	const input = frame.getByRole('textbox', { name: '编辑全文源码', exact: true });
+	const input = await selectInline(frame, '中文段落');
 	const initial = await page.evaluate(() => window.ashMarkdownHost.initial);
-	await input.fill(initial.replace(/\r\n/gu, '\n') + '尾部😀');
-	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial + '尾部😀');
+	await page.keyboard.insertText('尾部😀');
+	const edited = initial.replace('中文段落', '中文段落尾部😀');
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(edited);
 	await input.press('Control+s');
-	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.saved)).toBe(initial + '尾部😀');
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.saved)).toBe(edited);
 	await input.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 });
@@ -449,11 +474,9 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	const frame = page.frameLocator('#editor iframe').frameLocator('iframe');
 	await expect(frame.getByRole('heading', { name: '大文件 Markdown', exact: true })).toBeVisible({ timeout: 60000 });
 	await expect(frame.locator('.ash-markdown-content p')).toHaveCount(9002);
-	await expect(frame.getByRole('status')).toBeEmpty();
+	await expect(frame.locator('.ash-markdown-status')).toBeEmpty();
 	expect(await digest()).toBe(originalHash);
-	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
-	let input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-	await input.evaluate((element: HTMLTextAreaElement) => { const offset = element.value.indexOf('中文段落') + 4; element.setSelectionRange(offset, offset); });
+	const input = await selectInline(frame, '中文段落');
 	const session = await context.newCDPSession(page);
 	await session.send('Input.imeSetComposition', { text: '大文件输入😀', selectionStart: 7, selectionEnd: 7 });
 	expect(await digest()).toBe(originalHash);
@@ -463,17 +486,15 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	await expect.poll(() => digest(true), { timeout: 30000 }).toBe(expectedHash);
 	await input.press('Control+z');
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(originalHash);
-	input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-	await expect(input).not.toHaveValue(/大文件输入/u, { timeout: 30000 });
+	await expect(input).not.toContainText('大文件输入', { timeout: 30000 });
 	await input.press('Control+Shift+z');
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(expectedHash);
 	await page.evaluate(() => window.ashMarkdownHost.undo());
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(originalHash);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).not.toHaveValue(/大文件输入/u, { timeout: 30000 });
+	await expect(input).not.toContainText('大文件输入', { timeout: 30000 });
 	await page.evaluate(() => window.ashMarkdownHost.redo());
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(expectedHash);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/大文件输入/u, { timeout: 30000 });
-	await frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true }).press('Escape');
+	await expect(input).toContainText('大文件输入', { timeout: 30000 });
 	await expect(frame.getByRole('heading', { name: '大文件 Markdown', exact: true })).toBeVisible();
 	expect(errors).toEqual([]);
 	await page.screenshot({ path: testInfo.outputPath('markdown-large-source.png') });

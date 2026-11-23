@@ -1,5 +1,6 @@
 //! Markdown documents and language features run in this optional Rust extension;
 //! formulas use the independent math capability. Models and history belong to the client.
+mod embedded_editor;
 mod language;
 mod math;
 mod mermaid;
@@ -135,7 +136,7 @@ impl Extension for MarkdownExtension {
                     Ok(Content {
                         editable: true,
                         html: format!("<script type=\"application/json\" id=\"ash-markdown-initial\">{bootstrap}</script>"),
-                        update: Some(json!({"type":"document","uri":document.uri,"text":document.text,"version":document.version,"readOnly":document.read_only,"blocks":parsed.blocks})),
+                        update: Some(json!({"type":"document","uri":document.uri,"text":document.text,"version":document.version,"readOnly":document.read_only,"blocks":parsed.blocks,"taskProgress":parsed.task_progress})),
                         resources: Some(Resources { script: "media/richEditor.js".into(), style: "media/richEditor.css".into() }),
                     })
                 } else {
@@ -197,7 +198,7 @@ fn preview(
             }
             continue;
         }
-        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math") && parser::complete_math_fence(text, &range))
+        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math") && parser::complete_code_fence(text, &range))
         {
             fence = Some(String::new());
             continue;

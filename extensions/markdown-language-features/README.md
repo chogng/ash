@@ -1,6 +1,6 @@
 # Ash Markdown language features
 
-One preinstalled Rust extension owns Markdown preview, rich editing, link completion,
+One preinstalled Rust extension owns Markdown preview, visual Markdown editing, link completion,
 definitions, references, rename, workspace heading search and link diagnostics.
 Its internal `parser` module uses `pulldown-cmark`; there is no separate parser
 extension, command or process. Syntax highlighting, outline, folding and structural
@@ -29,14 +29,26 @@ the existing client TextModel owns edits, dirty state, save, conflicts and undo/
 Dirty documents precede authorized resource reads. Workspace rename results include
 expected source text and file operations for the client's single transaction.
 
-The rich view's JavaScript and CSS are static package resources compiled by
+The Markdown editor's JavaScript and CSS are static package resources compiled by
 `build/builtin`, not a JavaScript extension entry point. The host resolves resources
 within the owning product package and executes them inside its existing sandboxed
 Webview. HTML is inert in the rich view; remote images are not fetched automatically.
 The readonly and input composition behavior stays in the client view.
 
-Both views update their existing sandbox and retain unchanged DOM. Rich edits use
-versioned UTF-16 ranges; preview heading IDs, metadata and math use the same Markdown
+Both views update their existing sandbox and retain unchanged DOM. The Markdown
+editor accepts input directly in rendered headings, paragraphs, lists and code.
+Rust projects editable source ranges in UTF-16. The Webview turns typing, selection
+and composition into versioned source edits. The Workbench editor selector opens
+the source editor for direct access to Markdown syntax.
+
+In the Markdown editor, an empty `widget:task-progress`
+fenced block shows the document's completed and total GFM tasks.
+A `widget:json` fence with a flat JSON object opens a form for its string,
+number and boolean fields. Apply Changes updates the edited values in one
+undoable source edit and preserves the other fields and formatting. Unsupported
+or incomplete fences render as ordinary code.
+
+Preview heading IDs, metadata and math use the same Markdown
 semantics as language features. Settings groups separate language features, validation
 and preview. `markdown.preview.fontFamily` controls body text and headings,
 `markdown.preview.codeFontFamily` controls inline code and code blocks, and

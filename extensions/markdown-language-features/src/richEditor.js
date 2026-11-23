@@ -1,37 +1,13 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
-import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputbox.js';
 import { normalizeTextToEOL } from '../../../src/ash/editor/common/core/misc/eolCounter.js';
 import '../../markdown-math/src/styles.js';
-import { inputEdit, sourceOffset, normalizedOffset, textEdit } from './sourceEdits.js';
+import { createEmbeddedEditor, updateTaskProgress } from './embeddedEditor.js';
+import { draftBlocks, mappedText, readSelection, rebaseSelection, restoreSelection } from './inlineEditing.js';
+import { textEdit } from './sourceEdits.js';
 import '../media/richEditor.css';
 
-function shiftNode(node, shift) {
-	if (!shift) return node;
-	const [kind, value, detail] = node;
-	if (kind === 'task') return [kind, value, detail + shift];
-	if (['el', 'ol', 'a', 'img'].includes(kind)) return [kind, value, detail.map(child => shiftNode(child, shift))];
-	return node;
-}
-
-function draftBlocks(parsed, text) {
-	if (!parsed?.blocks) return [{ start: 0, end: text.length, content: ['raw', text] }];
-	const blocks = parsed.blocks.map(([start, end, content]) => ({ start, end, content }));
-	if (parsed.text === text) return blocks;
-	// Until Rust returns the new tree, retain exact, unaffected source spans. Only
-	// the edited region becomes raw source; its offsets never borrow an older tree.
-	const edit = textEdit(parsed.text, text);
-	const shift = edit.text.length - (edit.end - edit.start);
-	const before = blocks.filter(block => block.end <= edit.start && block.end > block.start);
-	const after = blocks.filter(block => block.start >= edit.end && block.end > block.start);
-	const start = before.at(-1)?.end ?? 0;
-	const end = after.length ? after[0].start + shift : text.length;
-	return [
-		...before,
-		...(end > start || text.length === 0 ? [{ start, end, content: ['raw', text.slice(start, end)] }] : []),
-		...after.map(block => ({ start: block.start + shift, end: block.end + shift, content: shiftNode(block.content, shift) })),
-	];
-}
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function documentEOL({ eol, text }) {
 	if (eol === '\r\n' || eol === '\n') return eol;
@@ -52,81 +28,48 @@ class MarkdownEditor extends Disposable {
 		this.readOnly = initial.readOnly !== false;
 		this.historyQueue = [];
 		this.historyPending = false;
-		this.saving = this.conflict = this.composing = false;
+		this.saving = this.conflict = false;
+		this.composition = undefined;
 		this.pending = undefined;
 		this.correction = undefined;
-		this.inputLifetime = this._register(new DisposableStore());
+		this.submittedForms = new WeakSet();
 		this._register(toDisposable(() => { for (const entry of this.renderedBlocks ?? []) entry.lifetime.dispose(); }));
-		this.toolbar = document.createElement('div');
-		this.toolbar.className = 'ash-markdown-toolbar';
-		this.toolbar.setAttribute('role', 'toolbar');
-		this.toolbar.setAttribute('aria-label', this.messages.toolbar);
+		this.notice = document.createElement('div');
+		this.notice.className = 'ash-markdown-notice';
+		this.notice.hidden = true;
 		this.status = document.createElement('div');
 		this.status.className = 'ash-markdown-status';
 		this.status.setAttribute('role', 'status');
+		this.reload = document.createElement('button');
+		this.reload.type = 'button';
+		this.reload.textContent = this.messages.reload;
+		this.notice.append(this.status, this.reload);
+		this.listen(this.reload, 'click', () => this.adopt(this.latest));
 		this.view = document.createElement('div');
 		this.view.className = 'ash-markdown-content';
 		this.view.tabIndex = 0;
-		this.view.setAttribute('role', 'document');
+		this.view.setAttribute('role', 'textbox');
+		this.view.setAttribute('aria-multiline', 'true');
 		this.view.setAttribute('aria-label', this.messages.editor);
-		this.buttons = [];
-		for (const [key, action, edits = true] of [
-			['bold', () => this.wrap('**')], ['italic', () => this.wrap('*')],
-			['strike', () => this.wrap('~~')], ['code', () => this.wrap('`')],
-			['heading', () => this.prefix('# ')], ['list', () => this.prefix('- ')],
-			['quote', () => this.prefix('> ')], ['link', () => this.openLinkForm()],
-			['table', () => this.replace(`\n\n| ${this.messages.tableHeader} | ${this.messages.tableHeader} |\n| --- | --- |\n| ${this.messages.tableCell} | ${this.messages.tableCell} |\n\n`)],
-			['source', () => this.activate(0, this.text.length, true)],
-			['undo', () => this.history('undo')], ['redo', () => this.history('redo')],
-			['save', () => { this.commitInput(); this.saving = true; this.flush(); }],
-			['reload', () => this.adopt(this.latest), false],
-		]) this.button(key, action, edits);
-		this.reload = this.buttons.at(-1);
-		this.reload.hidden = true;
-		this.form = document.createElement('form');
-		this.form.className = 'ash-markdown-link-form';
-		this.form.hidden = true;
-		this.url = document.createElement('input');
-		this.url.setAttribute('aria-label', this.messages.linkTarget);
-		this.url.placeholder = this.messages.linkTarget;
-		const submit = document.createElement('button');
-		submit.type = 'submit'; submit.textContent = this.messages.insert;
-		this.form.append(this.url, submit);
-		this.listen(this.form, 'submit', event => {
-			event.preventDefault();
-			const target = this.url.value.trim();
-			if (!target || /[\s<>]/u.test(target) || !this.safeLink(target)) return;
-			this.replace(`[${this.linkLabel || this.messages.linkText}](${target.replaceAll(')', '%29')})`);
-			this.form.hidden = true;
-		});
 		const main = document.createElement('main');
 		main.className = 'ash-markdown-main'; main.append(this.view);
-		document.body.append(this.toolbar, this.form, this.status, main);
-		this.listen(this.toolbar, 'keydown', event => {
-			const available = this.buttons.filter(button => !button.disabled && !button.hidden);
-			const index = available.indexOf(document.activeElement);
-			const next = event.key === 'ArrowRight' ? (index + 1) % available.length
-				: event.key === 'ArrowLeft' ? (index + available.length - 1) % available.length
-					: event.key === 'Home' ? 0 : event.key === 'End' ? available.length - 1 : undefined;
-			if (next !== undefined) { event.preventDefault(); available[next]?.focus(); }
-			if (event.key === 'Escape') { event.preventDefault(); this.focus(); }
-		});
+		document.body.append(this.notice, main);
 		this.listen(document, 'keydown', event => this.keydown(event), true);
-		this.listen(this.view, 'beforeinput', event => {
-			if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
-				event.preventDefault(); this.history(event.inputType === 'historyUndo' ? 'undo' : 'redo');
-			}
-		});
+		this.listen(this.view, 'beforeinput', event => this.beforeInput(event));
+		this.listen(this.view, 'paste', event => this.paste(event));
+		this.listen(this.view, 'compositionstart', event => this.startComposition(event));
+		this.listen(this.view, 'compositionend', event => this.endComposition(event));
 		this.listen(this.view, 'click', event => {
 			const anchor = event.target.closest('a');
-			if (anchor) { event.preventDefault(); this.api.postMessage({ href: anchor.getAttribute('href') }); return; }
-			if (event.target.closest('input, textarea, .ash-input-box')) return;
-			const block = event.target.closest('.ash-markdown-block');
-			if (block) this.activate(Number(block.dataset.start), Number(block.dataset.end));
+			if (!anchor) return;
+			event.preventDefault();
+			if (this.readOnly || this.conflict || event.ctrlKey || event.metaKey || event.detail === 0) {
+				this.api.postMessage({ href: anchor.getAttribute('href') });
+			}
 		});
 		this.listen(window, 'message', event => { if (event.source === parent) this.receive(event.data); });
 		this.listen(window, 'pagehide', () => this.dispose());
-		this.render(); this.updateButtons();
+		this.render();
 		this.api.postMessage({ type: 'ready' });
 	}
 
@@ -135,41 +78,29 @@ class MarkdownEditor extends Disposable {
 		if (store) store.add(disposable); else this._register(disposable);
 	}
 
-	button(key, action, edits) {
-		const button = document.createElement('button');
-		button.type = 'button'; button.textContent = this.messages[key];
-		button.dataset.edits = String(edits); button.tabIndex = this.buttons.length ? -1 : 0;
-		// Formatting by mouse keeps the text selection. Keyboard users enter the
-		// toolbar through Alt+F10 and can move between buttons with arrow keys.
-		this.listen(button, 'mousedown', event => event.preventDefault());
-		this.listen(button, 'click', () => { if (!this.composing) action(); });
-		this.listen(button, 'focus', () => {
-			for (const item of this.buttons) item.tabIndex = item === button ? 0 : -1;
-		});
-		this.buttons.push(button); this.toolbar.append(button);
+	updateEditability() {
+		const editable = !this.readOnly && !this.conflict;
+		this.view.contentEditable = String(editable || Boolean(this.composition));
+		this.view.setAttribute('aria-readonly', String(!editable));
+		this.notice.hidden = !this.status.textContent;
+		this.reload.hidden = !this.conflict;
+		for (const checkbox of this.view.querySelectorAll('input[type=checkbox]')) checkbox.disabled = !editable;
+		for (const fieldset of this.view.querySelectorAll('.ash-markdown-json-form fieldset')) fieldset.disabled = !editable;
 	}
 
-	updateButtons() {
-		for (const button of this.buttons) button.disabled = button.dataset.edits === 'true' && (this.readOnly || this.conflict);
-		const first = this.buttons.find(button => !button.hidden && !button.disabled);
-		if (first && !this.buttons.some(button => !button.hidden && !button.disabled && button.tabIndex === 0)) first.tabIndex = 0;
-		this.view.setAttribute('aria-readonly', String(this.readOnly || this.conflict));
-		if (this.active && !this.composing) this.active.input.readOnly = this.readOnly || this.conflict;
-		for (const checkbox of this.view.querySelectorAll('input[type=checkbox]')) checkbox.disabled = this.readOnly || this.conflict;
-	}
-
-	render() {
-		const activeContainer = this.active?.whole ? this.view : this.active?.input.element.closest('.ash-markdown-block');
-		this.inputLifetime.clear(); this.active = undefined;
-		// Parsing belongs to this extension's Rust provider. Only results for
-		// these exact bytes may supply ranges; the draft stays editable while waiting.
+	render(selection, invalidated) {
+		const focused = document.activeElement;
+		const focusedBlock = focused?.closest('.ash-markdown-embedded')?.closest('.ash-markdown-block');
+		if (!selection && focused === this.view) {
+			const previous = this.renderedText ?? this.text;
+			selection = rebaseSelection(readSelection(this.view, previous), previous, this.text);
+		}
 		const current = this.parsed?.text === this.text;
 		const blocks = draftBlocks(this.parsed, this.text);
 		if (current && this.parsed.parseError && !this.conflict) this.status.textContent = this.messages.parseError;
-		this.blocks = blocks;
 		const reusable = new Map();
 		for (const entry of this.renderedBlocks ?? []) {
-			if (entry.element === activeContainer || activeContainer === this.view) continue;
+			if (invalidated?.has(entry.element) || this.submittedForms.has(entry.element)) continue;
 			const bucket = reusable.get(entry.key) ?? { entries: [], next: 0 };
 			bucket.entries.push(entry); reusable.set(entry.key, bucket);
 		}
@@ -189,8 +120,19 @@ class MarkdownEditor extends Disposable {
 			element.className = 'ash-markdown-block';
 			element.dataset.start = block.start; element.dataset.end = block.end;
 			if (!source.trim() && this.text.length) {
-				element.classList.add('ash-markdown-gap'); element.setAttribute('aria-hidden', 'true');
-			} else { element.tabIndex = 0; element.append(this.node(block.content, false, lifetime)); }
+				element.classList.add('ash-markdown-gap');
+				const gap = mappedText(document.createElement('span'), source.replace(/\r\n?/gu, '\n'), [0, source.length]);
+				// Keep an editable position on blank lines so queued typing after
+				// Enter cannot jump across them into the next block.
+				if (gap.textContent.endsWith('\n')) gap.append(document.createElement('br'));
+				element.append(gap);
+			} else {
+				const content = block.content[0] === 'embedded'
+					? createEmbeddedEditor(block.content[1], source, this.messages, lifetime, replacement => this.applyEmbeddedEdit(element, source, replacement))
+					: this.node(block.content, false, lifetime);
+				if (block.content[0] === 'embedded') content.contentEditable = 'false';
+				element.append(content);
+			}
 			return { key, element, lifetime };
 		});
 		for (const entry of previous) { entry.lifetime.dispose(); entry.element.remove(); }
@@ -201,19 +143,43 @@ class MarkdownEditor extends Disposable {
 			cursor = element.nextSibling;
 		}
 		while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
-		this.updateButtons();
+		this.renderedText = this.text;
+		if (this.parsed?.taskProgress) updateTaskProgress(this.view, this.parsed.taskProgress, this.messages);
+		this.updateEditability();
+		if (selection) restoreSelection(this.view, this.text, selection);
+		if (focusedBlock && !focused.isConnected) {
+			const block = this.renderedBlocks.find(({ element }) => element.dataset.start === focusedBlock.dataset.start)?.element;
+			(block?.querySelector('.ash-markdown-json-form fieldset:not(:disabled) button') ?? this.view).focus();
+		}
+	}
+
+	applyEmbeddedEdit(element, source, replacement) {
+		if (this.readOnly || this.conflict || this.composition || !element.isConnected) return;
+		const start = Number(element.dataset.start);
+		// A control rendered from an older snapshot must never patch a different block.
+		if (this.text.slice(start, start + source.length) !== source) return;
+		const edit = textEdit(source, replacement);
+		// An undo may return the old source before the edited snapshot is
+		// rendered. Recreate the controls from the source in either case.
+		this.submittedForms.add(element);
+		this.patch(start + edit.start, start + edit.end, edit.text);
 	}
 
 	node([kind, value, detail, html], header = false, lifetime) {
 		const children = (parent, nodes) => { for (const child of nodes) parent.append(this.node(child, header, lifetime)); return parent; };
 		switch (kind) {
-			case 't': return document.createTextNode(value);
-			case 'raw': { const span = document.createElement('span'); span.className = 'ash-markdown-raw'; span.textContent = value; return span; }
-			case 'code': { const code = document.createElement('code'); code.textContent = value; return code; }
+			case 't': return mappedText(document.createElement('span'), value, detail);
+			case 'raw': {
+				const span = mappedText(document.createElement('span'), value, detail);
+				span.className = 'ash-markdown-raw';
+				return span;
+			}
+			case 'code': return mappedText(document.createElement('code'), value, detail);
 			case 'br': return document.createElement('br');
 			case 'hr': return document.createElement('hr');
 			case 'math': {
 				const element = document.createElement('span');
+				element.contentEditable = 'false';
 				element.className = 'ash-markdown-math';
 				element.dataset.mathDisplay = detail ? 'block' : 'inline';
 				// HTML comes from the authorized math provider, with trust disabled.
@@ -242,14 +208,17 @@ class MarkdownEditor extends Disposable {
 				// Opening a document must not load tracking images over the network.
 				if (/[\u0000-\u0020\u007f]/u.test(value)) return document.createTextNode(label);
 				if (/^(?:[a-z][\w+.-]*:|\/\/)/iu.test(value) && !/^data:image\/(?:png|jpeg|gif|webp|avif);base64,/iu.test(value)) return document.createTextNode(label);
-				const image = document.createElement('img'); image.alt = label; image.src = value; return image;
+				const image = document.createElement('img'); image.alt = label; image.src = value; image.contentEditable = 'false'; return image;
 			}
 			case 'task': {
 				const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = value;
+				checkbox.contentEditable = 'false';
 				checkbox.disabled = this.readOnly || this.conflict; checkbox.setAttribute('aria-label', this.messages.task);
 				this.listen(checkbox, 'change', () => {
-					if (this.readOnly || this.conflict || this.composing || !/^\[[ xX]\]$/u.test(this.text.slice(detail, detail + 3))) return;
-					this.commitInput(); this.patch(detail + 1, detail + 2, checkbox.checked ? 'x' : ' '); this.render();
+					const offset = Number(checkbox.closest('.ash-markdown-block')?.dataset.start) + detail;
+					if (this.readOnly || this.conflict || this.composition || !/^\[[ xX]\]$/u.test(this.text.slice(offset, offset + 3))) return;
+					this.patch(offset + 1, offset + 2, checkbox.checked ? 'x' : ' ');
+					this.render();
 				}, false, lifetime);
 				return checkbox;
 			}
@@ -262,140 +231,149 @@ class MarkdownEditor extends Disposable {
 		return !/^[a-z][\w+.-]*:/iu.test(normalized) || /^(?:https?:|mailto:|file:|ash-remote:)/iu.test(normalized);
 	}
 
-	activate(start, end, whole = false) {
-		if (this.readOnly || this.conflict || this.composing) return;
-		if (!whole && this.active && start >= this.active.renderedEnd) {
-			const shift = this.active.end - this.active.renderedEnd;
-			start += shift; end += shift;
-		}
-		this.commitInput(); this.render();
-		const block = whole ? undefined : this.blocks.find(block => block.start <= start && block.end >= end);
-		if (!whole && !block) return;
-		start = whole ? 0 : block.start; end = whole ? this.text.length : block.end;
-		const container = whole ? this.view : [...this.view.children].find(element => Number(element.dataset.start) === start);
-		container.replaceChildren();
-		container.removeAttribute('aria-hidden'); container.classList.remove('ash-markdown-gap');
-		const input = this.inputLifetime.add(new InputBox(container, { flexibleHeight: true, flexibleMaxHeight: 1000000, ariaLabel: whole ? this.messages.source : this.messages.editBlock }));
-		input.element.classList.add('ash-markdown-input');
-		input.value = this.text.slice(start, end); input.inputElement.spellcheck = false;
-		this.active = { start, end, input, whole, renderedEnd: end };
-		this.inputLifetime.add(input.onDidChange(() => { if (!this.composing) this.commitInput(); }));
-		this.listen(input.inputElement, 'compositionstart', () => { this.composing = true; }, false, this.inputLifetime);
-		this.listen(input.inputElement, 'compositionend', () => {
-			this.composing = false;
-			queueMicrotask(() => { if (!this.isDisposed) { this.commitInput(); this.updateButtons(); this.flush(); } });
-		}, false, this.inputLifetime);
-		input.focus(); input.select({ start: input.value.length, end: input.value.length });
+	patch(start, end, value) {
+		this.text = this.text.slice(0, start) + value + this.text.slice(end);
+		this.flush();
 	}
 
-	commitInput() {
-		if (!this.active || this.composing || this.updating) return;
-		const { start, end, input } = this.active;
-		const edit = inputEdit(this.text.slice(start, end), input.value, this.eol);
-		if (edit.start === edit.end && !edit.text) return;
-		this.text = this.text.slice(0, start + edit.start) + edit.text + this.text.slice(start + edit.end);
-		this.active.end += edit.text.length - (edit.end - edit.start); this.flush();
-	}
+	get editable() { return !this.readOnly && !this.conflict && !this.composition; }
 
-	patch(start, end, value) { this.text = this.text.slice(0, start) + value + this.text.slice(end); this.flush(); }
-
-	selection() {
-		if (!this.active) this.activate(0, this.text.length, true);
-		if (!this.active) return;
-		const { start, end, input } = this.active;
-		const source = this.text.slice(start, end);
-		return { start: start + sourceOffset(source, input.inputElement.selectionStart), end: start + sourceOffset(source, input.inputElement.selectionEnd) };
-	}
-
-	replace(value, selection = this.selection()) {
-		if (!selection || this.readOnly || this.conflict || this.composing) return;
+	replace(value, { start, end }, cursor, invalidated) {
 		value = normalizeTextToEOL(value, this.eol);
-		this.patch(selection.start, selection.end, value);
-		this.active.end += value.length - (selection.end - selection.start);
-		this.updating = true; this.active.input.value = this.text.slice(this.active.start, this.active.end); this.updating = false;
-		const caret = normalizedOffset(this.text.slice(this.active.start, this.active.end), selection.start - this.active.start + value.length);
-		this.active.input.select({ start: caret, end: caret }); this.focus();
+		if (start !== end || value) this.patch(start, end, value);
+		const caret = start + value.length;
+		this.render(cursor ?? { anchor: caret, focus: caret }, invalidated);
+	}
+
+	paste(event) {
+		if (event.target.closest('.ash-markdown-embedded')) return;
+		event.preventDefault();
+		if (!this.editable) return;
+		const selection = this.selection();
+		const value = event.clipboardData?.getData('text/plain');
+		if (selection && value) this.replace(value, selection);
+	}
+
+	selection(target) {
+		const selection = readSelection(this.view, this.text, target);
+		if (selection) return {
+			start: Math.min(selection.anchor, selection.focus),
+			end: Math.max(selection.anchor, selection.focus),
+		};
+	}
+
+	beforeInput(event) {
+		if (event.target !== this.view || event.isComposing || this.composition) return;
+		event.preventDefault();
+		if (!this.editable) return;
+		const type = event.inputType;
+		if (type === 'historyUndo' || type === 'historyRedo') {
+			this.history(type === 'historyUndo' ? 'undo' : 'redo');
+			return;
+		}
+		const target = event.getTargetRanges?.()[0];
+		const selection = this.selection(target) ?? this.selection();
+		if (!selection) return;
+		if (type.startsWith('delete')) {
+			const { start, end } = selection;
+			if (start === end) {
+				const backward = type.endsWith('Backward');
+				if (!backward && !type.endsWith('Forward')) return;
+				const segment = graphemes.segment(this.text).containing(backward ? start - 1 : end);
+				if (!segment) return;
+				this.replace('', { start: segment.index, end: segment.index + segment.segment.length });
+			} else this.replace('', selection);
+			return;
+		}
+		if (type === 'insertParagraph' || type === 'insertLineBreak') {
+			const element = document.getSelection().anchorNode?.parentElement;
+			if (element?.closest('td, th')) return;
+			const newline = element?.closest('pre') ? '\n'
+				: type === 'insertLineBreak' ? '  \n' : this.paragraphBreak(selection.start, element);
+			this.replace(newline, selection);
+			return;
+		}
+		if (type === 'insertText' || type === 'insertReplacementText' || type === 'insertFromDrop') {
+			const value = event.data ?? event.dataTransfer?.getData('text/plain');
+			if (value) this.replace(value, selection);
+		}
+	}
+
+	paragraphBreak(offset, element) {
+		if (!element?.closest('li')) return '\n\n';
+		const line = this.text.slice(this.text.lastIndexOf('\n', offset - 1) + 1, offset);
+		const marker = /^(\s*)([-+*]|\d{1,9}[.)])\s+(\[[ xX]\]\s+)?/u.exec(line);
+		if (!marker) return '\n\n';
+		const [, indent, bullet, task] = marker;
+		const next = bullet.length === 1 ? bullet : String(Number.parseInt(bullet, 10) + 1) + bullet.at(-1);
+		return '\n' + indent + next + ' ' + (task ? '[ ] ' : '');
+	}
+
+	startComposition(event) {
+		if (event.target !== this.view || !this.editable) return;
+		const selection = this.selection();
+		if (!selection) return;
+		// Chromium owns the provisional IME text. Replace any mutated DOM when
+		// the composition settles, even when its final source is unchanged.
+		const blocks = new Set([...this.view.children].filter(element =>
+			Number(element.dataset.start) <= selection.end && Number(element.dataset.end) >= selection.start));
+		this.composition = { selection, blocks };
+	}
+
+	endComposition(event) {
+		const composition = this.composition;
+		if (event.target !== this.view || !composition) return;
+		queueMicrotask(() => {
+			if (this.isDisposed) return;
+			this.composition = undefined;
+			if (this.conflict || this.readOnly) {
+				this.uncommittedBlocks = composition.blocks;
+				this.updateEditability();
+				return;
+			}
+			if (event.data) this.replace(event.data, composition.selection, undefined, composition.blocks);
+			else {
+				const { start, end } = composition.selection;
+				this.render({ anchor: start, focus: end }, composition.blocks);
+				this.flush();
+			}
+		});
 	}
 
 	wrap(marker) {
-		const selection = this.selection(); if (!selection) return;
-		const selected = this.text.slice(selection.start, selection.end);
-		const surrounded = this.text.slice(selection.start - marker.length, selection.start) === marker && this.text.slice(selection.end, selection.end + marker.length) === marker;
-		this.replace(surrounded ? selected : marker + selected + marker, surrounded ? { start: selection.start - marker.length, end: selection.end + marker.length } : selection);
-		const start = normalizedOffset(this.text.slice(this.active.start, this.active.end), selection.start - this.active.start + (surrounded ? -marker.length : marker.length));
-		this.active.input.select({ start, end: start + selected.replace(/\r\n?/gu, '\n').length });
-	}
-
-	prefix(marker) {
-		const selection = this.selection(); if (!selection) return;
-		const start = this.text.lastIndexOf('\n', selection.start - 1) + 1;
-		const newline = this.text.indexOf('\n', Math.max(selection.start, selection.end - 1));
-		const end = newline === -1 ? this.text.length : this.text[newline - 1] === '\r' ? newline - 1 : newline;
+		const selection = this.selection();
+		if (!selection || selection.start === selection.end) return;
+		const { start, end } = selection;
 		const text = this.text.slice(start, end);
-		const lines = text.split('\n');
-		const remove = lines.every(line => line.startsWith(marker));
-		const replacement = lines.map(line => {
-			const existing = marker === '# ' ? /^#{1,6} /u.exec(line)?.[0] : line.startsWith(marker) ? marker : '';
-			return (remove ? '' : marker) + line.slice(existing?.length ?? 0);
-		}).join('\n');
-		this.replace(replacement, { start, end });
+		const surrounded = this.text.slice(start - marker.length, start) === marker
+			&& this.text.slice(end, end + marker.length) === marker;
+		const anchor = start + (surrounded ? -marker.length : marker.length);
+		const range = surrounded ? { start: start - marker.length, end: end + marker.length } : selection;
+		this.replace(surrounded ? text : marker + text + marker, range, { anchor, focus: anchor + text.length });
 	}
-
-	openLinkForm() {
-		const selection = this.selection(); if (!selection) return;
-		this.linkLabel = this.text.slice(selection.start, selection.end);
-		this.form.hidden = false; this.url.value = ''; this.url.focus();
-	}
-
-	finish() {
-		if (this.composing) return;
-		this.commitInput(); const start = this.active?.start ?? 0; this.render();
-		this.api.postMessage({ type: 'ready' });
-		([...this.view.children].find(element => Number(element.dataset.start) >= start && element.tabIndex === 0) ?? this.view).focus();
-	}
-
-	focus() { if (this.active) this.active.input.focus(); else this.view.focus(); }
 
 	keydown(event) {
-		if (event.isComposing || this.composing || event.keyCode === 229) return;
-		if (event.altKey && event.key === 'F10') { event.preventDefault(); event.stopImmediatePropagation(); this.buttons.find(button => !button.disabled && !button.hidden)?.focus(); return; }
-		if (event.key === 'Escape') {
-			event.preventDefault(); event.stopImmediatePropagation(); this.form.hidden = true;
-			if (this.toolbar.contains(event.target) || this.form.contains(event.target)) this.focus(); else this.finish();
-			return;
-		}
-		if ((event.key === 'Enter' || event.key === 'F2') && event.target.classList.contains('ash-markdown-block')) {
-			event.preventDefault(); this.activate(Number(event.target.dataset.start), Number(event.target.dataset.end)); return;
-		}
-		if (!(event.ctrlKey || event.metaKey) || event.target === this.url) return;
+		if (event.isComposing || this.composition || event.keyCode === 229 || !(event.ctrlKey || event.metaKey)) return;
 		const key = event.key.toLowerCase();
-		if (!['s', 'z', 'y', 'b', 'i', 'home', 'end'].includes(key)) return;
+		if (key !== 's' && event.target.closest('.ash-markdown-embedded input[type=text]')) return;
+		if (!['s', 'z', 'y', 'b', 'i'].includes(key)) return;
 		event.preventDefault(); event.stopImmediatePropagation();
-		if (key === 's') { this.commitInput(); this.saving = true; this.flush(); }
+		if (key === 's') { this.saving = true; this.flush(); }
 		else if (key === 'z' || key === 'y') this.history(event.shiftKey || key === 'y' ? 'redo' : 'undo');
-		else if (key === 'b' || key === 'i') this.wrap(key === 'b' ? '**' : '*');
-		else {
-			this.activate(0, this.text.length, true);
-			if (this.active) {
-				const input = this.active.input.inputElement; const offset = key === 'home' ? 0 : input.value.length;
-				input.setSelectionRange(event.shiftKey ? input.selectionStart : offset, offset);
-			}
-		}
+		else if (this.editable) this.wrap(key === 'b' ? '**' : '*');
 	}
 
 	flush() {
-		if (this.composing || this.pending !== undefined || this.historyPending || this.conflict) return;
+		if (this.composition || this.pending !== undefined || this.historyPending || this.conflict) return;
 		if (this.correction !== undefined) {
 			const submitted = this.correction;
 			this.correction = undefined;
 			if (normalizeTextToEOL(submitted, this.eol) === this.confirmed) {
-				// The textarea already presents logical newlines. Convert the queued draft
-				// and restore its selection before computing offsets on the confirmed text.
+				// Rebase queued edits if the model chose a different line ending.
 				const normalized = normalizeTextToEOL(this.text, this.eol);
 				if (normalized !== this.text) {
-					const start = this.active && sourceOffset(normalized, normalizedOffset(this.text, this.active.start));
 					this.text = normalized;
-					this.renderWithInput(start);
+					this.render();
 				}
 			} else if (this.text === submitted) {
 				this.adopt(this.latest);
@@ -413,45 +391,25 @@ class MarkdownEditor extends Disposable {
 	}
 
 	history(type) {
-		if (this.readOnly || this.conflict || this.composing) return;
-		this.commitInput(); this.historyQueue.push(type); this.flush();
+		if (!this.editable) return;
+		this.historyQueue.push(type);
+		this.flush();
 	}
 
 	adopt(snapshot) {
-		if (!snapshot || this.composing) return;
+		if (!snapshot || this.composition) return;
 		this.pending = this.correction = undefined; this.conflict = false;
 		this.version = snapshot.version; this.text = this.confirmed = snapshot.text; this.readOnly = snapshot.readOnly;
 		this.eol = documentEOL(snapshot);
-		this.status.textContent = ''; this.reload.hidden = true;
-		this.renderWithInput();
+		this.status.textContent = '';
+		this.render(undefined, this.uncommittedBlocks);
+		this.uncommittedBlocks = undefined;
 	}
-
-	renderWithInput(start = this.active?.start) {
-		const focused = document.activeElement;
-		const previous = this.active;
-		const input = previous?.input.inputElement;
-		const selection = input && { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };
-		this.render();
-		if (previous && !this.readOnly) {
-			if (previous.whole) this.activate(0, this.text.length, true);
-			else {
-				const block = this.blocks.find(block => block.start <= start && start < block.end) ?? this.blocks.at(-1);
-				if (block) this.activate(block.start, block.end);
-			}
-			if (this.active) {
-				const shift = normalizedOffset(this.text.slice(this.active.start), Math.max(0, start - this.active.start));
-				this.active.input.inputElement.setSelectionRange(selection.start + shift, selection.end + shift, selection.direction);
-			}
-		}
-		// A delayed history response must not steal focus from the toolbar or link form.
-		if (focused?.isConnected && focused !== document.body) focused.focus();
-	}
-
 	reject(message) {
 		this.pending = this.correction = undefined; this.saving = false; this.conflict = true; this.historyPending = false; this.historyQueue = [];
 		if (message.document) this.latest = message.document;
 		this.status.textContent = message.reason === 'readonly' ? this.messages.readonly : this.messages.conflict;
-		this.reload.hidden = false; this.updateButtons();
+		this.updateEditability();
 	}
 
 	receive(message) {
@@ -475,9 +433,14 @@ class MarkdownEditor extends Disposable {
 			this.parsed = message;
 			if (message.version === this.version && message.text === this.confirmed) {
 				this.eol = documentEOL(message);
-				if (!this.active && !this.composing && !this.conflict && this.text === message.text) { this.status.textContent = ''; this.render(); }
-				this.readOnly = message.readOnly; this.updateButtons(); this.flush();
-			} else if (this.pending !== undefined || this.text !== this.confirmed || this.composing) this.reject({ reason: 'conflict', document: message });
+				this.readOnly = message.readOnly;
+				if (!this.conflict && this.text === message.text) {
+					if (!this.composition) { this.status.textContent = ''; this.render(); }
+					else if (message.taskProgress) updateTaskProgress(this.view, message.taskProgress, this.messages);
+				}
+				this.updateEditability();
+				this.flush();
+			} else if (this.pending !== undefined || this.text !== this.confirmed || this.composition) this.reject({ reason: 'conflict', document: message });
 			else { this.adopt(message); this.flush(); }
 		}
 	}

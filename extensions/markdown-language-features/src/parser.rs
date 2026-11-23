@@ -1,4 +1,5 @@
 //! Stateless rendering parse of immutable editor snapshots. Offsets are UTF-16.
+use crate::embedded_editor;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::HostErrorCode;
 use pulldown_cmark::Event;
@@ -13,6 +14,7 @@ use std::ops::Range;
 #[derive(Debug, Serialize)]
 pub(crate) struct Document {
     pub(crate) blocks: Vec<Block>,
+    pub(crate) task_progress: [u32; 2],
 }
 
 impl Document {
@@ -59,6 +61,7 @@ pub(crate) struct Block {
 enum Node {
     Text {
         value: String,
+        span: [u32; 2],
     },
     Element {
         tag: Element,
@@ -78,7 +81,9 @@ enum Node {
     },
     Code {
         value: String,
+        span: [u32; 2],
     },
+    Embedded(embedded_editor::Editor),
     Math {
         value: String,
         display: bool,
@@ -92,6 +97,7 @@ enum Node {
     Rule,
     Raw {
         value: String,
+        span: [u32; 2],
     },
 }
 
@@ -113,6 +119,7 @@ impl Node {
             }
             Self::Text { .. }
             | Self::Code { .. }
+            | Self::Embedded(_)
             | Self::Task { .. }
             | Self::Break
             | Self::Rule
@@ -133,7 +140,7 @@ impl Serialize for Block {
 impl Serialize for Node {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            Self::Text { value } => ("t", value).serialize(serializer),
+            Self::Text { value, span } => ("t", value, span).serialize(serializer),
             Self::Element { tag, children } => ("el", tag, children).serialize(serializer),
             Self::OrderedList { first, children } => ("ol", first, children).serialize(serializer),
             Self::Link {
@@ -144,7 +151,8 @@ impl Serialize for Node {
                 destination,
                 children,
             } => ("img", destination, children).serialize(serializer),
-            Self::Code { value } => ("code", value).serialize(serializer),
+            Self::Code { value, span } => ("code", value, span).serialize(serializer),
+            Self::Embedded(editor) => ("embedded", editor).serialize(serializer),
             Self::Math {
                 value,
                 display,
@@ -153,7 +161,7 @@ impl Serialize for Node {
             Self::Task { checked, offset } => ("task", checked, offset).serialize(serializer),
             Self::Break => ["br"].serialize(serializer),
             Self::Rule => ["hr"].serialize(serializer),
-            Self::Raw { value } => ("raw", value).serialize(serializer),
+            Self::Raw { value, span } => ("raw", value, span).serialize(serializer),
         }
     }
 }
@@ -207,10 +215,17 @@ pub(crate) fn parse_checked(
     }
     let options = markdown_options();
     let math = MathSource::new(source, math_enabled, &check)?;
+    let mut completed = 0;
+    let mut total = 0;
     let mut events = math
         .events(options)
         .take_while(|_| check().is_ok())
-        .peekable();
+        .inspect(|(event, _)| {
+            if let Event::TaskListMarker(checked) = event {
+                total += 1;
+                completed += u32::from(*checked);
+            }
+        });
     let mut blocks = Vec::new();
     let mut cursor = 0;
     while let Some((event, range)) = events.next() {
@@ -223,10 +238,13 @@ pub(crate) fn parse_checked(
             event,
             range.clone(),
             &mut events,
-            source,
-            &offsets,
+            &Projection {
+                source,
+                offsets: &offsets,
+                origin: offsets[range.start],
+                math_enabled,
+            },
             0,
-            math_enabled,
         );
         blocks.push(Block {
             start: offsets[range.start],
@@ -239,7 +257,10 @@ pub(crate) fn parse_checked(
         blocks.push(raw_block(source, cursor..source.len(), &offsets));
     }
     check()?;
-    Ok(Document { blocks })
+    Ok(Document {
+        blocks,
+        task_progress: [completed, total],
+    })
 }
 
 fn raw_block(source: &str, range: Range<usize>, offsets: &[u32]) -> Block {
@@ -247,8 +268,32 @@ fn raw_block(source: &str, range: Range<usize>, offsets: &[u32]) -> Block {
         start: offsets[range.start],
         end: offsets[range.end],
         content: Node::Raw {
+            span: [0, offsets[range.end] - offsets[range.start]],
             value: source[range].into(),
         },
+    }
+}
+
+struct Projection<'a> {
+    source: &'a str,
+    offsets: &'a [u32],
+    origin: u32,
+    math_enabled: bool,
+}
+
+impl Projection<'_> {
+    fn span(&self, range: &Range<usize>) -> [u32; 2] {
+        [
+            self.offsets[range.start] - self.origin,
+            self.offsets[range.end] - self.origin,
+        ]
+    }
+
+    fn raw(&self, range: Range<usize>) -> Node {
+        Node::Raw {
+            span: self.span(&range),
+            value: self.source[range].into(),
+        }
     }
 }
 
@@ -256,11 +301,15 @@ fn node<'a>(
     event: Event<'a>,
     range: Range<usize>,
     events: &mut impl Iterator<Item = (Event<'a>, Range<usize>)>,
-    source: &str,
-    offsets: &[u32],
+    projection: &Projection<'_>,
     depth: usize,
-    math_enabled: bool,
 ) -> Node {
+    let Projection {
+        source,
+        offsets,
+        origin,
+        math_enabled,
+    } = *projection;
     match event {
         Event::Start(tag) => {
             // Each element adds two JSON levels. Leave room for block and response
@@ -278,24 +327,14 @@ fn node<'a>(
                         break;
                     }
                 }
-                return Node::Raw {
-                    value: source[range].into(),
-                };
+                return projection.raw(range);
             }
             let mut children = Vec::new();
             while let Some((event, range)) = events.next() {
                 if matches!(event, Event::End(_)) {
                     break;
                 }
-                children.push(node(
-                    event,
-                    range,
-                    events,
-                    source,
-                    offsets,
-                    depth + 1,
-                    math_enabled,
-                ));
+                children.push(node(event, range, events, projection, depth + 1));
             }
             let element = |tag, children| Node::Element { tag, children };
             match tag {
@@ -318,12 +357,12 @@ fn node<'a>(
                 Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))
                     if math_enabled
                         && info.split_whitespace().next() == Some("math")
-                        && complete_math_fence(source, &range) =>
+                        && complete_code_fence(source, &range) =>
                 {
                     let value: String = children
                         .into_iter()
                         .filter_map(|child| match child {
-                            Node::Text { value } => Some(value),
+                            Node::Text { value, .. } => Some(value),
                             _ => None,
                         })
                         .collect();
@@ -332,6 +371,10 @@ fn node<'a>(
                         display: true,
                         html: None,
                     }
+                }
+                Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info)) if depth == 0 => {
+                    embedded_editor::resolve(&info, source, &range, offsets)
+                        .map_or_else(|| element(Element::Pre, children), Node::Embedded)
                 }
                 Tag::CodeBlock(_) => element(Element::Pre, children),
                 Tag::Table(_) => element(Element::Table, children),
@@ -357,17 +400,28 @@ fn node<'a>(
                 | Tag::DefinitionListDefinition
                 | Tag::Superscript
                 | Tag::Subscript
-                | Tag::MetadataBlock(_) => Node::Raw {
-                    value: source[range].into(),
-                },
+                | Tag::MetadataBlock(_) => projection.raw(range),
             }
         }
         Event::Text(value) => Node::Text {
             value: value.into_string(),
+            span: projection.span(&range),
         },
-        Event::Code(value) => Node::Code {
-            value: value.into_string(),
-        },
+        Event::Code(value) => {
+            let raw = &source[range.clone()];
+            let fence = raw.bytes().take_while(|byte| *byte == b'`').count();
+            let mut inner = range.start + fence..range.end - fence;
+            // CommonMark removes one padding space on each side of a nonblank span.
+            let content = &source[inner.clone()];
+            if content.starts_with(' ') && content.ends_with(' ') && !content.trim().is_empty() {
+                inner.start += 1;
+                inner.end -= 1;
+            }
+            Node::Code {
+                value: value.into_string(),
+                span: projection.span(&inner),
+            }
+        }
         Event::InlineMath(value) => Node::Math {
             value: value.into_string(),
             display: false,
@@ -380,20 +434,18 @@ fn node<'a>(
         },
         Event::TaskListMarker(checked) => Node::Task {
             checked,
-            offset: offsets[range.start],
+            offset: offsets[range.start] - origin,
         },
         Event::SoftBreak | Event::HardBreak => Node::Break,
         Event::Rule => Node::Rule,
         Event::Html(_) | Event::InlineHtml(_) | Event::FootnoteReference(_) | Event::End(_) => {
-            Node::Raw {
-                value: source[range].into(),
-            }
+            projection.raw(range)
         }
     }
 }
 
 /// Unclosed fences stay code while a response or document is still being typed.
-pub(crate) fn complete_math_fence(source: &str, range: &Range<usize>) -> bool {
+pub(crate) fn complete_code_fence(source: &str, range: &Range<usize>) -> bool {
     let prefix = source[..range.start]
         .rsplit('\n')
         .next()
