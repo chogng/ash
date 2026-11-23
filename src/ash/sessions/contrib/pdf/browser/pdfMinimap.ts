@@ -5,6 +5,8 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import type { PdfDocumentModel } from './pdfDocumentModel.js';
+import type { PdfThumbnail } from './pdfPageView.js';
 import './media/pdfMinimap.css';
 
 interface ThumbnailRow {
@@ -12,6 +14,7 @@ interface ThumbnailRow {
 	readonly image: HTMLImageElement;
 	readonly request: AbortController;
 	requested: boolean;
+	thumbnail?: PdfThumbnail;
 	url?: string;
 }
 
@@ -28,7 +31,7 @@ export class PdfMinimap extends Disposable {
 	constructor(
 		container: HTMLElement,
 		panel: { readonly id: string; readonly tabId: string; },
-		private readonly render: (page: number, signal: AbortSignal) => Promise<Uint8Array>,
+		private readonly render: PdfDocumentModel['renderThumbnail'],
 		openPage: (page: number) => void,
 		private readonly reportError: (message: string) => void,
 	) {
@@ -97,6 +100,12 @@ export class PdfMinimap extends Disposable {
 		if (!paused) { this.load.schedule(); }
 	}
 
+	getThumbnail(page: number): PdfThumbnail | undefined {
+		const row = this.list.row(page - 1);
+		const thumbnail = row && this.rows.get(row)?.thumbnail;
+		return thumbnail?.image.complete && thumbnail.image.naturalWidth ? thumbnail : undefined;
+	}
+
 	refresh(): void {
 		for (const { page } of [...this.rows.values()]) { this.list.rerender(page - 1); }
 	}
@@ -129,10 +138,11 @@ export class PdfMinimap extends Disposable {
 		this.loading = true;
 		const { signal } = entry.request;
 		try {
-			const bytes = await this.render(entry.page, signal);
+			const { bytes, widthPoints, heightPoints } = await this.render(entry.page, signal);
 			if (signal.aborted) { return; }
 			entry.url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
 			entry.image.src = entry.url;
+			entry.thumbnail = { image: entry.image, widthPoints, heightPoints };
 		} catch (error) {
 			// Rows remain navigable. Report once per sidebar visit so a failed PDF cannot flood the window.
 			if (!signal.aborted && !this.reportedFailure && !isCancellationError(error)) {

@@ -114,7 +114,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private model: PdfDocumentModel | undefined;
 	private displayedPage: PdfPage | undefined;
 	private renderedDimension = initialRasterDimension;
-	private pageRender: { readonly controller: AbortController; readonly refinement: boolean; } | undefined;
+	private pageRender: { readonly controller: AbortController; readonly refinement: boolean; readonly scrollBeforeTurn: { left: number; top: number; }; } | undefined;
 	private pagePaint: Promise<void> | undefined;
 	private readonly pageTurnDelay = this._register(new Delayer<void>(90));
 	private readonly zoomRefinement = this._register(new RunOnceScheduler(() => this.refineZoom(), 160));
@@ -520,7 +520,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		const view = new PdfPageView(this.element.ownerDocument, {
 			pointerDown: event => {
 				if (view !== this.activeView) {
-					if (this.busy || this.stroke || this.textLifetime.value || !view.page) { return; }
+					if (this.busy || this.isNavigating() || this.stroke || this.textLifetime.value || !view.page) { return; }
 					this.activatePage(view);
 				}
 				this.handlePointerDown(event);
@@ -604,9 +604,11 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 	private async showPage(number: number, dimension = initialRasterDimension, refinement = false, scrollTarget: 'start' | 'end' | number = 'start'): Promise<void> {
 		if (!this.model || (this.busy && this.displayedPage) || !Number.isSafeInteger(number) || number < 1 || number > (this.displayedPage?.pageCount ?? Infinity)) { return; }
 		const previous = this.displayedPage?.page ?? 1;
-		const replacesPageTurn = this.pageRender && !this.pageRender.refinement && !refinement;
+		const replacingTurn = this.isNavigating();
+		const replacesPageRequest = this.pageRender && !this.pageRender.refinement && !refinement;
 		this.pageRender?.controller.abort();
-		const request = { controller: new AbortController(), refinement };
+		const scrollBeforeTurn = this.pageRender?.scrollBeforeTurn ?? this.pageScroll.state;
+		const request = { controller: new AbortController(), refinement, scrollBeforeTurn };
 		this.pageRender = request;
 		const signal = request.controller.signal;
 		if (number !== previous) {
@@ -619,7 +621,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		try {
 			// Keep coalescing repeated input. Continuous navigation can take over the
 			// viewport's existing renders, so it needs a shorter settling interval.
-			if (replacesPageTurn) {
+			if (replacesPageRequest) {
 				await this.pageTurnDelay.trigger(() => undefined, this.continuous ? 40 : undefined);
 			}
 			// Only the latest request may start once the previous render has released its buffer.
@@ -627,12 +629,31 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			if (signal.aborted) { return; }
 			const outlineTop = typeof scrollTarget === 'number' ? scrollTarget : undefined;
 			const continuous = this.continuous;
-			const revealInContinuousView = !refinement && (number !== previous || replacesPageTurn || outlineTop !== undefined);
-			const paint = continuous && revealInContinuousView
-				? continuous.reveal(number, outlineTop, signal).then(view => { if (!signal.aborted) { this.activatePage(view); } })
-				: this.paint(undefined, number, dimension, signal);
-			this.pagePaint = paint.catch(() => undefined);
-			await paint;
+			const thumbnail = refinement ? undefined : this.navigationPane.minimap.getThumbnail(number);
+			let paint: Promise<void> | undefined;
+			if (continuous && !refinement && (number !== previous || replacesPageRequest || outlineTop !== undefined)) {
+				paint = continuous.reveal(number, outlineTop, thumbnail, signal).then(view => {
+					if (!signal.aborted) { this.activatePage(view); }
+				});
+			} else {
+				this.pagedView.clearThumbnail();
+				if (!continuous && number !== previous && thumbnail) {
+					this.pagedView.showThumbnail(thumbnail);
+					this.updateZoom();
+					this.pageScroll.scrollTo(0, scrollTarget === 'end' ? this.pageScroll.state.maximumTop : 0);
+				}
+				if (!continuous && replacingTurn && number === this.displayedPage?.page && !refinement) {
+					// Returning to the committed page can reuse its raster and text immediately.
+					this.updateZoom();
+					this.pageScroll.scrollTo(scrollBeforeTurn.left, scrollBeforeTurn.top);
+				} else {
+					paint = this.paint(undefined, number, dimension, signal);
+				}
+			}
+			if (paint) {
+				this.pagePaint = paint.catch(() => undefined);
+				await paint;
+			}
 			if (signal.aborted) { return; }
 			if (!this.continuous) {
 				if (outlineTop !== undefined) {
@@ -649,6 +670,11 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			if (signal.aborted) { return; }
 			this.pageNumber = previous;
 			this.pageInput.value = String(previous);
+			if (!this.continuous) {
+				this.pagedView.clearThumbnail();
+				this.updateZoom();
+				this.pageScroll.scrollTo(scrollBeforeTurn.left, scrollBeforeTurn.top);
+			}
 			if (!this.displayedPage) { this.progress.textContent = ''; }
 			if (!isCancellationError(error)) { this.showError(error); }
 		} finally {
@@ -1069,7 +1095,7 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 
 	private updateZoom(): void {
 		if (!this.pageScroll || !this.fitAction) { return; }
-		const page = this.displayedPage;
+		const page = this.activeView?.geometry;
 		if (!page) { return; }
 		if (this.continuous) { this.continuous.layout(this.zoom); this.updateFitAction(); return; }
 		const viewport = this.pageScroll.scrollableElement;
@@ -1078,8 +1104,8 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		const height = Math.max(1, viewport.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom));
 		let pageWidth = width;
 		if (typeof this.zoom === 'number') { pageWidth = page.widthPoints * 96 / 72 * this.zoom; }
-		else if (this.zoom === 'page') { pageWidth = Math.min(width, height * page.width / page.height); }
-		this.activeView.setSize(pageWidth, pageWidth * page.height / page.width);
+		else if (this.zoom === 'page') { pageWidth = Math.min(width, height * page.widthPoints / page.heightPoints); }
+		this.activeView.setSize(pageWidth, pageWidth * page.heightPoints / page.widthPoints);
 		this.pageScroll.layout();
 		this.updateFitAction();
 	}

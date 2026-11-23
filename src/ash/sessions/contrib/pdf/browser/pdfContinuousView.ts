@@ -5,7 +5,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import { localize } from '../../../../nls.js';
-import { PdfPageView } from './pdfPageView.js';
+import { PdfPageView, type PdfThumbnail } from './pdfPageView.js';
 import '../../../../base/browser/ui/list/list.css';
 
 interface PageEntry {
@@ -46,7 +46,7 @@ export class PdfContinuousView extends Disposable {
 	private documentWidth = 0;
 	private notifiedPage = 0;
 	private notifiedTop = -1;
-	private revealing: number | undefined;
+	private revealing: { readonly number: number; readonly restoreTop: number; } | undefined;
 	private revealedPage: { readonly number: number; readonly top: number; } | undefined;
 	private readonly inset: number;
 	public get viewport(): HTMLElement { return this.list.scrollElement; }
@@ -76,7 +76,10 @@ export class PdfContinuousView extends Disposable {
 			},
 			onDidRemoveRow: row => {
 				const entry = this.rows.get(row);
-				if (entry) { entry.mounted = false; }
+				if (entry) {
+					entry.mounted = false;
+					entry.view.releaseTextLayer();
+				}
 				this.rows.delete(row);
 			},
 		}));
@@ -106,10 +109,10 @@ export class PdfContinuousView extends Disposable {
 		const top = this.list.scrollTop;
 		const bottom = top + this.list.renderHeight;
 		const first = this.list.indexAt(top) + 1;
-		const last = this.list.indexAt(bottom) + 1;
+		const last = this.list.indexAt(Math.max(top, bottom - 1)) + 1;
 		if (this.revealedPage?.top !== top) { this.revealedPage = undefined; }
 		const atEnd = top > 0 && bottom >= this.list.getElementTop(this.numbers.length) - 1;
-		const current = this.revealing ?? this.revealedPage?.number ??
+		const current = this.revealing?.number ?? this.revealedPage?.number ??
 			(atEnd ? last : this.list.indexAt(top + this.list.renderHeight * 0.35) + 1);
 		this.notifyCurrentPage(current);
 		let next: PageEntry | undefined;
@@ -117,7 +120,7 @@ export class PdfContinuousView extends Disposable {
 		const retained: PageEntry[] = [];
 		for (const [number, entry] of this.entries) {
 			if (!entry.mounted) {
-				if (number === this.revealing || this.options.isActive(entry.view)) { continue; }
+				if (number === this.revealing?.number || this.options.isActive(entry.view)) { continue; }
 				if (entry.view.page) { retained.push(entry); }
 				else { this.disposeEntry(entry); }
 				continue;
@@ -154,11 +157,7 @@ export class PdfContinuousView extends Disposable {
 			signal.throwIfAborted();
 			await view.render(page, bytes, 1600, signal, true);
 			signal.throwIfAborted();
-			const previous = this.dimensions.get(number) ?? this.defaultGeometry;
-			const geometry = { width: page.widthPoints * 96 / 72, height: page.heightPoints * 96 / 72 };
-			if (previous.width !== geometry.width || previous.height !== geometry.height) {
-				this.layout(this.zoom, undefined, { number, geometry });
-			}
+			this.measurePage(number, page);
 			view.domNode.setAttribute('aria-busy', 'false');
 			return view;
 		}).finally(() => {
@@ -166,6 +165,14 @@ export class PdfContinuousView extends Disposable {
 			if (!this.isDisposed) { this.notify.schedule(); }
 		});
 		return entry.ready;
+	}
+
+	private measurePage(number: number, page: Pick<PdfPage, 'widthPoints' | 'heightPoints'>): void {
+		const previous = this.dimensions.get(number) ?? this.defaultGeometry;
+		const geometry = { width: page.widthPoints * 96 / 72, height: page.heightPoints * 96 / 72 };
+		if (previous.width !== geometry.width || previous.height !== geometry.height) {
+			this.layout(this.zoom, undefined, { number, geometry });
+		}
 	}
 
 	private size(number: number): PageSize {
@@ -230,13 +237,15 @@ export class PdfContinuousView extends Disposable {
 		});
 	}
 
-	public async reveal(number: number, top?: number, signal?: AbortSignal): Promise<PdfPageView> {
+	public async reveal(number: number, top?: number, thumbnail?: PdfThumbnail, signal?: AbortSignal): Promise<PdfPageView> {
 		signal?.throwIfAborted();
-		this.revealing = number;
+		const target = this.revealing = { number, restoreTop: this.revealing?.restoreTop ?? this.list.scrollTop };
 		try {
+			if (thumbnail) { this.measurePage(number, thumbnail); }
 			this.list.reveal(number - 1, 0);
 			const entry = this.entries.get(number);
 			if (!entry) { throw new Error('PDF page is outside the reading viewport'); }
+			if (!entry.view.page && thumbnail) { entry.view.showThumbnail(thumbnail); }
 			const loading = this.loading;
 			if (!entry.ready && loading && loading !== entry) {
 				// The document serializes renders, so a stale prefetch would delay this jump.
@@ -246,18 +255,25 @@ export class PdfContinuousView extends Disposable {
 			const ready = this.load(entry);
 			const view = await (signal ? raceCancellationError(ready, signal) : ready);
 			signal?.throwIfAborted();
-			if (this.revealing === number) {
-				if (top === undefined) {
-					this.list.reveal(number - 1, 0);
-				} else {
-					this.list.scrollTop = this.list.getElementTop(number - 1) + this.inset + top * this.size(number).height;
-				}
+			if (this.revealing === target) {
+				const offset = top === undefined ? 0 : this.inset + top * this.size(number).height;
+				this.list.scrollTop = this.list.getElementTop(number - 1) + offset;
 				// Short pages near the end cannot reach the viewport's usual current-page reference point.
 				this.revealedPage = { number, top: this.list.scrollTop };
 			}
 			return view;
+		} catch (error) {
+			if (this.revealing === target && !this.isDisposed) {
+				this.list.scrollTop = target.restoreTop;
+				const failed = this.entries.get(number);
+				if (failed && !failed.view.page) {
+					this.disposeEntry(failed);
+					if (failed.mounted) { this.list.rerender(number - 1); }
+				}
+			}
+			throw error;
 		} finally {
-			if (this.revealing === number) { this.revealing = undefined; }
+			if (this.revealing === target) { this.revealing = undefined; }
 		}
 	}
 

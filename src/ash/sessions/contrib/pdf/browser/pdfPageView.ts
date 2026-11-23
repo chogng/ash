@@ -5,6 +5,10 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import type { PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import { PdfTextSelection } from './pdfTextSelection.js';
 
+export interface PdfThumbnail extends Pick<PdfPage, 'widthPoints' | 'heightPoints'> {
+	readonly image: HTMLImageElement;
+}
+
 /** Owns one page's raster and selectable text in both reading modes. */
 export class PdfPageView extends Disposable {
 	/** Hosts may place, size and listen to this stable root; its content belongs to the page. */
@@ -16,9 +20,11 @@ export class PdfPageView extends Disposable {
 	public readonly onDidChangeText = this.changed.event;
 	private textLayer: HTMLElement | undefined;
 	private snapshot: PdfPage | undefined;
+	private preview: { canvas: HTMLCanvasElement; widthPoints: number; heightPoints: number; } | undefined;
 	private generation = 0;
 	public dimension = 1600;
 	public get page(): PdfPage | undefined { return this.snapshot; }
+	public get geometry(): Pick<PdfPage, 'widthPoints' | 'heightPoints'> | undefined { return this.preview ?? this.snapshot; }
 	public get hasText(): boolean { return this.textLayer !== undefined; }
 
 	constructor(document: Document, handlers: {
@@ -42,10 +48,32 @@ export class PdfPageView extends Disposable {
 		if (this.textLayer && this.snapshot) { this.textLayer.style.transform = `scale(${width / this.snapshot.width})`; }
 	}
 
+	/** Copy the decoded pixels while the sidebar owns the image. Its virtual row can disappear at any time. */
+	public showThumbnail(thumbnail: PdfThumbnail): void {
+		this.clearThumbnail();
+		const { image } = thumbnail;
+		const canvas = h(this.domNode.ownerDocument, 'canvas', {
+			className: 'ash-sessions-pdf-page-thumbnail',
+			properties: { width: image.naturalWidth, height: image.naturalHeight },
+			attributes: { 'aria-hidden': 'true' },
+		});
+		const context = canvas.getContext('2d');
+		if (!context) { return; }
+		context.drawImage(image, 0, 0);
+		this.preview = { canvas, widthPoints: thumbnail.widthPoints, heightPoints: thumbnail.heightPoints };
+		this.domNode.append(canvas);
+	}
+
+	public clearThumbnail(): void {
+		this.preview?.canvas.remove();
+		this.preview = undefined;
+	}
+
 	public clear(): void {
 		this.generation++;
-		this.decoding.clear(); this.textLifetime.clear(); this.raster.clear();
-		this.textLayer = undefined; this.snapshot = undefined;
+		this.clearThumbnail();
+		this.decoding.clear(); this.releaseTextLayer(); this.raster.clear();
+		this.snapshot = undefined;
 		this.domNode.replaceChildren();
 	}
 
@@ -55,8 +83,8 @@ export class PdfPageView extends Disposable {
 		const url = URL.createObjectURL(new Blob([data], { type: 'image/png' }));
 		const image = h(this.domNode.ownerDocument, 'img', { properties: { src: url, draggable: false }, attributes: { alt: '', 'aria-hidden': 'true' } });
 		const raster = toDisposable(() => {
-			// Clearing src on an evicted image can register a Chromium viewport listener
-			// after the image leaves the document, retaining the detached page and text layer.
+			// Clearing src after detachment can register a Chromium viewport listener
+			// that retains the image along with the page and its text layer.
 			image.remove();
 			URL.revokeObjectURL(url);
 		});
@@ -73,6 +101,7 @@ export class PdfPageView extends Disposable {
 			if (this.decoding.value === raster) { this.decoding.clearAndLeak(); }
 		}
 		if (signal?.aborted || this.isDisposed || generation !== this.generation) { raster.dispose(); return; }
+		this.clearThumbnail();
 		const previous = this.domNode.querySelector(':scope > img');
 		if (previous && this.snapshot?.page === page.page && this.snapshot.revision === page.revision && dimension > this.dimension) {
 			// Sharpening a page preserves its text selection and annotation controls.
@@ -81,14 +110,19 @@ export class PdfPageView extends Disposable {
 			this.dimension = dimension;
 			return;
 		}
-		this.textLifetime.clear();
-		this.textLayer = undefined;
+		this.releaseTextLayer();
 		this.snapshot = page;
 		this.dimension = dimension;
 		this.domNode.dataset.pageNumber = String(page.page);
 		this.domNode.replaceChildren(image);
 		this.raster.value = raster;
 		if (!deferText) { this.ensureTextLayer(); }
+	}
+
+	/** Keep the decoded raster on eviction from the viewport. Detached glyphs would all reflow on remount. */
+	public releaseTextLayer(): void {
+		this.textLifetime.clear();
+		this.textLayer = undefined;
 	}
 
 	/** Offscreen prefetch can decode the raster before allocating selectable glyphs. */
@@ -100,6 +134,7 @@ export class PdfPageView extends Disposable {
 		const document = this.domNode.ownerDocument;
 		const window = getWindow(this.domNode);
 		const text = h(document, 'div', { className: 'ash-sessions-pdf-text' });
+		store.add(toDisposable(() => text.remove()));
 		const content = h(document, 'div', { className: 'ash-sessions-pdf-text-content' });
 		const highlight = h(document, 'div', { className: 'ash-sessions-pdf-selection', attributes: { 'aria-hidden': 'true' } });
 		content.style.width = `${page.width}px`;

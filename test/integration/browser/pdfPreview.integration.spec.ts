@@ -9,10 +9,13 @@ let worker: ChildProcessWithoutNullStreams;
 let sequence = 0;
 const pending = new Map<number, (reply: unknown) => void>();
 
-function pdf(pageCount = 2, mixedSizes = false, stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET', firstPageAnnotations: readonly string[] = [], withOutline = false): Buffer {
+function pdf(pageCount = 2, landscapePage?: number, stream = 'BT /F1 18 Tf 30 220 Td (aspdf native review) Tj ET', firstPageAnnotations: readonly string[] = [], withOutline = false): Buffer {
 	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>'];
 	for (let number = 3; number <= pageCount; number++) { objects.push(objects[2]); }
-	if (mixedSizes) { objects[5] = objects[5].replace('300 400', '600 300'); }
+	if (landscapePage !== undefined) {
+		const index = landscapePage === 1 ? 2 : landscapePage + 3;
+		objects[index] = objects[index].replace('300 400', '600 300');
+	}
 	objects[1] = `<< /Type /Pages /Kids [3 0 R ${Array.from({ length: pageCount - 1 }, (_, index) => `${index + 6} 0 R`).join(' ')}] /Count ${pageCount} >>`;
 	if (firstPageAnnotations.length) {
 		const refs = firstPageAnnotations.map((_, index) => `${objects.length + index + 1} 0 R`).join(' ');
@@ -136,7 +139,7 @@ test('PDF keeps the original error when navigation creation fails', async ({ pag
 });
 
 test('PDF thumbnails open beside the document and follow page navigation', async ({ page }) => {
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(24, true), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(24, 2), contentType: 'application/pdf' }));
 	const thumbnailRequests: number[] = [];
 	await page.route('**/__aspdf_rpc', route => {
 		const request = route.request().postDataJSON();
@@ -229,6 +232,53 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
 });
 
+for (const mode of ['continuous', 'paged']) {
+	test(`PDF shows the latest thumbnail while the native raster is pending in ${mode} mode`, async ({ page }) => {
+		await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(16, 9), contentType: 'application/pdf' }));
+		await page.goto(`/pdfPreview.html?scrollMode=${mode}`);
+		await page.waitForFunction(() => !!window.aspdfTest);
+		await page.evaluate(() => window.aspdfTest.open(true));
+		const viewer = page.locator('.ash-sessions-pdf-preview');
+		const status = viewer.getByRole('status');
+		const rail = viewer.locator('.ash-sessions-pdf-thumbnails');
+		await viewer.getByRole('button', { name: 'PDF page navigation', exact: true }).click();
+		await rail.locator('> .ash-scrollbar-viewport').evaluate(element => { element.scrollTop = 7 * 184; });
+		const option = (number: number) => rail.getByRole('option', { name: `Page ${number}`, exact: true });
+		await expect(option(8).locator('img')).toHaveJSProperty('naturalHeight', 256);
+		await expect(option(9).locator('img')).toHaveJSProperty('naturalWidth', 256);
+		const readingArea = viewer.locator('.ash-sessions-pdf-reading-area');
+		const preview = readingArea.locator('.ash-sessions-pdf-page-thumbnail:visible');
+		let release!: () => void;
+		const gate = new Promise<void>(resolve => { release = resolve; });
+		await page.route('**/__aspdf_rpc', async route => {
+			const { method, params } = route.request().postDataJSON();
+			if (['pdf/page', 'pdf/renderPage'].includes(method) && params.page >= 8 && params.dimension === 1600) { await gate; }
+			await route.fallback();
+		});
+		try {
+			await option(8).click();
+			await expect(preview).toHaveJSProperty('width', 192);
+			await option(9).click();
+			await expect(preview).toHaveJSProperty('width', 256);
+			await expect(preview).toBeInViewport();
+			const bounds = (await preview.boundingBox())!;
+			expect(bounds.width / bounds.height).toBeCloseTo(2, 2);
+			await expect(status).toHaveText('Page 1 of 16');
+			await expect(viewer).toHaveAttribute('aria-busy', 'true');
+			// Removing the sidebar releases its object URLs while the main preview is still needed.
+			await viewer.getByRole('button', { name: 'PDF page navigation', exact: true }).click();
+			await expect(preview).toBeInViewport();
+		} finally { release(); }
+		await expect(status).toHaveText('Page 9 of 16');
+		const full = readingArea.locator('[data-page-number="9"] > img');
+		await expect(full).toHaveJSProperty('naturalWidth', 1600);
+		await expect(full).toBeInViewport();
+		await expect(preview).toHaveCount(0);
+		await expect(viewer).toHaveAttribute('aria-busy', 'false');
+		expect(await page.evaluate(() => window.aspdfTest.errors())).toEqual([]);
+	});
+}
+
 test('PDF navigation reports outline and thumbnail failures without disabling page links', async ({ page }) => {
 	await page.route('**/__aspdf_rpc', route => {
 		const request = route.request().postDataJSON();
@@ -278,7 +328,7 @@ test('PDF thumbnail navigation retains the selected page when the view reaches t
 });
 
 test('PDF outline switches with thumbnails and opens nested chapter destinations', async ({ page }) => {
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, false, undefined, [], true), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, undefined, undefined, [], true), contentType: 'application/pdf' }));
 	await page.goto('/pdfPreview.html?locale=zh-CN');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(() => window.aspdfTest.open(true));
@@ -354,7 +404,7 @@ test('PDF outline switches with thumbnails and opens nested chapter destinations
 });
 
 test('PDF links stay in the document without appearing in the annotation panel', async ({ page }) => {
-	const bytes = pdf(2, false, undefined, [
+	const bytes = pdf(2, undefined, undefined, [
 		'<< /Type /Annot /Subtype /Link /Rect [30 220 123 240] /Dest [6 0 R /Fit] >>',
 		'<< /Type /Annot /Subtype /Link /Rect [125 220 190 240] /Contents (Citation link) /A << /S /URI /URI (https://example.com) >> >>',
 	]);
@@ -794,7 +844,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 test('PDF selection joins mixed-height glyphs and spaces while preserving lines, columns and native endpoints', async ({ page }) => {
 	const stream = 'BT /F1 18 Tf 30 310 Td (ABCidef) Tj -2 Ts (.) Tj 0 Ts [( ) -725 (9)] TJ 135 0 Td (WXYZ) Tj -135 -34 Td (Second lineQ) Tj ET';
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, false, stream), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, undefined, stream), contentType: 'application/pdf' }));
 	await page.goto('/pdfPreview.html?scrollMode=paged');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(() => window.aspdfTest.open(true));
@@ -836,7 +886,7 @@ test('PDF selection centers on visible ink when the hidden text layer is offset'
 	// The visible ink is four points above the hidden text used for selection.
 	const ink = [31, 43, 55, 67, 79].map(x => `${x} 224 8 13 re`).join(' ');
 	const stream = `0 g ${ink} f BT /F1 18 Tf 3 Tr 30 220 Td (ABCDE) Tj ET`;
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, false, stream), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(2, undefined, stream), contentType: 'application/pdf' }));
 	await page.goto('/pdfPreview.html?scrollMode=paged');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(() => window.aspdfTest.open(true));
@@ -1015,19 +1065,21 @@ test('PDF reuses recently visited pages across distant scrolls and releases olde
 		await expect(image(number)).toHaveJSProperty('complete', true);
 	};
 	await scrollTo(10);
-	const first = await image(10).elementHandle();
+	const rasterUrl = await image(10).getAttribute('src');
+	if (!rasterUrl) { throw new Error('Expected a decoded PDF page'); }
 	const requests = () => renders.filter(number => number === 10).length;
 	const initialRequests = requests();
 	await scrollTo(45);
 	await expect(image(10)).toHaveCount(0);
 	await scrollTo(10);
-	await expect(image(10)).toHaveAttribute('src', (await first!.getAttribute('src'))!);
+	await expect(image(10)).toHaveAttribute('src', rasterUrl);
 	expect(requests()).toBe(initialRequests);
+	await expect(reader.locator('[data-page-number="10"] .ash-sessions-pdf-text')).toHaveText('aspdf native review');
 	for (const number of [16, 22, 28, 34, 40, 46, 52, 58]) { await scrollTo(number); }
-	await expect.poll(() => first!.getAttribute('src')).toBeNull();
+	// An evicted raster releases its blob even if another consumer kept the old URL.
+	await expect.poll(() => page.evaluate(url => fetch(url).then(response => response.ok, () => false), rasterUrl)).toBe(false);
 	await scrollTo(10);
 	expect(requests()).toBe(initialRequests + 1);
-	await first!.dispose();
 });
 
 test('PDF prioritizes the visible page after a large scroll and zooms while its raster is pending', async ({ page }) => {
@@ -1121,33 +1173,45 @@ test('PDF defers continuous restoration until the hidden viewport is laid out', 
 	expect(await page.evaluate(() => window.aspdfTest.errors())).toEqual([]);
 });
 
-test('PDF page failures enter the window notification history and allow retry', async ({ page }) => {
-	await page.goto('/pdfPreview.html?locale=zh-CN&scrollMode=paged');
-	await page.waitForFunction(() => !!window.aspdfTest);
-	await page.evaluate(() => window.aspdfTest.open());
-	let failNextTurn = true;
-	await page.route('**/__aspdf_rpc', route => {
-		const request = route.request().postDataJSON();
-		if (failNextTurn && ['pdf/page', 'pdf/renderPage'].includes(request.method) && request.params.page === 2) {
-			failNextTurn = false;
-			return route.fulfill({ json: { id: request.id, error: { code: -32170, message: 'PdfNotFound', data: { kind: 'PdfNotFound' } } } });
-		}
-		return route.fallback();
+for (const mode of ['continuous', 'paged']) {
+	test(`PDF page failures restore the previous view and allow retry in ${mode} mode`, async ({ page }) => {
+		await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(16, 9), contentType: 'application/pdf' }));
+		await page.goto(`/pdfPreview.html?locale=zh-CN&scrollMode=${mode}`);
+		await page.waitForFunction(() => !!window.aspdfTest);
+		await page.evaluate(() => window.aspdfTest.open());
+		const viewer = page.locator('.ash-sessions-pdf-preview');
+		await viewer.getByRole('button', { name: 'PDF 页面导航', exact: true }).click();
+		const rail = viewer.locator('.ash-sessions-pdf-thumbnails');
+		const target = rail.getByRole('option', { name: '第 9 页', exact: true });
+		const revealThumbnail = async () => {
+			await rail.locator('> .ash-scrollbar-viewport').evaluate(element => { element.scrollTop = 8 * 184; });
+			await expect(target.locator('img')).toHaveJSProperty('naturalWidth', 256);
+		};
+		await revealThumbnail();
+		let failNextTurn = true;
+		await page.route('**/__aspdf_rpc', route => {
+			const request = route.request().postDataJSON();
+			if (failNextTurn && ['pdf/page', 'pdf/renderPage'].includes(request.method) && request.params.page === 9 && request.params.dimension === 1600) {
+				failNextTurn = false;
+				return route.fulfill({ json: { id: request.id, error: { code: -32170, message: 'PdfNotFound', data: { kind: 'PdfNotFound' } } } });
+			}
+			return route.fallback();
+		});
+		await target.click();
+		await expect.poll(() => page.evaluate(() => window.aspdfTest.errors())).toEqual(['无法完成 PDF 操作：PdfNotFound']);
+		await expect(viewer.locator('.ash-sessions-pdf-page-number')).toHaveValue('1');
+		await expect(viewer.getByRole('alert')).toHaveCount(0);
+		await expect(viewer.locator('.ash-sessions-pdf-reading-area [data-page-number="1"] > img:visible')).toBeInViewport();
+		await expect(viewer.locator('.ash-sessions-pdf-page-thumbnail')).toHaveCount(0);
+		await revealThumbnail();
+		await target.click();
+		await expect(viewer).toHaveAttribute('aria-busy', 'false');
+		await expect(viewer.getByRole('status')).toHaveText('第 9 页，共 16 页');
 	});
-	const viewer = page.locator('.ash-sessions-pdf-preview');
-	const next = viewer.getByRole('button', { name: '下一页', exact: true });
-	const number = viewer.locator('.ash-sessions-pdf-page-number');
-	await next.click();
-	await expect.poll(() => page.evaluate(() => window.aspdfTest.errors())).toEqual(['无法完成 PDF 操作：PdfNotFound']);
-	await expect(number).toHaveValue('1');
-	await expect(viewer.getByRole('alert')).toHaveCount(0);
-	await next.click();
-	await expect(viewer).toHaveAttribute('aria-busy', 'false');
-	await expect(number).toHaveValue('2');
-});
+}
 
 test('PDF continuous mode preserves mixed page sizes and restored reading mode', async ({ page }) => {
-	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, true), contentType: 'application/pdf' }));
+	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(3, 2), contentType: 'application/pdf' }));
 	await page.setViewportSize({ width: 1440, height: 960 });
 	await page.goto('/pdfPreview.html?scrollMode=paged');
 	await page.waitForFunction(() => !!window.aspdfTest);

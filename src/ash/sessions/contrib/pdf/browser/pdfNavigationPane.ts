@@ -8,6 +8,7 @@ import { createUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import type { PdfOutlineEntry, PdfOutlineTarget } from '../../../../platform/pdf/common/pdfService.js';
 import { defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import type { PdfDocumentModel } from './pdfDocumentModel.js';
 import { PdfMinimap } from './pdfMinimap.js';
 import './media/pdfNavigationPane.css';
 
@@ -42,7 +43,7 @@ export class PdfNavigationPane extends Disposable {
 
 	constructor(
 		document: Document,
-		renderThumbnail: (page: number, signal: AbortSignal) => Promise<Uint8Array>,
+		renderThumbnail: PdfDocumentModel['renderThumbnail'],
 		private readonly readOutline: (signal: AbortSignal) => Promise<readonly PdfOutlineEntry[]>,
 		openPage: (page: number) => void,
 		private readonly openDestination: (target: PdfOutlineTarget) => void,

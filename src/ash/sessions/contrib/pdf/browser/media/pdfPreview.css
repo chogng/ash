@@ -196,11 +196,17 @@
 	box-shadow: none;
 }
 
-.ash-sessions-pdf-stage > img {
+.ash-sessions-pdf-stage > img,
+.ash-sessions-pdf-page-thumbnail {
 	display: block;
 	inline-size: 100%;
 	block-size: 100%;
 	user-select: none;
+}
+
+.ash-sessions-pdf-stage:has(> .ash-sessions-pdf-page-thumbnail)
+	> :not(.ash-sessions-pdf-page-thumbnail) {
+	display: none;
 }
 
 .ash-sessions-pdf-text {

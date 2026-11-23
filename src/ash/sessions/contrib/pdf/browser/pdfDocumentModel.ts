@@ -158,13 +158,13 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	}
 
 	/** Renders the working snapshot without changing the page used by editing and saving. */
-	public renderThumbnail(number: number, signal: AbortSignal): Promise<Uint8Array> {
+	public renderThumbnail(number: number, signal: AbortSignal): Promise<Pick<PdfPage, 'widthPoints' | 'heightPoints'> & { bytes: Uint8Array; }> {
 		return this.serialize(async () => {
 			const operation = AbortSignal.any([this.lifetime.signal, signal]);
 			operation.throwIfAborted();
 			const document = this.document!;
 			const page = await document.page(number, 256, operation);
-			return document.image(page, operation);
+			return { widthPoints: page.widthPoints, heightPoints: page.heightPoints, bytes: await document.image(page, operation) };
 		});
 	}
 
