@@ -255,11 +255,24 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     let activation = markdown.activation.as_ref().unwrap();
     assert!(activation.matches(&super::source::ActivationEvent::Language("markdown".into())));
     assert!(!activation.matches(&super::source::ActivationEvent::StartupFinished));
-    for (command, _) in &activation.commands {
-        assert!(activation.matches(&super::source::ActivationEvent::Command(command.clone())));
+    assert!(
+        activation.matches(&super::source::ActivationEvent::Capability(
+            "customEditor:vscode.markdown.preview.editor".into(),
+        ))
+    );
+    let preview_commands = [
+        "markdown.showPreview",
+        "markdown.showPreviewToSide",
+        "markdown.reopenAsPreview",
+    ];
+    assert_eq!(
+        activation.commands,
+        preview_commands.map(|command| (command.to_owned(), command.to_owned()))
+    );
+    for command in preview_commands {
+        assert!(activation.matches(&super::source::ActivationEvent::Command(command.into())));
     }
     assert_eq!(activation.events, markdown.params.activation_events);
-    assert_eq!(markdown.activation.as_ref().unwrap().commands.len(), 7);
     assert!(!markdown.authority.authorizes());
     assert!(markdown.authority.acquire().is_none());
     assert_eq!(
