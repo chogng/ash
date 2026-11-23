@@ -92,17 +92,18 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 	await expect.poll(isCentered).toBe(true);
 	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
 
+	const controls = pdf().locator('.ash-sessions-pdf-controls');
+	const annotationToolbar = controls.getByRole('toolbar', { name: 'PDF annotations', exact: true });
+	await expect(annotationToolbar.getByRole('button')).toHaveCount(5);
 	await pdf().getByRole('textbox', { name: 'Annotation text', exact: true }).fill('Save before interruption');
-	await pdf().getByRole('button', { name: 'Add note', exact: true }).click();
+	await annotationToolbar.getByRole('button', { name: 'Add note', exact: true }).click();
 	await expect(annotations()).toHaveCount(1);
 	await save().click();
 	await expect.poll(async () => (await readFile(path)).equals(original)).toBe(false);
 	await expect(save()).toBeDisabled();
 	const annotated = await readFile(path);
-	const controls = pdf().locator('.ash-sessions-pdf-controls');
 	await expect(controls.locator('.ash-sessions-pdf-page-number')).toHaveValue('1');
 	await expect(controls.locator('.ash-sessions-pdf-pagination')).toHaveText('/1');
-	await expect(controls.getByRole('button')).toHaveCount(10);
 	for (const button of await controls.getByRole('button').all()) { await expect(button.locator('.ash-button-label')).toBeHidden(); }
 	await testInfo.attach('pdf-toolbar-desktop', { body: await page.screenshot(), contentType: 'image/png' });
 

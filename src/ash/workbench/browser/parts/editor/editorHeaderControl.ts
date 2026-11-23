@@ -135,7 +135,7 @@ export class EditorHeaderControl extends Disposable {
 			this._register(new MenuWorkbenchToolBar(layoutActions, actions.menuService, actions.contextMenuProvider, viewOptions.menuIds.headerLayout, {
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
-				highlightToggledItems: true,
+				highlightToggledItems: false,
 				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
 			}));
 		}

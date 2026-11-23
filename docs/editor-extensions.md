@@ -130,6 +130,8 @@ Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和
 
 aspdf 是 Agent Window 内置的 PDF 阅读与批注产品，代码与领域接口保留 `Pdf*`、`pdf/*` 命名。Files 与只读 Chat 附件使用同一资源 pane，不要求安装扩展。Rust PDF 领域通过独立 helper 使用原生 PDFium，提供文字、字符位置、页面图像和结构化批注；批注支持高亮、便签、更新、删除及标准 PDF 保存。TypeScript 工作副本拥有草稿、撤销历史、恢复数据和文件版本，native session 是可释放的派生快照。保存通过既有文件服务检查原文件版本。Agent 的 `pdf_read`、`pdf_annotate` 工具读取或修改已保存文件，不读取未保存草稿；修改须提供原文摘要，并通过既有文件授权、写入审批与版本检查。
 
+aspdf 工具栏单行时与窗口标题栏等高，预览较窄时工具组按需换行。左侧是页面导航、翻页和页码，中间是便签、高亮、绘制、擦除和文本框，右侧是页面适配、滚动模式和保存。只读 PDF 的批注与保存操作保持可见并显示为禁用。
+
 支持 `pdfResource` v1 的 App Server 可通过 `pdf/openResource` 消费当前用户配置对应连接中已授权的文件快照。原稿字节留在后端，渲染器只持有文件版本和 PDF 文档句柄。会话目录及其他文件提供方继续使用分块上传。
 
 `pdfRender` v1 提供带操作 ID 的只读 `pdf/renderPage`。快速跳页取消已过时的渲染，`pdf/cancelRender` 和 `pdf/close` 走控制队列。缩放手势复用当前图像，停止后按屏幕像素补绘。批注和保存继续按文档版本串行。

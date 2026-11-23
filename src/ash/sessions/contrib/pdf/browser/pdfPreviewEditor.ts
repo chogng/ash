@@ -183,7 +183,9 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.inkAction = this.action('ink', localize('sessions.pdfPreview.draw', 'Draw'), Lxicon.editWrite, () => this.selectTool('ink'));
 		this.eraserAction = this.action('eraser', localize('sessions.pdfPreview.erase', 'Erase highlights and drawings'), Lxicon.eraser, () => this.selectTool('eraser'));
 		this.textAction = this.action('text', localize('sessions.pdfPreview.addText', 'Add text box'), Lxicon.text, () => this.selectTool('text'));
-		this.toolbar(controls, [this.noteAction, this.highlightAction, this.inkAction, this.eraserAction, this.textAction], localize('sessions.pdfPreview.annotations', 'PDF annotations'));
+		const markup = h(document, 'div', { className: 'ash-sessions-pdf-markup' });
+		this.toolbar(markup, [this.noteAction, this.highlightAction, this.inkAction, this.eraserAction, this.textAction], localize('sessions.pdfPreview.annotations', 'PDF annotations'));
+		controls.append(markup);
 		this.fitAction = this.action('fit', localize('sessions.pdfPreview.fitPage', 'Fit page'), Lxicon.screenNormal, () => this.setZoom(this.zoom === 'page' ? 'width' : 'page'), false);
 		this.scrollModeAction = this.action('scrollMode', localize('sessions.pdfPreview.scrollMode', 'Scroll mode'), Lxicon.file, () => undefined, false);
 		for (const [mode, label, icon] of [
@@ -196,7 +198,9 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 			}, false));
 		}
 		this.saveAction = this.action('save', localize('sessions.pdfPreview.save', 'Save changes'), Lxicon.save, () => this.save());
-		this.toolbar(controls, [this.fitAction, this.scrollModeAction, this.saveAction], localize('sessions.pdfPreview.documentActions', 'PDF document actions'));
+		const documentActions = h(document, 'div', { className: 'ash-sessions-pdf-document-actions' });
+		this.toolbar(documentActions, [this.fitAction, this.scrollModeAction, this.saveAction], localize('sessions.pdfPreview.documentActions', 'PDF document actions'));
+		controls.append(documentActions);
 		this.progress = h(document, 'span', { className: 'ash-sessions-pdf-status', attributes: { role: 'status' } });
 		controls.append(this.progress);
 		const content = h(document, 'div', { className: 'ash-sessions-pdf-content' });

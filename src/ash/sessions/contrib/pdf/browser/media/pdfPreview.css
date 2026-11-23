@@ -10,12 +10,36 @@
 }
 
 .ash-sessions-pdf-controls {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	flex-wrap: wrap;
 	gap: var(--ash-spacing-size120);
-	padding: var(--ash-spacing-size80);
+	min-block-size: var(
+		--ash-sessions-titlebar-height,
+		var(--ash-spacing-size360)
+	);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
 	border-block-end: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-pdf-navigation {
+	grid-column: 1;
+	justify-self: start;
+}
+
+.ash-sessions-pdf-markup {
+	grid-column: 2;
+}
+
+.ash-sessions-pdf-document-actions {
+	grid-column: 3;
+	margin-inline-start: auto;
+}
+
+.ash-sessions-pdf-preview.narrow .ash-sessions-pdf-controls {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
 }
 
 .ash-sessions-pdf-navigation,
