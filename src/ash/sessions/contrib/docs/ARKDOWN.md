@@ -1,18 +1,18 @@
 # Arkdown
 
-前端实现位于 [`browser/arkdown`](browser/arkdown)，由 Sessions Docs 持有。`ArkdownEditorPane` 承载 Markdown 文档，正文与源码通过同一个 Workbench `TextModel` 编辑，源码视图使用现有 `CodeEditorWidget`。Rust 核心位于 [`crates/arkdown`](../../../../../crates/arkdown/README.md)。其他 Markdown 场景见 [通用 Markdown](../../../workbench/contrib/markdown/README.md)。
+前端实现由 Workbench 的 [Markdown 贡献](../../../workbench/contrib/markdown/README.md) 持有。Chat Docs 与 Code 的可视化 Markdown 视图共用该组件。`ArkdownEditorPane` 承载 Markdown 文档，正文与源码通过同一个 Workbench `TextModel` 编辑，源码视图使用现有 `CodeEditorWidget`。Rust 核心位于 [`crates/arkdown`](../../../../../crates/arkdown/README.md)。其他 Markdown 场景见 [通用 Markdown](../../../workbench/contrib/markdown/README.md)。
 
-| 文件                                                                                       | 职责                                                  |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| [`arkdown.contribution.ts`](browser/arkdown/arkdown.contribution.ts)                       | Docs 正文快捷键注册                                   |
-| [`arkdownEditorPane.ts`](browser/arkdown/arkdownEditorPane.ts)                             | 借用 Workbench 文本工作副本，持有文档模式与无障碍接口 |
-| [`arkdownRuntime.ts`](browser/arkdown/arkdownRuntime.ts)                                   | Rust/WASM 边界、只读语法投影及 `CollabBuffer` 适配    |
-| [`arkdownCollabProfile.ts`](browser/arkdown/arkdownCollabProfile.ts)                       | Markdown 房间的版本化载荷、编码与大小限制             |
-| [`arkdownEditor.ts`](browser/arkdown/arkdownEditor.ts)                                     | 正文 DOM、选区、输入及共用 CodeEditor 源码视图        |
-| [`arkdownTableController.ts`](browser/arkdown/arkdownTableController.ts)                   | 表格选区、把手、菜单和拖动预览；通过编辑器提交事务    |
-| [`BufferCollabSession`](../../../workbench/services/collab/browser/bufferCollabSession.ts) | 通用缓冲区房间连接、重试、确认与增量同步              |
+| 文件                                                                                                         | 职责                                                  |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| [`arkdown.contribution.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdown.contribution.ts)     | 共享正文快捷键注册                                    |
+| [`arkdownEditorPane.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdownEditorPane.ts)           | 借用 Workbench 文本工作副本，持有文档模式与无障碍接口 |
+| [`arkdownRuntime.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdownRuntime.ts)                 | Rust/WASM 边界、只读语法投影及 `CollabBuffer` 适配    |
+| [`arkdownCollabProfile.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdownCollabProfile.ts)     | Markdown 房间的版本化载荷、编码与大小限制             |
+| [`arkdownEditor.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdownEditor.ts)                   | 正文 DOM、选区、输入及共用 CodeEditor 源码视图        |
+| [`arkdownTableController.ts`](../../../workbench/contrib/markdown/browser/arkdown/arkdownTableController.ts) | 表格选区、把手、菜单和拖动预览；通过编辑器提交事务    |
+| [`BufferCollabSession`](../../../workbench/services/collab/browser/bufferCollabSession.ts)                   | 通用缓冲区房间连接、重试、确认与增量同步              |
 
-`EditorWorkingCopy` 与文本模型持有保存、dirty、外部变更和本地撤销历史。协作期间，`TextModel` 通过有作用域的编辑参与者将操作与选择性历史交给 Yrs；源码视图、正文、其他编辑器和保存仍使用同一缓冲区。离开房间时解除参与者并清除跨会话历史。Arkdown 的语法树是投影，不保留第二份可写文档。Sessions 的 `DocsEditorPane` 持有 Docs 标题栏、作品操作及默认模式，借用本目录的编辑器，不再创建自己的工作副本。
+`EditorWorkingCopy` 与文本模型持有保存、dirty、外部变更和本地撤销历史。协作期间，`TextModel` 通过有作用域的编辑参与者将操作与选择性历史交给 Yrs；源码视图、正文、其他编辑器和保存仍使用同一缓冲区。离开房间时解除参与者并清除跨会话历史。Arkdown 的语法树是投影，不保留第二份可写文档。Sessions 的 `DocsEditorPane` 持有 Docs 标题栏、作品操作及默认模式，借用 Workbench 的编辑器，不再创建自己的工作副本。
 
 通用 Markdown 预览、数学渲染和图片粘贴位于 [`contrib/markdown`](../../../workbench/contrib/markdown/README.md)。Chat 消息正文由 [`ChatMarkdownContentPart`](../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.ts) 进行流式 Markdown 渲染。Docs 导入直接生成 Markdown，不依赖 Academy 的结构化模型，也不迁移旧 `.ash-doc`。
 
@@ -40,4 +40,4 @@ Docs 评论由同一个 Markdown 工作副本持有。UUID 形式的 `<span data
 
 `IBufferCollabService` 按 `TextModel` 持有会话与工作副本，多个视图复用同一会话，切换或关闭标签页后继续同步，离开房间或关闭窗口时释放。`arkdownRuntime.ts` 将 WASM 缓冲区适配到共享 `CollabBuffer` 契约，`arkdownCollabProfile.ts` 持有编码和限额预检。快照上限为 4 MiB，事务上限为 1 MiB，编码与解码使用相同限额。空闲时每 15 秒只读取版本元数据，发现缺口或重连时交换完整状态。永久拒绝停止自动重试，离线按退避重连，新房间 epoch 用于区分重建后的确认状态。
 
-Docs 贡献加载 `arkdown.contribution.ts` 的正文快捷键，通过 `DOCS_ARKDOWN_EDITOR_ID` 注册 `DocsEditorPane`。持久化编辑器 ID 为 `sessions.editor.docs.markdown`。Docs 入口通过 `artifactDetailEntry.workspaceMode` 进入 Chat。Markdown 语言标识、MIME 和协作载荷表达文件格式与协议。
+Arkdown 编辑窗格加载正文快捷键。Docs 通过 `DOCS_ARKDOWN_EDITOR_ID` 注册 `DocsEditorPane`。持久化编辑器 ID 为 `sessions.editor.docs.markdown`。Docs 入口通过 `artifactDetailEntry.workspaceMode` 进入 Chat。Markdown 语言标识、MIME 和协作载荷表达文件格式与协议。

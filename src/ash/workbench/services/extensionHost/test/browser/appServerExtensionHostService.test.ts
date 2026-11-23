@@ -49,6 +49,7 @@ import { MockDebugSession } from '../../../../contrib/debug/test/common/mockDebu
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { EditorPanes } from '../../../../browser/editor.js';
 
 import { IHostService } from '../../../host/browser/host.js';
 import { readFileSync } from 'node:fs';
@@ -1470,6 +1471,30 @@ test('new model and language change use current editor language for activation',
 	}
 });
 
+test('a Docs reference keeps the Markdown extension dormant until a source editor acquires the same model', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onLanguage:markdown']));
+	api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using language = services.get(ILanguageService).registerLanguage({ id: 'markdown' });
+	const models = services.get(IFileTextModelService);
+	const resource = URI.file('/project/notes.md');
+	using docs = await models.acquire({ resource, initialText: '# Notes', languageId: 'markdown' }, new AbortController().signal, { activateLanguageFeatures: false });
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	assert.equal(service.currentSnapshot.extensions[0]?.state, 'dormant');
+	assert.equal(api.activations.length, 0);
+	{
+		using source = await acquireFile(services, '# Notes', resource, 'markdown');
+		assert.equal(source.model, docs.model);
+		await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+		assert.equal(api.activations.length, 1);
+		assert.deepEqual(api.activations[0]!.event, { type: 'language', languageId: 'markdown' });
+	}
+	assert.deepEqual(models.getModelsRequestingLanguageFeatures(), []);
+	assert.equal(models.getModel(resource), docs.model);
+});
+
 test('startupFinished waits for window restoration and ignores replies after stop', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot(['onStartupFinished']));
 	const activation = deferred<ExtensionHostFleetSnapshot>();
@@ -1643,6 +1668,34 @@ test('eager contributed editors finish activation before the restoration barrier
 	await starting;
 	assert.equal(service.currentSnapshot.extensions[0]?.state, 'ready');
 	assert.equal(restored, true);
+});
+
+test('cold editor restore waits for declarations without starting the provider', async () => {
+	const viewType = 'acme.dormantEditor';
+	const api = new FakeExtensionHostApi(dormantSnapshot([`onCapability:customEditor:${viewType}`]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const extensions = services.get(IExtensionService);
+	const declarationsReady = deferred<void>();
+	let waitingForDeclarations = false;
+	let declared = false;
+	extensions.whenEditorContributionsReady = () => {
+		waitingForDeclarations = true;
+		return declarationsReady.promise;
+	};
+	extensions.getExtensionPointContributions = <T>(name: string) => declared && name === 'customEditors' ? [{
+		description: { id: api.current.extensions[0]!.id, name: 'demo', publisher: 'acme', version: '1', displayName: 'Demo', sourceKind: 'builtIn', manifestSha256: DIGEST, packageSha256: DIGEST },
+		value: [{ viewType, displayName: 'Dormant editor', priority: 'option', selector: [{ filenamePattern: '*.demo' }] }] as unknown as T,
+	}] : [];
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	const starting = host.start();
+	await waitFor(() => waitingForDeclarations);
+	assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === viewType), false);
+	declared = true;
+	declarationsReady.resolve(undefined);
+	await starting;
+	assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === viewType), true);
+	assert.equal(api.activations.length, 0);
 });
 
 test('wildcard startup binds actual window facts before restoration', async () => {

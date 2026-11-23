@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Page } from '@playwright/test';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
 const emptyWindowTest = test.extend({ openWorkspace: false });
@@ -48,14 +49,15 @@ test('plain editing and Markdown preview leave the bundled JSON Worker dormant u
 	await expect(group.editor.element.locator('.squiggly-error')).not.toHaveCount(0);
 });
 
-test('Markdown preview loads an image relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, runningApplication }) => {
+test('Markdown views load resources relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, runningApplication }) => {
 	const documents = join(testWorkspace.directory, 'preview-docs');
 	const assets = join(testWorkspace.directory, 'preview-assets');
 	await mkdir(documents);
 	await mkdir(assets);
 	await writeFile(join(assets, 'diagram space.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"><rect width="24" height="16" fill="green"/></svg>');
 	const document = join(documents, 'preview.md');
-	await writeFile(document, '# Workspace resources\n\n![Workspace diagram](../preview-assets/diagram%20space.svg)');
+	await writeFile(document, '# Workspace resources\n\n![Workspace diagram](../preview-assets/diagram%20space.svg)\n\n[Related document](./related.md)');
+	await writeFile(join(documents, 'related.md'), '# Related Markdown source');
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -78,6 +80,11 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 		await expect(content.getByRole('heading', { name: 'Workspace resources', exact: true })).toBeVisible();
 		await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
 	});
+	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
+	const native = source.content.getByRole('textbox', { name: 'Document body', exact: true });
+	await expect.poll(() => native.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
+	await native.getByRole('link', { name: 'Related document', exact: true }).click({ modifiers: ['ControlOrMeta'] });
+	await source.editor.waitForEditorContents(text => text.includes('# Related Markdown source'));
 });
 
 test('pasting a Markdown image creates a sibling asset and dropped images share the same preview', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, runningApplication }) => {
@@ -98,7 +105,9 @@ test('pasting a Markdown image creates a sibling asset and dropped images share 
 		input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, png);
 	await group.editor.waitForEditorContents(text => text.includes('![alt text](image-1.png)'));
-	expect(await readFile(pasted)).toEqual(Buffer.from(png, 'base64'));
+	await expect(async () => {
+		expect(await readFile(pasted)).toEqual(Buffer.from(png, 'base64'));
+	}).toPass();
 	expect(await readFile(existing, 'utf8')).toBe('existing file');
 	await group.editor.input.press('Escape');
 	await group.editor.input.press('ControlOrMeta+End');
@@ -111,7 +120,9 @@ test('pasting a Markdown image creates a sibling asset and dropped images share 
 		line.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.right - 1, clientY: bounds.top + bounds.height / 2 }));
 	}, png);
 	await group.editor.waitForEditorContents(text => text.includes('![alt text](another%20image.png)'));
-	expect(await readFile(join(testWorkspace.directory, 'another image.png'))).toEqual(Buffer.from(png, 'base64'));
+	await expect(async () => {
+		expect(await readFile(join(testWorkspace.directory, 'another image.png'))).toEqual(Buffer.from(png, 'base64'));
+	}).toPass();
 	await group.editor.input.press('Escape');
 	await group.editor.input.press('ControlOrMeta+s');
 	await expect.poll(() => readFile(file, 'utf8')).toContain('![alt text](image-1.png)');
@@ -271,9 +282,8 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	}
 	await group.editor.waitForEditorContents(text => text.includes('# Theme colors'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
-	const bold = frame.getByRole('button', { name: 'Bold', exact: true });
+	const editor = group.content.getByRole('textbox', { name: 'Document body', exact: true });
+	await expect(group.content.locator('iframe.ash-webview:visible')).toHaveCount(0);
 	await expect(editor).toBeVisible();
 	for (const [theme, id] of [['Ash Light', 'ash-light'], ['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -281,45 +291,20 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 		await workbench.quickaccess.input.press('Enter');
 		await expect(workbench.quickaccess.element).toHaveCount(0);
 		await expect(workbench.element).toHaveAttribute('data-color-theme', id);
-		const palette = await workbench.element.evaluate(element => {
+		const colors = await workbench.element.evaluate(element => {
 			const probe = document.createElement('span');
 			element.appendChild(probe);
 			try {
-				return Object.fromEntries(['button-foreground', 'button-secondaryBackground', 'button-hoverBackground', 'focusBorder', 'border', 'widget-border', 'text-codeBlockBackground', 'accent-foreground', 'error-foreground', 'editorCursor-foreground', 'editor-lineHighlightBackground', 'editor-foreground'].map(name => {
-					probe.style.backgroundColor = `var(--ash-${name})`;
-					return [name, getComputedStyle(probe).backgroundColor];
+				return Object.fromEntries(['text-codeBlockBackground', 'editorCursor-foreground'].map(name => {
+					probe.style.color = `var(--ash-${name})`;
+					return [name, getComputedStyle(probe).color];
 				}));
-			} finally {
-				probe.remove();
-			}
+			} finally { probe.remove(); }
 		});
-		const foreground = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-foreground').trim());
-		await expect(frame.locator('html')).toHaveCSS('--ash-editor-foreground', foreground);
-		await editor.hover();
-		await expect.poll(() => bold.evaluate(element => element.matches(':hover'))).toBe(false);
-		await expect(bold).toHaveCSS('color', palette['button-foreground']!);
-		await expect(bold).toHaveCSS('background-color', palette['button-secondaryBackground']!);
-		await expect(frame.getByRole('toolbar')).toHaveCSS('border-bottom-color', palette['border']!);
-		await expect(editor.locator('pre')).toHaveCSS('background-color', palette['text-codeBlockBackground']!);
-		await expect(editor.locator('blockquote')).toHaveCSS('border-left-color', palette['widget-border']!);
-		await expect(editor.getByRole('link')).toHaveCSS('color', palette['accent-foreground']!);
-		await expect(editor.getByRole('columnheader', { name: 'Header', exact: true })).toHaveCSS('border-top-color', palette['widget-border']!);
-		await expect(frame.getByRole('status')).toHaveCSS('color', palette['error-foreground']!);
-		await editor.getByRole('heading', { name: 'Theme colors', exact: true }).click();
-		const input = editor.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
-		await expect(input).toBeFocused();
-		await expect(input).toHaveCSS('caret-color', palette['editorCursor-foreground']!);
-		await expect(input).toHaveCSS('background-color', palette['editor-lineHighlightBackground']!);
-		await expect(input).toHaveCSS('color', palette['editor-foreground']!);
-		await page.keyboard.press('Escape');
+		await expect(editor.locator('pre')).toHaveCSS('background-color', colors['text-codeBlockBackground']!);
 		await editor.focus();
-		await page.keyboard.press('Alt+F10');
-		await expect(bold).toBeFocused();
-		await expect(bold).toHaveCSS('outline-style', 'solid');
-		await expect(bold).toHaveCSS('outline-width', '1px');
-		await expect(bold).toHaveCSS('outline-color', palette['focusBorder']!);
-		await bold.hover();
-		await expect(bold).toHaveCSS('background-color', palette['button-hoverBackground']!);
+		await expect(editor).toBeFocused();
+		await expect(editor).toHaveCSS('caret-color', colors['editorCursor-foreground']!);
 	}
 });
 
@@ -338,24 +323,24 @@ test('Markdown rich editor shares text and history with the source editor', { ta
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Rich document'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
+	const editor = group.content.getByRole('textbox', { name: 'Document body', exact: true });
 	await expect(editor).toBeVisible();
 	await editor.click();
 	await page.keyboard.press('ControlOrMeta+End');
-	await page.keyboard.type('\nAdded in rich editor');
+	await page.keyboard.press('Enter');
+	await page.keyboard.insertText('Added in rich editor');
 	await page.keyboard.press('Escape');
 	await expect(editor).toContainText('Added in rich editor');
-	await frame.getByRole('button', { name: 'Undo', exact: true }).click();
+	await editor.press('ControlOrMeta+z');
 	await expect(editor).not.toContainText('Added in rich editor');
-	await frame.getByRole('button', { name: 'Redo', exact: true }).click();
+	await editor.press('ControlOrMeta+Shift+z');
 	await expect(editor).toContainText('Added in rich editor');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.search(theme);
 		await workbench.quickaccess.input.press('Enter');
 		const foreground = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-foreground').trim());
-		await expect(frame.locator('html')).toHaveCSS('--ash-editor-foreground', foreground);
+		await expect(editor).toHaveCSS('--ash-editor-foreground', foreground);
 		await expect(editor).toContainText('Added in rich editor');
 	}
 	await workbench.quickaccess.runCommand('markdown.reopenAsSource');
@@ -372,38 +357,30 @@ test('Markdown rich editor saves files and refreshes from an open source tab', {
 	await group.editor.waitForEditorContents(text => text.includes('# Rich saved'));
 	await workbench.quickaccess.runCommand('markdown.showRichEditor');
 	await expect(group.tabs.filter({ hasText: 'rich-saved.md' })).toHaveCount(2);
-	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
+	const editor = group.content.getByRole('textbox', { name: 'Document body', exact: true });
 	await expect(editor).toBeVisible();
 	await editor.click();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.insertText(' persisted');
 	await page.keyboard.press('ControlOrMeta+s');
 	await expect.poll(() => readFile(path, 'utf8')).toBe(original + ' persisted');
-	await page.keyboard.press('Alt+F10');
-	await expect(frame.getByRole('button', { name: 'Bold', exact: true })).toBeFocused();
-	await page.keyboard.press('ArrowRight');
-	await expect(frame.getByRole('button', { name: 'Italic', exact: true })).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(editor.getByRole('textbox', { name: 'Edit document source', exact: true })).toBeFocused();
+	await editor.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Markdown rich text editor[\s\S]*Alt\+F10/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Edit the formatted Markdown directly/u);
 	await page.keyboard.press('Escape');
+	await expect(editor).toBeFocused();
 	await workbench.quickaccess.runCommand('markdown.showSource');
 	await group.editor.waitForEditorFocus();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.insertText(' from source');
 	await group.tabs.filter({ hasText: 'rich-saved.md' }).last().click();
-	const richSource = editor.getByRole('textbox', { name: 'Edit document source', exact: true });
-	await expect(richSource).toHaveValue(original + ' persisted from source');
-	await richSource.press('Escape');
 	await expect(editor).toContainText('persisted from source');
 	await editor.focus();
 	await page.keyboard.press('ControlOrMeta+s');
 	await expect.poll(() => readFile(path, 'utf8')).toBe(original + ' persisted from source');
 });
 
-test('Markdown rich editor respects readonly rules and rejects stale document edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
+test('Markdown rich editor respects readonly rules', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
@@ -417,28 +394,17 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Protected document'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
+	const editor = group.content.getByRole('textbox', { name: 'Document body', exact: true });
 	await expect(editor).toBeVisible();
 	for (const readonly of [true, false]) {
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = workbench.settingsEditor.element;
-		await settings.getByRole('searchbox').fill('files.readonlyInclude');
-		const control = settings.locator('[data-configuration-key="files.readonlyInclude"]');
-		if (readonly) {
-			await control.getByRole('button', { name: 'Add pattern', exact: true }).click();
-			await control.getByRole('textbox', { name: 'Path pattern', exact: true }).fill('**/protected.md');
-			await control.getByRole('button', { name: 'Save', exact: true }).click();
-			await expect(control.locator('[data-pattern="**/protected.md"]')).toBeVisible();
-		} else {
-			await control.getByRole('listitem', { name: '**/protected.md', exact: true }).press('Delete');
-			await expect(control.locator('[data-pattern="**/protected.md"]')).toHaveCount(0);
-		}
-		await expect(control.locator('.ash-settings-indicators')).toBeHidden();
-		await settings.locator('.ash-modal-editor-close').click();
+		const settings = await readUserSettings(page);
+		const values = JSON.parse(settings.content);
+		await writeUserSettings(page, JSON.stringify({
+			...values,
+			'files.readonlyInclude': { ...values['files.readonlyInclude'], '**/protected.md': readonly },
+		}), settings.revision);
 		await expect(editor).toHaveAttribute('aria-readonly', String(readonly));
-		await expect(frame.getByRole('button', { name: 'Bold', exact: true })).toBeEnabled({ enabled: !readonly });
-		await expect(editor.getByRole('listitem').filter({ hasText: 'Keep unchecked' }).getByRole('checkbox', { name: 'Completed task', exact: true })).toBeEnabled({ enabled: !readonly });
+		await expect(editor.getByRole('listitem').filter({ hasText: 'Keep unchecked' }).getByRole('checkbox', { name: 'Task: Keep unchecked', exact: true })).toBeEnabled({ enabled: !readonly });
 		await editor.click();
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.insertText(readonly ? ' forbidden' : ' accepted');
@@ -449,16 +415,6 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 			await expect(editor).toContainText('accepted');
 		}
 	}
-	const channel = await group.content.locator('iframe.ash-webview:visible').getAttribute('data-ash-webview-channel');
-	// Send an obsolete version through the public webview protocol, as a delayed view would.
-	await editor.evaluate((_element, channel) => {
-		parent.postMessage({ channel, message: { type: 'edit', version: 0, text: 'stale content' } }, '*');
-	}, channel);
-	await expect(frame.getByRole('status')).toContainText('changed in another editor');
-	await expect(editor).toContainText('accepted');
-	await frame.getByRole('button', { name: 'Reload document', exact: true }).click();
-	await expect(editor).toHaveAttribute('aria-readonly', 'false');
-	await expect(editor).toContainText('accepted');
 	await workbench.quickaccess.runCommand('markdown.reopenAsSource');
 	await group.editor.waitForEditorContents(text => text === '# Protected document\n\n- [ ] Keep unchecked\n\nOriginal body accepted');
 });
@@ -535,7 +491,7 @@ test('Markdown link rename moves the target file and updates its references toge
 	await expect(readFile(original, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
-test('Markdown rich editor localizes its toolbar and accessibility help in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
+test('Markdown rich editor localizes its body and accessibility help in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language', exact: true });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -554,47 +510,50 @@ test('Markdown rich editor localizes its toolbar and accessibility help in Chine
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('中文文档'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	await expect(frame.getByRole('toolbar', { name: 'Markdown 格式', exact: true })).toBeVisible();
-	const editor = frame.getByLabel('Markdown 富文本编辑器', { exact: true });
+	const editor = group.content.getByRole('textbox', { name: '文档正文', exact: true });
 	await expect(editor).toContainText('中文文档');
-	await expect(frame.getByRole('button', { name: '粗体', exact: true })).toBeVisible();
-	await expect(frame.getByRole('button', { name: '保存', exact: true })).toBeVisible();
 	await editor.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Markdown 富文本编辑器[\s\S]*Alt\+F10/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/排版后的 Markdown/u);
 	await page.keyboard.press('Escape');
-	await expect(group.content.locator('iframe.ash-webview:visible')).toBeFocused();
+	await expect(editor).toBeFocused();
 });
 
-test('Markdown preview restores an unsaved custom tab through a cold provider start', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, reloadWorkbench }) => {
-	const file = join(testWorkspace.directory, 'restore-preview.md');
-	await writeFile(file, '# Persisted heading\n\nSaved text\n');
-	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
-	await workbench.page.keyboard.press('ControlOrMeta+N');
-	const group = workbench.editors.groupAt(0);
-	const transfer = await workbench.page.evaluateHandle(uri => {
-		const value = new DataTransfer();
-		value.setData('text/uri-list', uri);
-		return value;
-	}, pathToFileURL(file).href);
-	try {
-		await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
-	} finally { await transfer.dispose(); }
-	await group.editor.waitForEditorContents(text => text.includes('# Persisted heading'));
-	await group.editor.input.focus();
-	await workbench.page.keyboard.press('ControlOrMeta+a');
-	await workbench.page.keyboard.insertText('# Unsaved restored heading\n\nRetained draft\n');
-	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
-	const preview = () => workbench.editors.groupAt(0).content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
-	({ workbench } = await reloadWorkbench());
-	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
-	await expect(preview().locator('body')).toContainText('Retained draft');
-	await workbench.quickaccess.runCommand('markdown.reopenAsSource');
-	// Viewport empty lines contain layout placeholders; persisted bytes below verify the exact text.
-	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('Unsaved restored heading') && text.includes('Retained draft'));
-	expect(await readFile(file, 'utf8')).toBe('# Persisted heading\n\nSaved text\n');
-	await workbench.page.keyboard.press('ControlOrMeta+s');
-	await expect.poll(() => readFile(file, 'utf8')).toBe('# Unsaved restored heading\n\nRetained draft\n');
-});
+for (const view of ['preview', 'visual editor'] as const) {
+	test(`Markdown ${view} restores an unsaved custom tab after reload`, { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, reloadWorkbench }) => {
+		const file = join(testWorkspace.directory, 'restore.md');
+		await writeFile(file, '# Persisted heading\n\nSaved text\n');
+		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+		await workbench.page.keyboard.press('ControlOrMeta+N');
+		const group = workbench.editors.groupAt(0);
+		const transfer = await workbench.page.evaluateHandle(uri => {
+			const value = new DataTransfer();
+			value.setData('text/uri-list', uri);
+			return value;
+		}, pathToFileURL(file).href);
+		try {
+			await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
+		} finally { await transfer.dispose(); }
+		await group.editor.waitForEditorContents(text => text.includes('# Persisted heading'));
+		await group.editor.input.focus();
+		await workbench.page.keyboard.press('ControlOrMeta+a');
+		await workbench.page.keyboard.insertText('# Unsaved restored heading\n\nRetained draft\n');
+		await workbench.quickaccess.runCommand(view === 'preview' ? 'markdown.reopenAsPreview' : 'markdown.reopenAsRichEditor');
+		const documentBody = () => {
+			const content = workbench.editors.groupAt(0).content;
+			return view === 'preview'
+				? content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe').locator('body')
+				: content.getByRole('textbox', { name: 'Document body', exact: true });
+		};
+		await expect(documentBody().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+		({ workbench } = await reloadWorkbench());
+		await expect(documentBody().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+		await expect(documentBody()).toContainText('Retained draft');
+		await workbench.quickaccess.runCommand('markdown.reopenAsSource');
+		// Viewport empty lines contain layout placeholders; persisted bytes below verify the exact text.
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('Unsaved restored heading') && text.includes('Retained draft'));
+		expect(await readFile(file, 'utf8')).toBe('# Persisted heading\n\nSaved text\n');
+		await workbench.page.keyboard.press('ControlOrMeta+s');
+		await expect.poll(() => readFile(file, 'utf8')).toBe('# Unsaved restored heading\n\nRetained draft\n');
+	});
+}

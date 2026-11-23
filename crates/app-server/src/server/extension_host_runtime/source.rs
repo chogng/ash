@@ -504,7 +504,7 @@ fn product_markdown_deployment(
     let manifest =
         include_str!("../../../../../extensions/markdown-language-features/package.json");
     let source = [
-        include_str!("../../../../../extensions/markdown-language-features/src/parser.rs"),
+        include_str!("../../../../../crates/utils/markdown-math/src/projection.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/math.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/mermaid.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/lib.rs"),

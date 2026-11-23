@@ -69,8 +69,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this._register(extensions.onDidChange(() => {
 			if (this.started && this.connectionReady) void this.requestRefresh('list').catch(reportExtensionHostError);
 		}));
-		this._register(models.onModelAdded(() => this.activateEditorEvents()));
-		this._register(models.onModelLanguageChanged(() => this.activateEditorEvents()));
+		this._register(models.onDidRequestLanguageFeatures(() => this.activateEditorEvents()));
 		void lifecycle.when(LifecyclePhase.Restored).then(() => this.activateEditorEvents());
 		const changed = api.onDidChange(generation => this.acceptChanged(generation));
 		const connection = api.onConnectionState(state => { void this.acceptConnectionState(state).catch(error => this.failRefresh(error)); });
@@ -224,6 +223,11 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 
 	private async acceptSnapshot(snapshot: ExtensionHostFleetSnapshot): Promise<void> {
 		const revision = this.authorityRevision;
+		// A cold custom-editor tab uses its verified manifest until its provider is running.
+		if (snapshot.extensions.some(runtime => runtime.lifecycle !== 'ready'
+			&& runtime.activation?.events.some(event => event.startsWith('onCapability:customEditor:')))) {
+			await this.extensions.whenEditorContributionsReady();
+		}
 		// Dormant declarations must be discoverable before executing their provider.
 		// Resolve only display titles through this window's existing package NLS owner.
 		const extensions = await Promise.all(snapshot.extensions.map(async runtime => {
@@ -261,7 +265,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private activateEditorEvents(snapshot?: ExtensionHostFleetSnapshot): void {
 		if (this.isDisposed || !this.started || !this.connectionReady) { return; }
 		if (!snapshot) { void this.requestRefresh('list').catch(reportExtensionHostError); return; }
-		const languages = new Set(this.models.getModels().map(model => model.getLanguageId()));
+		const languages = new Set(this.models.getModelsRequestingLanguageFeatures().map(model => model.getLanguageId()));
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'dormant') { continue; }
 			const language = [...languages].find(id => runtime.activation!.events.includes('onLanguage') || runtime.activation!.events.includes(`onLanguage:${id}`));

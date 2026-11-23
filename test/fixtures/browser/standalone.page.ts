@@ -3007,8 +3007,10 @@ window.ashStandaloneIntegration = {
 			waitForSaveRecovery: resource => snapshots.waitForSaveRecovery(resource),
 			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
 			getModels: () => [callerModel],
+			getModelsRequestingLanguageFeatures: () => [callerModel],
 			onModelRemoved: EventUtils.None,
 			onModelLanguageChanged: EventUtils.None,
+			onDidRequestLanguageFeatures: EventUtils.None,
 			refresh: async () => { },
 			onModelAdded: EventUtils.None,
 		});

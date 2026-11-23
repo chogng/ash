@@ -15,9 +15,10 @@ default = []
 wasm = ["dep:wasm-bindgen"]
 
 [dependencies]
+ash-utils-markdown-math = { workspace = true, features = ["projection"] }
 pulldown-cmark = { workspace = true, features = ["html"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
 unicode-segmentation = { workspace = true }
 yrs = { workspace = true }
 

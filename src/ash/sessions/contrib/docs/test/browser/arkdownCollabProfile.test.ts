@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { CollabBuffer } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
-import { createArkdownCollabProfile } from '../../browser/arkdown/arkdownCollabProfile.js';
+import { createArkdownCollabProfile } from '../../../../../workbench/contrib/markdown/browser/arkdown/arkdownCollabProfile.js';
 
 const profile = createArkdownCollabProfile({ createBuffer: () => { throw new Error('Unexpected buffer creation'); } });
 

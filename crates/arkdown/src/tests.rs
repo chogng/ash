@@ -1818,3 +1818,33 @@ fn table_sort_natural_text_folds_case_accents_and_leading_zero_runs_stably() {
         [2, 1, 0]
     );
 }
+#[test]
+fn embedded_forms_preserve_original_utf16_value_ranges() {
+    let fence = "~~~widget:json\r\n{ \"中文😀\": \"草稿\", \"attempts\" : 1.00, \"enabled\": false }\r\n~~~\r\n";
+    let form = serde_json::to_value(crate::embedded_editor::resolve("widget:json", fence)).unwrap();
+    assert_eq!(form["kind"], "json_form");
+    let units = fence.encode_utf16().collect::<Vec<_>>();
+    for (field, (name, token)) in form["fields"].as_array().unwrap().iter().zip([
+        ("中文😀", "\"草稿\""),
+        ("attempts", "1.00"),
+        ("enabled", "false"),
+    ]) {
+        assert_eq!(field["name"], name);
+        let start = field["start"].as_u64().unwrap() as usize;
+        let end = field["end"].as_u64().unwrap() as usize;
+        assert_eq!(String::from_utf16(&units[start..end]).unwrap(), token);
+    }
+    assert_eq!(form["fields"].as_array().unwrap().len(), 3);
+    assert!(
+        crate::embedded_editor::resolve("widget:json", "```widget:json\n{\"a\":{}}\n```").is_none()
+    );
+    assert!(
+        crate::embedded_editor::resolve("widget:json", "```widget:json\n{\"a\":true}\n").is_none()
+    );
+    let progress =
+        crate::embedded_editor::resolve("widget:task-progress", "```widget:task-progress\n```\n");
+    assert_eq!(
+        serde_json::to_value(progress).unwrap()["kind"],
+        "task_progress"
+    );
+}

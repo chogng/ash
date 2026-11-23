@@ -11,7 +11,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { IDialogService, type IInputDialogOptions } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { CollabError, CollabFailure, ICollabService, type RejoinableRoom, type RemoteRoomEnvelope, type RoomOpenInput } from '../../../src/ash/workbench/services/collab/common/collabService.js';
-import { ArkdownEditorPane } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownEditorPane.js';
+import { ArkdownEditorPane } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownEditorPane.js';
 import { MemoryResourceStore } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';

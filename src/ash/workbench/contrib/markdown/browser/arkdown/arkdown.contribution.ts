@@ -1,7 +1,7 @@
 import { SelectAllCommand, UndoCommand, RedoCommand } from '../../../../../editor/browser/editorExtensions.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { KeybindingWeight, KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { ArkdownEditor, ArkdownEditorFocused } from './arkdownEditor.js';
 
 // The global keybinding service dispatches in capture phase. Route shared edit

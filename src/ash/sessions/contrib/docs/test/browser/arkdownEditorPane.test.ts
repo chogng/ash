@@ -21,15 +21,19 @@ suite('Arkdown editor pane', () => {
 		await expect(browser.page.getByRole('textbox', { name: '文档正文', exact: true })).toBeVisible();
 	});
 
-	test('Arkdown is a document host and does not register for ordinary Markdown files', async () => {
+	test('Markdown uses the source editor by default and offers to open Arkdown', async () => {
 		await open();
 		assert.deepEqual(await browser.page.evaluate(() => ({ defaultEditor: window.arkdownPaneFixture.defaultEditor, shared: window.arkdownPaneFixture.sharedModel, choices: window.arkdownPaneFixture.choices })), {
-			defaultEditor: 'stanza.editor.code', shared: true, choices: ['stanza.editor.code'],
+			defaultEditor: 'stanza.editor.code', shared: true, choices: ['stanza.editor.code', 'vscode.markdown.editor'],
 		});
 	});
 
 	test('rich and code editing share undo, dirty, save and pane reopening', async () => {
 		await open();
+		assert.deepEqual(await browser.page.evaluate(() => ({
+			docs: window.arkdownPaneFixture.docsRequestsLanguageFeatures,
+			source: window.arkdownPaneFixture.sourceRequestsLanguageFeatures,
+		})), { docs: false, source: true });
 		const body = browser.page.getByRole('textbox', { name: 'Document body', exact: true });
 		await body.press(end); await body.pressSequentially('中文🙂');
 		const source = browser.page.getByRole('textbox', { name: 'Peer Markdown source', exact: true });

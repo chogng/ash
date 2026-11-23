@@ -8,22 +8,22 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
-import { loadArkdown } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownRuntime.js';
-import { ArkdownEditor } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownEditor.js';
+import { loadArkdown } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownRuntime.js';
+import { ArkdownEditor } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownEditor.js';
 import type { DocsEditorMode } from '../../../src/ash/sessions/contrib/docs/common/docs.js';
-import type { DocsTypography, DocsFontFamily } from '../../../src/ash/sessions/contrib/docs/common/docsTypography.js';
-import type { ArkdownTextColor } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownRuntime.js';
+import type { DocsTypography, DocsFontFamily } from '../../../src/ash/workbench/contrib/markdown/common/arkdownTypography.js';
+import type { ArkdownTextColor } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownRuntime.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { DocsCommentsWidget } from '../../../src/ash/sessions/contrib/docs/browser/docsCommentsWidget.js';
-import { DocsCommentState } from '../../../src/ash/sessions/contrib/docs/common/docsComments.js';
-import type { DocsCommentDraft } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownComments.js';
-import { ArkdownComments } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownComments.js';
+import { DocsCommentState } from '../../../src/ash/workbench/contrib/markdown/common/arkdownComments.js';
+import type { DocsCommentDraft } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownComments.js';
+import { ArkdownComments } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownComments.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../src/ash/workbench/services/notification/test/common/testNotificationService.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { readArkdownImage, type ArkdownImageSource } from '../../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownImages.js';
+import { readArkdownImage, type ArkdownImageSource } from '../../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownImages.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialogHandler.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { DocsSelectionToolbar } from '../../../src/ash/sessions/contrib/docs/browser/docsSelectionToolbar.js';
@@ -61,7 +61,7 @@ const fixture = {
 			document.body.append(parent);
 			lifetime.add(toDisposable(() => parent.remove()));
 			const model = lifetime.add(new TextModel('Remote shared document'));
-			const editor = lifetime.add(services.createInstance(ArkdownEditor, parent, model, runtime, 'rich', (error: unknown) => errors.push(String(error)), () => {}));
+			const editor = lifetime.add(services.createInstance(ArkdownEditor, parent, model, runtime, 'rich', (error: unknown) => errors.push(String(error)), () => {}, undefined));
 			editor.setRemoteChanges(Array.from({ length: 6 }, (_, slot) => ({ id: slot, clientId: String(slot), start: 0, end: 6, inserted: 'Remote', removed: '' })));
 		}
 	},
@@ -77,7 +77,7 @@ const fixture = {
 			parent.replaceChildren(frame);
 			parent = frame.contentDocument!.body;
 		}
-		editor = services.createInstance(ArkdownEditor, parent, model, runtime, mode, (error: unknown) => errors.push(String(error)), () => {});
+		editor = services.createInstance(ArkdownEditor, parent, model, runtime, mode, (error: unknown) => errors.push(String(error)), () => {}, undefined);
 		if (inFrame) {
 			const outside = parent.ownerDocument.createElement('button');
 			outside.textContent = 'Outside document';
@@ -142,7 +142,7 @@ const fixture = {
 	async switchDocument(source: string) {
 		const runtime = await loadArkdown(), previous = editor, previousModel = model;
 		model = new TextModel(source);
-		editor = services.createInstance(ArkdownEditor, document.getElementById('root')!, model, runtime, 'rich', (error: unknown) => errors.push(String(error)), () => {});
+		editor = services.createInstance(ArkdownEditor, document.getElementById('root')!, model, runtime, 'rich', (error: unknown) => errors.push(String(error)), () => {}, undefined);
 		previous?.dispose(); previousModel?.dispose();
 		comments?.setEditor(editor); editor.focus();
 	},

@@ -1,4 +1,5 @@
 import { localize } from '../../../nls.js';
+import { CancellationError } from '../../../base/common/errors.js';
 import { match } from '../../../base/common/glob.js';
 import { Event } from '../../../base/common/event.js';
 import { basename } from '../../../base/common/resources.js';
@@ -17,8 +18,11 @@ import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.
 /** Connects one activated extension provider to the existing editor pane registry. */
 export class MainThreadCustomEditors extends Disposable {
 	private readonly providers = this._register(new DisposableMap<string, DisposableStore>());
+	private generation = 0;
+	private authorityRevision = 0;
 	private readonly bindings = new Map<string, {
 		readonly identity: string;
+		readonly signal: AbortSignal;
 		runtime: ExtensionHostRuntime;
 		registration: ExtensionHostCustomEditorRegistration;
 		incarnation: number | undefined;
@@ -34,6 +38,8 @@ export class MainThreadCustomEditors extends Disposable {
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
+		if (snapshot.generation < this.generation) return;
+		this.generation = snapshot.generation;
 		const declarations = this.extensions.getExtensionPointContributions<readonly ExtensionCustomEditorContribution[]>('customEditors');
 		const entries = snapshot.extensions.flatMap(runtime => {
 			if (runtime.lifecycle === 'ready' && runtime.incarnation !== undefined) {
@@ -69,27 +75,47 @@ export class MainThreadCustomEditors extends Disposable {
 			this.providers.set(registration.viewType, lifetime);
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
-			const binding = { identity, runtime, registration, incarnation: runtime.incarnation };
+			const binding = { identity, signal: controller.signal, runtime, registration, incarnation: runtime.incarnation };
 			this.bindings.set(registration.viewType, binding);
+			const authorityRevision = this.authorityRevision;
 			lifetime.add(this.registerCustomTextEditorProvider(registration, async (operation, payload, signal) => {
-				const requestSignal = AbortSignal.any([controller.signal, signal]);
-				requestSignal.throwIfAborted();
-				if (binding.runtime.lifecycle !== 'ready') {
+				const assertAuthority = (): void => {
+					signal.throwIfAborted();
+					if (authorityRevision !== this.authorityRevision) throw new CancellationError();
+				};
+				const currentBinding = () => {
+					assertAuthority();
+					const current = this.bindings.get(registration.viewType);
+					if (!current || current.runtime.id !== runtime.id || current.runtime.version !== runtime.version || current.runtime.packageDigest !== runtime.packageDigest) {
+						throw new TypeError(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
+					}
+					return current;
+				};
+				let current = currentBinding();
+				if (current.runtime.lifecycle !== 'ready') {
+					// Workspace restoration can replace a dormant registration before its first use.
+					const refreshed = await this.api.reconcile('refresh');
+					assertAuthority();
+					this.update(refreshed);
+					current = currentBinding();
+				}
+				if (current.runtime.lifecycle !== 'ready') {
 					const activated = await this.api.activateByEvent({
-						extensionId: runtime.id, activationGeneration: runtime.activationGeneration,
+						extensionId: current.runtime.id, activationGeneration: current.runtime.activationGeneration,
 						event: { type: 'capability', capability: `customEditor:${registration.viewType}` },
 					});
-					requestSignal.throwIfAborted();
-					const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.packageDigest === runtime.packageDigest && candidate.lifecycle === 'ready');
-					const actual = current?.registrations.find(candidate => candidate.kind === 'customTextEditor' && candidate.viewType === registration.viewType);
-					if (!current || actual?.kind !== 'customTextEditor') { throw new TypeError(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.')); }
-					binding.runtime = current;
-					binding.registration = actual;
-					binding.incarnation = current.incarnation;
+					assertAuthority();
+					this.update(activated);
+					current = currentBinding();
 				}
+				if (current.runtime.lifecycle !== 'ready' || current.incarnation === undefined) {
+					throw new TypeError(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
+				}
+				const requestSignal = AbortSignal.any([current.signal, signal]);
+				requestSignal.throwIfAborted();
 				return this.api.invoke({
-					extensionId: runtime.id, registrationId: binding.registration.registrationId,
-					activationGeneration: binding.runtime.activationGeneration, incarnation: binding.runtime.incarnation!,
+					extensionId: current.runtime.id, registrationId: current.registration.registrationId,
+					activationGeneration: current.runtime.activationGeneration, incarnation: current.incarnation,
 					operation, payload, deadlineUnixMillis: Date.now() + this.timeout,
 				}, requestSignal);
 			}, runtime));
@@ -103,8 +129,10 @@ export class MainThreadCustomEditors extends Disposable {
 	}
 
 	public clear(): void {
+		this.authorityRevision++;
 		this.providers.clearAndDisposeAll();
 		this.bindings.clear();
+		this.generation = 0;
 	}
 
 	public registerCustomTextEditorProvider(
@@ -137,7 +165,7 @@ export class MainThreadCustomEditors extends Disposable {
 		return EditorPanes.registerEditorPane({
 			id: registration.viewType,
 			name: registration.displayName,
-			createInput: input => new CustomEditorInput(input, registration.viewType),
+			createInput: input => input.editorId === registration.viewType ? input : new CustomEditorInput(input.toUntyped?.() ?? input, registration.viewType),
 			canOpen: input => {
 				const path = input.resource.path;
 				const matches = registration.selectors.some(pattern => match(pattern.toLowerCase(), (pattern.includes('/') ? path : basename(input.resource)).toLowerCase()));

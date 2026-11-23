@@ -5,7 +5,11 @@ edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
+[features]
+projection = ["dep:pulldown-cmark"]
+
 [dependencies]
+pulldown-cmark = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 
 [lints]

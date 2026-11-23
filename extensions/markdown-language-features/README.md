@@ -1,21 +1,20 @@
 # Ash Markdown language features
 
-One preinstalled Rust extension owns Markdown preview, visual Markdown editing, link completion,
+One preinstalled Rust extension owns Markdown preview, link completion,
 definitions, references, rename, workspace heading search and link diagnostics.
-Its internal `parser` module uses `pulldown-cmark`; there is no separate parser
-extension, command or process. Syntax highlighting, outline, folding and structural
+The preview uses `pulldown-cmark`. Syntax highlighting, outline, folding and structural
 selection use the editor's shared Rust Tree-sitter (and the Web Worker fallback).
 Grammar/query resources remain in `markdown-basics`.
-Opening a Markdown document or invoking a contributed command can activate the
-extension immediately, without waiting for the rest of workbench startup.
+Opening a Markdown source editor or preview activates the extension on demand.
+The native [Arkdown editor](../../src/ash/workbench/contrib/markdown/README.md)
+loads separately for visual editing in Docs and Code.
 
 Formula rendering belongs to the independently enabled [`markdown-math`](../markdown-math/README.md)
 Rust extension. Chat, rich editing and preview share the `$...$`, `$$...$$`, `\(...\)`,
 `\[...\]` and complete `math` fence syntax, tested against one compatibility corpus.
 Escaped delimiters, currency, code examples and incomplete input stay literal.
 Markdown sends recognized formulas in document order through its declared `math.render.v2` capability. Macro definitions are scoped
-to one render. Both views consume the returned HTML + MathML; their static bundles
-include formula styles and fonts, with no JavaScript formula renderer. Missing or
+to one render. The preview includes formula styles and fonts for the returned HTML and MathML. Missing or
 disabled math retains formula source and does not prevent Markdown editing.
 
 Ash Chat invokes this extension's `markdown.mermaid.render.v1` capability for
@@ -29,24 +28,8 @@ the existing client TextModel owns edits, dirty state, save, conflicts and undo/
 Dirty documents precede authorized resource reads. Workspace rename results include
 expected source text and file operations for the client's single transaction.
 
-The Markdown editor's JavaScript and CSS are static package resources compiled by
-`build/builtin`, not a JavaScript extension entry point. The host resolves resources
-within the owning product package and executes them inside its existing sandboxed
-Webview. HTML is inert in the rich view; remote images are not fetched automatically.
-The readonly and input composition behavior stays in the client view.
-
-Both views update their existing sandbox and retain unchanged DOM. The Markdown
-editor accepts input directly in rendered headings, paragraphs, lists and code.
-Rust projects editable source ranges in UTF-16. The Webview turns typing, selection
-and composition into versioned source edits. The Workbench editor selector opens
-the source editor for direct access to Markdown syntax.
-
-In the Markdown editor, an empty `widget:task-progress`
-fenced block shows the document's completed and total GFM tasks.
-A `widget:json` fence with a flat JSON object opens a form for its string,
-number and boolean fields. Apply Changes updates the edited values in one
-undoable source edit and preserves the other fields and formatting. Unsupported
-or incomplete fences render as ordinary code.
+The host loads preview resources from the owning package into an isolated Webview.
+Successive snapshots update the existing view and retain unchanged DOM.
 
 Preview heading IDs, metadata and math use the same Markdown
 semantics as language features. Settings groups separate language features, validation
@@ -64,8 +47,7 @@ link dependency index once, then update diagnostics for the changed document and
 dependents without fetching all open buffers again. Closing a document releases its cached
 analysis and dependency entry; interrupted refreshes rebuild from current client snapshots.
 Leading-slash links use the containing workspace folder, including nested multi-root folders.
-Compact render tuples keep prose-heavy documents within transport quotas;
-an oversized provider result returns a recoverable error instead of ending the process.
+Oversized preview requests return a recoverable error.
 
 Disable the functional extension to retire its process and providers; source
 editing and Tree-sitter remain available. Browser hosts need an authorized backend

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
-import { isArkdownImageSource, readArkdownImageLayout, writeArkdownImage } from '../../browser/arkdown/arkdownImages.js';
+import { isArkdownImageSource, readArkdownImageLayout, writeArkdownImage } from '../../../../../workbench/contrib/markdown/browser/arkdown/arkdownImages.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 suite('Arkdown images', () => {

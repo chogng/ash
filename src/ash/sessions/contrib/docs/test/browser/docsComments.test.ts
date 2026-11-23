@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { DocsCommentState, readDocsCommentEvent, writeDocsCommentEvent, type DocsCommentEvent } from '../../common/docsComments.js';
+import { DocsCommentState, readDocsCommentEvent, writeDocsCommentEvent, type DocsCommentEvent } from '../../../../../workbench/contrib/markdown/common/arkdownComments.js';
 
 const base = { version: 1 as const, id: '11111111-1111-4111-8111-111111111111', threadId: '22222222-2222-4222-8222-222222222222', clock: 1 };
 const message = { id: '33333333-3333-4333-8333-333333333333', authorId: '44444444-4444-4444-8444-444444444444', body: '中文🙂\n<script>plain text</script>\n```', createdAt: 1234 };

@@ -10,9 +10,9 @@ import type { INotificationService } from '../../../../../platform/notification/
 import type { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { ISessionsEntryService } from '../../../../services/layout/common/sessionsEntryService.js';
 import type { ArtifactToolbar, ArtifactToolbarAction } from '../../../artifact/browser/widget/artifactToolbar.js';
-import type { ArkdownEditorPane } from '../../browser/arkdown/arkdownEditorPane.js';
+import type { ArkdownEditorPane } from '../../../../../workbench/contrib/markdown/browser/arkdown/arkdownEditorPane.js';
 import { DocsToolbar } from '../../browser/docsToolbar.js';
-import { defaultDocsTypography, DocsFontFamily, type DocsTypography } from '../../common/docsTypography.js';
+import { defaultDocsTypography, DocsFontFamily, type DocsTypography } from '../../../../../workbench/contrib/markdown/common/arkdownTypography.js';
 
 function fixture(options: { readonly readOnly?: boolean; readonly tableSelection?: boolean; readonly fileDialogs?: IFileDialogService; } = {}): { toolbar: DocsToolbar; actions: () => readonly ArtifactToolbarAction[]; } {
 	let actions: readonly ArtifactToolbarAction[] = [];

@@ -1,4 +1,4 @@
-import type { BufferAction, CollabBuffer } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import type { BufferAction, CollabBuffer } from '../../../../services/collab/common/bufferCollabService.js';
 import { toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { isUuid, parseUuid } from '../../../../../base/common/uuid.js';
 
@@ -34,6 +34,12 @@ export type ArkdownOperation =
 	| { readonly kind: 'insert_table_row'; readonly offset: number; }
 	| { readonly kind: 'table'; readonly offset: number; readonly action: ArkdownTableAction; };
 export interface ArkdownEdit { readonly range: ArkdownRange; readonly text: string; }
+export type ArkdownJsonField = { readonly name: string; readonly range: ArkdownRange; } & (
+	| { readonly kind: 'text' | 'number'; readonly value: string; }
+	| { readonly kind: 'boolean'; readonly value: boolean; }
+	| { readonly kind: 'null'; });
+export type ArkdownEmbeddedEditor = { readonly kind: 'task_progress'; }
+	| { readonly kind: 'json_form'; readonly maxBytes: number; readonly fields: readonly ArkdownJsonField[]; };
 export interface ArkdownNode {
 	readonly kind: string;
 	readonly range: ArkdownRange;
@@ -46,6 +52,8 @@ export interface ArkdownNode {
 	readonly threadId?: string;
 	readonly destination?: string;
 	readonly title?: string;
+	readonly info?: string;
+	readonly closed?: boolean;
 	readonly alignments?: readonly ArkdownColumnAlignment[];
 	readonly tableLayout?: ArkdownTableLayout;
 	readonly tableCellMissing?: boolean;
@@ -56,6 +64,7 @@ export interface ArkdownProjection extends IDisposable {
 export interface ArkdownRuntime {
 	createBuffer(clientId: number, source: string): CollabBuffer;
 	createProjection(): ArkdownProjection;
+	embeddedEditor(info: string, source: string): ArkdownEmbeddedEditor | undefined;
 	operation(source: string, operation: ArkdownOperation): readonly ArkdownEdit[];
 	validate(source: string, edits: readonly ArkdownEdit[]): readonly ArkdownEdit[];
 	grapheme(source: string, offset: number, direction: 'previous' | 'next'): number;
@@ -91,6 +100,7 @@ async function initialize(): Promise<ArkdownRuntime> {
 				parse: (source: string) => decodeNodes(JSON.parse(projection.parseJson(source)), source.length),
 			});
 		},
+		embeddedEditor: (info, source) => decodeEmbeddedEditor(JSON.parse(core.embeddedEditorJson(info, source)), source.length),
 		operation: (source, operation) => decodeEdits(JSON.parse(core.markdownOperationEditsJson(source, JSON.stringify(operation))), source.length),
 		validate: (source, edits) => decodeEdits(JSON.parse(core.validateMarkdownEditsJson(source, JSON.stringify(edits))), source.length),
 		grapheme: (source, offset, direction) => {
@@ -114,6 +124,25 @@ function decodeEdits(value: unknown, length: number): readonly ArkdownEdit[] {
 	if (!Array.isArray(value)) throw new TypeError('Invalid Arkdown edit list');
 	return value.map(item => { const edit = object(item); if (typeof edit.text !== 'string') throw new TypeError('Invalid Arkdown edit text'); return { range: range(edit.range, length), text: edit.text }; });
 }
+function decodeEmbeddedEditor(value: unknown, length: number): ArkdownEmbeddedEditor | undefined {
+	if (value === null) return undefined;
+	const editor = object(value);
+	if (editor.kind === 'task_progress') return { kind: editor.kind };
+	if (editor.kind !== 'json_form' || typeof editor.max_bytes !== 'number' || !Number.isSafeInteger(editor.max_bytes) || editor.max_bytes <= 0 || !Array.isArray(editor.fields)) {
+		throw new TypeError('Invalid Arkdown code block editor');
+	}
+	const fields = editor.fields.map((item): ArkdownJsonField => {
+		const field = object(item);
+		if (typeof field.name !== 'string') throw new TypeError('Invalid Arkdown JSON field name');
+		const location = { name: field.name, range: range(field, length) };
+		if (field.kind === 'null') return { ...location, kind: field.kind };
+		if (field.kind === 'boolean' && typeof field.value === 'boolean') return { ...location, kind: field.kind, value: field.value };
+		if ((field.kind === 'text' || field.kind === 'number') && typeof field.value === 'string') return { ...location, kind: field.kind, value: field.value };
+		throw new TypeError('Invalid Arkdown JSON field value');
+	});
+	return { kind: editor.kind, maxBytes: editor.max_bytes, fields };
+}
+
 function decodeNodes(value: unknown, length: number, depth = 0): readonly ArkdownNode[] {
 	if (!Array.isArray(value) || depth > 128) throw new TypeError('Invalid Arkdown node list');
 	return value.map(item => {
@@ -137,6 +166,7 @@ function decodeNodes(value: unknown, length: number, depth = 0): readonly Arkdow
 			...table,
 			...(typeof node.destination === 'string' ? { destination: node.destination } : {}),
 			...(typeof node.title === 'string' ? { title: node.title } : {}),
+			...(node.kind === 'code_block' && typeof node.info === 'string' ? { info: node.info, closed: node.closed === true } : {}),
 		};
 		return result;
 	});

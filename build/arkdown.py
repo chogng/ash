@@ -34,8 +34,9 @@ def input_digest(root: Path) -> str:
             ".cargo/config.toml",
         )
     ]
-    files += sorted((root / "crates/arkdown").rglob("*.rs"))
-    files.append(root / "crates/arkdown/Cargo.toml")
+    for crate in ("crates/arkdown", "crates/utils/markdown-math"):
+        files += sorted((root / crate).rglob("*.rs"))
+        files.append(root / crate / "Cargo.toml")
     digest = hashlib.sha256()
     for path in files:
         digest.update(path.relative_to(root).as_posix().encode())

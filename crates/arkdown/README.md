@@ -17,7 +17,7 @@ Arkdown 是 Ash 的 Rust 文档核心，Cargo 包名为 `ash-arkdown`。原生�
 
 源码是唯一可写文档状态，解析树与 HTML 是只读投影。节点区间覆盖原文语法，不能直接作为 DOM 文本选区：实体、转义与隐藏的定界符仍需要呈现层做位置映射。事务各区间均指向同一个输入版本，不按数组顺序逐步重新定位。
 
-Agent Window 的 Chat 模式中，Docs 使用 Arkdown WASM，支持正文直接编辑、加粗、斜体和 Markdown 源码切换。DOM、选区、剪贴板与 IME 由 Sessions Docs 的 [`ArkdownEditor`](../../src/ash/sessions/contrib/docs/browser/arkdown/arkdownEditor.ts) 持有，源码模式复用 `CodeEditorWidget`。IDE 和 Agent Window 的 Code 模式使用 Markdown 扩展的源码编辑与预览。正文渲染使用随编辑器释放的只读增量投影缓存，缓存不能提交编辑。标题和列表转换已接入正文快捷键，表格支持 Tab／Shift+Tab 导航及末尾 Tab 加行。CRDT 会话已通过 `ash-collab` 接入 Workbench 在线房间。Sessions 的迁移器将旧 `.ash-doc` 单向转为 Markdown，保留原文件。
+Agent Window 的 Chat 模式中，Docs 使用 Arkdown WASM，支持正文直接编辑、加粗、斜体和 Markdown 源码切换。DOM、选区、剪贴板与 IME 由 Workbench 的 [`ArkdownEditor`](../../src/ash/workbench/contrib/markdown/browser/arkdown/arkdownEditor.ts) 持有，源码模式复用 `CodeEditorWidget`。IDE 和 Agent Window Code 默认使用 CodeEditor。打开可视化 Markdown 编辑器时加载 Arkdown WASM。只读预览由 Markdown 扩展提供。正文渲染使用随编辑器释放的只读增量投影缓存，缓存不能提交编辑。标题和列表转换已接入正文快捷键，表格支持 Tab／Shift+Tab 导航及末尾 Tab 加行。CRDT 会话已通过 `ash-collab` 接入 Workbench 在线房间。Sessions 的迁移器将旧 `.ash-doc` 单向转为 Markdown，保留原文件。
 
 输入限制为 16 MiB 源码、每事务 4096 个编辑、每次解析 100000 个节点和 128 层容器。本地 `Document` 的历史按删除与插入文本的合计字节计量，最多保留 256 个事务或 16 MiB；超过历史预算会淘汰最早事务，包括单次超出预算的事务。撤销历史只在当前模型存活期间有效。
 

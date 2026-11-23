@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
-import { defaultDocsTypography, DocsFontFamily, writeDocsTypography } from '../../common/docsTypography.js';
+import { defaultDocsTypography, DocsFontFamily, writeDocsTypography } from '../../../../../workbench/contrib/markdown/common/arkdownTypography.js';
 
 suite('Arkdown document editing', () => {
 	const browser = useBrowserTests();

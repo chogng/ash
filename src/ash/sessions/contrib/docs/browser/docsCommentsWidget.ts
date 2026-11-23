@@ -15,9 +15,9 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { DOCS_COMMENT_MAX_LENGTH, DocsCommentState, type DocsCommentThread } from '../common/docsComments.js';
-import type { DocsCommentDraft } from './arkdown/arkdownComments.js';
-import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
+import { DOCS_COMMENT_MAX_LENGTH, DocsCommentState, type DocsCommentThread } from '../../../../workbench/contrib/markdown/common/arkdownComments.js';
+import type { DocsCommentDraft } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownComments.js';
+import type { ArkdownEditor } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownEditor.js';
 
 type Composer = { readonly kind: 'new'; readonly draft?: DocsCommentDraft; }
 	| { readonly kind: 'reply'; readonly threadId: string; }

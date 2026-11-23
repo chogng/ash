@@ -143,7 +143,7 @@ fn start() -> Running {
     .unwrap();
     let snapshot = host.start().unwrap();
     assert_eq!(snapshot.status, ExtensionHostStatus::Ready);
-    assert_eq!(snapshot.registrations.len(), 22);
+    assert_eq!(snapshot.registrations.len(), 17);
     Running {
         host,
         authority,
@@ -152,7 +152,7 @@ fn start() -> Running {
 }
 fn invocation(snapshot: Value) -> ExtensionInvocation {
     ExtensionInvocation {
-        registration_id: "vscode.markdown.editor".into(),
+        registration_id: "vscode.markdown.preview.editor".into(),
         operation: "resolveCustomTextEditor".into(),
         payload: json!({"document": snapshot}),
         deadline_unix_millis: NonZeroU64::new(
@@ -167,26 +167,19 @@ fn snapshot(text: &str) -> Value {
 }
 
 #[test]
-fn real_product_process_preserves_utf16_source_and_rejects_invalid_contracts() {
+fn real_preview_renders_original_source_and_rejects_invalid_contracts() {
     let running = start();
     let text =
         "\u{feff}# 中文😀\r\n\r\n**保真** [引用][id]  \r\n\r\n[id]: <https://example.com>\r\n";
-    let result = running.invoke(invocation(snapshot(text))).unwrap().payload["update"].clone();
-    assert_eq!(result["version"], 7);
-    assert_eq!(result["uri"], "file:///synthetic.md");
-    let blocks = result["blocks"].as_array().unwrap();
-    let mut offset = 0;
-    for block in blocks {
-        assert_eq!(block[0], offset);
-        offset = block[1].as_u64().unwrap();
-    }
-    assert_eq!(offset, text.encode_utf16().count() as u64);
+    let result = running.invoke(invocation(snapshot(text))).unwrap().payload;
+    assert_eq!(result["editable"], false);
+    let html = result["update"]["html"].as_str().unwrap();
+    assert!(html.contains("中文😀"));
+    assert!(html.contains("<strong>保真</strong>"));
+    assert!(html.contains("https://example.com"));
     let deep = format!("{}deep\n", "> ".repeat(256));
     let nested = running.invoke(invocation(snapshot(&deep))).unwrap().payload;
-    assert_eq!(
-        nested["update"]["blocks"][0][1].as_u64().unwrap(),
-        deep.len() as u64
-    );
+    assert!(nested["update"]["html"].as_str().unwrap().contains("deep"));
     let mut invalid = snapshot(text);
     invalid["version"] = json!(0);
     assert!(matches!(
@@ -235,14 +228,9 @@ fn product_process_transports_large_wide_and_nested_render_trees() {
         .payload["update"]
         .clone();
     assert!(serde_json::to_vec(&result).unwrap().len() > 512 * 1024);
-    let blocks = result["blocks"].as_array().unwrap();
-    assert!(blocks.len() > 8192);
-    let mut offset = 0;
-    for block in blocks {
-        assert_eq!(block[0], offset);
-        offset = block[1].as_u64().unwrap();
-    }
-    assert_eq!(offset, source.encode_utf16().count() as u64);
+    let html = result["html"].as_str().unwrap();
+    assert_eq!(html.matches("<strong>加粗</strong>").count(), 16_000);
+    assert!(html.contains("深层中文😀"));
 }
 
 #[test]
@@ -255,19 +243,15 @@ fn four_megabytes_of_prose_fit_the_response_contract_and_leave_the_process_usabl
         .invoke(invocation(snapshot(&source)))
         .unwrap()
         .payload;
-    let blocks = result["update"]["blocks"].as_array().unwrap();
-    assert_eq!(
-        blocks.last().unwrap()[1].as_u64().unwrap(),
-        source.encode_utf16().count() as u64
-    );
+    let html = result["update"]["html"].as_str().unwrap();
+    assert_eq!(html.matches("<strong>bold</strong>").count(), 55_000);
     assert!(serde_json::to_vec(&result).unwrap().len() < 24 * 1024 * 1024);
     let incarnation = running.host.snapshot().incarnation;
-    // The larger source still fits the input contract, but its render tree does
-    // not fit the output quota. That must not retire this extension incarnation.
+    // Oversized input must leave the process available for the next document.
     assert!(matches!(
-        running.invoke(invocation(snapshot(&source.repeat(2)))),
+        running.invoke(invocation(snapshot(&source.repeat(5)))),
         Err(ExtensionHostError::HostRejected {
-            code: HostErrorCode::QuotaExceeded,
+            code: HostErrorCode::InvalidRequest,
             ..
         })
     ));

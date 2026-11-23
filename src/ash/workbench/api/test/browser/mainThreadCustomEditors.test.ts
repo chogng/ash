@@ -44,21 +44,14 @@ test('Rust custom editor resources stay within their enabled package and follow 
 
 type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
 
-test('rich Markdown and preview consume the shared formula compatibility corpus', async () => {
+test('the Markdown preview consumes the shared formula compatibility corpus', async () => {
 	const { handlers } = await loadMarkdown('en');
 	const corpus = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 	const combined = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
 	corpus.push({ name: 'combined compatibility document', markdown: combined.map(entry => entry.markdown).join('\n\n'), formulas: combined.flatMap(entry => entry.formulas) });
-	const collect = (value: unknown): { source: string; display: string; }[] => {
-		if (!Array.isArray(value)) { return []; }
-		if (value[0] === 'math') { return [{ source: value[1], display: value[2] ? 'block' : 'inline' }]; }
-		return value.flatMap(collect);
-	};
 	for (const entry of corpus) {
 		const document = { uri: 'untitled:/compatibility.md', version: 1, languageId: 'markdown', text: entry.markdown };
 		const signal = new AbortController().signal;
-		const rich = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document }, signal) as { update: { blocks: unknown[]; }; };
-		assert.deepEqual(collect(rich.update.blocks), entry.formulas, entry.name);
 		const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document }, signal) as { update: { html: string; }; };
 		assert.equal((preview.update.html.match(/class="ash-markdown-math"/gu) ?? []).length, entry.formulas.length, entry.name);
 		assert.equal((preview.update.html.match(/data-math-display="block"/gu) ?? []).length, entry.formulas.filter(formula => formula.display === 'block').length, entry.name);
@@ -73,8 +66,7 @@ test('independent Markdown math shares macros across formulas and follows settin
 	const initial = await preview();
 	assert.equal((initial.update.html.match(/class="katex"/g) ?? []).length, 3);
 	assert.doesNotMatch(initial.update.html, /#cc0000|katex-error/);
-	const rich = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document }, signal);
-	assert.match(JSON.stringify(rich), /katex-display/);
+	assert.match(initial.update.html, /katex-display/);
 	const empty = { contents: {}, keys: [], overrides: [] };
 	await handlers.get('ash.workspace.events')!('workspaceEvent', {
 		type: 'configuration', revision: 1, emit: true,
@@ -102,18 +94,16 @@ for (const [language, explanation, limitExplanation] of [['en', 'This formula co
 		const { handlers } = await loadMarkdown(language);
 		const document = { uri: 'untitled:/diagnostics.md', version: 1, languageId: 'markdown', text: '$x$\n\n$\\ashInvalidCommand$\n\n```math\n' + 'q+'.repeat(4000) + '\n```\n\n$y$' };
 		const signal = new AbortController().signal;
-		for (const view of ['vscode.markdown.preview.editor', 'vscode.markdown.editor']) {
-			const result = await handlers.get(view)!('resolveCustomTextEditor', { document }, signal);
-			const encoded = JSON.stringify(result);
-			assert.match(encoded, /data-math-diagnostic/);
-			assert.match(encoded, /invalidFormula/);
-			assert.ok(encoded.includes(explanation));
-			assert.ok(encoded.includes(limitExplanation));
-			assert.match(encoded, /outputLimit/);
-			assert.ok(encoded.includes('<mi>x</mi>') && encoded.includes('<mi>y</mi>'));
-			assert.match(encoded, /katex/);
-			assert.doesNotMatch(encoded, /katex-error/);
-		}
+		const result = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document }, signal);
+		const encoded = JSON.stringify(result);
+		assert.match(encoded, /data-math-diagnostic/);
+		assert.match(encoded, /invalidFormula/);
+		assert.ok(encoded.includes(explanation));
+		assert.ok(encoded.includes(limitExplanation));
+		assert.match(encoded, /outputLimit/);
+		assert.ok(encoded.includes('<mi>x</mi>') && encoded.includes('<mi>y</mi>'));
+		assert.match(encoded, /katex/);
+		assert.doesNotMatch(encoded, /katex-error/);
 	});
 }
 test('Markdown fixture drains the shutdown response after the process exits', async () => {
@@ -266,17 +256,16 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	assert.match(result.update.html, /<strong>bold<\/strong>/u);
 	assert.doesNotMatch(result.update.html, /alert\(1\)/u);
 	const activeEditor = { resource: URI.file('/notes/draft.md').toJSON(), groupId: 1, editorIndex: 2 };
-	for (const command of ['markdown.showPreview', 'markdown.showPreviewToSide', 'markdown.showSource', 'markdown.reopenAsPreview', 'markdown.reopenAsSource', 'markdown.showRichEditor', 'markdown.reopenAsRichEditor']) {
+	for (const command of ['vscode.markdown.editor', 'markdown.showRichEditor', 'markdown.showSource', 'markdown.reopenAsSource']) {
+		assert.equal(handlers.has(command), false, command);
+	}
+	for (const command of ['markdown.showPreview', 'markdown.showPreviewToSide', 'markdown.reopenAsPreview']) {
 		await handlers.get(command)!('execute', normalizeExtensionHostPayload({ activeEditor, arguments: [] }), signal);
 	}
 	assert.deepEqual(JSON.parse(JSON.stringify(commands)), [
 		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-1], 1],
 		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-2], 1],
-		['_workbench.openWith', activeEditor.resource, 'default', [-1], 1],
 		['reopenActiveEditorWith', 'vscode.markdown.preview.editor', { groupId: 1, editorIndex: 2 }],
-		['reopenActiveEditorWith', 'default', { groupId: 1, editorIndex: 2 }],
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.editor', [-1], 1],
-		['reopenActiveEditorWith', 'vscode.markdown.editor', { groupId: 1, editorIndex: 2 }],
 	]);
 });
 
@@ -372,15 +361,14 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 	await assert.rejects(invoke('references', request, cancelled.signal), error => error instanceof Error && error.name === 'AbortError');
 });
 
-test('large rich documents are delivered once as updates instead of embedded HTML', async () => {
+test('large Markdown previews are delivered once as updates instead of embedded HTML', async () => {
 	const text = '\uFEFF# Unembedded source\r\n' + '中文😀 **保真**  \r\n'.repeat(50000);
 	const uri = 'file:///synthetic/large.md';
 	const { handlers } = await loadMarkdown('zh-CN');
-	const result = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document: { uri, version: 5, text, languageId: 'markdown' } }, new AbortController().signal) as { html: string; update: { text: string; blocks: unknown[]; }; };
+	const result = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, version: 5, text, languageId: 'markdown' } }, new AbortController().signal) as { html: string; update: { html: string; }; };
 	assert.ok(result.html.length < 10000);
 	assert.doesNotMatch(result.html, /Unembedded source/u);
-	assert.equal(result.update.text, text);
-	assert.ok(result.update.blocks.length > 0);
+	assert.equal((result.update.html.match(/<strong>保真<\/strong>/gu) ?? []).length, 50000);
 });
 
 
@@ -593,24 +581,32 @@ test('an interrupted Markdown diagnostic publication rebuilds dependencies from 
 	assert.equal(publications[0].entries[0].diagnostics[0].code, 'link.no-such-header-in-file');
 });
 
-test('a restored custom editor activates on first render and survives dormant-to-ready publication', async () => {
+test('a restored custom editor activates the current workspace registration on first render', async () => {
 	let provider: CustomTextEditorProvider | undefined;
 	let starts = 0;
 	let calls = 0;
 	const declaration = { viewType: 'test.lazy.editor', displayName: 'Lazy editor', priority: 'option', selector: [{ filenamePattern: '*.md' }] };
-	const ready = normalizeExtensionHostSnapshot({ generation: 2, extensions: [{ id: 'test.lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 7, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [{ kind: 'customTextEditor', registrationId: 'actual-view', viewType: declaration.viewType, displayName: declaration.displayName, selectors: ['*.md'], priority: 'option' }] }] });
-	const dormant = { ...ready, generation: 1, extensions: ready.extensions.map(runtime => ({ ...runtime, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: [`onCapability:customEditor:${declaration.viewType}`], commands: [] } })) };
+	const ready = normalizeExtensionHostSnapshot({ generation: 4, extensions: [{ id: 'test.lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 2, incarnation: 7, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [{ kind: 'customTextEditor', registrationId: 'actual-view', viewType: declaration.viewType, displayName: declaration.displayName, selectors: ['*.md'], priority: 'option' }] }] });
+	const dormant = { ...ready, generation: 3, extensions: ready.extensions.map(runtime => ({ ...runtime, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: [`onCapability:customEditor:${declaration.viewType}`], commands: [] } })) };
+	const beforeWorkspace = { ...dormant, generation: 1, extensions: dormant.extensions.map(runtime => ({ ...runtime, activationGeneration: 1 })) };
+	const starting = { ...dormant, extensions: dormant.extensions.map(runtime => ({ ...runtime, lifecycle: 'starting' as const })) };
 	const packages = { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi;
 	const host = {
+		reconcile: async () => {
+			adapter.update({ generation: 2, extensions: [] });
+			return dormant;
+		},
 		activateByEvent: async (request: Parameters<IExtensionHostApi['activateByEvent']>[0]) => {
 			starts++;
+			assert.equal(request.activationGeneration, 2);
 			assert.deepEqual(request.event, { type: 'capability', capability: 'customEditor:test.lazy.editor' });
-			adapter.update({ ...dormant, extensions: dormant.extensions.map(runtime => ({ ...runtime, lifecycle: 'starting' as const })) });
-			adapter.update(ready);
+			adapter.update(starting);
 			return ready;
 		},
-		invoke: async (request: Parameters<IExtensionHostApi['invoke']>[0]) => {
+		invoke: async (request: Parameters<IExtensionHostApi['invoke']>[0], signal: AbortSignal) => {
 			calls++;
+			adapter.update(starting);
+			assert.equal(signal.aborted, false, 'An older starting snapshot cannot retire the ready editor');
 			assert.equal(request.incarnation, 7);
 			assert.equal(request.registrationId, 'actual-view');
 			return { html: '<main>restored unsaved document</main>' };
@@ -620,15 +616,19 @@ test('a restored custom editor activates on first render and survives dormant-to
 		{ createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService,
 		host, packages,
 		{ getExtensionPointContributions: () => [{ description: { id: 'test.lazy' }, value: [declaration] }] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
-	adapter.update(dormant);
+	adapter.update(beforeWorkspace);
 	assert.equal(starts, 0);
 	const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType)!;
 	assert.ok(descriptor, 'Restoration discovers the declared view before a process exists');
+	const source = { resource: URI.parse('untitled:/draft.md') };
+	const input = descriptor.createInput!(source);
+	assert.strictEqual(descriptor.createInput!(input), input);
+	assert.strictEqual(input.toUntyped!(), source);
 	await descriptor.create({});
 	const document = { uri: 'untitled:/draft.md', version: 3, languageId: 'markdown', text: 'unsaved', eol: '\n', readOnly: false };
 	const signal = new AbortController().signal;
 	assert.equal((await provider!.render(document, signal)).html, '<main>restored unsaved document</main>');
-	assert.strictEqual(EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType), descriptor);
+	assert.notStrictEqual(EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType), descriptor);
 	await provider!.render(document, signal);
 	assert.equal(starts, 1);
 	assert.equal(calls, 2);

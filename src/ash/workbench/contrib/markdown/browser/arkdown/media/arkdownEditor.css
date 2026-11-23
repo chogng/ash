@@ -8,6 +8,7 @@
 }
 
 .stanza-arkdown-prose {
+	caret-color: var(--ash-editorCursor-foreground);
 	flex: 1;
 	min-height: 0;
 	box-sizing: border-box;
@@ -449,4 +450,16 @@
 [data-color-scheme="hcLight"] .ash-arkdown-comment {
 	background: transparent;
 	text-decoration-color: var(--ash-foreground);
+}
+.ash-arkdown-conflict:not([hidden]) {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	background: var(--ash-editorWidget-background);
+	color: var(--ash-editorWidget-foreground);
+	border-block-end: var(--ash-strokeThickness) solid
+		var(--ash-editorWidget-border);
+	overflow-wrap: anywhere;
+}
+
+.ash-arkdown-conflict button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }

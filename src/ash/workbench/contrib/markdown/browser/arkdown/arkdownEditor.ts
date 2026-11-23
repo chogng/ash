@@ -1,7 +1,7 @@
-import './arkdownEditor.css';
-import '../docsColors.js';
+import './media/arkdownEditor.css';
+import './arkdownColors.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Checkbox } from '../../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -19,14 +19,17 @@ import type { ArkdownNode, ArkdownOperation, ArkdownProjection, ArkdownRange, Ar
 import { ArkdownTableController, type ArkdownTableBlockTarget } from './arkdownTableController.js';
 import { formatArkdownInline, formatArkdownTableCells, type ArkdownInlineFormat, type ArkdownTableCellFormat } from './arkdownInlineFormatting.js';
 import { ArkdownComments, type DocsCommentDraft } from './arkdownComments.js';
-import { DocsCommentState } from '../../common/docsComments.js';
-import type { DocsEditorMode } from '../../common/docs.js';
-import { defaultDocsTypography, DocsFontFamily, readDocsTypography, writeDocsTypography, type DocsTypography } from '../../common/docsTypography.js';
-import type { BufferRemoteChange } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import { DocsCommentState } from '../../common/arkdownComments.js';
+import type { ArkdownEditorMode } from '../../common/arkdownEditor.js';
+import type { ArkdownFileResources } from './arkdownFileResources.js';
+import { defaultDocsTypography, DocsFontFamily, readDocsTypography, writeDocsTypography, type DocsTypography } from '../../common/arkdownTypography.js';
+import type { BufferRemoteChange } from '../../../../services/collab/common/bufferCollabService.js';
 import type { IEditorDecorationsCollection } from '../../../../../editor/common/editorCommon.js';
-import { readDocsDropdown, writeDocsDropdown } from '../../common/docsDropdown.js';
+import { readDocsDropdown, writeDocsDropdown } from '../../common/arkdownDropdown.js';
 import { ArkdownImage } from './arkdownImage.js';
 import { readArkdownImageLayout, isArkdownImageSource, readArkdownImageFile, writeArkdownImage, type ArkdownImageSource, type ArkdownImageLayout } from './arkdownImages.js';
+import { createArkdownEmbeddedEditor, updateArkdownTaskProgress } from './arkdownEmbeddedEditor.js';
+import { MarkedKatexSupport } from '../markedKatexSupport.js';
 
 const collaboratorColors = ['blue', 'purple', 'green', 'orange', 'red', 'yellow'];
 
@@ -68,8 +71,11 @@ export class ArkdownEditor extends Disposable {
 	private composition: Composition | undefined;
 	private pendingTableComposition: TableComposition | undefined;
 	private skipCompositionInput: string | undefined;
-	private readOnly = false;
-	private mode: DocsEditorMode;
+	private inputReadOnly = false;
+	private readonly conflictNotice: HTMLElement | undefined;
+	private readonly conflictDraft: HTMLElement | undefined;
+	private get readOnly(): boolean { return this.inputReadOnly || this.conflictNotice?.hidden === false; }
+	private mode: ArkdownEditorMode;
 	private pageWide = false;
 	private renderedVersion = -1;
 	private parsedVersion = -1;
@@ -78,7 +84,7 @@ export class ArkdownEditor extends Disposable {
 	private readonly rootLifetimes = this._register(new DisposableStore());
 	private resetProjection = false;
 	private terminal: HTMLElement | undefined;
-	private readonly modeChanged = this._register(new Emitter<DocsEditorMode>());
+	private readonly modeChanged = this._register(new Emitter<ArkdownEditorMode>());
 	readonly onDidChangeMode = this.modeChanged.event;
 	private readonly selectionChanged = this._register(new Emitter<void>());
 	readonly onDidChangeSelection = this.selectionChanged.event;
@@ -91,9 +97,13 @@ export class ArkdownEditor extends Disposable {
 	readonly onDidRequestComment = this.commentRequested.event;
 	private activeComment: string | undefined;
 	private readonly tables: ArkdownTableController;
+	private readonly mathPresentation = this._register(new MutableDisposable());
+	private mathRenderer: MarkedKatexSupport | undefined;
+	private mathElements: readonly HTMLElement[] = [];
 
-	constructor(parent: HTMLElement, private readonly model: TextModel, private readonly runtime: ArkdownRuntime, mode: DocsEditorMode,
+	constructor(parent: HTMLElement, private readonly model: TextModel, private readonly runtime: ArkdownRuntime, mode: ArkdownEditorMode,
 		private readonly onError: (error: unknown) => void, private readonly openLink: (url: string) => void,
+		private readonly fileEditor: ArkdownFileResources | undefined,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -117,6 +127,19 @@ export class ArkdownEditor extends Disposable {
 		this.prose.tabIndex = 0;
 		ArkdownEditorFocused.bindTo(this._register(contextKeys.createScoped(this.prose))).set(true);
 		this.domNode.append(this.remoteHistory, this.prose, this.source);
+		if (fileEditor) {
+			const reload = h(document, 'button', { attributes: { type: 'button' } }, localize({ bundle: 'ash.arkdown', key: 'reloadDocument' }, 'Reload Document'));
+			this.conflictDraft = h(document, 'p');
+			this.conflictNotice = h(document, 'aside', { className: 'ash-arkdown-conflict', attributes: { hidden: '' } },
+				h(document, 'p', { attributes: { role: 'status' } }, localize({ bundle: 'ash.arkdown', key: 'compositionConflict' }, 'The Markdown source changed during typing. The uncommitted text is shown below. Reload the document to continue editing.')),
+				this.conflictDraft, reload);
+			this.domNode.prepend(this.conflictNotice);
+			this._register(addDisposableListener(reload, 'click', () => {
+				this.conflictNotice!.hidden = true;
+				this.conflictDraft!.textContent = '';
+				this.render(true);
+			}));
+		}
 		this._register(toDisposable(() => {
 			this.clearRemoteHighlights();
 			this.sourceHighlights?.clear();
@@ -182,7 +205,12 @@ export class ArkdownEditor extends Disposable {
 		this._register(addDisposableListener(this.prose, 'copy', event => { if (this.selectedImage) { event.preventDefault(); void this.selectedImage.copy().catch(this.onError); } }));
 		this._register(addDisposableListener(this.prose, 'click', event => {
 			const link = (event.target as Element).closest?.('a[data-href]');
-			if (link && (event.ctrlKey || event.metaKey)) { event.preventDefault(); this.openLink(link.getAttribute('data-href')!); }
+			if (link) {
+				event.preventDefault();
+				if (event.ctrlKey || event.metaKey || (this.fileEditor && (this.readOnly || event.detail === 0))) {
+					this.openLink(link.getAttribute('data-href')!);
+				}
+			}
 			const id = (event.target as Element).closest<HTMLElement>('[data-comment-id]')?.dataset.commentId;
 			if (id && this.comments.snapshot.threads.some(thread => thread.id === id)) this.commentRequested.fire({ threadId: id });
 		}));
@@ -231,18 +259,20 @@ export class ArkdownEditor extends Disposable {
 	}
 
 	setReadOnly(value: boolean): void {
-		const changed = this.readOnly !== value;
-		this.readOnly = value;
+		const previous = this.prose.contentEditable === 'false';
+		this.inputReadOnly = value;
+		value = this.readOnly;
 		this.prose.contentEditable = String(!value);
 		this.prose.setAttribute('aria-readonly', String(value));
 		this.sourceEditor?.updateOptions({ readOnly: value });
 		for (const select of this.prose.querySelectorAll<HTMLSelectElement>('select[data-arkdown-dropdown]')) select.disabled = value;
+		for (const fieldset of this.prose.querySelectorAll<HTMLFieldSetElement>('.ash-markdown-json-form fieldset')) fieldset.disabled = value;
 		for (const root of this.renderedRoots) for (const checkbox of root.checkboxes) checkbox.enabled = !value;
 		for (const image of this.prose.querySelectorAll<HTMLElement>('.ash-arkdown-image')) this.imageWidgets.get(image)?.update();
-		if (changed) this.tables.update();
+		if (previous !== value) this.tables.update();
 	}
-	setMode(mode: DocsEditorMode): void { this.tables.close(); this.selection = this.readSelection(); this.mode = mode; this.render(false); this.modeChanged.fire(this.mode); this.focus(); }
-	getMode(): DocsEditorMode { return this.mode; }
+	setMode(mode: ArkdownEditorMode): void { this.tables.close(); this.selection = this.readSelection(); this.mode = mode; this.render(false); this.modeChanged.fire(this.mode); this.focus(); }
+	getMode(): ArkdownEditorMode { return this.mode; }
 	getTypography(): DocsTypography { return readDocsTypography(this.model.getValue())?.value ?? defaultDocsTypography; }
 	setTypography(part: keyof DocsTypography, family: DocsFontFamily): void {
 		if (this.readOnly || this.composition || this.mode !== 'rich') return;
@@ -675,6 +705,7 @@ export class ArkdownEditor extends Disposable {
 
 	private keydown(event: KeyboardEvent): void {
 		if (this.composition || event.isComposing) return;
+		if ((event.target as HTMLElement).closest('.ash-markdown-json-form')) return;
 		if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey && event.code === 'KeyM') {
 			event.preventDefault(); event.stopPropagation(); this.requestComment(); return;
 		}
@@ -932,7 +963,14 @@ export class ArkdownEditor extends Disposable {
 		const composition = this.composition;
 		this.composition = undefined;
 		if (!composition) return;
-		if (composition.version !== this.model.getVersionId() || this.readOnly || !text) { this.render(this.hasFocus()); return; }
+		if (composition.version !== this.model.getVersionId() || this.readOnly || !text) {
+			if (text && this.conflictNotice && this.conflictDraft && composition.version !== this.model.getVersionId()) {
+				this.conflictDraft.textContent = text;
+				this.conflictNotice.hidden = false;
+			}
+			this.render(this.hasFocus());
+			return;
+		}
 		this.skipCompositionInput = text;
 		if (composition.table) {
 			const rectangle = composition.table;
@@ -1151,7 +1189,7 @@ export class ArkdownEditor extends Disposable {
 		this.prose.hidden = this.mode !== 'rich';
 		this.source.hidden = this.mode !== 'markdown';
 		if (this.mode === 'markdown' && (sourceWasHidden || !this.sourceEditor)) this.ensureSourceEditor().layout({ width: this.source.clientWidth, height: this.source.clientHeight });
-		this.setReadOnly(this.readOnly);
+		this.setReadOnly(this.inputReadOnly);
 		this.setActiveComment(this.activeComment);
 		this.renderRemoteHighlights();
 		if (this.mode === 'rich') this.tables.update();
@@ -1216,7 +1254,7 @@ export class ArkdownEditor extends Disposable {
 			const start = this.segments.length;
 			const lifetime = this.rootLifetimes.add(new DisposableStore());
 			const checkboxes: Checkbox[] = [];
-			try { this.renderNode(container, node, source, lifetime, checkboxes); }
+			try { this.renderNode(container, node, source, lifetime, checkboxes, true); }
 			catch (error) { this.rootLifetimes.delete(lifetime); lifetime.dispose(); throw error; }
 			const dom = Array.from(container.childNodes);
 			const anchor = suffix ? old[old.length - suffix].dom[0] : null;
@@ -1238,6 +1276,16 @@ export class ArkdownEditor extends Disposable {
 			this.terminal.append(this.domNode.ownerDocument.createElement('br'));
 		}
 		this.renderedVersion = this.model.getVersionId();
+		updateArkdownTaskProgress(this.prose, this.syntax);
+		const formulas = [...this.prose.querySelectorAll<HTMLElement>('.ash-katex-container[data-latex]')];
+		if (formulas.length !== this.mathElements.length || formulas.some((node, index) => node !== this.mathElements[index])) {
+			this.mathPresentation.clear();
+			this.mathElements = formulas;
+			if (formulas.length > 0) {
+				this.mathRenderer ??= this._register(this.instantiation.createInstance(MarkedKatexSupport));
+				this.mathPresentation.value = this.mathRenderer.renderMath(this.prose);
+			}
+		}
 	}
 
 	private parseSyntax(): readonly ArkdownNode[] {
@@ -1248,7 +1296,8 @@ export class ArkdownEditor extends Disposable {
 		return this.syntax;
 	}
 
-	private renderNode(parent: HTMLElement, node: ArkdownNode, source: string, lifetime: DisposableStore, checkboxes: Checkbox[]): void {
+	private renderNode(parent: HTMLElement, node: ArkdownNode, source: string, lifetime: DisposableStore, checkboxes: Checkbox[], root = false): void {
+		if (this.fileEditor && node.kind === 'metadata_block') return;
 		if (node.kind === 'table') {
 			this.renderTable(parent, node, source, lifetime, checkboxes);
 			return;
@@ -1259,6 +1308,26 @@ export class ArkdownEditor extends Disposable {
 			return;
 		}
 		if (node.kind === 'code_block') {
+			const fenced = source.slice(node.range.start, node.range.end);
+			if (node.closed && node.info?.split(/\s+/u, 1)[0] === 'math') {
+				this.renderFormula(parent, node, source, node.children.map(child => child.text ?? '').join('').trim(), 'block');
+				return;
+			}
+			if (root && node.closed && (node.info === 'widget:task-progress' || node.info === 'widget:json')) {
+				const editor = this.runtime.embeddedEditor(node.info, fenced);
+				if (editor) {
+					const element = createArkdownEmbeddedEditor(parent.ownerDocument, editor, fenced, lifetime, replacement => {
+						const range = this.ranges.get(element);
+						if (!range || this.model.getValue().slice(range.start, range.end) !== fenced) return;
+						this.replace(range, replacement, true);
+						const updated = [...this.prose.querySelectorAll<HTMLFormElement>('.ash-markdown-json-form')]
+							.find(form => this.ranges.get(form)?.start === range.start);
+						updated?.querySelector('button')?.focus();
+					});
+					this.atomic(parent, element, node.range, source);
+					return;
+				}
+			}
 			if (node.range.start === 0 && readDocsTypography(source)) {
 				const metadata = h(parent.ownerDocument, 'span', { attributes: { hidden: '', contenteditable: 'false' } });
 				this.ranges.set(metadata, node.range);
@@ -1286,8 +1355,18 @@ export class ArkdownEditor extends Disposable {
 				return;
 			}
 		}
-		if (node.kind === 'image' && node.destination && isArkdownImageSource(node.destination)) {
+		if (node.kind === 'image' && node.destination) {
 			const description = (children: readonly ArkdownNode[]): string => children.map(child => child.text ?? description(child.children)).join('');
+			if (!isArkdownImageSource(node.destination) || (this.fileEditor && !node.destination.startsWith('data:'))) {
+				if (!this.fileEditor) {
+					for (const child of node.children) this.renderNode(parent, child, source, lifetime, checkboxes);
+					return;
+				}
+				const image = h(parent.ownerDocument, 'img', { attributes: { alt: description(node.children) } });
+				this.atomic(parent, image, node.range, source);
+				void this.fileEditor.loadImage(image, node.destination, lifetime);
+				return;
+			}
 			const layout = readArkdownImageLayout(node.title);
 			const data = { source: node.destination, description: description(node.children), title: layout.title };
 			const image: ArkdownImage = lifetime.add(this.instantiation.createInstance(ArkdownImage, parent, data.source, data.description, layout, {
@@ -1314,6 +1393,10 @@ export class ArkdownEditor extends Disposable {
 			image.domNode.remove(); this.atomic(parent, image.domNode, node.range, source);
 			return;
 		}
+		if (node.text !== undefined && (node.kind === 'inline_math' || node.kind === 'display_math')) {
+			this.renderFormula(parent, node, source, node.text, node.kind === 'inline_math' ? 'inline' : 'block');
+			return;
+		}
 		if (node.text !== undefined) {
 			if (node.kind === 'code') {
 				const code = h(parent.ownerDocument, 'code'); parent.append(code);
@@ -1335,7 +1418,15 @@ export class ArkdownEditor extends Disposable {
 		if (node.kind === 'comment' && node.threadId) element.dataset.commentId = node.threadId;
 		if (node.kind === 'list' && node.start !== undefined) element.setAttribute('start', String(node.start));
 		if (node.kind === 'list' && node.children.length && node.children.every(child => this.taskMarker(child))) element.classList.add('ash-arkdown-task-list');
-		if (node.kind === 'link' && node.destination && /^(?:https?:|mailto:)/iu.test(node.destination)) element.setAttribute('data-href', node.destination);
+		if (node.kind === 'link' && node.destination) {
+			const href = this.fileEditor
+				? this.fileEditor.resolveLink(node.destination)
+				: /^(?:https?:|mailto:)/iu.test(node.destination) ? node.destination : undefined;
+			if (href) {
+				element.setAttribute('data-href', href);
+				if (this.fileEditor) element.setAttribute('href', href);
+			}
+		}
 		if (node.kind === 'rule') element.contentEditable = 'false';
 		parent.append(element);
 		if (node.kind === 'table_head') { const row = h(parent.ownerDocument, 'tr'); element.append(row); for (const child of node.children) this.renderNode(row, child, source, lifetime, checkboxes); }
@@ -1352,6 +1443,11 @@ export class ArkdownEditor extends Disposable {
 			const tail = source.slice(start, node.range.end).match(/^[ \t]+(?=\r?\n?$)/u)?.[0];
 			if (tail) this.leaf(element, tail, { start, end: start + tail.length }, source);
 		}
+	}
+
+	private renderFormula(parent: HTMLElement, node: ArkdownNode, source: string, latex: string, display: 'inline' | 'block'): void {
+		const formula = h(parent.ownerDocument, 'span', { className: 'ash-katex-container ash-markdown-math', attributes: { 'data-latex': latex, 'data-math-display': display } }, source.slice(node.range.start, node.range.end));
+		this.atomic(parent, formula, node.range, source);
 	}
 
 	private renderTable(parent: HTMLElement, node: ArkdownNode, source: string, lifetime: DisposableStore, checkboxes: Checkbox[]): void {

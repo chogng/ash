@@ -1,4 +1,4 @@
-import './arkdownImage.css';
+import './media/arkdownImage.css';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { parseDocsDropdown, readDocsDropdown, writeDocsDropdown } from '../../common/docsDropdown.js';
+import { parseDocsDropdown, readDocsDropdown, writeDocsDropdown } from '../../../../../workbench/contrib/markdown/common/arkdownDropdown.js';
 
 test('dropdown block preserves its label, options and selection in Markdown', () => {
 	const value = { label: '状态', options: ['待办', '已完成'], selected: 1 };

@@ -1,6 +1,6 @@
 import './docsEditorPane.css';
-import { ArkdownEditorPane } from './arkdown/arkdownEditorPane.js';
-import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
+import { ArkdownEditorPane } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownEditorPane.js';
+import type { ArkdownEditor } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownEditor.js';
 import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IArtifactAutoSaveService } from '../../../services/artifactAutoSave/common/artifactAutoSaveService.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';

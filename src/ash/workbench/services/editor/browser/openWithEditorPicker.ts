@@ -17,7 +17,7 @@ export class OpenWithEditorPicker {
 	) { }
 
 	/** Returns Ash's editor opening options, or undefined when selection is unnecessary or cancelled. */
-	async pick(editor: IResourceEditorInput): Promise<EditorOpenOptions | undefined> {
+	async pick(editor: IResourceEditorInput): Promise<(EditorOpenOptions & { readonly preferredEditorId: string; }) | undefined> {
 		const choices = this.editorPart.getEditorPaneChoices(editor);
 		if (choices.length <= 1) return undefined;
 
@@ -28,7 +28,7 @@ export class OpenWithEditorPicker {
 		picker.canAcceptInBackground = true;
 		picker.items = choices.map(choice => ({ id: choice.id, label: choice.name, description: choice.id }));
 
-		return await new Promise<EditorOpenOptions | undefined>(resolve => {
+		return await new Promise<(EditorOpenOptions & { readonly preferredEditorId: string; }) | undefined>(resolve => {
 			lifetime.add(picker.onDidHide(() => resolve(undefined)));
 			lifetime.add(picker.onDidAccept(event => {
 				const selected = picker.selectedItems[0];

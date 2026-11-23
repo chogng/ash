@@ -13,7 +13,7 @@ import '../../../scm/browser/scmHistory.js';
 import '../../../terminal/common/terminalColorRegistry.js';
 import '../../../terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js';
 import '../../../../../sessions/common/theme.js';
-import '../../../../../sessions/contrib/docs/browser/docsColors.js';
+import '../../../markdown/browser/arkdown/arkdownColors.js';
 import '../../../../../platform/theme/common/colors/chartsColors.js';
 import '../../../../../platform/theme/common/colors/componentColors.js';
 import '../../../../../platform/theme/common/colors/editorColors.js';

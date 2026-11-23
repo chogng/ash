@@ -2,13 +2,14 @@ use crate::Error;
 use crate::SourceIndex;
 use crate::SourceSpan;
 use crate::check_source_size;
+use ash_utils_markdown_math::MathSource;
+use ash_utils_markdown_math::complete_code_fence;
 use pulldown_cmark::Alignment;
 use pulldown_cmark::BlockQuoteKind;
 use pulldown_cmark::CodeBlockKind;
 use pulldown_cmark::Event;
 use pulldown_cmark::MetadataBlockKind;
 use pulldown_cmark::Options;
-use pulldown_cmark::Parser;
 use pulldown_cmark::Tag;
 use pulldown_cmark::TagEnd;
 use pulldown_cmark::html;
@@ -58,6 +59,7 @@ pub enum NodeKind {
     },
     CodeBlock {
         info: String,
+        closed: bool,
     },
     HtmlBlock,
     List {
@@ -134,7 +136,8 @@ fn options() -> Options {
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_MATH
+        | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+        | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
         | Options::ENABLE_GFM
 }
 
@@ -145,7 +148,8 @@ pub fn parse(source: &str) -> Result<Vec<Node>, Error> {
     let mut roots = Vec::new();
     let mut stack: Vec<Node> = Vec::new();
     let mut node_count = 0;
-    for (event, range) in Parser::new_ext(source, options()).into_offset_iter() {
+    let math = math_source(source);
+    for (event, range) in math.events(options()) {
         if let Event::End(_) = event {
             let node = stack.pop().expect("parser events are balanced");
             append(&mut roots, &mut stack, node);
@@ -164,6 +168,10 @@ pub fn parse(source: &str) -> Result<Vec<Node>, Error> {
             });
         }
         let kind = match event {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) => NodeKind::CodeBlock {
+                info: info.into_string(),
+                closed: complete_code_fence(source, &range),
+            },
             Event::Start(tag) => tag_kind(tag),
             Event::End(_) => unreachable!("handled before node creation"),
             Event::Text(text) => NodeKind::Text {
@@ -375,6 +383,7 @@ fn tag_kind(tag: Tag<'_>) -> NodeKind {
                 CodeBlockKind::Fenced(info) => info.into_string(),
                 CodeBlockKind::Indented => String::new(),
             },
+            closed: false,
         },
         Tag::HtmlBlock => NodeKind::HtmlBlock,
         Tag::List(start) => NodeKind::List { start },
@@ -508,53 +517,59 @@ pub fn render_html(source: &str) -> Result<String, Error> {
     let mut links = Vec::new();
     let mut images = Vec::new();
     let mut table_hidden = false;
-    let events = Parser::new_ext(source, options())
-        .into_offset_iter()
-        .filter_map(|(event, range)| {
-            if table_hidden {
-                if matches!(event, Event::End(TagEnd::Table)) {
-                    table_hidden = false;
-                }
-                return None;
+    let math = math_source(source);
+    let events = math.events(options()).filter_map(|(event, range)| {
+        if table_hidden {
+            if matches!(event, Event::End(TagEnd::Table)) {
+                table_hidden = false;
             }
-            if matches!(event, Event::Start(Tag::Table(_))) {
-                if let Some(html) = tables.remove(&range.start) {
-                    table_hidden = true;
-                    return Some(Event::Html(html.into()));
-                }
+            return None;
+        }
+        if matches!(event, Event::Start(Tag::Table(_))) {
+            if let Some(html) = tables.remove(&range.start) {
+                table_hidden = true;
+                return Some(Event::Html(html.into()));
             }
-            match event {
-                Event::Html(text) | Event::InlineHtml(text) => {
-                    if table_metadata
-                        .iter()
-                        .any(|metadata| metadata.start <= range.start && range.end <= metadata.end)
-                    {
-                        return None;
-                    }
-                    Some(if inline_tags.contains(&(range.start, range.end)) {
-                        Event::InlineHtml(text)
-                    } else {
-                        Event::Text(text)
-                    })
+        }
+        match event {
+            Event::Html(text) | Event::InlineHtml(text) => {
+                if table_metadata
+                    .iter()
+                    .any(|metadata| metadata.start <= range.start && range.end <= metadata.end)
+                {
+                    return None;
                 }
-                Event::Start(Tag::Link { ref dest_url, .. }) => {
-                    let allowed = allowed_url(dest_url, false);
-                    links.push(allowed);
-                    allowed.then_some(event)
-                }
-                Event::End(TagEnd::Link) => links.pop().unwrap_or(false).then_some(event),
-                Event::Start(Tag::Image { ref dest_url, .. }) => {
-                    let allowed = allowed_url(dest_url, true);
-                    images.push(allowed);
-                    allowed.then_some(event)
-                }
-                Event::End(TagEnd::Image) => images.pop().unwrap_or(false).then_some(event),
-                event => Some(event),
+                Some(if inline_tags.contains(&(range.start, range.end)) {
+                    Event::InlineHtml(text)
+                } else {
+                    Event::Text(text)
+                })
             }
-        });
+            Event::Start(Tag::Link { ref dest_url, .. }) => {
+                let allowed = allowed_url(dest_url, false);
+                links.push(allowed);
+                allowed.then_some(event)
+            }
+            Event::End(TagEnd::Link) => links.pop().unwrap_or(false).then_some(event),
+            Event::Start(Tag::Image { ref dest_url, .. }) => {
+                let allowed = allowed_url(dest_url, true);
+                images.push(allowed);
+                allowed.then_some(event)
+            }
+            Event::End(TagEnd::Image) => images.pop().unwrap_or(false).then_some(event),
+            event => Some(event),
+        }
+    });
     let mut html = String::new();
     html::push_html(&mut html, events);
     Ok(html)
+}
+
+fn math_source(source: &str) -> MathSource<'_> {
+    MathSource::new(source, options(), true, &|| {
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .unwrap_or_else(|never| match never {})
 }
 
 fn allowed_url(url: &str, image: bool) -> bool {

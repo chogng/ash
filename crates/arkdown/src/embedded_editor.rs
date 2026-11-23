@@ -1,16 +1,16 @@
+use crate::SourceIndex;
 use serde::Serialize;
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
-use std::ops::Range;
 
 const MAX_FORM_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Serialize)]
 #[serde(
     tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all = "snake_case",
+    rename_all_fields = "snake_case"
 )]
 pub(crate) enum Editor {
     TaskProgress,
@@ -30,7 +30,7 @@ pub(crate) struct JsonField {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 enum FieldValue {
     Text(String),
     Number(String),
@@ -38,25 +38,21 @@ enum FieldValue {
     Null,
 }
 
-pub(crate) fn resolve(
-    info: &str,
-    source: &str,
-    fence: &Range<usize>,
-    offsets: &[u32],
-) -> Option<Editor> {
+pub(crate) fn resolve(info: &str, fenced: &str) -> Option<Editor> {
     if !matches!(info, "widget:task-progress" | "widget:json")
-        || !crate::parser::complete_code_fence(source, fence)
+        || !ash_utils_markdown_math::complete_code_fence(fenced, &(0..fenced.len()))
     {
         return None;
     }
-    let fenced = &source[fence.clone()];
-    let body_start = fence.start + fenced.find('\n')? + 1;
-    let body_end = fence.start + fenced.rfind('\n')? + 1;
-    let body = &source[body_start..body_end];
+    let fenced = fenced.trim_end_matches(['\n', '\r']);
+    let body_start = fenced.find('\n')? + 1;
+    let body_end = fenced.rfind('\n')? + 1;
+    let body = &fenced[body_start..body_end];
     match info {
         "widget:task-progress" if body.trim().is_empty() => Some(Editor::TaskProgress),
         "widget:json" if fenced.len() <= MAX_FORM_BYTES => {
-            let fields = json_fields(body, body_start, offsets[fence.start], offsets)?;
+            let index = SourceIndex::new(fenced).ok()?;
+            let fields = json_fields(body, body_start, &index)?;
             Some(Editor::JsonForm {
                 fields,
                 max_bytes: MAX_FORM_BYTES,
@@ -66,12 +62,7 @@ pub(crate) fn resolve(
     }
 }
 
-fn json_fields(
-    body: &str,
-    body_start: usize,
-    fence_start: u32,
-    offsets: &[u32],
-) -> Option<Vec<JsonField>> {
+fn json_fields(body: &str, body_start: usize, index: &SourceIndex) -> Option<Vec<JsonField>> {
     // Borrow original tokens so a form edit can leave the surrounding JSON intact.
     let object: BTreeMap<String, &RawValue> = serde_json::from_str(body).ok()?;
     if object.is_empty() || object.len() > 32 {
@@ -91,8 +82,8 @@ fn json_fields(
         };
         fields.push(JsonField {
             name,
-            start: offsets[start] - fence_start,
-            end: offsets[end] - fence_start,
+            start: index.byte_to_utf16(start).ok()?,
+            end: index.byte_to_utf16(end).ok()?,
             value,
         });
     }

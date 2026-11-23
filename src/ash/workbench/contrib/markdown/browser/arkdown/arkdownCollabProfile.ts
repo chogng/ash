@@ -1,7 +1,7 @@
 import { encodeBase64, decodeBase64, VSBuffer } from '../../../../../base/common/buffer.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { localize } from '../../../../../nls.js';
-import type { BufferCollabProfile } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import type { BufferCollabProfile } from '../../../../services/collab/common/bufferCollabService.js';
 import type { ArkdownRuntime } from './arkdownRuntime.js';
 
 const maxSnapshotBytes = 4 * 1024 * 1024;

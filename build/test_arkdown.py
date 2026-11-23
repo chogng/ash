@@ -22,6 +22,7 @@ class ArkdownBuildTests(unittest.TestCase):
             "scripts/cargo.py",
             ".cargo/config.toml",
             "crates/arkdown/Cargo.toml",
+            "crates/utils/markdown-math/Cargo.toml",
             "crates/arkdown/src/lib.rs",
         ):
             path = self.root / name

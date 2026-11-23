@@ -52,7 +52,10 @@ export class WorkbenchDiagnostics extends Disposable {
 			if (response.status() >= 400) recordResourceFailure(response.request(), `HTTP ${response.status()}`);
 		};
 		const onRequestFailed = (request: Request): void => {
-			recordResourceFailure(request, request.failure()?.errorText ?? 'Request failed');
+			const reason = request.failure()?.errorText ?? 'Request failed';
+			// Replacing or closing an editor can cancel an in-flight iframe navigation.
+			if (reason === 'net::ERR_ABORTED' && request.isNavigationRequest()) return;
+			recordResourceFailure(request, reason);
 		};
 		context.on('console', onConsole);
 		this._register(toDisposable(() => context.off('console', onConsole)));

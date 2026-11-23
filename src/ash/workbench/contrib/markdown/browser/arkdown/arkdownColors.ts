@@ -1,8 +1,8 @@
-import { localize } from '../../../../nls.js';
-import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
-import { contrastBorder, foreground, selectionBackground } from '../../../../platform/theme/common/colors/baseColors.js';
-import { editorBackground } from '../../../../platform/theme/common/colors/editorColors.js';
-import type { ArkdownTextColor } from './arkdown/arkdownRuntime.js';
+import { localize } from '../../../../../nls.js';
+import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
+import { contrastBorder, foreground, selectionBackground } from '../../../../../platform/theme/common/colors/baseColors.js';
+import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
+import type { ArkdownTextColor } from './arkdownRuntime.js';
 
 function textColor(id: string, light: string, dark: string, description: string): string {
 	return registerColor(id, { light, dark, hcDark: foreground, hcLight: foreground }, { owner: 'sessions.docs', description });

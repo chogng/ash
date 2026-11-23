@@ -4,6 +4,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+#[cfg(feature = "projection")]
+mod projection;
+#[cfg(feature = "projection")]
+pub use projection::MathSource;
+#[cfg(feature = "projection")]
+pub use projection::complete_code_fence;
+
 pub const CHANNEL: &str = "math.render.v2";
 
 /// One immutable document render; macro definitions never outlive this request.

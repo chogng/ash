@@ -1,6 +1,6 @@
 # Docs
 
-Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作块导入、格式导入导出、恢复状态与作品目录适配。前端 Arkdown 实现位于 [`browser/arkdown`](browser/arkdown)，编辑与协作接口见 [Arkdown](ARKDOWN.md)。文档使用 Arkdown 连续正文。
+Docs 持有 Sessions 的文档创建、打开、默认视图选择、HTML 写作块导入、格式导入导出、恢复状态与作品目录适配。正文使用 Workbench 的 [Arkdown](ARKDOWN.md) 编辑器。
 
 | 文件                                                           | 职责                                                        |
 | -------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -24,7 +24,9 @@ Arkdown 的 Markdown 入口接续文档导出命令：Markdown 导出保留源�
 
 下拉选择块使用 `ash-dropdown` 围栏代码块保存 JSON 名称、选项与选值。正文仅把通过边界校验的块投影为选择控件；无效内容保留为代码，标签按纯文本呈现。修改选值通过同一个 `TextModel` 提交，参与保存、撤销和协作。通用 Markdown 查看器将其显示为代码块；源码视图可直接修改选项。
 
-Docs 的唯一编辑器为 `DocsEditorPane`，借用 [ArkdownEditorPane](browser/arkdown/arkdownEditorPane.ts)，支持排版正文与共用 CodeEditor 的 Markdown 源码视图。Docs 入口进入 Chat 模式，IDE 和 Agent Window Code 使用 Markdown 扩展。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
+`DocsEditorPane` 借用 Workbench 的 [`ArkdownEditorPane`](../../../workbench/contrib/markdown/browser/arkdown/arkdownEditorPane.ts)，支持排版正文与 Markdown 源码。IDE 和 Agent Window Code 的「打开 Markdown 编辑器」使用同一组件。Markdown 原文由 `TextModel` 持有，`EditorWorkingCopy` 接入保存、dirty、外部变更与备份，Rust 提供增量解析、结构编辑与协作操作日志。
+
+Docs 打开和恢复文档时只取得共享文本模型。首次从 Code 打开同一模型时，源码编辑器请求 Markdown 语言功能并触发扩展激活。
 
 Docs 仅接收 Markdown，不注册旧 `.ash-doc` 编辑器或迁移入口。HTML 通过基础层转换器生成 Markdown；Markdown 导入按 Arkdown 源码区间内嵌本地图片，复用编辑器的图片校验和写入规则，其余源码保持原样；DOCX 由 Docs 读取标准 OOXML，转换正文、标题、列表、链接、图片和普通表格。不支持的正文结构拒绝导入，源文件保留。
 
@@ -109,7 +111,7 @@ Docs 的实现方向是维护自己的产品层，复用开源依赖，逐步建
 
 - Docs 持有连续正文体验、格式工具、目录和 Agent 文档操作；不使用空间画布。
 - Rust 核心持有文档语义、源码位置映射、结构化编辑操作、事务和撤销语义；同一份实现编译为浏览器 WASM 和原生库。WASM 绑定与 App Server 适配器只处理边界，不各写一套语义。
-- Sessions Docs 的 `browser/arkdown` 持有 Arkdown 的 DOM 呈现、选区、命中检测、剪贴板及 IME，源码输入复用 CodeEditor。现有 documentEditor 基座继续承载结构化富文档，Academy 和频道笔记消费其 profile。
+- Workbench 的 Arkdown 编辑器持有 DOM 呈现、选区、命中检测、剪贴板及 IME，源码输入复用 CodeEditor。现有 documentEditor 基座继续承载结构化富文档，Academy 和频道笔记消费其 profile。
 - 输入热路径优先在前端 WASM 执行，后端使用同一核心进行 Agent 编辑、校验和导入导出。纯后端执行也是可选路径，但每次编辑都需处理异步 RPC、版本、乱序与断线；在测量和验证这些行为前，不将它视为本地 WASM 的等价替换。
 - 保存、工作副本、dirty、外部变更和恢复继续由 Workbench 持有。富文档保留结构化模型，Markdown 保留文本模型；不在每次编辑时通过 Markdown 导入导出往返同步，以免丢失格式或文档信息。同一个编辑会话的写入必须经过其模型或事务 owner，不能让 WASM 与原生副本分别覆盖状态。
 - `ash-collab` 的结构化文档房间使用有序事务、版本和重放契约。Markdown 房间使用独立的 `arkdown-markdown-v1` profile 和 Yrs 更新，房间生命周期与权限由通用协作服务持有。

@@ -3,7 +3,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../../nls.js';
-import { DOCS_COMMENTS_MAX_SOURCE_LENGTH, DocsCommentState, readDocsCommentEvent, writeDocsCommentEvent, type DocsCommentThread, type DocsCommentMessage, type DocsCommentEvent, type DocsCommentEventPayload } from '../../common/docsComments.js';
+import { DOCS_COMMENTS_MAX_SOURCE_LENGTH, DocsCommentState, readDocsCommentEvent, writeDocsCommentEvent, type DocsCommentThread, type DocsCommentMessage, type DocsCommentEvent, type DocsCommentEventPayload } from '../../common/arkdownComments.js';
 import type { ArkdownEdit, ArkdownNode, ArkdownRange, ArkdownRuntime } from './arkdownRuntime.js';
 
 const maxEvents = 4096;

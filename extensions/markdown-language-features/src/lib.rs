@@ -1,10 +1,8 @@
 //! Markdown documents and language features run in this optional Rust extension;
 //! formulas use the independent math capability. Models and history belong to the client.
-mod embedded_editor;
 mod language;
 mod math;
 mod mermaid;
-mod parser;
 
 use external_ext_sdk::Command;
 use external_ext_sdk::Extension;
@@ -84,13 +82,7 @@ impl Extension for MarkdownExtension {
             let client = context.client.clone();
             context.commands.register_command(command, move |call, token| {
                 let Some(editor) = call.active_editor else { return Ok(Value::Null); };
-                let view = if id.ends_with("AsSource") || id == "markdown.showSource" {
-                    "default"
-                } else if id.contains("RichEditor") {
-                    "vscode.markdown.editor"
-                } else {
-                    "vscode.markdown.preview.editor"
-                };
+                let view = "vscode.markdown.preview.editor";
                 if id.contains("reopenAs") {
                     client.execute_command("reopenActiveEditorWith", vec![json!(view), json!({"groupId":editor["groupId"],"editorIndex":editor["editorIndex"]})], &token)
                 } else {
@@ -124,40 +116,35 @@ impl Extension for MarkdownExtension {
                 .collect::<Result<Vec<_>, _>>()?;
             let messages = Arc::clone(&messages);
             let client = context.client.clone();
-            let rich = view == "vscode.markdown.editor";
             context.editors.register_custom_text_editor(view, messages[title].as_str().unwrap_or(title).to_owned(), selectors, "option".into(), move |document, token| {
                 token.check_cancelled()?;
                 let configuration = client.get_configuration("markdown", Some(document.uri.clone()), &token)?;
-                if rich {
-                    let mut parsed = parser::parse_checked(&document.text, math::enabled(&configuration), || token.check_cancelled())?;
-                    parsed.render_math(&client, &configuration, &messages, &token)?;
-                    let labels: serde_json::Map<String,Value> = messages.as_object().into_iter().flatten().filter_map(|(key,value)| key.strip_prefix("markdown.rich.").map(|key| (key.into(),value.clone()))).collect();
-                    let bootstrap = json!({"uri":document.uri,"text":"","version":0,"readOnly":true,"messages":labels}).to_string().replace('<', "\\u003c");
-                    Ok(Content {
-                        editable: true,
-                        html: format!("<script type=\"application/json\" id=\"ash-markdown-initial\">{bootstrap}</script>"),
-                        update: Some(json!({"type":"document","uri":document.uri,"text":document.text,"version":document.version,"readOnly":document.read_only,"blocks":parsed.blocks,"taskProgress":parsed.task_progress})),
-                        resources: Some(Resources { script: "media/richEditor.js".into(), style: "media/richEditor.css".into() }),
-                    })
-                } else {
-                    Ok(Content {
-                        html: "<main id=\"markdown-preview\"></main>".into(),
-                        editable: false,
-                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?, "configuration": {
-                            "fontFamily": configuration.pointer("/preview/fontFamily"),
-                            "codeFontFamily": configuration.pointer("/preview/codeFontFamily"),
-                            "blockquoteFontFamily": configuration.pointer("/preview/blockquoteFontFamily"),
-                            "fontSize": configuration.pointer("/preview/fontSize"),
-                            "lineHeight": configuration.pointer("/preview/lineHeight"),
-                        }})),
-                        resources: Some(Resources { script: "media/preview.js".into(), style: "media/preview.css".into() }),
-                    })
-                }
+                Ok(Content {
+                    html: "<main id=\"markdown-preview\"></main>".into(),
+                    editable: false,
+                    update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?, "configuration": {
+                        "fontFamily": configuration.pointer("/preview/fontFamily"),
+                        "codeFontFamily": configuration.pointer("/preview/codeFontFamily"),
+                        "blockquoteFontFamily": configuration.pointer("/preview/blockquoteFontFamily"),
+                        "fontSize": configuration.pointer("/preview/fontSize"),
+                        "lineHeight": configuration.pointer("/preview/lineHeight"),
+                    }})),
+                    resources: Some(Resources { script: "media/preview.js".into(), style: "media/preview.css".into() }),
+                })
             })?;
         }
         mermaid::register(context)?;
         language::register(context, chinese)
     }
+}
+
+fn markdown_options() -> pulldown_cmark::Options {
+    use pulldown_cmark::Options;
+    Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+        | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
 }
 
 fn preview(
@@ -183,8 +170,11 @@ fn preview(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let mut fence: Option<String> = None;
-    let source = parser::MathSource::new(text, math_enabled, &|| token.check_cancelled())?;
-    for (event, range) in source.events(parser::markdown_options()) {
+    let source =
+        ash_utils_markdown_math::MathSource::new(text, markdown_options(), math_enabled, &|| {
+            token.check_cancelled()
+        })?;
+    for (event, range) in source.events(markdown_options()) {
         token.check_cancelled()?;
         if let Some(source) = &mut fence {
             match event {
@@ -198,7 +188,7 @@ fn preview(
             }
             continue;
         }
-        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math") && parser::complete_code_fence(text, &range))
+        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math") && ash_utils_markdown_math::complete_code_fence(text, &range))
         {
             fence = Some(String::new());
             continue;

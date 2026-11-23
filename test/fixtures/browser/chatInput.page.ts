@@ -869,7 +869,8 @@ services.registerInstance(IContentSearchService, { search: async () => { throw n
 services.registerInstance(IFileTextModelService, {
 	...Disposable.None,
 	onDidChangeEncoding: Event.None, onModelAdded: Event.None, onModelRemoved: Event.None, onModelLanguageChanged: Event.None,
-	getEncodingSupport: () => undefined, getModel: () => null, getModels: () => [], hasPendingSaveRecovery: () => false,
+	onDidRequestLanguageFeatures: Event.None,
+	getEncodingSupport: () => undefined, getModel: () => null, getModels: () => [], getModelsRequestingLanguageFeatures: () => [], hasPendingSaveRecovery: () => false,
 	addSaveParticipant: () => Disposable.None, addSaveCompletionParticipant: () => Disposable.None,
 	waitForSaveRecovery: async () => { }, refresh: async () => { },
 	acquire: async () => { throw new Error('Chat context fixture has no shared file models'); },

@@ -1,6 +1,8 @@
-import { IBufferCollabService, BufferCollabState, type BufferCollabSession } from '../../../../../workbench/services/collab/common/bufferCollabService.js';
+import './arkdown.contribution.js';
+import { IBufferCollabService, BufferCollabState, type BufferCollabSession } from '../../../../services/collab/common/bufferCollabService.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { h, type IDimension } from '../../../../../base/browser/dom.js';
@@ -15,19 +17,22 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import { EditorPane } from '../../../../../workbench/browser/parts/editor/editorPane.js';
-import { EditorWorkingCopy } from '../../../../../workbench/browser/parts/editor/textResourceEditor.js';
-import type { IResourceEditorInput, ISaveOptions } from '../../../../../workbench/common/editor.js';
-import { IFilesConfigurationService } from '../../../../../workbench/services/filesConfiguration/common/filesConfigurationService.js';
-import { ITextModelResourceService } from '../../../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
-import { TextFileSaveErrorHandler } from '../../../../../workbench/contrib/files/browser/editors/textFileSaveErrorHandler.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { EditorPane } from '../../../../browser/parts/editor/editorPane.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { CODE_EDITOR_ID, EditorWorkingCopy } from '../../../../browser/parts/editor/textResourceEditor.js';
+import type { IResourceEditorInput, ISaveOptions } from '../../../../common/editor.js';
+import { IFilesConfigurationService } from '../../../../services/filesConfiguration/common/filesConfigurationService.js';
+import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { TextFileSaveErrorHandler } from '../../../files/browser/editors/textFileSaveErrorHandler.js';
+import type { ArkdownEditorMode } from '../../common/arkdownEditor.js';
 import { loadArkdown } from './arkdownRuntime.js';
 import { createArkdownCollabProfile } from './arkdownCollabProfile.js';
 import { ArkdownEditor } from './arkdownEditor.js';
-import type { DocsEditorMode } from '../../common/docs.js';
+import { ArkdownFileResources } from './arkdownFileResources.js';
 
-/** File lifecycle for the Arkdown document host used by Sessions Docs. */
+/** Shared file and working-copy lifecycle for Arkdown views. */
 export class ArkdownEditorPane extends EditorPane {
 	readonly id: string;
 	private root!: HTMLElement;
@@ -46,7 +51,7 @@ export class ArkdownEditorPane extends EditorPane {
 	private readonly saveErrors: TextFileSaveErrorHandler;
 
 	constructor(
-		private readonly options: { readonly id: string; readonly onSave?: () => Promise<void | boolean>; },
+		private readonly options: { readonly id: string; readonly onSave?: () => Promise<void | boolean>; readonly fileEditor?: boolean; },
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IThemeService theme: IThemeService,
@@ -58,6 +63,8 @@ export class ArkdownEditorPane extends EditorPane {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IBufferCollabService private readonly bufferCollab: IBufferCollabService,
+		@IFileService private readonly files: IFileService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super(options.id, theme, storage);
 		this.id = options.id;
@@ -82,13 +89,22 @@ export class ArkdownEditorPane extends EditorPane {
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const runtime = await loadArkdown();
 		signal.throwIfAborted();
-		const reference = await this.models.acquire({ ...input, languageId: 'markdown' }, signal, { waitForSyntax: false });
+		const reference = await this.models.acquire({
+			resource: input.resource,
+			languageId: 'markdown',
+			contentType: input.contentType,
+			initialText: input.initialText,
+			readOnly: input.readOnly,
+			encoding: input.encoding,
+		}, signal, { waitForSyntax: false, activateLanguageFeatures: false });
 		const lifetime = new DisposableStore();
 		try {
 			const copy = lifetime.add(new EditorWorkingCopy(reference, input, this.workingCopies, this.options.onSave));
+			const fileResources = this.options.fileEditor ? new ArkdownFileResources(input.resource, this.files, this.workspace) : undefined;
 			const widget = lifetime.add(this.instantiation.createInstance(ArkdownEditor, this.root, reference.model, runtime, 'rich',
 				(error: unknown) => this.notifications.error(error instanceof Error ? error : String(error)),
-				(url: string) => { void this.opener.open(URI.parse(url), { openExternal: true }).catch(error => this.notifications.error(String(error))); }));
+				(url: string) => { void this.opener.open(URI.parse(url), { openExternal: !fileResources }).catch(error => this.notifications.error(String(error))); },
+				fileResources));
 			signal.throwIfAborted();
 			this.collaborationAbort?.abort(); this.collaborationAbort = undefined; this.connecting = false;
 			this.inputLifetime.value = lifetime;
@@ -117,8 +133,8 @@ export class ArkdownEditorPane extends EditorPane {
 	get isDirty(): boolean { return this.copy?.isDirty ?? false; }
 	get hasExternalChange(): boolean { return this.copy?.hasExternalChange ?? false; }
 	get isReadonly(): boolean { return this.readOnly; }
-	setMode(mode: DocsEditorMode): void { this.widget?.setMode(mode); }
-	private getMode(): DocsEditorMode { return this.widget?.getMode() ?? 'rich'; }
+	setMode(mode: ArkdownEditorMode): void { this.widget?.setMode(mode); }
+	private getMode(): ArkdownEditorMode { return this.widget?.getMode() ?? 'rich'; }
 	override getControl(): ArkdownEditor | undefined { return this.widget; }
 	override focus(): void { this.widget?.focus(); }
 	override layout(dimension: IDimension): void { this.widget?.layout({ width: this.root.clientWidth || dimension.width, height: this.root.clientHeight || dimension.height }); }
@@ -129,10 +145,16 @@ export class ArkdownEditorPane extends EditorPane {
 	}
 	async saveAs(resource: URI): Promise<void> { await this.copy?.saveAs(resource, new AbortController().signal); }
 	containsAccessibilityFocus(target: HTMLElement): boolean { return this.getMode() === 'rich' && this.root.contains(target); }
-	getAccessibleContent(): string { return this.widget?.getAccessibleText() ?? ''; }
-	getAccessibilityHelp(): readonly string[] { return [localize({ bundle: 'ash.arkdown', key: 'arkdownHelp' }, 'Edit the document directly. Use Control or Command+B for bold, Control or Command+I for italic, and Control or Command+Z to undo. Use Control or Command+Alt+0 through 6 for a paragraph or heading. Use Control or Command+Shift+7, 8, or 9 for numbered, bulleted, or task lists. In a table, Tab and Shift+Tab move between cells; Tab in the last cell adds a row. Show Markdown source opens the code editor on the same document; Show document returns to the formatted document. Changes save automatically. Export creates a separate copy. Read-only files cannot be edited. Collaborate creates or joins a room. Copy room ID shares its identifier; remote rooms also require an access token. Undo during collaboration affects local edits and preserves remote edits. Disconnected edits are retried after reconnection. Leave collaboration stops synchronization and keeps the current local document. Saving still writes the local file. Collaboration stays active when switching tabs or views; leave the room to stop it. Collaboration undo history is checkpointed after 256 operations or 16 MiB.'), localize({ bundle: 'ash.docs', key: 'tableHelp' }, 'In a table, right-click a cell or press Shift+F10 to open Cell actions. Alt+F10 focuses the table handles. The table handle selects the whole table; drag it to move the table between document blocks, or focus it and press Alt+Up or Alt+Down. Row and column handles select a row or column and open its options. Drag a handle to move it; Escape cancels a drag. Add row and Add column extend the table. Drag a column boundary to resize it, or use Set column width in Cell actions. Selecting cells or the whole table opens the inline formatting toolbar. Bold, italic, underline, strikethrough, code, text color and highlight apply to selected nonempty cells in one undo step. Paragraphs, headings, bulleted lists, numbered lists and checklists are available inside cells and for cell rectangles. In a cell list, Enter adds an item; Enter in an empty item returns to a paragraph. Enter after a cell heading starts a paragraph. Shift+Enter inserts a line break. Links are unavailable for a cell rectangle. Table options opens the table menu. Shift-click another cell or use Shift+arrow keys to extend a rectangular selection. Escape returns to one cell. Delete clears selected cells, deletes selected rows or columns, or deletes a selected table. Copy and cut preserve a rectangular table; paste accepts table cells or tab-separated text. Cell actions also provide sorting, alignment, cell color, merge, split and header options. Merged tables cannot be sorted or reordered until their cells are split. Table changes, including column widths, save with the document and support undo and redo. Read-only tables allow selection and copying.'), localize({ bundle: 'ash.arkdown', key: 'taskHelp' }, 'Click a checklist checkbox to toggle completion. Use Tab to focus a checkbox and Space to check or uncheck it. With the caret in task text, Control or Command+Enter toggles completion. Checkbox changes support undo and redo. Checkboxes in read-only documents are disabled.'), localize({ bundle: 'ash.arkdown', key: 'remoteChangesHelp' }, 'Recent remote changes expands a session-local list of the last 20 received changes with connection labels and insertion or deletion previews. The affected ranges are highlighted in matching colors in the document and source views. These ranges describe received updates, not permanent text authorship. Connection IDs are not verified user names. The list is available in the accessible view and clears when leaving collaboration.')]; }
+	getAccessibleContent(): string { return (this.options.fileEditor ? this.copy?.backup() : this.widget?.getAccessibleText()) ?? ''; }
+	getAccessibilityHelp(): readonly string[] {
+		if (this.options.fileEditor) {
+			return [localize({ bundle: 'ash.arkdown', key: 'fileHelp' }, 'Edit the formatted Markdown directly. Use Control or Command+S to save, Z to undo, and Shift+Z to redo. Use the editor picker or Show Markdown source to edit the same document as text. Tab focuses task checkboxes and form fields. Apply Changes writes a JSON form back to the document in one undo step. Run <keybinding:editor.action.accessibleView> to read the Markdown source.')];
+		}
+		return [localize({ bundle: 'ash.arkdown', key: 'arkdownHelp' }, 'Edit the document directly. Use Control or Command+B for bold, Control or Command+I for italic, and Control or Command+Z to undo. Use Control or Command+Alt+0 through 6 for a paragraph or heading. Use Control or Command+Shift+7, 8, or 9 for numbered, bulleted, or task lists. In a table, Tab and Shift+Tab move between cells; Tab in the last cell adds a row. Show Markdown source opens the code editor on the same document; Show document returns to the formatted document. Changes save automatically. Export creates a separate copy. Read-only files cannot be edited. Collaborate creates or joins a room. Copy room ID shares its identifier; remote rooms also require an access token. Undo during collaboration affects local edits and preserves remote edits. Disconnected edits are retried after reconnection. Leave collaboration stops synchronization and keeps the current local document. Saving still writes the local file. Collaboration stays active when switching tabs or views; leave the room to stop it. Collaboration undo history is checkpointed after 256 operations or 16 MiB.'), localize({ bundle: 'ash.docs', key: 'tableHelp' }, 'In a table, right-click a cell or press Shift+F10 to open Cell actions. Alt+F10 focuses the table handles. The table handle selects the whole table; drag it to move the table between document blocks, or focus it and press Alt+Up or Alt+Down. Row and column handles select a row or column and open its options. Drag a handle to move it; Escape cancels a drag. Add row and Add column extend the table. Drag a column boundary to resize it, or use Set column width in Cell actions. Selecting cells or the whole table opens the inline formatting toolbar. Bold, italic, underline, strikethrough, code, text color and highlight apply to selected nonempty cells in one undo step. Paragraphs, headings, bulleted lists, numbered lists and checklists are available inside cells and for cell rectangles. In a cell list, Enter adds an item; Enter in an empty item returns to a paragraph. Enter after a cell heading starts a paragraph. Shift+Enter inserts a line break. Links are unavailable for a cell rectangle. Table options opens the table menu. Shift-click another cell or use Shift+arrow keys to extend a rectangular selection. Escape returns to one cell. Delete clears selected cells, deletes selected rows or columns, or deletes a selected table. Copy and cut preserve a rectangular table; paste accepts table cells or tab-separated text. Cell actions also provide sorting, alignment, cell color, merge, split and header options. Merged tables cannot be sorted or reordered until their cells are split. Table changes, including column widths, save with the document and support undo and redo. Read-only tables allow selection and copying.'), localize({ bundle: 'ash.arkdown', key: 'taskHelp' }, 'Click a checklist checkbox to toggle completion. Use Tab to focus a checkbox and Space to check or uncheck it. With the caret in task text, Control or Command+Enter toggles completion. Checkbox changes support undo and redo. Checkboxes in read-only documents are disabled.'), localize({ bundle: 'ash.arkdown', key: 'remoteChangesHelp' }, 'Recent remote changes expands a session-local list of the last 20 received changes with connection labels and insertion or deletion previews. The affected ranges are highlighted in matching colors in the document and source views. These ranges describe received updates, not permanent text authorship. Connection IDs are not verified user names. The list is available in the accessible view and clears when leaving collaboration.')];
+	}
 
 	override getActions(): readonly IAction[] {
+		if (this.options.fileEditor) return this.getEditingActions();
 		const roomId = this.collaborationSession?.roomId;
 		const collaborationLabel = roomId ? localize({ bundle: 'ash.arkdown', key: 'leaveCollaboration' }, 'Leave collaboration') : localize({ bundle: 'ash.arkdown', key: 'collaborate' }, 'Collaborate');
 		return [
@@ -165,7 +187,9 @@ export class ArkdownEditorPane extends EditorPane {
 			{
 				id: 'arkdown.editor.toggleMode', label: mode, tooltip: mode,
 				icon: source ? Lxicon.fileText : Lxicon.bracket, enabled: !!this.widget,
-				run: () => this.setMode(source ? 'rich' : 'markdown'),
+				run: () => this.options.fileEditor
+					? this.instantiation.get(IEditorPart).reopenActiveEditorWith(CODE_EDITOR_ID)
+					: this.setMode(source ? 'rich' : 'markdown'),
 			},
 		];
 	}

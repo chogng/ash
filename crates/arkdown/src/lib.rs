@@ -14,6 +14,8 @@ mod source;
 mod table;
 mod table_cell;
 
+#[cfg(any(test, all(feature = "wasm", target_arch = "wasm32")))]
+mod embedded_editor;
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm;
 

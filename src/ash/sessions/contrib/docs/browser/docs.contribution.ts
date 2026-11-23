@@ -4,7 +4,6 @@ import { DocsService } from './docsService.js';
 import { DocsCommentsFocused } from './docsCommentsWidget.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import './arkdown/arkdown.contribution.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -34,7 +33,6 @@ import { DOCS_DEFAULT_MODE_SETTING, DOCS_ARKDOWN_EDITOR_ID, type DocsEditorMode 
 import { createDocsOpener, createDocsDocument, restoredDocsResource } from './documentActions.js';
 import { convertActiveTextToDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact, openWritingDraft } from './docsImportExport.js';
 import { createArkdownDocsInput } from './docsEditorInput.js';
-import { DocsEditorPane } from './docsEditorPane.js';
 import { createDocsBackupContribution } from './docsBackupContribution.js';
 
 registerSingleton(IDocsService, DocsService, InstantiationType.Delayed);
@@ -76,8 +74,9 @@ registerEditorPane({
 	get name() { return localize('sessions.artifacts.docs', 'Docs'); },
 	canOpen: input => input.editorId === DOCS_ARKDOWN_EDITOR_ID && !isResourceDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	createInput: createArkdownDocsInput,
-	create(options) {
+	async create(options) {
 		if (!options.instantiationService) throw new Error('Docs requires the Workbench instantiation service');
+		const { DocsEditorPane } = await import('./docsEditorPane.js');
 		return options.instantiationService.createInstance(DocsEditorPane, options.onSave);
 	},
 });

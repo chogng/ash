@@ -18,7 +18,7 @@ export class BufferCollabService extends Disposable implements IBufferCollabServ
 	get(model: TextModel): BufferCollabSession | undefined { return this.sessions.get(model)?.session; }
 	async join(model: TextModel, input: TextModelInput, profile: BufferCollabProfile, roomId: string | undefined, signal: AbortSignal): Promise<void> {
 		const existing = this.sessions.get(model); if (existing) return existing.connecting;
-		const reference = await this.models.acquire(input, signal, { waitForSyntax: false });
+		const reference = await this.models.acquire(input, signal, { waitForSyntax: false, activateLanguageFeatures: false });
 		if (this.isDisposed || signal.aborted) { reference.dispose(); return; }
 		const concurrent = this.sessions.get(model); if (concurrent) { reference.dispose(); return concurrent.connecting; }
 		if (reference.model !== model) { reference.dispose(); throw new Error('Collaboration must bind the existing text model'); }

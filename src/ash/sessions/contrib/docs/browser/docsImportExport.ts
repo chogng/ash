@@ -29,11 +29,11 @@ import { createZip } from '../../../../base/common/zip.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { decodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { createImagePdf } from '../../../../base/common/pdf.js';
-import { readDocsCommentEvent } from '../common/docsComments.js';
-import { defaultDocsTypography, DocsFontFamily, readDocsTypography, type DocsTypography } from '../common/docsTypography.js';
-import { readDocsDropdown } from '../common/docsDropdown.js';
-import { checkDocsImageSize, isArkdownImageSource, readArkdownImage, readArkdownImageLayout, writeArkdownImage, type ArkdownImageSource } from './arkdown/arkdownImages.js';
-import type { ArkdownNode } from './arkdown/arkdownRuntime.js';
+import { readDocsCommentEvent } from '../../../../workbench/contrib/markdown/common/arkdownComments.js';
+import { defaultDocsTypography, DocsFontFamily, readDocsTypography, type DocsTypography } from '../../../../workbench/contrib/markdown/common/arkdownTypography.js';
+import { readDocsDropdown } from '../../../../workbench/contrib/markdown/common/arkdownDropdown.js';
+import { checkDocsImageSize, isArkdownImageSource, readArkdownImage, readArkdownImageLayout, writeArkdownImage, type ArkdownImageSource } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownImages.js';
+import type { ArkdownNode } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownRuntime.js';
 
 /** Writing blocks use the same inert HTML conversion as clipboard imports. */
 export function importDocsHtml(html: string, ownerDocument: Document): string | undefined {
@@ -44,7 +44,7 @@ export function importDocsHtml(html: string, ownerDocument: Document): string | 
 export async function importDocsText(text: string, format: DocumentTextFormat, resource: URI, readResource: (resource: URI) => Promise<Uint8Array>): Promise<string> {
 	if (format === 'text') return text.replace(/\r\n?/g, '\n').split('\n').map(line => escapeMarkdownSyntaxTokens(line)).join('\n');
 	if (!text.includes('![')) return text;
-	const { loadArkdown } = await import('./arkdown/arkdownRuntime.js');
+	const { loadArkdown } = await import('../../../../workbench/contrib/markdown/browser/arkdown/arkdownRuntime.js');
 	const runtime = await loadArkdown();
 	const images: ArkdownNode[] = [];
 	const collect = (nodes: readonly ArkdownNode[]): void => {
@@ -499,7 +499,7 @@ function exportDocsDocx(content: HTMLElement, typography: DocsTypography, signal
 
 /** A detached, presentation-only snapshot shared by the two binary codecs. */
 async function createDocsExportContent(source: string, typography: DocsTypography, owner: Document, signal: AbortSignal): Promise<HTMLElement> {
-	const { loadArkdown } = await import('./arkdown/arkdownRuntime.js');
+	const { loadArkdown } = await import('../../../../workbench/contrib/markdown/browser/arkdown/arkdownRuntime.js');
 	const runtime = await loadArkdown();
 	signal.throwIfAborted();
 	using projection = runtime.createProjection();

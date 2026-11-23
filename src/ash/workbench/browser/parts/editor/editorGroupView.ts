@@ -391,9 +391,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			onHide: didCancel => {
 				menuContext?.dispose();
 				const survivingTab = tab.ownerDocument.getElementById(entry.tabId);
-				if (didCancel && survivingTab) {
+				// A preview iframe focus transition can dismiss a picker opened by the menu.
+				if (survivingTab) {
 					survivingTab.focus();
-				} else {
+				} else if (didCancel) {
 					this.focus();
 				}
 			},
@@ -869,6 +870,22 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (restoreFocus && !this.activePane) { this.focus(); }
 	}
 
+	async reopenEditorWith(input: IResourceEditorInput, preferredEditorId: string, preserveFocus?: boolean): Promise<IEditorPane | undefined> {
+		const original = this.entry(input);
+		if (!original) return undefined;
+		const candidate = original.paneInstance.pane.id === preferredEditorId ? input : input.toUntyped?.() ?? input;
+		const pane = await this.openEditor(candidate, { preferredEditorId, index: this.model.indexOf(input), pinned: true, preserveFocus });
+		if (pane.id === preferredEditorId && pane !== original.paneInstance.pane && this.entry(input) === original) {
+			const target = this.entries.find(entry => entry.paneInstance.pane === pane);
+			if (target) {
+				if (original.sticky) this.stickEditor(target.input);
+				// The replacement now owns the file reference, including any unsaved edits.
+				await this.closeEditor(original.input, { skipConfirmation: true, reason: 'replace' });
+			}
+		}
+		return pane;
+	}
+
 	async replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
 		replacement = await this.resolveEditorInput(replacement);
 		const index = this.model.indexOf(input);
@@ -1074,7 +1091,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		})), this.activeInput, this.activePane, this.model.selectedEditorIds);
 		const input = this.activeInput;
 		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
-			if (input && this.inputs.includes(input)) await this.openEditor(input, { preferredEditorId: id, pinned: true });
+			if (input) await this.reopenEditorWith(input, id);
 		});
 	}
 

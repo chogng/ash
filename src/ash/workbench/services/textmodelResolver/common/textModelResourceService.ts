@@ -81,6 +81,8 @@ export interface TextModelWorkingCopyReference extends TextModelReference {
 export interface TextModelAcquireOptions {
 	/** A hidden pane may build in parallel with syntax setup, then await tokenization.whenReady before publication. */
 	readonly waitForSyntax?: boolean;
+	/** Set to false for views that use the text model without requesting language extensions. */
+	readonly activateLanguageFeatures?: boolean;
 }
 
 /** Resolves resource identities to reference-counted text models and their persisted baseline. */
@@ -102,8 +104,11 @@ export interface IFileTextModelService extends ITextModelResourceService {
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
 	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
+	/** Fires on the first live language-extension request and when that model changes language. */
+	readonly onDidRequestLanguageFeatures: Event<TextModel>;
 	getModel(resource: URI): TextModel | null;
 	getModels(): readonly TextModel[];
+	getModelsRequestingLanguageFeatures(): readonly TextModel[];
 	/** Revalidates an open file after the host regains focus. */
 	refresh(resource: URI): Promise<void>;
 }

@@ -110,7 +110,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		// Clearing an input also cancels acquisition, before a model or webview exists.
 		const inputSignal = AbortSignal.any([signal, inputController.signal]);
 		try {
-			const reference = await this.models.acquire(input, inputSignal);
+			const reference = await this.models.acquire(input, inputSignal, { waitForSyntax: false, activateLanguageFeatures: false });
 			if (inputSignal.aborted) {
 				reference.dispose();
 				inputSignal.throwIfAborted();

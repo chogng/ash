@@ -32,6 +32,7 @@ for (const failure of ['HTTP 404', 'request failed', 'service worker'] as const)
 					}, failure);
 				}
 				await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'preview.md' }).dblclick();
+				await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('# Webview diagnostics'));
 				const expected = failure === 'service worker'
 					? /Webview bootstrap failed Error: intentional webview registration failure/u
 					: failure === 'HTTP 404' ? /Webview bootstrap request failed: HTTP 404 ash-webview:/u : /Webview bootstrap request failed: net::ERR_FAILED ash-webview:/u;

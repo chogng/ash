@@ -42,7 +42,7 @@ Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `
 
 ## 快速理解
 
-通用 Code 编辑功能由客户端 `src/ash/editor` 内置。IDE 和 Agent Window Code 使用 Markdown 源码编辑及扩展预览，Chat 正文使用流式 Markdown，Chat Docs 使用 Sessions 内的 Arkdown。Docs 的源码视图复用 CodeEditor，文本模型、保存和撤销保持同一 owner。旧 `.ash-doc` 复用 Academy 的格式转换器单向迁移为 Markdown，原文件保留。Academy 的论文编辑器、PDF 查看器与文献管理器独立安装，专业结构化模型与排版继续由 Academy 持有。资源加载与 Provider 生命周期沿公开 SDK 和客户端桥。
+通用 Code 编辑功能由客户端 `src/ash/editor` 内置。IDE 和 Agent Window Code 默认使用 Markdown 源码编辑，预览由内置 Markdown 扩展提供。Chat 正文使用流式 Markdown，Chat Docs 与 Code 的可视化 Markdown 视图共用 Workbench 的 Arkdown。Docs 的源码视图复用 CodeEditor，文本模型、保存和撤销保持同一 owner。旧 `.ash-doc` 复用 Academy 的格式转换器单向迁移为 Markdown，原文件保留。Academy 的论文编辑器、PDF 查看器与文献管理器独立安装，专业结构化模型与排版继续由 Academy 持有。资源加载与 Provider 生命周期沿公开 SDK 和客户端桥。
 
 Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、权威状态、权限裁决和通用资源机制。服务商认证、托管平台 API 和特定产品工作流由可选扩展提供；实现需要 Rust、后台执行或跨窗口存活，都不能单独成为进入核心的理由。
 
@@ -114,32 +114,11 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 文档扫描只使用发起客户端的文件服务可访问的工作区目录。
 补全触发字符属于语言 Provider 注册契约。取消和扩展退出会终止对应请求。
 
-`markdown-language-features` 由一个独立 Rust 扩展程序提供 Markdown 预览、富文本编辑和链接语义功能。
-内部 `parser` 模块使用 `pulldown-cmark` 解析带版本的源码快照，返回渲染节点和 UTF-16 源码范围；
-不再注册独立的解析扩展或跨扩展解析命令。通用 Rust SDK 提供命令、自定义文本编辑器、语言 Provider 和文档观察。
-高亮、大纲、折叠与结构选择由编辑器已有的共享 Tree-sitter 提供，grammar/query 继续归 `markdown-basics`。
-公式转换由独立启停的 `markdown-math` Rust 扩展通过 `katex-rs = 0.3.0` 提供。
-Markdown 识别行内、块级公式和 `math` 围栏，按文档顺序一次提交 `math.render.v2` 请求；
-每次渲染独享宏定义，按公式返回 HTML + MathML 或结构化的源码回退诊断。序列化响应预算为 512 KiB，
-输出配额不足时保留成功的公式，消费者拥有源码展示与诊断本地化。共享宿主按产品包声明的 channel→provider 授权路由，
-首次调用才激活精确 Provider，继承调用取消、截止时间和扩展生命周期。停用数学扩展时保留公式源码。
-公式字体和样式由数学包提供并编入 Markdown 静态视图，浏览器不再运行 KaTeX JS 公式转换。
-静态浏览器视图资源随功能扩展打包，通过通用 CustomTextEditor 宿主加载；没有 JS 扩展入口。
-桌面端和已连接后端的 Web 使用同一 Rust Provider；纯 Web 的语法 WASM 降级不提供可执行扩展能力。
-客户端 JSON envelope 上限为 64 MiB、100 万节点、每集合 262144 项及深度 160，允许快照和渲染树一同传输；
-各扩展进程仍按各自已授权额度校验。富编辑 HTML 只保留启动数据，完整文档通过宿主初始消息队列投递，
-避免重复嵌入 HTML；文档、源码视图与富编辑视图继续共用同一个撤销历史。客户端使用现有多行 InputBox
-编辑当前段落，Escape 恢复排版；全文源码输入支持跨段落选区。输入法组合结束后才提交局部源码变化，
-未编辑的换行、空白、转义和引用定义保持原样。原始 HTML 只作为文本显示，不主动加载远程图片。
-工作台通用 `WebviewEditor` 承载这些视图，`CustomTextEditorModel` 引用源码的共享文本模型。
-预览用源文档 URI 作为资源基址；相对图片、样式、字体和模块路径通过隔离 Webview 的资源通道加载。
-允许读取的目录是当前工作区与源文档目录，实际读取还必须满足已有文件服务的授权。
-切换文档和关闭视图后，旧请求不会向新页面发送结果。
-富文本视图只保留当前显示内容，编辑必须带上共享模型的版本；撤销、重做、保存和关闭确认均由同一文档状态决定。
-版本冲突保留视图中的草稿，并提供重新载入操作。静态视图资源由扩展包提供，工作台按当前目录代次
-读取并在沙箱内加载，不占用文档编辑消息的 JSON 限额；Provider 退出时撤销注册并取消在途调用。
-“打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
-源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
+`markdown-language-features` 提供只读 Markdown 预览、链接语义与语言功能。高亮、大纲、折叠和结构选择继续使用编辑器的 Tree-sitter，语法资源由 `markdown-basics` 提供。公式由按需激活的 `markdown-math` 处理，Arkdown、预览与 Chat 使用同一公式语法。
+
+预览通过 `WebviewEditor` 读取共享文本模型的快照，使用源文档 URI 作为资源基址。隔离的资源通道按文件服务授权读取相对图片、样式与字体。打开或恢复预览标签时按需启动预览 Provider。窗口关闭、视图切换或扩展停用会取消相关请求。
+
+Workbench 在启动时登记 Arkdown 的可视化编辑器，首次打开时才加载组件、样式与 Rust/WASM。`markdown.showRichEditor` 打开同一文件的独立标签，`markdown.reopenAsRichEditor` 替换当前标签。回到源码的命令由 Workbench 提供。可视化编辑沿用文件服务授权读取相对图片，并通过工作台打开文档链接。源码、预览与可视化视图使用同一个文本模型，保存和备份由 Workbench 的工作副本服务管理。Chat Docs 使用 Arkdown 并被动引用文本模型。IDE 和 Agent Window Code 打开 Markdown 源码时按需激活语言扩展。
 
 ### 已安装的第一方编辑器客户端
 

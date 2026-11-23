@@ -288,7 +288,7 @@ test('editor commands close the active tab and reopen it with a chosen editor', 
 		const closedInputs: typeof activeInput[] = [];
 		let cancelClose = false;
 		const activeGroup = {
-			openEditor: async (_input: unknown, options: { preferredEditorId: string; }) => { chosen = options.preferredEditorId; },
+			reopenEditorWith: async (_input: unknown, preferredEditorId: string) => { chosen = preferredEditorId; },
 			id: 1,
 			inputs: [activeInput],
 			selectedInputs: [activeInput],
@@ -299,7 +299,7 @@ test('editor commands close the active tab and reopen it with a chosen editor', 
 		let reopenedOtherGroup = false;
 		const otherGroup = {
 			id: 0,
-			openEditor: async () => { reopenedOtherGroup = true; },
+			reopenEditorWith: async () => { reopenedOtherGroup = true; },
 			inputs: [otherInput],
 			selectedInputs: [otherInput],
 			editors: [{ input: otherInput }],

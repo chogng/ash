@@ -914,7 +914,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	async reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> {
 		const input = this.activeInput;
 		if (!input) return undefined;
-		return await this.openEditor(input, { preferredEditorId, pinned: true }, this.modalEditor.isVisible ? 'modalGroup' : 'activeGroup');
+		return this.modalEditor.isVisible
+			? this.openEditor(input, { preferredEditorId, pinned: true }, 'modalGroup')
+			: this._activeGroup.reopenEditorWith(input, preferredEditorId);
 	}
 
 	protected getFloatingBorderWidth(): number {

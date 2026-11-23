@@ -8,7 +8,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from '../../../../nls.js';
 import type { ArtifactToolbarAction } from '../../artifact/browser/widget/artifactToolbar.js';
-import type { ArkdownEditor } from './arkdown/arkdownEditor.js';
+import type { ArkdownEditor } from '../../../../workbench/contrib/markdown/browser/arkdown/arkdownEditor.js';
 import { getDocsMenuActionViewItem, type DocsSelectionAction } from './docsToolbar.js';
 
 class SelectionActionBar extends WorkbenchToolBar {

@@ -1,4 +1,4 @@
-import { startMarkdownMathExtension, startMarkdownExtension } from '../../fixtures/markdownExtension.js';
+import { startMarkdownMathExtension } from '../../fixtures/markdownExtension.js';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../fixtures/chatGPTModels.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -132,10 +132,10 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>> | undefined;
 test.afterAll(async () => { await math?.dispose(); });
-async function installMathProvider(page: Page): Promise<{ lists: number; renders: number; }> {
+async function installMathProvider(page: Page, path = '**/__chat_math'): Promise<{ lists: number; renders: number; }> {
 	const counters = { lists: 0, renders: 0 };
 	math ??= await startMarkdownMathExtension();
-	await page.route('**/__chat_math', async route => {
+	await page.route(path, async route => {
 		try {
 			if (route.request().method() === 'POST') {
 				counters.renders++;
@@ -1362,27 +1362,31 @@ for (const locale of ['en', 'zh-CN']) {
 		const cases = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
 		const text = cases.map(entry => entry.markdown).join('\n\n');
 		const expected = cases.flatMap(entry => entry.formulas);
-		const extension = await startMarkdownExtension(locale);
 		const editor = await context.newPage();
 		try {
-			await editor.route('**/__markdown_render**', async route => {
-				await route.fulfill({ json: await extension.render('vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
-			});
+			await installMathProvider(editor, '**/__markdown_math');
 			await installMathProvider(page);
 			await mockChatGPTRequests(page, text);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-			await editor.goto(`/markdownEditor.html?locale=${locale}`);
-			await expect(editor.locator('.ash-markdown-content .katex')).toHaveCount(2);
-			await editor.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
+			await editor.goto(`/markdownEditorHost.html?locale=${locale}`);
+			await expect.poll(() => editor.evaluate(() => window.ashMarkdownHost?.sharedModel)).toBe(true);
+			await editor.evaluate(text => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, text), text);
 			const chat = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part');
-			const markdown = editor.locator('.ash-markdown-content');
+			const markdown = editor.locator('.stanza-arkdown-prose');
 			for (const content of [chat, markdown]) {
 				await expect(content.locator('.ash-markdown-math')).toHaveCount(expected.length);
 				await expect(content.locator('[data-math-diagnostic]')).toHaveCount(2);
 				await expect(content.locator('math')).toHaveCount(expected.length - 2);
 				await expect(content.locator('code').first()).toHaveText('$x$');
-				await content.evaluate(element => { Object.assign((element as HTMLElement).style, { fontFamily: 'system-ui, sans-serif', fontSize: '16px', lineHeight: '1.5', width: '360px' }); });
+				await content.evaluate(element => {
+					Object.assign((element as HTMLElement).style, { fontFamily: 'system-ui, sans-serif', fontSize: '16px', lineHeight: '1.5', width: '360px' });
+					// Native document tables use smaller body text. Compare formulas at the same inherited size.
+					for (const table of element.querySelectorAll('table')) {
+						table.style.fontSize = 'inherit';
+						table.style.lineHeight = 'inherit';
+					}
+				});
 			}
 			await Promise.all([page.evaluate(() => document.fonts.ready), editor.evaluate(() => document.fonts.ready)]);
 			for (const content of [chat, markdown]) {
@@ -1426,7 +1430,7 @@ for (const locale of ['en', 'zh-CN']) {
 					if (chatHeight !== undefined) { expect(Math.abs(chatHeight - markdownHeight!)).toBeLessThan(1); }
 				}
 			}
-		} finally { await editor.close(); await extension.dispose(); }
+		} finally { await editor.close(); }
 	});
 }
 

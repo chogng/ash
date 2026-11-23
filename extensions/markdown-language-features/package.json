@@ -37,26 +37,6 @@
         "command": "markdown.reopenAsPreview",
         "title": "%markdown.reopenAsPreview.title%",
         "icon": "$(preview)"
-      },
-      {
-        "command": "markdown.showSource",
-        "title": "%markdown.showSource.title%",
-        "icon": "$(file-code)"
-      },
-      {
-        "command": "markdown.reopenAsSource",
-        "title": "%markdown.reopenAsSource.title%",
-        "icon": "$(file-code)"
-      },
-      {
-        "command": "markdown.reopenAsRichEditor",
-        "title": "%markdown.reopenAsRichEditor.title%",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "markdown.showRichEditor",
-        "title": "%markdown.showRichEditor.title%",
-        "icon": "$(edit)"
       }
     ],
     "menus": {
@@ -71,16 +51,6 @@
           "command": "markdown.reopenAsPreview",
           "when": "resourceLangId == markdown && activeEditor == stanza.editor.code",
           "group": "navigation@2"
-        },
-        {
-          "command": "markdown.reopenAsSource",
-          "when": "activeEditor == vscode.markdown.preview.editor",
-          "group": "navigation@2"
-        },
-        {
-          "command": "markdown.reopenAsSource",
-          "when": "activeEditor == vscode.markdown.editor",
-          "group": "navigation@2"
         }
       ],
       "editor/title/context": [
@@ -88,21 +58,6 @@
           "command": "markdown.showPreview",
           "when": "resourceLangId == markdown",
           "group": "1_open@10"
-        },
-        {
-          "command": "markdown.showSource",
-          "when": "activeEditor == vscode.markdown.preview.editor",
-          "group": "1_open@10"
-        },
-        {
-          "command": "markdown.reopenAsRichEditor",
-          "when": "resourceLangId == markdown",
-          "group": "1_open@11"
-        },
-        {
-          "command": "markdown.showRichEditor",
-          "when": "resourceLangId == markdown",
-          "group": "1_open@12"
         }
       ]
     },
@@ -110,28 +65,6 @@
       {
         "viewType": "vscode.markdown.preview.editor",
         "displayName": "%markdown.preview.editor%",
-        "priority": "option",
-        "selector": [
-          {
-            "filenamePattern": "*.md"
-          },
-          {
-            "filenamePattern": "*.markdown"
-          },
-          {
-            "filenamePattern": "*.mdown"
-          },
-          {
-            "filenamePattern": "*.mkd"
-          },
-          {
-            "filenamePattern": "*.mkdn"
-          }
-        ]
-      },
-      {
-        "viewType": "vscode.markdown.editor",
-        "displayName": "%markdown.rich.editor%",
         "priority": "option",
         "selector": [
           {
@@ -532,11 +465,6 @@
       "math.render.v2": "ash.markdown-math"
     },
     "webviews": [
-      {
-        "entry": "src/richEditor.js",
-        "script": "media/richEditor.js",
-        "style": "media/richEditor.css"
-      },
       {
         "entry": "src/preview.js",
         "script": "media/preview.js",

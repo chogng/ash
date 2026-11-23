@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { DocsFontFamily, readDocsTypography, writeDocsTypography } from '../../common/docsTypography.js';
+import { DocsFontFamily, readDocsTypography, writeDocsTypography } from '../../../../../workbench/contrib/markdown/common/arkdownTypography.js';
 
 test('typography metadata accepts only complete bounded document prefixes', () => {
 	const value = { headings: DocsFontFamily.Serif, text: DocsFontFamily.Sans };

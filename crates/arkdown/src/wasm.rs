@@ -18,6 +18,13 @@ pub fn parse_markdown_json(source: &str) -> Result<String, JsValue> {
     encode(&parse(source).map_err(js_error)?)
 }
 
+/// Describe the editable values in a single already parsed top-level code fence.
+#[wasm_bindgen(js_name = embeddedEditorJson)]
+pub fn embedded_editor_json(info: &str, source: &str) -> Result<String, JsValue> {
+    crate::check_source_size(source.len()).map_err(js_error)?;
+    encode(&crate::embedded_editor::resolve(info, source))
+}
+
 /// Disposable read-only cache; the host text model remains the source authority.
 #[wasm_bindgen(js_name = ArkdownProjection)]
 #[derive(Default)]

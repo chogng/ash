@@ -91,16 +91,19 @@ registerAction2(class ReopenWithAction extends Action2 {
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		const groupId = typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number' ? context.groupId : undefined;
 		const editorIndex = typeof context === 'object' && context !== null && 'editorIndex' in context && typeof context.editorIndex === 'number' ? context.editorIndex : undefined;
+		const target = typeof context === 'object' && context !== null && 'editor' in context ? context.editor : undefined;
 		const part = accessor.get(IEditorPart);
 		const group = groupId !== undefined ? part.groups.find(group => group.id === groupId) : part.activeGroup;
-		const input = editorIndex === undefined ? group?.activeInput : group?.inputs[editorIndex];
+		const input = target !== undefined
+			? group?.inputs.find(input => input === target)
+			: editorIndex === undefined ? group?.activeInput : group?.inputs[editorIndex];
 		if (!group || !input) return;
 
 		const picker = accessor.get(IInstantiationService).createInstance(OpenWithEditorPicker);
 		const options = await picker.pick(input);
 		// A tab or its group may have closed while the picker was awaiting input.
 		if (!options || !part.groups.includes(group) || !group.inputs.includes(input)) return;
-		await group.openEditor(input, { ...options, pinned: true });
+		await group.reopenEditorWith(input, options.preferredEditorId, options.preserveFocus);
 	}
 });
 
@@ -111,9 +114,10 @@ CommandsRegistry.register(REOPEN_ACTIVE_EDITOR_WITH_COMMAND_ID, async (accessor,
 	if (typeof override !== 'string') throw new TypeError('Editor override must be a string');
 	const part = accessor.get(IEditorPart);
 	if (args.length === 0) { await part.reopenActiveEditorWith(override === 'default' ? CODE_EDITOR_ID : override); return; }
-	for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
+	const { groupedEditors, preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+	for (const { group, editors } of groupedEditors) {
 		const owner = part.groups.find(candidate => candidate.id === group.id);
-		for (const input of editors) await owner?.openEditor(input, { preferredEditorId: override === 'default' ? CODE_EDITOR_ID : override, pinned: true });
+		for (const input of editors) await owner?.reopenEditorWith(input, override === 'default' ? CODE_EDITOR_ID : override, preserveFocus);
 	}
 });
 

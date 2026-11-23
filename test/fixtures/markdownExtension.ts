@@ -122,7 +122,6 @@ export async function startMarkdownExtension(language = 'en', documents: readonl
 	const invoke = runtime.invoke;
 	return {
 		...runtime,
-		async parse(snapshot: any) { return (await invoke('vscode.markdown.editor', 'resolveCustomTextEditor', { document: { languageId: 'markdown', readOnly: false, ...snapshot } })).update; },
 		async render(registrationId: string, payload: any) {
 			const result = await invoke(registrationId, 'resolveCustomTextEditor', payload);
 			if (result.resources) {

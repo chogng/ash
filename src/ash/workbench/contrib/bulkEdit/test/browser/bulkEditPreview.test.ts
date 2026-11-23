@@ -244,6 +244,8 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	readonly onModelAdded = this.modelAdded.event;
 	readonly onModelRemoved = EventUtils.None;
 	readonly onModelLanguageChanged = EventUtils.None;
+	readonly onDidRequestLanguageFeatures = EventUtils.None;
+	getModelsRequestingLanguageFeatures(): readonly TextModel[] { return []; }
 
 	constructor(resources: readonly (readonly [URI, string])[], persistentResources: readonly URI[] = []) {
 		super();

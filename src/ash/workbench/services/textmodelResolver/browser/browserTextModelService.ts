@@ -71,6 +71,7 @@ interface TextModelEntry {
 	saveQueue: Promise<void>;
 	refresh: TextModelRefresh | undefined;
 	references: number;
+	languageFeatureReferences: number;
 }
 
 /** UTF-16 prefix and suffix known to match the saved text at this model version. */
@@ -131,14 +132,19 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
 	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
+	private readonly languageFeaturesRequested = this._register(new Emitter<TextModel>());
 	private readonly encodingChanged = this._register(new Emitter<URI>());
 	public readonly onDidChangeEncoding = this.encodingChanged.event;
 	public readonly onModelAdded = this.modelAdded.event;
 	public readonly onModelRemoved = this.modelRemoved.event;
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
+	public readonly onDidRequestLanguageFeatures = this.languageFeaturesRequested.event;
 
 	public getModel(resource: URI): TextModel | null { return this.findEntry(resource)?.[1].model ?? null; }
 	public getModels(): readonly TextModel[] { return [...this.entries.values()].map(entry => entry.model); }
+	public getModelsRequestingLanguageFeatures(): readonly TextModel[] {
+		return [...this.entries.values()].filter(entry => entry.languageFeatureReferences > 0).map(entry => entry.model);
+	}
 
 	public getEncodingSupport(resource: URI): IEncodingSupport | undefined {
 		const entry = this.findEntry(resource)?.[1];
@@ -307,7 +313,10 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					}
 				}
 			}),
-			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
+			languageChangeListener: model.onDidChangeLanguage(event => {
+				this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage });
+				if (entry.languageFeatureReferences > 0) this.languageFeaturesRequested.fire(model);
+			}),
 			savedText,
 			comparison: { baseline: savedText, version: model.version, eol: model.getEOL(), length: model.length, prefix: startsDirty ? 0 : model.length, suffix: startsDirty ? 0 : model.length },
 			revision: content.revision,
@@ -322,6 +331,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			saveQueue: Promise.resolve(),
 			refresh: undefined,
 			references: 0,
+			languageFeatureReferences: 0,
 		};
 		this.entries.set(key, entry);
 		this.modelAdded.fire(model);
@@ -346,7 +356,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
-		const reference = this.reference(key, entry);
+		const reference = this.reference(key, entry, options?.activateLanguageFeatures !== false);
 		try {
 			// Ordinary callers receive lexical support before the viewport. Hidden
 			// panes can overlap their construction and retain this gate at publication.
@@ -359,13 +369,18 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		}
 	}
 
-	private reference(key: string, entry: TextModelEntry): TextModelReference {
+	private reference(key: string, entry: TextModelEntry, activateLanguageFeatures = false): TextModelReference {
 		entry.references += 1;
+		if (activateLanguageFeatures) {
+			entry.languageFeatureReferences += 1;
+			if (entry.languageFeatureReferences === 1) this.languageFeaturesRequested.fire(entry.model);
+		}
 		let released = false;
 		const dispose = (): void => {
 			if (released) return;
 			released = true;
 			if (this.entries.get(key) !== entry) return;
+			if (activateLanguageFeatures) entry.languageFeatureReferences -= 1;
 			entry.references -= 1;
 			if (entry.references > 0) return;
 			this.entries.delete(key);
@@ -383,14 +398,14 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			},
 			onDidChangeExternalChange: entry.externalChangeEmitter.event,
 			save: (signal: AbortSignal, options?: ISaveOptions) => this.save(entry, signal, options),
-			saveAs: (resource: URI, signal: AbortSignal) => this.saveAs(entry, resource, signal),
+			saveAs: (resource: URI, signal: AbortSignal) => this.saveAs(entry, resource, signal, activateLanguageFeatures),
 			revert: (signal: AbortSignal) => this.revert(entry, signal),
 			dispose,
 			[Symbol.dispose]: dispose,
 		});
 	}
 
-	private async saveAs(entry: TextModelEntry, resource: URI, signal: AbortSignal): Promise<void> {
+	private async saveAs(entry: TextModelEntry, resource: URI, signal: AbortSignal, activateLanguageFeatures: boolean): Promise<void> {
 		this.ensureEntryAlive(entry);
 		if (this.uriIdentity.extUri.isEqual(resource, entry.resource)) return this.save(entry, signal);
 		const snapshot = entry.model.getTextBuffer().createSnapshot();
@@ -399,7 +414,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const languageId = entry.model.getLanguageId();
 		const encoding = entry.encoding;
 		// Save As runs against the destination so providers receive its URI and inferred language.
-		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
+		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal, { activateLanguageFeatures });
 		if (target.model === entry.model) return target.save(signal);
 		// Check the resolved, shared model after acquisition so edits made while it was loading are protected.
 		if (target.isDirty) {

@@ -1,6 +1,8 @@
 import { ICollabService } from '../services/collab/common/collabService.js';
 import { CollabService } from '../services/collab/browser/collabService.js';
 import { AppServerCollabService } from '../services/collab/browser/appServerCollabService.js';
+import { BufferCollabService } from '../services/collab/browser/bufferCollabService.js';
+import { IBufferCollabService } from '../services/collab/common/bufferCollabService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
@@ -779,6 +781,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRemoteConnectionApi, api.remoteConnections ?? UnavailableRemoteConnectionApi);
 		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
 		services.registerSingleton(ICollabService, () => services.createInstance(CollabService, new AppServerCollabService(api.collab, api.events)));
+		services.registerSingleton(IBufferCollabService, () => services.createInstance(BufferCollabService));
 		const dialogService = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogService.model);
 		if (nativeHostApi) {
