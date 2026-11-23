@@ -3,6 +3,7 @@
 `ash-prompts` 隔离共享提示词资产与渲染依赖，供根 Agent、子 Agent 和共享流程使用。
 
 - `AGENT_INSTRUCTIONS`：[`base_prompt.md`](templates/agent/base_prompt.md)，未登记模型的默认基础提示词。
+- 窗口提示词按发送窗口选择 [IDE](templates/surfaces/ide.md) 或 [Agents Window](templates/surfaces/agents-window.md)，随当前 Turn 保存。
 - `permissions_instructions`：工具授权说明与当前 Turn 的三种批准模式。
 - `COMPACTION_PROMPT`、`checkpoint_prompt`：生成摘要，以及压缩后的续接说明和来源边界。
 - `HANDOFF_PROMPT`：当前模型在切换窗口前保存目标、纠正、已完成行动、证据和下一步；执行与持久化规则见[上下文压缩](../../docs/core-context.md#两种自动压缩方式)。
@@ -12,7 +13,7 @@
 
 Core 按实际运行状态选择模板、分配上下文预算并组装请求。角色正文归 `agent-roles`，完整模型正文登记在 `model-provider-info/models/<provider>.json`，由 `models-manager` 选择并冻结；本 crate 不读取配置、访问 Git、判断授权或调用模型。
 
-下一版的共同核心、IDE／Agents Window／TUI 界面说明及任务流程在 [`drafts/`](drafts/) 中审阅，设计理由与逐项入口见[提示词设计依据](docs/prompt-design.md)。这些文件是未接入的文本草案，不替换上述运行时资产，也不自动进入模型请求；后续接入须沿用准确模型正文、Role、模式、授权和工具的组合契约。
+共同核心、TUI 界面说明和任务流程的草案保存在 [drafts/](drafts/)。各份正文的设计理由见[提示词设计依据](docs/prompt-design.md)。
 
 权限说明按 Turn 已保存的 `approval_mode` 选择。Ash 的沙箱和授权按每次工具调用判定，因此使用自身的动作授权模板。不会注入 Codex 的 `sandbox_permissions`、`prefix_rule` 等参数，也不会把批准旁路说明为全盘访问。
 

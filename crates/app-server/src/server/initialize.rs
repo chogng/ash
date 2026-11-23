@@ -136,7 +136,7 @@ impl AppServer {
             params.client_info.name.as_str(),
             "ash-cli" | "ash-cli-remote" | "ash-cli-management" | "ash-cli-exec"
         );
-        connection.set_initialized();
+        connection.set_initialized(params.capabilities.window);
         let (file_system, git, content_search, codebase, cloud_codebase, terminal, debug_adapter) =
             self.env_features();
         let extensions = self

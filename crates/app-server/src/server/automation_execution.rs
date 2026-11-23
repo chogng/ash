@@ -284,6 +284,7 @@ impl AppServer {
                     .with_turn_precondition(precondition)
                     .start_turn_request(
                         ThreadMutation {
+                            window: None,
                             ide_window_id: None,
                             connection_id: None,
                             command_id: command.clone(),
@@ -408,6 +409,7 @@ impl AppServer {
             self.agent_processor()
                 .interrupt_turn_request(
                     ThreadMutation {
+                        window: None,
                         ide_window_id: None,
                         connection_id: None,
                         command_id: command_id("stop", &run.id)?,

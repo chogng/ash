@@ -8,6 +8,14 @@ use std::error::Error;
 use std::fmt;
 use ts_rs::TS;
 
+/// The workbench window that submitted a Turn.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkbenchWindow {
+    Ide,
+    AgentWindow,
+}
+
 /// Immutable instructions selected before one Agent Turn is durably accepted.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +32,9 @@ pub struct TurnInstructions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     mode_instructions: Option<InstructionText>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    window_instructions: Option<InstructionText>,
     /// Task approach resolved by the host for this execution, from a command or owning workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -46,6 +57,7 @@ impl TurnInstructions {
             shared: Vec::new(),
             model_guidance: None,
             mode_instructions: None,
+            window_instructions: None,
             task_command: None,
         };
         instructions.validate()?;
@@ -68,6 +80,9 @@ impl TurnInstructions {
         }
         for shared in &self.shared {
             shared.validate()?;
+        }
+        if let Some(window) = &self.window_instructions {
+            window.validate()?;
         }
         if let Some(mode) = &self.mode_instructions {
             mode.validate()?;
@@ -113,6 +128,16 @@ impl TurnInstructions {
             }
         }
         self
+    }
+
+    /// Replaces any inherited window guidance before a new Turn is accepted.
+    pub fn with_window(mut self, instructions: Option<InstructionText>) -> Self {
+        self.window_instructions = instructions;
+        self
+    }
+
+    pub fn window_instructions(&self) -> Option<&InstructionText> {
+        self.window_instructions.as_ref()
     }
 
     /// Records the model instruction decision made before this Turn was accepted.

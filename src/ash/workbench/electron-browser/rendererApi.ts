@@ -1,3 +1,4 @@
+import type { WorkbenchWindow } from '../../platform/agentHost/common/agent.js';
 import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import type {
 	IRuntimeEnvironment,
@@ -129,7 +130,7 @@ interface WorkspaceStartupOptions {
 }
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; readonly transportHandshake?: boolean; readonly backupClientId?: 'ash-editor' | 'ash-sessions'; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>, localApi?: ElectronRendererLocalApi): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly window: WorkbenchWindow; readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; readonly transportHandshake?: boolean; readonly backupClientId?: 'ash-editor' | 'ash-sessions'; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>, localApi?: ElectronRendererLocalApi): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const local = localApi ?? resources.add(new ElectronRendererLocalApi(mainProcessService));
@@ -361,6 +362,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		}
 
 		const agentHosts = hostCapabilities.agentHosts ? resources.add(connectionServices.createInstance(RemoteAgentHostService, {
+			window: hostCapabilities.window,
 			browser: hostCapabilities.browser,
 			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
 			onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),

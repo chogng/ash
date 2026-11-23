@@ -1,3 +1,4 @@
+import type { WorkbenchWindow } from '../../platform/agentHost/common/agent.js';
 import { WebWorkerService } from '../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { createAppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
 import { addDisposableListener, windowOpenNoOpener } from '../../base/browser/dom.js';
@@ -13,7 +14,7 @@ import { createWebUpdateProvider } from '../services/update/browser/updateServic
 declare const __ASH_WEB_APP_SERVER__: boolean;
 
 /** Connects a browser page to its App Server workspace before building either Workbench. */
-export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly RendererCapabilityContribution[] = [], textDocuments = false, appTools = false): Promise<IDisposable | undefined> {
+export async function connectBrowserWorkbenchHost(windowKind: WorkbenchWindow, rendererCapabilities: readonly RendererCapabilityContribution[] = [], textDocuments = false, appTools = false): Promise<IDisposable | undefined> {
 	if (globalThis.ashWebWorkbenchHost !== undefined || !__ASH_WEB_APP_SERVER__) return undefined;
 	let transport: AppServerWebSocketTransport | undefined;
 	try {
@@ -32,7 +33,7 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 				},
 			},
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-		}, { capabilities: { ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities, createAppServerFrameDecoder(new WebWorkerService()));
+		}, { capabilities: { window: windowKind, ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities, createAppServerFrameDecoder(new WebWorkerService()));
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
 			updateProvider: createWebUpdateProvider(window.document),

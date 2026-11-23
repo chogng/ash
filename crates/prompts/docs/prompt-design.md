@@ -2,7 +2,7 @@
 
 Ash 的提示词需要让同一个助手在 IDE、Agents Window 和 TUI 中理解用户意图、使用真实能力并交付可信结果。我们区分界面、任务和职责，保持共同的身份、事实标准、授权边界与任务连续性。
 
-本文件供提示词维护者阅读，记录为什么采用某条规则、规则归谁以及怎样判断它是否有效。它不作为运行时提示词注入。2026-10-09 的首版交付是文本草案与设计依据；`crates/prompts/drafts/` 尚未接入运行时，也没有真实模型效果评测。
+本文件供提示词维护者阅读，记录为什么采用某条规则、规则归谁以及怎样判断它是否有效。它不作为运行时提示词注入。IDE 和 Agents Window 的界面提示词已按发送窗口接入。`crates/prompts/drafts/` 尚未接入运行时，也没有真实模型效果评测。
 
 ## 为什么区分三种界面
 
@@ -22,17 +22,17 @@ IDE 与 TUI 共享编码流程。TUI 的呈现方式和编辑器上下文通常�
 
 首版将共同规则、界面规则和任务流程分别写成可审阅的正文。每个单元只有一个目的，避免同时加载无关流程。
 
-| 单元               | 草案                                                    | 负责的决定                                                   |
-| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------ |
-| 共同核心           | [core.md](../drafts/core.md)                            | 身份、意图、事实与来源、行动边界、持续执行、沟通、记忆和续接 |
-| IDE 界面           | [ide.md](../drafts/surfaces/ide.md)                     | 如何使用编辑器上下文以及呈现代码结果                         |
-| Agents Window 界面 | [agents-window.md](../drafts/surfaces/agents-window.md) | 如何在多个任务、项目、会话与成果之间保持方向                 |
-| TUI 界面           | [tui.md](../drafts/surfaces/tui.md)                     | 如何在终端中使用和呈现实际能力                               |
-| 对话               | [chat.md](../drafts/workflows/chat.md)                  | 讨论、解释、建议和创意对话的交付标准                         |
-| 编码               | [coding.md](../drafts/workflows/coding.md)              | 调查、实现、调试、审查与代码核验                             |
-| Cowork             | [cowork.md](../drafts/workflows/cowork.md)              | 研究、数据、文件和文档成果的完整交付                         |
-| Design             | [design.md](../drafts/workflows/design.md)              | 将设计要求变成合适的视觉或交互成果并核验                     |
-| 个人助手           | [assistant.md](../drafts/workflows/assistant.md)        | 个人上下文、承诺、记忆、外部行动与受托的主动工作             |
+| 单元               | 正文                                                       | 负责的决定                                                   |
+| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------ |
+| 共同核心           | [core.md](../drafts/core.md)                               | 身份、意图、事实与来源、行动边界、持续执行、沟通、记忆和续接 |
+| IDE 界面           | [ide.md](../templates/surfaces/ide.md)                     | 如何使用编辑器上下文以及呈现代码结果                         |
+| Agents Window 界面 | [agents-window.md](../templates/surfaces/agents-window.md) | 如何在多个任务、项目、会话与成果之间保持方向                 |
+| TUI 界面           | [tui.md](../drafts/surfaces/tui.md)                        | 如何在终端中使用和呈现实际能力                               |
+| 对话               | [chat.md](../drafts/workflows/chat.md)                     | 讨论、解释、建议和创意对话的交付标准                         |
+| 编码               | [coding.md](../drafts/workflows/coding.md)                 | 调查、实现、调试、审查与代码核验                             |
+| Cowork             | [cowork.md](../drafts/workflows/cowork.md)                 | 研究、数据、文件和文档成果的完整交付                         |
+| Design             | [design.md](../drafts/workflows/design.md)                 | 将设计要求变成合适的视觉或交互成果并核验                     |
+| 个人助手           | [assistant.md](../drafts/workflows/assistant.md)           | 个人上下文、承诺、记忆、外部行动与受托的主动工作             |
 
 这里的工作类型是写作与评测单元，不是新增的协议枚举、Role 或产品菜单。识别任务类型不会选择一个拥有更多权限的 Agent，也不会自动切换 Agent 模式。
 
@@ -131,7 +131,7 @@ Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文
 
 因此，`core.md` 首先是共同规则的写作与评测基线，不能直接再叠到所有已有完整基础正文上。首轮接入应按这份基线修订适用模型的完整正文和默认正文，保留有证据的模型表达差异；界面与任务说明的选择、归属和预算需进入真实组装链路的验证。若以后改为共同核心加精简模型指导，需要单独修改组合契约并评测，不通过文本草案暗中完成迁移。
 
-本轮不修改现有运行时正文、模型 JSON、Role、模式或工具协议。新正文放在 `drafts/`，不从 Rust 导出、不自动加载、不放进当前编译模板目录。阅读入口放在 [Prompts README](../README.md)，现有架构事实继续由 [Agent Harness](../../../docs/agent-harness.md) 和 [Agent 指令组合](agent-instructions.md) 维护。
+发送窗口在连接时声明自己的类型。App Server 为每个新 Turn 选取 `templates/surfaces/` 中对应的正文。排队消息保留发送窗口，已开始的 Turn 使用接受时保存的正文。其余设计草案保存在 `drafts/`。阅读入口放在 [Prompts README](../README.md)，现有架构事实继续由 [Agent Harness](../../../docs/agent-harness.md) 和 [Agent 指令组合](agent-instructions.md) 维护。
 
 ## 参考与采用理由
 
@@ -179,7 +179,7 @@ Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文
 
 评测、Trace 和本文件共同承担改进依据：独立验收判断成果是否满足需求，Trace 解释系统实际接收、尝试、执行和返回了什么，MIND 记录据此选择规则或机制的原因。一次任务通过仍可能包含重复调查、无效重试、额外文件或难以审阅的成果；一次任务失败也可能来自输入组装、工具、执行环境或验收设施，需要沿实际证据定位。
 
-Delta 在 [Beyond Pass Rate](https://delta.dev/blog/beyond-pass-rate) 中使用公开任务评测，并通过具体运行过程讨论代码可审阅性、工具失败和调度开销。这支持我们同时检查最终成果与执行过程；文章的有限任务集和产品比较不直接证明某条提示词规则更优。[OpenAI Docs 的评测指南](https://developers.openai.com/api/docs/guides/evaluation-best-practices) 也要求尽早建立任务评测、积累日志中的用例并持续比较。提示词草案仍未接入运行时；本次后续工作按用户要求实现 Trace 的评测分析与报告，下面明确区分已有能力和后续验收条件。
+Delta 在 [Beyond Pass Rate](https://delta.dev/blog/beyond-pass-rate) 中使用公开任务评测，并通过具体运行过程讨论代码可审阅性、工具失败和调度开销。这支持我们同时检查最终成果与执行过程；文章的有限任务集和产品比较不直接证明某条提示词规则更优。[OpenAI Docs 的评测指南](https://developers.openai.com/api/docs/guides/evaluation-best-practices) 也要求尽早建立任务评测、积累日志中的用例并持续比较。共同核心与任务流程仍是草案；本次后续工作按用户要求实现 Trace 的评测分析与报告，下面明确区分已有能力和后续验收条件。
 
 ### 从指定基准测试对话吸收的设计
 

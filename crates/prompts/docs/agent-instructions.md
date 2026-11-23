@@ -11,6 +11,7 @@ Core 按独立来源组装指令。工具、目录和外部服务的授权由对
 | 内容                      | 表达什么                                                         | 目标 owner                                                                      |
 | ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | `models/<provider>.json` 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
+| 窗口提示词                | IDE 或 Agents Window 发起本轮对话时，选用该窗口的正文            | [窗口提示词](../templates/surfaces/)                                            |
 | Agent 模式                | 当前 Turn 的任务处理方式，作为独立指令资产保存                   | [内置模式模板](../../agent-mode-templates/README.md#指令模板)                   |
 | 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | `models/<provider>.json`；Models Manager 选择并冻结                             |
 | Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                                     |
@@ -70,7 +71,7 @@ Core 按独立来源组装指令。工具、目录和外部服务的授权由对
     → Generic { model } 或 Specialized { model, instructions, digest, messages }
 
 新 Turn 冻结：选中的完整模型基础正文及分组指导，或未登记模型的 base_prompt.md
-Core 接收：冻结基础正文 + 按实际模式和根／子身份选择的模型指导 + 当前 Role + 实际工具/环境 + 任务
+Core 接收：冻结基础正文 + 当前发送窗口的提示词 + 按实际模式和根／子身份选择的模型指导 + 当前 Role + 实际工具/环境 + 任务
     → 有来源的 ContextPlan
     → ModelRequest
 ```

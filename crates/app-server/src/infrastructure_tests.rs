@@ -180,7 +180,23 @@ fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
     let (server, _) = queued_server(root.path());
     let mut first = server.connection();
     let (session, thread) = create(&server, &mut first);
-    let message = enqueue(&server, &mut first, &session, &thread);
+    let mut sender = server.connection();
+    let initialized = call(
+        &server,
+        &mut sender,
+        json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                "clientInfo":{"name":"ash-desktop","version":"1"},"capabilities":{"window":"agentWindow"}
+            }
+        }),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let message = enqueue(&server, &mut sender, &session, &thread);
+    assert_eq!(enqueue(&server, &mut first, &session, &thread), message);
+    assert_eq!(
+        message.request.window,
+        Some(ash_protocol::WorkbenchWindow::AgentWindow)
+    );
     let mut second = server.connection();
     initialize(&server, &mut second);
     let list = call(
@@ -204,14 +220,20 @@ fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
     };
     assert_eq!(turn, replayed);
     super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
+    let snapshot = server
+        .threads()
+        .read_thread(&message.request.thread_id)
+        .unwrap();
+    assert_eq!(snapshot.turns.len(), 1);
     assert_eq!(
-        server
-            .threads()
-            .read_thread(&message.request.thread_id)
+        snapshot.turns[0]
+            .instructions
+            .as_ref()
             .unwrap()
-            .turns
-            .len(),
-        1
+            .window_instructions(),
+        Some(&ash_prompts::window_instructions(
+            ash_protocol::WorkbenchWindow::AgentWindow
+        ))
     );
 }
 

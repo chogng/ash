@@ -308,6 +308,7 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
             .map_err(|error| team_error(TeamError::InvalidInput(error.to_string())))?;
         self.context.start_agent_turn_request(
             ThreadMutation {
+                window: connection.window(),
                 ide_window_id: None,
                 connection_id: Some(connection.connection_id),
                 command_id: turn_command,

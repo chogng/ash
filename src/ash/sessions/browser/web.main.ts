@@ -61,7 +61,7 @@ export class SessionsBrowserMain extends Disposable {
 		const { container, profile } = this;
 		try {
 			let documentClient: AppServerProtocolClient | undefined;
-			const connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
+			const connectedHost = await connectBrowserWorkbenchHost('agentWindow', [client => { documentClient = client; return {}; }], true, true);
 			if (this.isDisposed) { connectedHost?.dispose(); this.assertNotDisposed(); }
 			if (connectedHost) { this._register(connectedHost); }
 			installBaseUiStyles();

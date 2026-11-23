@@ -1173,6 +1173,97 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
 }
 
 #[test]
+fn workbench_window_follows_the_sender_on_each_turn() {
+    use ash_protocol::WorkbenchWindow::{AgentWindow, Ide};
+
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let (sender, requests) = mpsc::channel();
+    let server = AppServer::new(
+        threads.clone(),
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    );
+    for (kind, provider, model) in [
+        ("code", "openai", "gpt-6-astra"),
+        ("chat", "anthropic", "claude-sonnet-5-5"),
+    ] {
+        let mut creator = server.connection();
+        call(
+            &server,
+            &mut creator,
+            "initialize",
+            serde_json::json!({
+                "clientInfo": {"name": "ash-desktop", "version": "1"}
+            }),
+        );
+        let created = call(
+            &server,
+            &mut creator,
+            "session/create",
+            serde_json::json!({
+                "commandId": format!("create-{kind}"), "title": "Window prompts",
+                "kind": kind, "executionTarget": null
+            }),
+        );
+        let id = created["result"]["session"]["sessionId"].as_str().unwrap();
+        let thread_id = ThreadId::new(id).unwrap();
+        for (index, window) in [Some(Ide), Some(AgentWindow), None].into_iter().enumerate() {
+            let mut connection = server.connection();
+            let capabilities = window.map_or_else(
+                || serde_json::json!({}),
+                |window| serde_json::json!({"window": window}),
+            );
+            let initialized = call(
+                &server,
+                &mut connection,
+                "initialize",
+                serde_json::json!({
+                    "clientInfo": {"name": "ash-desktop", "version": "1"}, "capabilities": capabilities
+                }),
+            );
+            assert!(initialized.get("error").is_none(), "{initialized}");
+            let sequence = threads.read_thread(&thread_id).unwrap().sequence;
+            let started = call(
+                &server,
+                &mut connection,
+                "session/request",
+                serde_json::json!({
+                    "commandId": format!("turn-{kind}-{index}"), "sessionId": id,
+                    "request": {"type": "startTurn", "threadId": id, "expectedSequence": sequence,
+                        "model": {"provider": provider, "model": model},
+                        "input": [{"type": "text", "text": "What window am I using?"}]}
+                }),
+            );
+            assert!(started.get("error").is_none(), "{started}");
+            let body = requests
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .instructions
+                .unwrap();
+            for candidate in [Ide, AgentWindow] {
+                let prompt = ash_prompts::window_instructions(candidate);
+                assert_eq!(
+                    body.matches(prompt.body.trim()).count(),
+                    usize::from(window == Some(candidate))
+                );
+            }
+            crate::tests::wait_for_latest_turn(&server, id, ash_protocol::TurnStatus::Completed);
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            assert_eq!(
+                snapshot.turns[index]
+                    .instructions
+                    .as_ref()
+                    .unwrap()
+                    .window_instructions(),
+                window.map(ash_prompts::window_instructions).as_ref()
+            );
+        }
+    }
+}
+
+#[test]
 fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
     let selected_model = ModelRef::new(
         ProviderId::new("openai").unwrap(),

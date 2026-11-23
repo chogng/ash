@@ -5,6 +5,8 @@ import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } 
 import type { ApprovalMode } from './approvalModes.js';
 import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 
+export type WorkbenchWindow = 'ide' | 'agentWindow';
+
 export type CommandInterpretation = 'product' | 'literal';
 
 export type SessionMode = 'agent' | 'plan' | 'debug' | 'swarm' | 'ask';

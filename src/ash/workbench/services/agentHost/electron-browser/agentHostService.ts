@@ -1,3 +1,4 @@
+import type { WorkbenchWindow } from '../../../../platform/agentHost/common/agent.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -16,7 +17,7 @@ import { IRemoteSocketFactoryService } from '../../../../platform/remote/common/
 
 interface WorkbenchAgentHostOptions {
 	readonly connection: RemoteAgentConnection;
-	readonly capabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; };
+	readonly capabilities: { readonly window: WorkbenchWindow; readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; };
 	readonly transportHandshake?: boolean;
 	readonly onDidSuspendOS: INativeHostApi['onDidSuspendOS'];
 	readonly onDidResumeOS: INativeHostApi['onDidResumeOS'];
@@ -106,6 +107,7 @@ export class WorkbenchAgentHostService extends Disposable {
 	private executionCapabilities(desktopTools = true) {
 		const capabilities = this.options.capabilities;
 		return {
+			window: capabilities.window,
 			agentInteractions: { version: 1 as const, kinds: ['approval', 'permissions', 'userInput', 'toolResultReview'] as ('approval' | 'permissions' | 'userInput' | 'toolResultReview')[] },
 			...(capabilities.browser ? { browser: { version: 4 as const, observe: true, input: true } } : {}),
 			...(capabilities.textDocuments ? { textDocuments: { version: 2 as const } } : {}),

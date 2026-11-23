@@ -13,6 +13,7 @@ pub use agent::AGENT_INSTRUCTIONS;
 pub use agent::SIDE_CHAT_REFERENCE_BOUNDARY;
 pub use agent::SIDE_CHAT_REFERENCE_POLICY;
 pub use agent::TURN_INTERRUPTED_PROMPT;
+pub use agent::window_instructions;
 pub use artifact::PromptArtifact;
 pub use artifact::RenderedPrompt;
 pub use compact::COMPACTION_PROMPT;

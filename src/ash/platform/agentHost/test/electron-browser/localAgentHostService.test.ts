@@ -144,7 +144,7 @@ suite('Local Agent Host connection service', () => {
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		return services.createInstance(RemoteService, {
-			browser: false, onDidSuspendOS: Event.None, onDidResumeOS: Event.None,
+			window: 'agentWindow', browser: false, onDidSuspendOS: Event.None, onDidResumeOS: Event.None,
 			initializeDirectories: restore,
 			createApi: (lease, target, _resources, id) => {
 				const api = createDisconnectedRendererApi();

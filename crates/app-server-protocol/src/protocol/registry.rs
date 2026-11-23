@@ -6625,6 +6625,7 @@ macro_rules! typescript_bindings {
 typescript_bindings! {
     serde_json::Value,
     ash_protocol::AgentMode,
+    ash_protocol::WorkbenchWindow,
     ash_protocol::CommandInterpretation,
     ash_protocol::AgentConfiguration,
     ash_protocol::AgentRoleSelection,

@@ -355,6 +355,7 @@ pub use turn::TurnLoopReason;
 pub use turn::TurnModelRouting;
 pub use turn::TurnSkillLoad;
 pub use turn::TurnStatus;
+pub use turn::WorkbenchWindow;
 pub use turn_execution::TurnExecutionBinding;
 
 #[cfg(test)]

@@ -129,6 +129,7 @@ pub(super) struct SessionMutation {
 }
 
 pub(super) struct ThreadMutation {
+    pub(super) window: Option<ash_protocol::WorkbenchWindow>,
     pub(super) connection_id: Option<u64>,
     pub(super) ide_window_id: Option<String>,
     pub(super) command_id: ash_protocol::CommandId,
@@ -365,7 +366,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     .unwrap_or_default()
             })
     }
-    pub(super) fn context_read(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn context_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::model::ContextReadParams;
         use ash_app_server_protocol::protocol::model::ContextReadResult;
         use ash_app_server_protocol::protocol::model::ContextReadScope;
@@ -412,6 +417,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     .map(|turn| turn.execution_approach())
                     .unwrap_or_default();
                 base.with_mode(&agent_mode_templates::instructions(mode))
+                    .with_window(connection.window().map(ash_prompts::window_instructions))
             }
         };
         let scope = match &params.scope {
@@ -977,7 +983,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 input,
             } => result(&SessionRequestResult::Rewrite(
                 self.rewrite_session_thread_request(
-                    connection.connection_id,
+                    connection,
                     mutation,
                     RewriteSessionMutation {
                         parent_thread_id,
@@ -1004,7 +1010,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 ThreadMutation {
                     ide_window_id,
-                    ..thread_mutation(mutation, expected_sequence, connection.connection_id)
+                    ..thread_mutation(mutation, expected_sequence, connection)
                 },
                 thread_id,
                 approval_mode,
@@ -1020,7 +1026,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 expected_sequence,
                 target,
             } => result(&SessionRequestResult::Turn(self.start_review_request(
-                thread_mutation(mutation, expected_sequence, connection.connection_id),
+                thread_mutation(mutation, expected_sequence, connection),
                 thread_id,
                 target,
             )?)),
@@ -1031,7 +1037,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 command,
                 working_directory,
             } => result(&SessionRequestResult::Turn(self.start_shell_turn_request(
-                thread_mutation(mutation, expected_sequence, connection.connection_id),
+                thread_mutation(mutation, expected_sequence, connection),
                 thread_id,
                 approval_mode,
                 command,
@@ -1105,7 +1111,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
                 result(&SessionRequestResult::Turn(self.start_agent_turn_request(
-                    thread_mutation(mutation, expected_sequence, connection.connection_id),
+                    thread_mutation(mutation, expected_sequence, connection),
                     thread_id,
                     ash_protocol::ApprovalMode::default(),
                     ash_protocol::AgentMode::Ask,
@@ -1123,7 +1129,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 retention_prompt,
             } => result(&SessionRequestResult::Turn(
                 self.start_context_compaction_request(
-                    thread_mutation(mutation, expected_sequence, connection.connection_id),
+                    thread_mutation(mutation, expected_sequence, connection),
                     thread_id,
                     retention_prompt,
                 )?,
@@ -1134,7 +1140,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 turn_id,
                 input,
             } => result(&SessionRequestResult::TurnSteer(self.steer_turn_request(
-                thread_mutation(mutation, expected_sequence, connection.connection_id),
+                thread_mutation(mutation, expected_sequence, connection),
                 thread_id,
                 turn_id,
                 input,
@@ -1145,7 +1151,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 turn_id,
             } => result(&SessionRequestResult::TurnInterrupt(
                 self.interrupt_turn_request(
-                    thread_mutation(mutation, expected_sequence, connection.connection_id),
+                    thread_mutation(mutation, expected_sequence, connection),
                     thread_id,
                     turn_id,
                 )?,
@@ -1172,7 +1178,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             } => result(&SessionRequestResult::Interaction(
                 self.resolve_turn_interaction_request(
                     connection.connection_id,
-                    thread_mutation(mutation, expected_sequence, connection.connection_id),
+                    thread_mutation(mutation, expected_sequence, connection),
                     thread_id,
                     turn_id,
                     request_id,
@@ -1597,10 +1603,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
 
     fn rewrite_session_thread_request(
         &self,
-        connection_id: u64,
+        connection: &ConnectionState,
         mutation: SessionMutation,
         rewrite: RewriteSessionMutation,
     ) -> Result<SessionRewriteResult, RpcError> {
+        let connection_id = connection.connection_id;
         let source =
             self.read_session_thread_snapshot(&mutation.session_id, &rewrite.parent_thread_id)?;
         let source_turn = rewrite_source_turn(&source, &rewrite.before_turn_id)?;
@@ -1673,6 +1680,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 };
                 self.start_agent_turn_request(
                     ThreadMutation {
+                        window: connection.window(),
                         ide_window_id: None,
                         connection_id: Some(connection_id),
                         command_id: start_command_id,
@@ -2446,6 +2454,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             TurnInstructionSelection::Workflow(command) => (Some(command), base),
         };
         let instructions = instructions
+            .with_window(mutation.window.map(ash_prompts::window_instructions))
             .with_mode(&agent_mode_templates::instructions(mode))
             .with_model_guidance(guidance);
         let advisor_default = self
@@ -2898,11 +2907,12 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
 fn thread_mutation(
     mutation: SessionMutation,
     expected_sequence: u64,
-    connection_id: u64,
+    connection: &ConnectionState,
 ) -> ThreadMutation {
     ThreadMutation {
+        window: connection.window(),
         ide_window_id: None,
-        connection_id: Some(connection_id),
+        connection_id: Some(connection.connection_id),
         command_id: mutation.command_id,
         session_id: mutation.session_id,
         expected_sequence,

@@ -30,6 +30,10 @@ pub struct ClientInfo {
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientCapabilities {
+    /// Selects model-facing window guidance for requests on this connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub window: Option<ash_protocol::WorkbenchWindow>,
     #[serde(default)]
     #[ts(optional = nullable)]
     pub app_tools: Option<crate::protocol::app_tools::AppToolsCapability>,

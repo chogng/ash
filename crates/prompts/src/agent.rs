@@ -4,9 +4,28 @@ use crate::PromptArtifact;
 pub const AGENT_INSTRUCTIONS: PromptArtifact = PromptArtifact::new(
     "prompts",
     "agent/common",
-    "agent-common-v1",
+    "agent-common-v2",
     include_str!("../templates/agent/base_prompt.md"),
 );
+
+/// Window guidance is frozen together with the model instructions for each Turn.
+pub fn window_instructions(window: ash_protocol::WorkbenchWindow) -> ash_protocol::InstructionText {
+    let prompt = match window {
+        ash_protocol::WorkbenchWindow::Ide => PromptArtifact::new(
+            "prompts",
+            "window/ide",
+            "ide-v1",
+            include_str!("../templates/surfaces/ide.md"),
+        ),
+        ash_protocol::WorkbenchWindow::AgentWindow => PromptArtifact::new(
+            "prompts",
+            "window/agents",
+            "agents-window-v1",
+            include_str!("../templates/surfaces/agents-window.md"),
+        ),
+    };
+    prompt.freeze().as_text()
+}
 
 /// Continuation notice for an interrupted ordinary Turn, without guessing its cause.
 pub const TURN_INTERRUPTED_PROMPT: PromptArtifact = PromptArtifact::new(

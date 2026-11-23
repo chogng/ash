@@ -353,6 +353,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         let queued = store
             .enqueue_scoped(
                 &queue::QueueInput {
+                    window: existing
+                        .as_ref()
+                        .map_or_else(|| connection.window(), |message| message.request.window),
                     command_id: params.command_id,
                     session_id: params.session_id,
                     thread_id: params.thread_id,
@@ -516,6 +519,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         };
         let start = self.context.start_agent_turn_request(
             ThreadMutation {
+                window: request.window,
                 ide_window_id: None,
                 connection_id: None,
                 command_id: request.command_id.clone(),

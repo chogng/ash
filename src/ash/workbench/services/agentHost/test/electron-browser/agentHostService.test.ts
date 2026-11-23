@@ -1,3 +1,4 @@
+import type { WorkbenchWindow } from '../../../../../platform/agentHost/common/agent.js';
 import { languagePackCatalog as chineseCatalog } from '../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -168,10 +169,10 @@ suite('Desktop Workbench Agent Host selection', () => {
 		} finally { tracking[Symbol.dispose](); }
 	});
 
-	function options(connection: RemoteAgentConnection) {
+	function options(connection: RemoteAgentConnection, window: WorkbenchWindow = 'ide') {
 		return {
 			connection,
-			capabilities: { browser: true, appTools: true, textDocuments: true },
+			capabilities: { window, browser: true, appTools: true, textDocuments: true },
 			onDidSuspendOS: () => ({ dispose() { } }),
 			onDidResumeOS: () => ({ dispose() { } }),
 		} satisfies ConstructorParameters<typeof Service>[0];
@@ -204,7 +205,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	}
 
 	test('the runtime registry shares one endpoint, isolates equal servers with different roots, and retires window scopes', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { window: 'ide', browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const first = { name: 'Build', host: 'build', workspace: '/repo' };
 		const nested = { name: 'Nested', host: 'build', workspace: '/repo/nested' };
@@ -235,7 +236,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('disconnecting a pending runtime endpoint rejects acquisition and its late Main result cannot publish a host', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { window: 'ide', browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const opening = new DeferredPromise<void>();
 		beforeHostOpen = () => opening.p;
@@ -253,7 +254,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('synchronous registry observers can retire a starting endpoint before Main acquisition', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { window: 'ide', browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		using listener = registry.onDidChangeConnections(() => {
 			const first = registry.connections[0];
@@ -265,7 +266,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('runtime reconnect waits for directory rebind, retains its domain scope, and reports failed restoration', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { window: 'ide', browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const host = await registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
 		const generation = host.api.appServer.connectionGeneration;
@@ -302,7 +303,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
 		await renderer.workspaceDirectoriesReady;
@@ -327,7 +328,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		test(`${kind} workspace replacement drains reconnect restoration before binding the new folders`, async () => {
 			windowConnection = kind === 'local' ? { kind: 'local', generation: 1 } : windowConnection;
 			if (kind === 'local') requestedWorkspace = URI.file('/workspace');
-			using renderer = await createRendererApi([], { browser: false }, {
+			using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 				requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 			}, mainProcess);
 			await renderer.workspaceDirectoriesReady;
@@ -371,7 +372,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 
 	test('an explicit folder replacement can recover a cancelled startup directory binding', async () => {
 		directoryAuthorized = false;
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requestDirectoryPermissions: async () => 'cancel'
 		}, mainProcess);
 		renderer.startWorkspaceDirectories();
@@ -393,7 +394,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		let prompts = 0;
 		const prompted = new DeferredPromise<void>();
 		const choice = new DeferredPromise<'cancel'>();
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requiresDevelopmentTrust: true,
 			requestDirectoryPermissions: async () => {
 				prompts++;
@@ -435,7 +436,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 
 	test('startup directory failures reject workspace readiness while the renderer stays connected', async () => {
 		failDirectoryBinding = true;
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); },
 		}, mainProcess);
 		await assert.rejects(renderer.workspaceDirectoriesReady, /restore rejected/);
@@ -443,7 +444,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
 		await renderer.workspaceDirectoriesReady;
@@ -486,7 +487,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('a retired workspace restoration cannot fail a newer ready connection', async () => {
-		using renderer = await createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { window: 'ide', browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
 		await renderer.workspaceDirectoriesReady;
@@ -544,6 +545,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(host.client, host.localConnection.client);
 		assert.equal(host.client.state, 'ready');
 		assert.deepEqual(acquired, ['ash:app-server:acquire']);
+		const handshake = handshakes[0].params as { capabilities: Record<string, unknown>; };
+		assert.equal(handshake.capabilities.window, 'ide');
 	});
 
 	test('SSH windows keep local devices on the local lease and select a separate ready workspace lease', async () => {
@@ -602,7 +605,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const resolutions: unknown[] = [];
 		let extensions: IExtensionHostApi | undefined;
 		using host = services.createInstance(Service, {
-			...options({ kind: 'remote', generation: 1, authority: 'fixture+host' }),
+			...options({ kind: 'remote', generation: 1, authority: 'fixture+host' }, 'agentWindow'),
 			resolveRemoteAuthority: async (_api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => {
 				resolutions.push({ factories, authority, attempt });
 				return { connectTo: new ManagedRemoteConnection(24), connectionToken: undefined };
@@ -614,6 +617,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(host.windowExtensions, extensions);
 		assert.deepEqual(resolutions, [{ factories: services.get(IRemoteSocketFactoryService), authority: 'fixture+host', attempt: 1 }]);
 		const remoteHandshake = endpoints[0].handshakes[0] as { capabilities: Record<string, unknown>; };
+		assert.equal(remoteHandshake.capabilities.window, 'agentWindow');
 		assert.equal(remoteHandshake.capabilities.appTools, undefined);
 		assert.equal(remoteHandshake.capabilities.directoryGrantsHost, undefined);
 		assert.deepEqual(remoteHandshake.capabilities.textDocuments, { version: 2 });

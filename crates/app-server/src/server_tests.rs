@@ -1258,7 +1258,7 @@ fn create_thread(
     )
 }
 
-fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatus) {
+pub(crate) fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatus) {
     let thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {

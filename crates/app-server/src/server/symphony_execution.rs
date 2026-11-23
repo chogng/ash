@@ -341,6 +341,7 @@ impl AppServer {
             };
             let started = self.agent_processor().start_turn_request(
                 ThreadMutation {
+                    window: None,
                     ide_window_id: None,
                     connection_id: None,
                     command_id: turn_command.clone(),
@@ -484,6 +485,7 @@ impl AppServer {
             self.agent_processor()
                 .interrupt_turn_request(
                     ThreadMutation {
+                        window: None,
                         ide_window_id: None,
                         connection_id: None,
                         command_id: command(

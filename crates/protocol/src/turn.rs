@@ -29,6 +29,7 @@ pub use instructions::InvalidTurnInstructions;
 pub use instructions::ModelInstructionMessages;
 pub use instructions::ModelInstructionSelection;
 pub use instructions::TurnInstructions;
+pub use instructions::WorkbenchWindow;
 pub use review_target::ReviewTarget;
 pub use status::TurnStatus;
 pub use tool_profile::ToolCategory;

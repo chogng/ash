@@ -242,7 +242,8 @@ pub(crate) fn turn_instruction_fragments(
     let assets = instructions
         .shared()
         .iter()
-        .chain(std::iter::once(&primary));
+        .chain(std::iter::once(&primary))
+        .chain(instructions.window_instructions());
     let mut instruction_fragments = assets
         .clone()
         .map(|asset| {

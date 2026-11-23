@@ -505,6 +505,7 @@ struct ConnectionMutableState {
     extension_packages_leases: BTreeSet<String>,
     directory_grants_host: bool,
     code_sessions_only: bool,
+    window: Option<ash_protocol::WorkbenchWindow>,
 }
 
 impl ConnectionState {
@@ -564,8 +565,14 @@ impl ConnectionState {
         connection_state(self).initialized
     }
 
-    fn set_initialized(&self) {
-        connection_state(self).initialized = true;
+    fn set_initialized(&self, window: Option<ash_protocol::WorkbenchWindow>) {
+        let mut state = connection_state(self);
+        state.window = window;
+        state.initialized = true;
+    }
+
+    fn window(&self) -> Option<ash_protocol::WorkbenchWindow> {
+        connection_state(self).window
     }
 
     fn code_sessions_only(&self) -> bool {
@@ -3951,7 +3958,9 @@ impl AppServer {
             Some(ClientMethod::SessionUnsubscribe) => self
                 .session_processor()
                 .session_unsubscribe(connection, &request.params),
-            Some(ClientMethod::ContextRead) => self.agent_processor().context_read(&request.params),
+            Some(ClientMethod::ContextRead) => self
+                .agent_processor()
+                .context_read(connection, &request.params),
             Some(ClientMethod::SessionThreadRead) => {
                 self.agent_processor().session_thread_read(&request.params)
             }

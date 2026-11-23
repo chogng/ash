@@ -247,6 +247,7 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
 
 fn input(id: &str) -> QueueInput {
     QueueInput {
+        window: None,
         command_interpretation: protocol::CommandInterpretation::Product,
         mode: Default::default(),
         task_command: None,

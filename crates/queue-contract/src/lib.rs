@@ -16,6 +16,10 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueueInput {
+    /// Retains the submitting window when delivery outlives its connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub window: Option<protocol::WorkbenchWindow>,
     pub command_id: CommandId,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
