@@ -321,7 +321,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (this.isConfiguration(resource)) return;
 		if (!this.isConnectionReady()) { throw canceled(); }
 		const generation = this.api.connectionGeneration;
-		const directory = this.knownDirectory(resource) ?? await this.resolveDirectory(resource);
+		const directory = this.knownDirectory(resource) ?? await this.resolveDirectory(resource).catch(error => {
+			throw fileReadError(resource, error);
+		});
 		if (this.isDisposed || !this.isConnectionReady() || generation !== this.api.connectionGeneration) { throw canceled(); }
 		const target = this.directoryTarget(directory, resource);
 		const state = this.pathIdentityState(directory);
@@ -331,7 +333,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}
 		const epoch = state.epoch;
 		const pending = (async (): Promise<void> => {
-			const result = await this.api.readPathCaseSensitivity(target);
+			const result = await this.api.readPathCaseSensitivity(target).catch(error => {
+				throw fileReadError(resource, error);
+			});
 			if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
 			// A watcher invalidation retires these facts, not the caller's file operation.
 			// Join a fresh observation before choosing an existing editor model.

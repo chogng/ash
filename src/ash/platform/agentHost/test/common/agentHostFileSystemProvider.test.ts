@@ -83,10 +83,13 @@ suite('Agent Host filesystem authority routes', () => {
 		const workspace = URI.file('/workspace');
 		using provider = new AgentHostFileSystemProvider(connection(workspace, 'primary', {
 			resolvePath: async () => { throw new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' }); },
+			readPathCaseSensitivity: async () => { throw new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' }); },
 			readFile: async () => { throw new AppServerRemoteError(-32043, 'FileSystemPermissionDenied', { kind: 'FileSystemPermissionDenied' }); },
 			readBinaryFile: async () => { throw new AppServerRemoteError(-32044, 'FileSystemPermissionDenied', { kind: 'FileSystemPermissionDenied' }); },
 		}));
 		const isPermissionError = (error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.NoPermissions;
+		await assert.rejects(provider.resolvePathIdentity(URI.file('/checkout/themes/theme.json')), isPermissionError);
+		await assert.rejects(provider.resolvePathIdentity(URI.joinPath(workspace, 'restricted.json')), isPermissionError);
 		await assert.rejects(provider.stat(URI.file('/checkout/themes/theme.json')), isPermissionError);
 		await assert.rejects(provider.readTextFile(URI.joinPath(workspace, 'restricted.json'), 'utf8'), isPermissionError);
 		await assert.rejects(provider.readFile(URI.joinPath(workspace, 'restricted.png')), isPermissionError);

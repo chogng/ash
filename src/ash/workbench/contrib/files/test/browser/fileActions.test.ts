@@ -25,12 +25,12 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IFilesConfigurationService } from '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
-import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -41,7 +41,7 @@ import { IClipboardService, type IClipboardResources } from '../../../../../plat
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
-import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
+import { createFileSystemProviderError, IFileService, FileKind, FileNotFoundError, FileSystemProviderErrorCode, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -158,6 +158,53 @@ test('Open File command opens every file selected by the dialog', async () => {
 		else Reflect.deleteProperty(globalThis, 'document');
 		browser.window.close();
 	}
+});
+
+test('Open File in the Agent Window can choose another file after a permission denial', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const denied = URI.file('/outside/private.md');
+	const allowed = URI.file('/work/notes.md');
+	const selections = [denied, allowed];
+	const opened: URI[] = [];
+	const services = createFileActionServices();
+	using context = new ContextKeyService();
+	const isAgentWindow = IsSessionsWindowContext.bindTo(context);
+	isAgentWindow.set(true);
+	services.registerInstance(IContextKeyService, context);
+	const unexpectedDialog = async () => assert.fail('Only the Open File picker should be used');
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: unexpectedDialog,
+		pickWorkspaceAndOpen: unexpectedDialog,
+		pickFileToSave: unexpectedDialog,
+		showSaveConfirm: unexpectedDialog,
+		showSaveDialog: unexpectedDialog,
+		showOpenDialog: async () => {
+			const resource = selections.shift();
+			assert.ok(resource);
+			return [resource];
+		},
+	});
+	services.registerInstance(IDialogService, {
+		confirm: async (options: IConfirmationDialogOptions) => {
+			assert.equal(options.detail, denied.fsPath);
+			assert.equal(options.detailPresentation, 'resource');
+			return { confirmed: true };
+		},
+	} as IDialogService);
+	const permissionError = createFileSystemProviderError('PermissionRequired', FileSystemProviderErrorCode.NoPermissions);
+	services.registerInstance(IEditorService, {
+		openEditor: async input => {
+			if (input.resource === denied) throw permissionError;
+			opened.push(input.resource);
+		},
+	} as EditorServiceContract);
+	using commands = new CommandService(services);
+	await commands.executeCommand(OPEN_FILE_COMMAND_ID);
+	assert.deepEqual(opened, [allowed]);
+
+	isAgentWindow.set(false);
+	selections.push(denied);
+	await assert.rejects(commands.executeCommand(OPEN_FILE_COMMAND_ID), error => error === permissionError);
 });
 
 for (const fileRoot of fileCommandRoots) {

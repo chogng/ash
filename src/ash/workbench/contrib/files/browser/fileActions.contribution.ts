@@ -14,15 +14,16 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, ResourceSetContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
+import { EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, ResourceSetContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { ASH_REMOTE_SCHEME, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { registerEditorToolAction } from '../../../browser/actions/editorToolActions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
+import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID, SAVE_FILE_AS_COMMAND_ID } from './fileConstants.js';
@@ -99,8 +100,33 @@ registerAction2(class OpenFileAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const resources = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
-		for (const resource of resources ?? []) await accessor.get(IEditorService).openEditor(new FileEditorInput(resource));
+		const fileDialogs = accessor.get(IFileDialogService);
+		const editors = accessor.get(IEditorService);
+		const dialogs = accessor.getOptional(IContextKeyService)?.contextMatchesRules(IsSessionsWindowContext.isEqualTo(true))
+			? accessor.get(IDialogService)
+			: undefined;
+		let chooseAnotherFile: boolean;
+		do {
+			chooseAnotherFile = false;
+			const resources = await fileDialogs.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
+			for (const resource of resources ?? []) {
+				try {
+					await editors.openEditor(new FileEditorInput(resource));
+				} catch (error) {
+					if (!dialogs || !(error instanceof Error) || toFileSystemProviderErrorCode(error) !== FileSystemProviderErrorCode.NoPermissions) throw error;
+					const { confirmed } = await dialogs.confirm({
+						title: localize('files.openDeniedTitle', 'Cannot open file'),
+						message: localize('files.openDeniedMessage', 'Ash does not have permission to read this file.'),
+						detail: resource.scheme === Schemas.file ? resource.fsPath : resource.path,
+						detailPresentation: 'resource',
+						primaryButton: localize('files.openDeniedRetry', 'Choose another file…'),
+						cancelButton: localize('files.openDeniedClose', 'Close'),
+					});
+					chooseAnotherFile = confirmed;
+					break;
+				}
+			}
+		} while (chooseAnotherFile);
 	}
 });
 
