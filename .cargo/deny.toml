@@ -24,6 +24,10 @@ ignore = [
     # retains the dependency. Remove when upstream replaces it:
     # https://github.com/y-crdt/y-crdt/issues/755
     "RUSTSEC-2026-0215", # smallstr
+    # Reviewed 2026-11-23: Chrono has no maintained release. Dependencies such
+    # as hf-chat-template, mxc-sdk and pdfium-render still select it. Remove
+    # this maintenance exception when the dependency graph no longer uses it.
+    "RUSTSEC-2026-0543", # chrono
 ]
 
 [licenses]

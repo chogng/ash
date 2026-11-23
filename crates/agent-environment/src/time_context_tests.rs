@@ -58,11 +58,19 @@ fn time_context_handles_zone_boundaries_and_repeated_dst_hours() {
         first.facts().sampled_at_unix_ms,
         second.facts().sampled_at_unix_ms
     );
+    let last = snapshot("9999-12-31T23:59:59Z", "UTC", TimeContextMode::Time);
+    assert!(last.render().contains("9999-12-31T23:59:59+00:00"));
 }
 
 #[test]
 fn time_context_rejects_invalid_calendar_facts_instead_of_substituting_a_zone() {
-    for zone in ["", "Mars/Base", "UTC\"><injected>", " America/Los_Angeles"] {
+    for zone in [
+        "",
+        "Mars/Base",
+        "UTC\"><injected>",
+        " America/Los_Angeles",
+        "america/los_angeles",
+    ] {
         assert!(validate_time_zone(zone).is_err());
     }
     let mut facts = snapshot("2026-01-01T00:00:00Z", "UTC", TimeContextMode::Time)

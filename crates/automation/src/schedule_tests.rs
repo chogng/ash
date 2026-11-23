@@ -85,6 +85,7 @@ fn invalid_rules_and_out_of_range_timestamps_are_rejected() {
             minutes: 0,
         },
         weekly("Unknown/Zone", 9, 0),
+        weekly("america/new_york", 9, 0),
         weekly("UTC", 24, 0),
         weekly("UTC", 9, 60),
         AutomationSchedule::Weekly {
@@ -99,6 +100,22 @@ fn invalid_rules_and_out_of_range_timestamps_are_rejected() {
     assert!(serde_json::from_str::<UnixMillis>("-1").is_err());
     assert!(serde_json::from_str::<UnixMillis>("253402300800000").is_err());
     assert_eq!(serde_json::to_string(&zero).unwrap(), "0");
+}
+
+#[test]
+fn weekly_occurrences_respect_the_last_supported_day() {
+    let rule = AutomationSchedule::Weekly {
+        timezone: "UTC".into(),
+        weekdays: (1..=7).collect(),
+        hour: 23,
+        minute: 59,
+    };
+    let last = at(9999, 12, 31, 23, 59);
+    assert_eq!(next_occurrence(&rule, last).unwrap(), Some(last));
+    assert_eq!(
+        next_occurrence(&rule, UnixMillis::new(UnixMillis::MAX).unwrap()).unwrap(),
+        None
+    );
 }
 
 #[test]

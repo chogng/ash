@@ -4,10 +4,9 @@ use ash_protocol::TimeContextMode;
 use ash_protocol::TimeZoneOrigin;
 use chrono::DateTime;
 use chrono::FixedOffset;
-use chrono::Offset;
 use chrono::SecondsFormat;
 use chrono::Utc;
-use chrono_tz::Tz;
+use tz::TimeZoneRef;
 
 /// Validates an explicit IANA time zone; no local-zone substitution occurs on error.
 pub fn validate_time_zone(value: &str) -> Result<(), AgentEnvironmentError> {
@@ -33,11 +32,10 @@ impl TimeSnapshot {
         let zone = parse_zone(&time_zone)?;
         let instant = DateTime::from_timestamp_millis(sampled_at_unix_ms.get() as i64)
             .ok_or_else(|| invalid("time context timestamp is out of range"))?;
-        let utc_offset_seconds = instant
-            .with_timezone(&zone)
-            .offset()
-            .fix()
-            .local_minus_utc();
+        let utc_offset_seconds = zone
+            .find_local_time_type(instant.timestamp())
+            .map_err(|_| invalid("time zone offset is unavailable"))?
+            .ut_offset();
         Self::new(TimeContext {
             sampled_at_unix_ms,
             time_zone,
@@ -104,15 +102,16 @@ impl TimeSnapshot {
     }
 }
 
-fn parse_zone(value: &str) -> Result<Tz, AgentEnvironmentError> {
+fn parse_zone(value: &str) -> Result<TimeZoneRef<'static>, AgentEnvironmentError> {
     if value.is_empty() || value.len() > 128 {
         return Err(invalid(
             "time zone must be a non-empty IANA identifier of at most 128 bytes",
         ));
     }
-    value
-        .parse()
-        .map_err(|_| invalid("unrecognized IANA time zone"))
+    // Preserve exact IANA spelling because the database lookup ignores case.
+    tzdb::tz_by_name(value)
+        .filter(|_| tzdb::TZ_NAMES.contains(&value))
+        .ok_or_else(|| invalid("unrecognized IANA time zone"))
 }
 
 fn invalid(message: &str) -> AgentEnvironmentError {

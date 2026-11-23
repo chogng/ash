@@ -10,7 +10,8 @@ doctest = false
 
 [dependencies]
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
+tz-rs = { workspace = true, features = ["alloc"] }
+tzdb = { workspace = true }
 rusqlite = { workspace = true }
 ash-state = { workspace = true }
 serde = { workspace = true }

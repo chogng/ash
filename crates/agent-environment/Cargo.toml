@@ -13,7 +13,8 @@ path = "src/lib.rs"
 
 [dependencies]
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
+tz-rs = { workspace = true }
+tzdb = { workspace = true }
 ash-protocol = { workspace = true }
 ash-utils-absolute-path = { workspace = true }
 

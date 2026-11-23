@@ -290,7 +290,7 @@ reason = "6.0 accompanies the active zbus 6 API. 4.4 remains only in keyring 3's
 [[multiple_versions]]
 name = "typed-path"
 versions = ["0.9.3", "0.12.3"]
-reason = "0.9.3 belongs to tough's signed package metadata; zip 9.0.4 requires 0.12.3 for platform-independent archive paths. No typed paths cross these APIs."
+reason = "0.9.3 belongs to tough's signed package metadata; zip uses the 0.12 family for platform-independent archive paths. No typed paths cross these APIs."
 
 [[multiple_versions]]
 name = "foreign-types"
@@ -390,8 +390,8 @@ reason = "0.16 through rtc-dtls; 0.18 through rcgen. Certificate parsing remains
 
 [[multiple_versions]]
 name = "phf"
-versions = ["0.11.3", "0.12.1", "0.14.0"]
-reason = "0.11.3 remains in the lockfile through Ratatui's optional Termwiz backend. Chrono-tz uses 0.12.1 and katex-rs uses 0.14.0."
+versions = ["0.11.3", "0.14.0"]
+reason = "0.11.3 remains in the lockfile through Ratatui's optional Termwiz backend. Katex-rs uses 0.14.0."
 
 [[multiple_versions]]
 name = "phf_codegen"
@@ -410,8 +410,8 @@ reason = "Macros for the PHF 0.11.3 and 0.14.0 families."
 
 [[multiple_versions]]
 name = "phf_shared"
-versions = ["0.11.3", "0.12.1", "0.14.0"]
-reason = "Shared implementation for the reviewed PHF families used by Termwiz, chrono-tz and katex-rs."
+versions = ["0.11.3", "0.14.0"]
+reason = "Shared implementation for the reviewed PHF families used by Termwiz and katex-rs."
 
 [[multiple_versions]]
 name = "prettyplease"

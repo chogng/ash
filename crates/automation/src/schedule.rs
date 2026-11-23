@@ -5,8 +5,9 @@ use ash_protocol::UnixMillis;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
-use chrono::TimeZone;
-use chrono_tz::Tz;
+use chrono::FixedOffset;
+use tz::TimeZoneRef;
+use tz::datetime::FoundDateTimeKind;
 
 #[cfg(test)]
 #[path = "schedule_tests.rs"]
@@ -96,9 +97,7 @@ fn validate_schedule(schedule: &AutomationSchedule) -> Result<(), AutomationErro
             hour,
             minute,
         } => {
-            timezone
-                .parse::<Tz>()
-                .map_err(|_| AutomationError::Invalid("unknown IANA timezone".into()))?;
+            parse_timezone(timezone)?;
             if *hour > 23
                 || *minute > 59
                 || weekdays.is_empty()
@@ -119,6 +118,13 @@ fn validate_schedule(schedule: &AutomationSchedule) -> Result<(), AutomationErro
             "interval must be at least one minute".into(),
         )),
     }
+}
+
+fn parse_timezone(value: &str) -> Result<TimeZoneRef<'static>, AutomationError> {
+    // Preserve exact IANA spelling because the database lookup ignores case.
+    tzdb::tz_by_name(value)
+        .filter(|_| tzdb::TZ_NAMES.contains(&value))
+        .ok_or_else(|| AutomationError::Invalid("unknown IANA timezone".into()))
 }
 
 /// Returns the first occurrence at or after `from`, selecting the earlier ambiguous local time
@@ -144,20 +150,40 @@ pub fn next_occurrence(
             hour,
             minute,
         } => {
-            let timezone: Tz = timezone
-                .parse()
-                .map_err(|_| AutomationError::Invalid("unknown IANA timezone".into()))?;
+            let timezone = parse_timezone(timezone)?;
             let now = DateTime::from_timestamp_millis(from.get() as i64)
                 .ok_or_else(|| AutomationError::Invalid("unsupported timestamp".into()))?;
-            let mut date = now.with_timezone(&timezone).date_naive();
+            let offset = timezone
+                .find_local_time_type(now.timestamp())
+                .ok()
+                .and_then(|local| FixedOffset::east_opt(local.ut_offset()))
+                .ok_or_else(|| AutomationError::Invalid("unsupported time zone offset".into()))?;
+            let mut date = now.with_timezone(&offset).date_naive();
             // Weekly rules have at least one selected day. Two weeks spans a skipped DST date.
             for _ in 0..15 {
                 if weekdays.contains(&(date.weekday().number_from_monday() as u8)) {
-                    let local = date
-                        .and_hms_opt(u32::from(*hour), u32::from(*minute), 0)
-                        .ok_or_else(|| AutomationError::Invalid("invalid local time".into()))?;
-                    if let Some(candidate) = timezone.from_local_datetime(&local).earliest() {
-                        let millis = candidate.timestamp_millis();
+                    let candidates = tz::DateTime::find(
+                        date.year(),
+                        date.month() as u8,
+                        date.day() as u8,
+                        *hour,
+                        *minute,
+                        0,
+                        0,
+                        timezone,
+                    )
+                    .map_err(|_| AutomationError::Invalid("invalid local time".into()))?;
+                    // Results are ordered by instant. A skipped wall time has no occurrence.
+                    let first_valid =
+                        candidates
+                            .into_inner()
+                            .into_iter()
+                            .find_map(|result| match result {
+                                FoundDateTimeKind::Normal(candidate) => Some(candidate),
+                                FoundDateTimeKind::Skipped { .. } => None,
+                            });
+                    if let Some(candidate) = first_valid {
+                        let millis = candidate.unix_time() * 1_000;
                         if millis >= from.get() as i64 {
                             return Ok(UnixMillis::new(millis as u64).ok());
                         }
