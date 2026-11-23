@@ -17,12 +17,12 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWording } from '../../../../platform/chat/common/sessionArchiveActions.js';
-import { IProjectService, type Project, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import { projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
+import { projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogProjectFile, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
@@ -41,8 +41,10 @@ import { ChatListForks } from './chatListForks.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
-import { openProjectFile, projectMaterialId, ProjectMaterialFiles, resolveProjectFileReference } from '../../projects/browser/projectMaterialFiles.js';
+import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import { isWeb } from '../../../../base/common/platform.js';
+import { openProjectFile, projectMaterialFile, projectMaterialId, resolveProjectFileReference } from '../../projects/browser/projectMaterialFiles.js';
+import { IProjectMaterialFileService } from '../../projects/browser/projectMaterialFileService.js';
 
 export interface ChatListForkReference {
 	readonly id: string;
@@ -177,8 +179,8 @@ export interface CatalogProjectDetails {
 	readonly upload?: {
 		readonly limits: { readonly count: number; readonly fileBytes: number; readonly totalBytes: number; };
 		readonly limitMessage: string;
-		/** Calls onFileAdded after each new material appears in the confirmed catalog. */
-		readonly addFiles: (files: readonly File[], onFileAdded: () => void) => Promise<void>;
+		/** Calls onFileAdded once the provider confirms the file, before publishing the updated catalog. */
+		readonly addFiles: (files: readonly File[], onFileAdded: (file: Pick<ProjectMaterialRow, 'id' | 'name'>) => void | Promise<void>) => Promise<void>;
 	};
 }
 
@@ -476,7 +478,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		@ISessionsListModelService private readonly list: ISessionsListModelService,
 		@IFileService private readonly files: IFileService,
 		@IEditorService private readonly editors: IEditorService,
-		@IWorkbenchEnvironmentService private readonly environment: IWorkbenchEnvironmentService,
+		@IProjectMaterialFileService private readonly projectMaterialFiles: IProjectMaterialFileService,
 		@ISessionsEntryService private readonly entries: ISessionsEntryService,
 	) {
 		super();
@@ -616,24 +618,16 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 					: undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
 			loadMore: history?.state === 'more' && !history.manual ? history.load : undefined,
-			files: this.projectFiles(localProject, project.project?.details, reader),
+			files: this.projectFiles(localProject, project.project, destinations, reader),
 		};
 	}
 
-	private projectFiles(local: ProjectSummary | undefined, details: CatalogProjectDetails | undefined, reader: IReader): SessionsCatalogProject['files'] {
+	private projectFiles(local: ProjectSummary | undefined, catalog: ChatListProject | undefined, destinations: readonly ProjectSummary[], reader: IReader): SessionsCatalogProject['files'] {
 		if (local) {
 			const current = this.membership.get(local.id);
 			return {
 				key: JSON.stringify(['local', local.id, local.revision]),
-				rows: current?.project?.materials.flatMap(material => material.kind === 'file' ? [{
-					id: projectMaterialId(material), name: material.name,
-					open: async (signal, restoreFocus) => {
-						using copies = this.projectFileCopies(`local:${local.id}`);
-						const resource = await resolveProjectFileReference(this.files, copies, material, () => !signal.aborted);
-						signal.throwIfAborted();
-						await this.openSidebarFile(resource, resource.scheme === projectMaterialFilesScheme, signal, restoreFocus);
-					},
-				}] : []),
+				rows: current?.project?.materials.flatMap(material => material.kind === 'file' ? [this.localProjectFile(local.id, material, destinations)] : []),
 				load: current?.revision === local.revision && current.failed === false ? undefined : async signal => {
 					if (this.membership.get(local.id)?.failed) this.membership.delete(local.id);
 					await this.readProject(local).read;
@@ -641,26 +635,138 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 				},
 			};
 		}
-		if (!details) return undefined;
+		const details = catalog?.details;
+		if (!catalog || !details) return undefined;
+		const source = this.catalog.sources.find(source => source.snapshot.read(reader).projects?.some(project => project.details?.key === details.key));
+		const targets = source?.snapshot.read(reader).projects?.filter(project => !project.archived && project.details?.key !== details.key && project.details?.upload && project.details.data.read(reader)?.canEdit !== false) ?? [];
 		return {
 			key: details.key,
-			rows: details.data.read(reader)?.materials?.filter(material => material.kind === 'file').map(material => ({
-				id: material.id, name: material.name,
-				open: material.open ?? ((signal, restoreFocus) => this.openCatalogFile(details.key, material, signal, restoreFocus)),
-			})),
+			rows: details.data.read(reader)?.materials?.filter(material => material.kind === 'file').map(material => this.catalogProjectFile(catalog, details, material, targets)),
 			load: details.load,
 		};
 	}
 
-	private projectFileCopies(key: string): ProjectMaterialFiles | undefined {
-		const profile = this.environment.userRoamingDataHome;
-		if (!profile || !this.files.hasProvider(URI.from({ scheme: projectMaterialFilesScheme }))) return undefined;
-		const root = projectMaterialFilesRoot(profile, this.configuration.getValue<string>(projectMaterialFilesLocation));
-		return new ProjectMaterialFiles(this.files, root, key);
+	private localProjectFile(projectId: string, material: Extract<ProjectMaterial, { kind: 'file'; }>, destinations: readonly ProjectSummary[]): SessionsCatalogProjectFile {
+		const id = projectMaterialId(material);
+		const key = `local:${projectId}`;
+		const read = async () => {
+			const project = await this.projectService.read(projectId, 'chat');
+			const file = project.materials.find(item => item.kind === 'file' && projectMaterialId(item) === id);
+			if (project.archived || file?.kind !== 'file') throw new CancellationError();
+			return { project, file };
+		};
+		return {
+			id, name: material.name,
+			open: async (signal, restoreFocus) => {
+				using copies = this.projectMaterialFiles.copies(key);
+				const resource = await resolveProjectFileReference(this.files, copies, material, () => !signal.aborted);
+				signal.throwIfAborted();
+				await this.openSidebarFile(resource, resource.scheme === projectMaterialFilesScheme, signal, restoreFocus);
+			},
+			rename: async name => {
+				const { project, file } = await read();
+				await this.projectService.update(project, project.name, project.description, project.materials.map(item => item === file ? { ...file, name } : item));
+			},
+			remove: async () => {
+				const { project, file } = await read();
+				await this.projectService.update(project, project.name, project.description, project.materials.filter(item => item !== file));
+				using copies = this.projectMaterialFiles.copies(key);
+				if (copies) await this.projectMaterialFiles.removeCopy(copies, projectMaterialFile(file));
+			},
+			reveal: !isWeb && material.resource.scheme === 'file' && !material.resource.authority ? async () => {
+				const { file } = await read();
+				using copies = this.projectMaterialFiles.copies(key);
+				const managed = await copies?.existing(projectMaterialFile(file));
+				return managed && copies ? copies.localResource(managed) : file.resource;
+			} : undefined,
+			destinations: destinations.filter(target => target.id !== projectId).map(target => ({
+				id: target.id, title: target.name,
+				move: async () => {
+					const { project, file } = await read();
+					const destination = await this.projectService.read(target.id, 'chat');
+					if (destination.archived) throw new CancellationError();
+					const existing = destination.materials.find(item => item.kind !== 'text' && item.resource.toString() === file.resource.toString());
+					if (existing && projectMaterialId(existing) !== id) {
+						throw new Error(localize('projects.fileAlreadyInProject', 'This file is already in the destination project.'));
+					}
+					using copies = this.projectMaterialFiles.copies(key);
+					using targetCopies = this.projectMaterialFiles.copies(`local:${destination.id}`);
+					const material = projectMaterialFile(file);
+					const sourceCopy = await copies?.existing(material);
+					let replacement: URI | undefined;
+					if (sourceCopy && targetCopies) {
+						await this.projectMaterialFiles.prepareTransfer(sourceCopy);
+						const { bytes } = await this.files.readFileBytes(sourceCopy);
+						replacement = await targetCopies.ensure(material, async () => new Blob([new Uint8Array(bytes).buffer]));
+						const targetBytes = (await this.files.readFileBytes(replacement)).bytes;
+						if (targetBytes.length !== bytes.length || !targetBytes.every((byte, index) => byte === bytes[index])) {
+							throw new Error(localize('projects.fileCopyConflict', 'The destination already has a local copy with different contents.'));
+						}
+					}
+					if (!existing) await this.projectService.update(destination, destination.name, destination.description, [...destination.materials, file]);
+					try {
+						await this.projectService.update(project, project.name, project.description, project.materials.filter(item => item !== file));
+						if (copies) await this.projectMaterialFiles.removeCopy(copies, material, replacement);
+					} catch (error) { throw incompleteFileTransfer(error); }
+				},
+			})),
+		};
+	}
+
+	private catalogProjectFile(catalog: ChatListProject, details: CatalogProjectDetails, file: ProjectMaterialRow, targets: readonly ChatListProject[]): SessionsCatalogProjectFile {
+		const remove = file.remove && (async (replacement?: URI) => {
+			await file.remove!();
+			this.projects.forgetCatalogMaterialName(catalog.preferenceKey ?? details.key, file.id);
+			using copies = this.projectMaterialFiles.copies(details.key);
+			if (copies) await this.projectMaterialFiles.removeCopy(copies, file, replacement);
+		});
+		const transfer = async (target: CatalogProjectDetails, name: string) => {
+			const source = details.data.get();
+			if (!remove || !target.upload || !source?.canEdit || !source.materials?.some(item => item.id === file.id)) throw new CancellationError();
+			const controller = new AbortController();
+			await target.load?.(controller.signal);
+			const destination = target.data.get();
+			if (!destination?.canEdit) throw new Error(localize('projects.fileDestinationReadOnly', 'The destination project only allows viewing files.'));
+			if (destination.materials?.some(item => item.name === name)) {
+				throw new Error(localize('projects.fileNameInUse', 'A file with that name already exists in the destination project.'));
+			}
+			using copies = this.projectMaterialFiles.copies(details.key);
+			const resource = await copies?.existing(file);
+			if (resource) await this.projectMaterialFiles.prepareTransfer(resource);
+			const remote = await file.read?.(controller.signal);
+			if (!remote) throw new Error(localize('projects.localFileOffline', 'This project file is unavailable offline.'));
+			// PDF edits in the managed copy stay local when the provider file is replaced.
+			const local = resource ? await this.readProjectCopy(resource, file.name) : remote;
+			using targetCopies = this.projectMaterialFiles.copies(target.key);
+			let replacement: URI | undefined;
+			await target.upload.addFiles([new File([remote], name, { type: remote.type || getMediaOrTextMime(name) })], async added => {
+				replacement = await targetCopies?.ensure(added, async () => local);
+			});
+			try { await remove(replacement); }
+			catch (error) { throw incompleteFileTransfer(error); }
+		};
+		return {
+			id: file.id, name: file.name, remove,
+			open: file.open ?? ((signal, restoreFocus) => this.openCatalogFile(details.key, file, signal, restoreFocus)),
+			rename: remove && details.upload ? name => transfer(details, name) : undefined,
+			reveal: !isWeb && (file.read || this.files.hasProvider(URI.from({ scheme: projectMaterialFilesScheme }))) ? async () => {
+				using copies = this.projectMaterialFiles.copies(details.key);
+				if (!copies) throw new Error(localize('projects.localFileOffline', 'This project file is unavailable offline.'));
+				return copies.localResource(await copies.ensure(file, file.read));
+			} : undefined,
+			destinations: remove ? targets.flatMap(project => project.details ? [{
+				id: project.id, title: project.title, move: () => transfer(project.details!, file.name),
+			}] : []) : undefined,
+		};
+	}
+
+	private async readProjectCopy(resource: URI, name: string): Promise<Blob> {
+		const { bytes } = await this.files.readFileBytes(resource);
+		return new Blob([new Uint8Array(bytes).buffer], { type: getMediaOrTextMime(name) });
 	}
 
 	private async openCatalogFile(key: string, file: ProjectMaterialRow, signal: AbortSignal, restoreFocus: () => void): Promise<void> {
-		using copies = this.projectFileCopies(key);
+		using copies = this.projectMaterialFiles.copies(key);
 		if (!copies) throw new Error(localize('projects.localFileOffline', 'This project file is unavailable offline.'));
 		const download = file.read;
 		const resource = await copies.ensure(file, download && (request => download(AbortSignal.any([signal, request]))));
@@ -731,4 +837,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			getActions: signal => getChatListEntryActions(entry, signal, this.commands, this.configuration),
 		};
 	}
+}
+
+function incompleteFileTransfer(error: unknown): Error {
+	return new Error(localize('projects.fileTransferIncomplete', 'The file was added to the destination. The source could not be fully removed: {0}', toErrorMessage(error)), { cause: error });
 }

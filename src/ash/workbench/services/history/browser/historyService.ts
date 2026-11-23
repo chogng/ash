@@ -91,6 +91,17 @@ export class HistoryService extends Disposable implements IHistoryService {
 		return [...this.recentlyOpened.values()].reverse().filter(input => !this.resourceExcludeMatcher.matches(input.resource));
 	}
 
+	public remove(resource: URI): void {
+		if (this.recentlyOpened.delete(extUri.getComparisonKey(resource))) this.saveHistory();
+		for (let index = this.recentlyClosed.length - 1; index >= 0; index--) {
+			if (extUri.isEqual(this.recentlyClosed[index].resource, resource)) this.recentlyClosed.splice(index, 1);
+		}
+	}
+
+	private saveHistory(): void {
+		this.storage.store('history.recentlyOpened', JSON.stringify([...this.recentlyOpened.values()].map(input => input.resource.toString())), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
 	private restoreHistory(): void {
 		try {
 			const stored: unknown = JSON.parse(this.storage.get('history.recentlyOpened', StorageScope.WORKSPACE, '[]'));
@@ -203,7 +214,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 			this.recentlyOpened.delete(key);
 			this.recentlyOpened.set(key, { resource: active.resource });
 			if (this.recentlyOpened.size > 100) this.recentlyOpened.delete(this.recentlyOpened.keys().next().value!);
-			this.storage.store('history.recentlyOpened', JSON.stringify([...this.recentlyOpened.values()].map(input => input.resource.toString())), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			this.saveHistory();
 		}
 		if (this.isNavigating) return;
 		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;

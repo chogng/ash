@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { globSync, readFileSync, statSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
@@ -49,6 +49,10 @@ test.beforeEach(async ({ page }) => {
 	worker = spawn(resolve(binary), ['--fixture'], { stdio: 'pipe' });
 	const lines = createInterface({ input: worker.stdout });
 	lines.on('line', line => { const reply = JSON.parse(line) as { id: number; }; pending.get(reply.id)?.(reply); pending.delete(reply.id); });
+	await routePdfFixture(page);
+});
+
+async function routePdfFixture(page: Page): Promise<void> {
 	await page.route('**/__aspdf_bytes', route => route.fulfill({ body: pdf(), contentType: 'application/pdf' }));
 	await page.route('**/__aspdf_rpc', async route => {
 		const request = route.request().postDataJSON(); const id = ++sequence;
@@ -58,13 +62,54 @@ test.beforeEach(async ({ page }) => {
 		});
 		await route.fulfill({ json: { ...reply, id: request.id } });
 	});
-});
+}
 
 test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.aspdfTest?.dispose()).catch(() => undefined);
 	worker.stdin.end();
 	await new Promise<void>(resolve => { if (worker.exitCode !== null) { resolve(); } else { worker.once('exit', () => resolve()); } });
 	pending.clear();
+});
+
+test('A tool PDF restores unsaved annotations after its renderer crashes', async ({ page, context }) => {
+	await page.goto('/pdfPreview.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	const resource = await page.evaluate(() => window.aspdfTest.openToolResponse());
+	const viewer = page.getByRole('region', { name: 'PDF — tool-report.pdf' });
+	const noteInput = viewer.getByRole('textbox', { name: '批注内容' });
+	const addNote = viewer.getByRole('button', { name: '添加便签', exact: true });
+	await noteInput.fill('放弃的批注');
+	await addNote.click();
+	await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('放弃的批注');
+	await page.evaluate(() => { window.aspdfTest.retireToolResponse(); return window.aspdfTest.revert(); });
+	await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(0);
+	await noteInput.fill('崩溃前的批注');
+	await addNote.click();
+	await expect(viewer.getByRole('button', { name: '保存副本', exact: true })).toBeEnabled();
+	await expect.poll(() => page.evaluate(resource => window.aspdfTest.hasBackup(resource), resource)).toBe(true);
+	const debuggerSession = await context.newCDPSession(page);
+	const crashed = page.waitForEvent('crash');
+	void debuggerSession.send('Page.crash').catch(() => undefined);
+	await crashed;
+
+	const reopened = await context.newPage();
+	try {
+		await routePdfFixture(reopened);
+		await reopened.goto('/pdfPreview.html?locale=zh-CN');
+		await reopened.waitForFunction(() => !!window.aspdfTest);
+		await reopened.evaluate(() => window.aspdfTest.restoreWorkspace());
+		const restored = reopened.getByRole('region', { name: 'PDF — tool-report.pdf' });
+		await expect(restored.locator('.ash-sessions-pdf-text')).toContainText('aspdf native review');
+		await expect(restored.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('崩溃前的批注');
+		expect(await reopened.evaluate(() => window.aspdfTest.errors())).toEqual([]);
+		await restored.getByRole('button', { name: '保存副本', exact: true }).click();
+		await expect.poll(() => reopened.evaluate(resource => window.aspdfTest.hasBackup(resource), resource)).toBe(false);
+		await reopened.evaluate(() => window.aspdfTest.open(false, 'review-copy.pdf'));
+		await expect(reopened.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('崩溃前的批注');
+	} finally {
+		await reopened.evaluate(() => window.aspdfTest?.dispose()).catch(() => undefined);
+		await reopened.close();
+	}
 });
 
 test('PDF keeps the original error when navigation creation fails', async ({ page }) => {

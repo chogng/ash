@@ -56,6 +56,7 @@ export async function catalogConversationActions(
 
 export function startConversationRename(row: HTMLElement, store: DisposableStore, notifications: INotificationService, options: {
 	readonly name: string;
+	readonly label?: string;
 	readonly rename: (title: string) => Promise<void>;
 	readonly validate?: (title: string) => string | undefined;
 	readonly finish: (restoreFocus: boolean) => void;
@@ -90,7 +91,7 @@ export function startConversationRename(row: HTMLElement, store: DisposableStore
 		}
 	};
 	const input = renderInlineRenameInput(row, {
-		label: localize('sessions.titlebar.sessionName', 'Session name'),
+		label: options.label ?? localize('sessions.titlebar.sessionName', 'Session name'),
 		onAccept: () => { void save(); },
 		onCancel: () => { if (!saving) finish(true); },
 		onBlur: () => { if (!saving) finish(false); },

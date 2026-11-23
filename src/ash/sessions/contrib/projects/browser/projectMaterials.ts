@@ -40,7 +40,9 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
 import type { CatalogProjectDetails, ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
 import { IProjectDialogService } from './projectDialogService.js';
-import { isPreviewableProjectFile, openProjectFile, projectMaterialId, ProjectMaterialFiles, resolveProjectFileReference } from './projectMaterialFiles.js';
+import { IProjectMaterialFileService } from './projectMaterialFileService.js';
+import { confirmProjectFileRemoval } from './projectFileActions.js';
+import { isPreviewableProjectFile, openProjectFile, projectMaterialFile, projectMaterialId, ProjectMaterialFiles, resolveProjectFileReference } from './projectMaterialFiles.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectMaterials.css';
 
@@ -94,6 +96,7 @@ export class ProjectMaterials extends Disposable {
 		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IProjectMaterialFileService private readonly projectFiles: IProjectMaterialFileService,
 	) {
 		super();
 		this._register(toDisposable(() => this.selectedFiles.clear()));
@@ -114,12 +117,18 @@ export class ProjectMaterials extends Disposable {
 	}
 
 	renderCatalog(target: HTMLElement, key: string,
-		model: Omit<ProjectMaterialsContent, 'pickFiles' | 'pickFolders' | 'dropFiles' | 'addText' | 'removeFiles'> & { readonly upload?: CatalogMaterialUpload; },
+		model: Omit<ProjectMaterialsContent, 'pickFiles' | 'pickFolders' | 'dropFiles' | 'addText' | 'removeFiles'> & { readonly upload?: CatalogMaterialUpload; readonly preferenceKey?: string; },
 		content: DisposableStore): HTMLElement {
 		const localFiles = this.localFiles.value;
 		const isCurrent = () => !this.isDisposed && this.localFiles.value === localFiles && model.isCurrent();
 		const rows = model.rows?.map((file): ProjectMaterialPresentation => {
-			if (file.open || file.kind !== 'file') return file;
+			if (file.kind !== 'file') return file;
+			const remove = file.remove && (async () => {
+				await file.remove!();
+				this.projects.forgetCatalogMaterialName(model.preferenceKey ?? key, file.id);
+				if (localFiles) await this.projectFiles.removeCopy(localFiles, file);
+			});
+			if (file.open) return { ...file, remove };
 			const resolveFile = localFiles ? async () => {
 				if (!isCurrent()) throw new CancellationError();
 				return localFiles.ensure(file, file.read);
@@ -137,12 +146,12 @@ export class ProjectMaterials extends Disposable {
 				} : undefined;
 				return {
 					...file,
-					readText, resolveFile,
+					readText, resolveFile, remove,
 				};
 			}
 			return {
 				...file,
-				resolveFile,
+				resolveFile, remove,
 				open: resolveFile ? () => this.openMaterial(resolveFile, isCurrent, true) : undefined,
 			};
 		});
@@ -204,6 +213,8 @@ export class ProjectMaterials extends Disposable {
 			for (const material of removed) {
 				if (material.kind === 'file') this.selectedFiles.delete(previewKey(material.resource));
 			}
+			if (localFiles) await Promise.all(removed.filter(material => material.kind === 'file').map(material =>
+				this.projectFiles.removeCopy(localFiles, projectMaterialFile(material))));
 		};
 		const add = async (entries: readonly { resource: URI; file?: File; }[], kind: 'file' | 'folder') => {
 			if (this.isDisposed || !isCurrent()) return;
@@ -218,7 +229,7 @@ export class ProjectMaterials extends Disposable {
 					const stat = await this.fileService.stat(resource).catch(() => undefined);
 					if (stat?.kind !== FileKind.File && isCurrent()) {
 						// A picker grants access to these bytes, without authorizing the containing directory.
-						await localFiles.ensure({ id: projectMaterialId(material), name }, async () => file);
+						await localFiles.ensure(projectMaterialFile(material), async () => file);
 					}
 				}
 				return { material, file };
@@ -370,41 +381,32 @@ export class ProjectMaterials extends Disposable {
 		const previous = selection.get();
 		const ids = new Set(selectable.filter(row => previous.has(row.id)).map(row => row.id));
 		if (ids.size !== previous.size) selection.set(ids, undefined);
-		if (selectable.length || this.removingFiles.get().has(key)) {
-			const removeButton = this.action(content, actions, 'remove-selected-files', { label: '', icon: Lxicon.trash }, async () => {
-				const ids = selection.get();
-				if (!ids.size || this.removingFiles.get().has(key) || model.busy || !isCurrent()) return;
-				const rows = selectable.filter(row => ids.has(row.id));
-				const confirmation = await this.dialogs.confirm({
-					message: rows.length === 1
-						? localize('projects.confirmRemoveMaterial', 'Remove {0} from this project?', rows[0].name)
-						: localize('projects.confirmRemoveFiles', 'Remove {0} files from this project?', rows.length),
-					primaryButton: localize('projects.confirmRemoveMaterialAction', 'Remove'),
-					destructive: true,
-				});
-				if (!confirmation.confirmed || this.isDisposed || !isCurrent() || this.selection?.ids !== selection
-					|| this.removingFiles.get().has(key)) return;
-				const currentIds = new Set(rows.filter(row => selection.get().has(row.id)).map(row => row.id));
-				if (!currentIds.size) return;
-				this.removingFiles.set(new Set(this.removingFiles.get()).add(key), undefined);
-				try {
-					if (model.removeFiles) {
-						await model.removeFiles(currentIds);
-					} else {
-						// Providers can commit individual removals even when another one fails.
-						const results = await Promise.allSettled(rows.filter(row => currentIds.has(row.id)).map(row => row.remove!()));
-						const failure = results.find(result => result.status === 'rejected');
-						if (failure) throw failure.reason;
-					}
-					if (isCurrent()) status(localize('projects.filesRemoved', 'Selected files removed from the project.'));
-				} catch (error) {
-					if (isCurrent() && !isCancellationError(error)) this.reportError(toErrorMessage(error));
-				} finally {
-					const pending = new Set(this.removingFiles.get());
-					pending.delete(key);
-					this.removingFiles.set(pending, undefined);
+		const removeRows = async (rows: readonly ProjectMaterialPresentation[]) => {
+			if (!rows.length || this.removingFiles.get().has(key) || model.busy || !isCurrent()) return;
+			if (!await confirmProjectFileRemoval(this.dialogs, rows.map(row => row.name)) || this.isDisposed || !isCurrent() || this.selection?.ids !== selection
+				|| this.removingFiles.get().has(key)) return;
+			this.removingFiles.set(new Set(this.removingFiles.get()).add(key), undefined);
+			try {
+				if (model.removeFiles) {
+					await model.removeFiles(new Set(rows.map(row => row.id)));
+				} else {
+					// Providers can commit individual removals even when another one fails.
+					const results = await Promise.allSettled(rows.map(row => row.remove!()));
+					const failure = results.find(result => result.status === 'rejected');
+					if (failure) throw failure.reason;
 				}
-			});
+				if (isCurrent()) status(localize('projects.filesRemoved', 'Selected files removed from the project.'));
+			} catch (error) {
+				if (isCurrent() && !isCancellationError(error)) this.reportError(toErrorMessage(error));
+			} finally {
+				const pending = new Set(this.removingFiles.get());
+				pending.delete(key);
+				this.removingFiles.set(pending, undefined);
+			}
+		};
+		if (selectable.length || this.removingFiles.get().has(key)) {
+			const removeButton = this.action(content, actions, 'remove-selected-files', { label: '', icon: Lxicon.trash },
+				() => removeRows(selectable.filter(row => selection.get().has(row.id))));
 			actions.prepend(removeButton.domNode);
 			content.add(autorun(reader => {
 				const ids = selection.read(reader);
@@ -464,9 +466,14 @@ export class ProjectMaterials extends Disposable {
 					}));
 					checkbox.element.classList.add('ash-projects-material-card-select');
 					checkbox.input.dataset.projectControl = `select:${material.id}`;
+					const removeLabel = localize('projects.removeMaterial', 'Remove {0} from project', material.name);
+					const removeButton = this.action(content, row, `remove:${material.id}`, {
+						label: removeLabel, title: removeLabel, icon: Lxicon.close, iconOnly: true, size: 'small',
+					}, () => removeRows([material]));
+					removeButton.domNode.classList.add('ash-projects-material-card-remove');
 					content.add(autorun(reader => {
 						checkbox.checked = selection.read(reader).has(material.id);
-						checkbox.enabled = !model.busy && !this.removingFiles.read(reader).has(key);
+						removeButton.enabled = checkbox.enabled = !model.busy && !this.removingFiles.read(reader).has(key);
 					}));
 				}
 			} else if (open) {

@@ -1820,6 +1820,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await confirm.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
 			await expect(existing).toHaveCount(0);
 			await expect(note).toHaveCount(0);
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Existing.txt'))).toBeUndefined();
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Project notes.md'))).toBeUndefined();
 			await expect(fileCard).toBeVisible();
 			expect(removals).toEqual(['file-existing', 'file-markdown']);
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
@@ -1854,6 +1856,122 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			}
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('Updated on ChatGPT Web');
 			await expect(editInstructions).toBeVisible();
+		});
+
+		if (locale === 'zh-CN') test('removes a ChatGPT PDF and its local draft only after the project confirms removal', async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			const id = 'g-p-pdf-review';
+			const filename = 'Review.pdf';
+			const file = { file_id: 'file-review-pdf', name: filename };
+			let attempts = 0;
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: [{ gizmo: { id, display: { name: 'PDF review' } } }], cursor: null },
+			}));
+			await page.route(`**/service/backend-api/gizmos/${id}?*`, route => route.fulfill({
+				json: {
+					gizmo: { id, display: { name: 'PDF review' }, current_user_permission: { can_write: true } },
+					files: attempts < 2 ? [file] : [],
+				}
+			}));
+			await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4' }));
+			await page.route(`**/service/backend-api/projects/${id}/files/${file.file_id}`, route => {
+				expect(route.request().method()).toBe('DELETE');
+				return route.fulfill({ status: ++attempts === 1 ? 403 : 204 });
+			});
+			await page.goto('/chatgptNavigation.html?projects&projectMaterials&locale=zh-CN');
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: 'PDF review', exact: true }).click();
+			const context = projects.getByRole('region', { name: '上下文', exact: true });
+			const remove = context.getByRole('button', { name: `从项目中移除 ${filename}`, exact: true });
+			await expect.poll(() => page.evaluate(name => window.ashChatGPTIntegration.readSavedMaterial(name), filename)).toBe('%PDF-1.4');
+			const uri = await page.evaluate(name => window.ashChatGPTIntegration.seedProjectPdfDraft(name), filename);
+			const draft = () => page.evaluate(uri => window.ashChatGPTIntegration.readProjectPdfDraft(uri), uri);
+			const confirm = page.getByRole('dialog').filter({ hasText: `从此项目移除 ${filename}？` });
+			await remove.press('Enter');
+			await confirm.getByRole('button', { name: '移除', exact: true }).click();
+			await expect(projects.locator('.ash-projects-feedback')).toBeVisible();
+			await expect(remove).toBeEnabled();
+			expect(await draft()).toEqual({ backup: true, conversation: true });
+			await remove.click();
+			await confirm.getByRole('button', { name: '移除', exact: true }).click();
+			await expect(context.getByRole('button', { name: filename, exact: true })).toHaveCount(0);
+			await expect.poll(draft).toEqual({ backup: false, conversation: false });
+			await expect.poll(() => page.evaluate(name => window.ashChatGPTIntegration.readSavedMaterial(name), filename)).toBeUndefined();
+			expect(attempts).toBe(2);
+		});
+
+		if (locale === 'zh-CN') test('the project file menu renames, moves and deletes the clicked ChatGPT file', async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			const source = 'g-p-file-review';
+			const target = 'g-p-file-archive';
+			const projects = [{ id: source, name: 'File review' }, { id: target, name: 'File archive' }];
+			const files = new Map(projects.map(project => [project.id, project.id === source ? [{ file_id: 'file-original-pdf', name: 'Original.pdf' }] : []]));
+			const mutations: string[] = [];
+			let uploadId = 0;
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: projects.map(({ id, name }) => ({ gizmo: { id, display: { name } } })), cursor: null },
+			}));
+			for (const { id, name } of projects) {
+				await page.route(`**/service/backend-api/gizmos/${id}?*`, route => route.fulfill({
+					json: {
+						gizmo: { id, display: { name }, current_user_permission: { can_write: true } }, files: files.get(id),
+					}
+				}));
+				await page.route(`**/service/backend-api/projects/${id}/files`, route => {
+					const [file] = route.request().postDataJSON().files;
+					files.get(id)!.push(file);
+					mutations.push(`add:${id}:${file.name}`);
+					return route.fulfill({ status: 204 });
+				});
+				await page.route(`**/service/backend-api/projects/${id}/files/*`, route => {
+					const fileId = new URL(route.request().url()).pathname.split('/').at(-1)!;
+					mutations.push(`delete:${id}:${fileId}`);
+					files.set(id, files.get(id)!.filter(file => file.file_id !== fileId));
+					return route.fulfill({ status: 204 });
+				});
+			}
+			await page.route('**/service/backend-api/files', route => route.fulfill({ json: { file_id: `file-pdf-${++uploadId}`, upload_url: 'https://example.test/upload' } }));
+			await page.route('**/service/.upload?*', route => {
+				expect(route.request().postData()).toBe('%PDF-1.4');
+				return route.fulfill({ status: 201 });
+			});
+			await page.route('**/service/backend-api/files/process_upload_stream', route => route.fulfill({
+				contentType: 'application/x-ndjson', body: JSON.stringify({ event: 'file.processing.completed', file_id: route.request().postDataJSON().file_id, extra: { metadata_object_id: 'library-pdf' } }) + '\n',
+			}));
+			await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4' }));
+			await page.goto('/chatgptNavigation.html?projects&sidebarProjectFiles&projectMaterials&locale=zh-CN');
+			await page.locator('.ash-projects').getByRole('button', { name: 'File review', exact: true }).click();
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Original.pdf'))).toBe('%PDF-1.4');
+			const annotated = '%PDF-1.4\n% Local annotations';
+			await page.evaluate(annotated => window.ashChatGPTIntegration.writeSavedMaterial('Original.pdf', annotated), annotated);
+			const sidebar = page.locator('.ash-chat-navigation-list');
+			await sidebar.getByRole('button', { name: 'File review', exact: true }).press('ArrowRight');
+			const original = sidebar.getByRole('button', { name: 'Original.pdf', exact: true });
+			await original.click({ button: 'right' });
+			await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+			const input = page.getByRole('textbox', { name: '文件名', exact: true });
+			await input.fill('Renamed.pdf');
+			await input.press('Enter');
+			const renamed = sidebar.getByRole('button', { name: 'Renamed.pdf', exact: true });
+			await expect(original).toHaveCount(0);
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Renamed.pdf'))).toBe(annotated);
+			await renamed.press('Shift+F10');
+			await page.getByRole('menuitem', { name: '移至项目', exact: true }).press('ArrowRight');
+			await page.getByRole('menuitem', { name: 'File archive', exact: true }).press('Enter');
+			await expect(sidebar.locator(`[data-parent-project-id="${source}"]`).getByRole('button', { name: 'Renamed.pdf', exact: true })).toHaveCount(0);
+			await sidebar.getByRole('button', { name: 'File archive', exact: true }).press('ArrowRight');
+			const moved = sidebar.locator(`[data-parent-project-id="${target}"]`).getByRole('button', { name: 'Renamed.pdf', exact: true });
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Renamed.pdf'))).toBe(annotated);
+			await moved.click({ button: 'right' });
+			await page.getByRole('menuitem', { name: '删除', exact: true }).click();
+			await page.getByRole('dialog').getByRole('button', { name: '移除', exact: true }).click();
+			await expect(moved).toHaveCount(0);
+			expect(mutations).toEqual([
+				`add:${source}:Renamed.pdf`, `delete:${source}:file-original-pdf`,
+				`add:${target}:Renamed.pdf`, `delete:${source}:file-pdf-1`, `delete:${target}:file-pdf-2`,
+			]);
 		});
 
 		test(`pauses the project history fallback between batches (${locale})`, async () => {

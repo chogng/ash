@@ -652,7 +652,7 @@ const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IQuickInputService, quickInput);
-services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
+services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], remove() { }, goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
 const openedEditors = document.createElement('output');
 openedEditors.setAttribute('aria-label', 'Opened editor count');
 openedEditors.textContent = '0';

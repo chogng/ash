@@ -52,6 +52,7 @@ export interface IProjectsService {
 	getCatalogProjectAppearance(key: string): CatalogProjectAppearance;
 	readCatalogMaterialNames(key: string): readonly CatalogMaterialName[] | undefined;
 	rememberCatalogMaterialNames(key: string, materials: readonly CatalogMaterialName[]): void;
+	forgetCatalogMaterialName(key: string, id: string): void;
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
 	getProjects(): readonly ProjectSummary[];
@@ -131,6 +132,11 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		if (value !== this.storage.get(storageKey, StorageScope.PROFILE)) {
 			this.storage.store(storageKey, value, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
+	}
+
+	public forgetCatalogMaterialName(key: string, id: string): void {
+		const names = this.readCatalogMaterialNames(key);
+		if (names?.some(file => file.id === id)) this.rememberCatalogMaterialNames(key, names.filter(file => file.id !== id));
 	}
 
 	public isPinned(id: string): boolean { return this.storage.getBoolean(`sessions.projects.pinned.${id}`, StorageScope.PROFILE, false); }

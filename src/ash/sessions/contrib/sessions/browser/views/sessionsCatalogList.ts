@@ -1,5 +1,6 @@
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
+import type { URI } from '../../../../../base/common/uri.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
@@ -55,13 +56,19 @@ export interface SessionsCatalogProject {
 	readonly files?: {
 		/** Changes when the file source or the saved local project revision changes. */
 		readonly key: string;
-		readonly rows: readonly {
-			readonly id: string;
-			readonly name: string;
-			open(signal: AbortSignal, restoreFocus: () => void): Promise<void>;
-		}[] | undefined;
+		readonly rows: readonly SessionsCatalogProjectFile[] | undefined;
 		readonly load?: (signal: AbortSignal) => Promise<void>;
 	};
+}
+
+export interface SessionsCatalogProjectFile {
+	readonly id: string;
+	readonly name: string;
+	open(signal: AbortSignal, restoreFocus: () => void): Promise<void>;
+	readonly rename?: (name: string) => Promise<void>;
+	readonly remove?: () => Promise<void>;
+	readonly reveal?: () => Promise<URI>;
+	readonly destinations?: readonly { readonly id: string; readonly title: string; move(): Promise<void>; }[];
 }
 
 export type CatalogProjectMemoryMode = 'default' | 'projectOnly';

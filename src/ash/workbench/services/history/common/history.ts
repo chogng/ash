@@ -1,4 +1,5 @@
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 
 export const enum GoFilter {
@@ -10,6 +11,8 @@ export const enum GoFilter {
 /** Navigates through editors and locations visited in the current Workbench. */
 export interface IHistoryService {
 	getHistory(): readonly IResourceEditorInput[];
+	/** Forgets an explicitly removed resource in the open and closed editor history. */
+	remove(resource: URI): void;
 	goBack(filter?: GoFilter): Promise<void>;
 	goForward(filter?: GoFilter): Promise<void>;
 	/** Reopens the most recently closed available editor as a pinned tab. */

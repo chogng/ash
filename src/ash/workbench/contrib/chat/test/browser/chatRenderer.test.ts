@@ -36,6 +36,7 @@ import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.j
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { getChatRequestAccessibilityHelp } from '../../browser/actions/chatAccessibilityHelp.js';
 import '../../browser/chat.shared.contribution.js';
 
@@ -431,6 +432,33 @@ test('published files move between a reply footer pill and a menu without losing
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('A tool PDF opens from its response resource with no editor-level write restriction', async () => {
+	using resources = new DisposableStore();
+	const services = createResourceRendererServices(resources);
+	const files = resources.add(new ChatResponseResourceFileSystemProvider());
+	services.registerInstance(IChatResponseResourceFileSystemProvider, files);
+	const opened = new DeferredPromise<IResourceEditorInput>();
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async input => { await opened.complete(input); }, focusActiveEditor() { } });
+	const widget = mount(resources, services);
+	const bytes = new TextEncoder().encode('%PDF-1.7');
+	widget.render([{
+		...response, content: [{
+			type: 'artifact', artifact: {
+				source: { type: 'embeddedResource', uri: 'mcp://resource/report.bin' }, mimeType: 'application/pdf',
+				data: { type: 'bytes', bytes }, contentDigest: 'pdf', truncated: false,
+			}
+		}]
+	}]);
+	const row = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-resources details')!;
+	row.open = true;
+	row.querySelector<HTMLButtonElement>('.ash-chat-resource-pill')!.click();
+	const input = await opened.p;
+	assert.equal(input.contentType, 'application/pdf');
+	assert.equal(input.readOnly, undefined);
+	assert.equal(input.initialBytes, undefined);
+	assert.deepEqual((await files.readFile(input.resource)).bytes, bytes);
 });
 
 test('corrected response resources retain disclosure identity, expansion and summary focus and retire previous bytes', async () => {

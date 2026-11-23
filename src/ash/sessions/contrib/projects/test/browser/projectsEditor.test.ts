@@ -22,6 +22,28 @@ suite('Projects toolbar', () => {
 		await expect(projects.getByText(message, { exact: true })).toHaveCount(0);
 	});
 
+	test('the PDF card removes a project file with keyboard confirmation', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?projectCreation&projectPdfPreview&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
+		const projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'PDF project', exact: true }).click();
+		const context = projects.getByRole('region', { name: '上下文', exact: true });
+		const card = context.getByRole('button', { name: 'report.pdf', exact: true });
+		const remove = context.getByRole('button', { name: '从项目中移除 report.pdf', exact: true });
+		await expect(remove).toBeVisible();
+		await remove.press('Enter');
+		const dialog = page.getByRole('dialog').filter({ hasText: '从此项目移除 report.pdf？' });
+		await expect(dialog.getByText('同时删除 Ash 为这些项目文件保存的副本和未保存的修改。磁盘上的原文件会保留。')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(card).toBeVisible();
+		await remove.press('Enter');
+		await dialog.getByRole('button', { name: '移除', exact: true }).click();
+		await expect(card).toHaveCount(0);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`sidebar creation keeps the remote project on cancel and renames the new local project on save (${locale})`, async () => {
 			const { page, info } = browser;

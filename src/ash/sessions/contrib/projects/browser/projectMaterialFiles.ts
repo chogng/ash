@@ -4,6 +4,7 @@ import { isValidBasename } from '../../../../base/common/extpath.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { extname } from '../../../../base/common/path.js';
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
+import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileService } from '../../../../platform/files/common/files.js';
@@ -17,7 +18,7 @@ export function isPreviewableProjectFile(name: string): boolean {
 
 export function openProjectFile(editors: IEditorService, resource: URI, readOnly: boolean): Promise<void> {
 	if (isPreviewableProjectFile(resource.path)) {
-		return editors.openEditor({ resource, readOnly: extname(resource.path).toLowerCase() !== '.pdf', showBreadcrumbs: false }, {}, 'modalGroup');
+		return editors.openEditor({ resource, showBreadcrumbs: false, ...(getMediaOrTextMime(resource.path)?.startsWith('image/') ? { readOnly: true } : {}) }, {}, 'modalGroup');
 	}
 	return editors.openEditor({ resource, ...(readOnly && { readOnly, showBreadcrumbs: false }) });
 }
@@ -29,19 +30,26 @@ export function projectMaterialId(material: ProjectMaterial): string {
 	return material.kind === 'file' ? JSON.stringify([resource, material.sizeBytes]) : resource;
 }
 
+export function projectMaterialFile(material: Extract<ProjectMaterial, { kind: 'file'; }>): { id: string; name: string; } {
+	// The displayed project label can change independently of the source and its managed copy.
+	return { id: projectMaterialId(material), name: basename(material.resource) || material.name };
+}
+
 export async function resolveProjectFileReference(files: IFileService, copies: ProjectMaterialFiles | undefined,
 	material: Extract<ProjectMaterial, { kind: 'file'; }>, isCurrent: () => boolean): Promise<URI> {
-	if (!copies || !isPreviewableProjectFile(material.name)) return material.resource;
+	const file = projectMaterialFile(material);
+	if (!copies || !isPreviewableProjectFile(file.name)) return material.resource;
 	const stat = await files.stat(material.resource).catch(() => undefined);
 	if (stat?.kind === FileKind.File) return material.resource;
 	if (!isCurrent()) throw new CancellationError();
-	return copies.ensure({ id: projectMaterialId(material), name: material.name }, undefined);
+	return copies.ensure(file, undefined);
 }
 
 /** Publish each local copy once so a repeat download cannot overwrite local annotations. */
 export class ProjectMaterialFiles extends AbstractDisposable {
 	private readonly queue = new TaskQueue();
 	private readonly pending = new Map<string, Promise<URI>>();
+	private readonly removing = new Set<string>();
 	private readonly controller = new AbortController();
 
 	constructor(
@@ -53,19 +61,13 @@ export class ProjectMaterialFiles extends AbstractDisposable {
 	async ensure(file: { readonly id: string; readonly name: string; }, download: ((signal: AbortSignal) => Promise<Blob>) | undefined): Promise<URI> {
 		const signal = this.controller.signal;
 		signal.throwIfAborted();
-		// Leave room for the disk provider's atomic write suffix and preserve the file's editor type.
-		const extension = /\.[a-z0-9]{1,16}$/iu.exec(file.name)?.[0] ?? '';
-		const name = isValidBasename(file.name, true) && new TextEncoder().encode(file.name).length <= 200 ? file.name : `file${extension}`;
-		const target = URI.from({
-			scheme: projectMaterialFilesScheme,
-			authority: projectMaterialFilesKey(this.root.fsPath),
-			path: `/${projectMaterialFilesKey(this.projectKey)}/${projectMaterialFilesKey(file.id)}/${name}`,
-		});
+		const target = this.resource(file);
+		const key = target.toString();
 		const exists = await this.isFile(target);
 		signal.throwIfAborted();
+		if (this.removing.has(key)) throw new CancellationError();
 		if (exists) return target;
 
-		const key = target.toString();
 		const pending = this.pending.get(key);
 		if (pending) return pending;
 		if (!download) throw new Error(localize('projects.localFileOffline', 'This project file is unavailable offline.'));
@@ -78,6 +80,7 @@ export class ProjectMaterialFiles extends AbstractDisposable {
 			const blob = await raceCancellationError(download(signal), signal);
 			const bytes = new Uint8Array(await blob.arrayBuffer());
 			signal.throwIfAborted();
+			if (this.removing.has(key)) throw new CancellationError();
 			try {
 				await this.files.writeFileBytes(target, bytes);
 			} catch (error) {
@@ -89,6 +92,38 @@ export class ProjectMaterialFiles extends AbstractDisposable {
 		}).finally(() => { this.pending.delete(key); });
 		this.pending.set(key, operation);
 		return operation;
+	}
+
+	async remove(file: { readonly id: string; readonly name: string; }, purge: (resource: URI) => Promise<void>): Promise<void> {
+		const target = this.resource(file);
+		const key = target.toString();
+		this.removing.add(key);
+		try {
+			// A download that already reached the provider may still publish its bytes.
+			await this.pending.get(key)?.catch(() => undefined);
+			await purge(target);
+			await this.files.delete(target, 'ignore', 'fileOrEmptyDirectory');
+		} finally {
+			this.removing.delete(key);
+		}
+	}
+
+	public resource(file: { readonly id: string; readonly name: string; }): URI {
+		// Leave room for the disk provider's atomic write suffix and preserve the file's editor type.
+		const extension = /\.[a-z0-9]{1,16}$/iu.exec(file.name)?.[0] ?? '';
+		const name = isValidBasename(file.name, true) && new TextEncoder().encode(file.name).length <= 200 ? file.name : `file${extension}`;
+		return URI.from({
+			scheme: projectMaterialFilesScheme,
+			authority: projectMaterialFilesKey(this.root.fsPath),
+			path: `/${projectMaterialFilesKey(this.projectKey)}/${projectMaterialFilesKey(file.id)}/${name}`,
+		});
+	}
+
+	public localResource(resource: URI): URI { return URI.joinPath(this.root, resource.path); }
+
+	public async existing(file: { readonly id: string; readonly name: string; }): Promise<URI | undefined> {
+		const resource = this.resource(file);
+		return await this.isFile(resource) ? resource : undefined;
 	}
 
 	protected override disposeCore(): void {

@@ -470,7 +470,9 @@ export class ChatAttachmentsContentPart extends Disposable {
 					text.textContent = new TextDecoder().decode(bytes);
 					row.media.append(text);
 				} else {
-					const input = { resource: row.association.value!.resource, contentType: mime, readOnly: true, initialBytes: bytes };
+					const resource = row.association.value!.resource;
+					const pdf = mime === 'application/pdf' || getMediaMime(resource.path) === 'application/pdf';
+					const input = { resource, ...(pdf ? { contentType: 'application/pdf' } : { contentType: mime, readOnly: true, initialBytes: bytes }) };
 					const descriptor = EditorPanes.getEditorPanesForInput(input).find(pane => pane.resourceEditor);
 					if (!descriptor) {
 						this.showFileDownload(row, row.part, blob);
@@ -574,7 +576,9 @@ export class ChatAttachmentsContentPart extends Disposable {
 		row.openButton.disabled = true;
 		try {
 			if (row.media.matches('audio,video')) (row.media as HTMLMediaElement).pause();
-			await this.editors.openEditor({ resource: row.association.value.resource, readOnly: true });
+			const resource = row.association.value.resource;
+			const pdf = row.blob?.type.split(';', 1)[0]?.trim() === 'application/pdf' || getMediaMime(resource.path) === 'application/pdf';
+			await this.editors.openEditor({ resource, ...(pdf ? { contentType: 'application/pdf' } : { readOnly: true }) });
 		} catch (error) {
 			if (!row.isDisposed && !this.isDisposed) row.status.textContent = localize('chat.media.openFailed', 'Could not open this media: {0}', String(error));
 		} finally {

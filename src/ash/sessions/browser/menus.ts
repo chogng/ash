@@ -12,6 +12,7 @@ export const Menus = {
 	SidebarChatSessionContext: new MenuId('SidebarChatSessionContext'),
 	SidebarCodeSessionContext: new MenuId('SidebarCodeSessionContext'),
 	SidebarChatProjectContext: new MenuId('SidebarChatProjectContext'),
+	SidebarChatProjectFileContext: new MenuId('SidebarChatProjectFileContext'),
 	SidebarCodeProjectContext: new MenuId('SidebarCodeProjectContext'),
 	SessionSectionToolbar: new MenuId('SessionSectionToolbar'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),

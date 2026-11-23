@@ -25,9 +25,12 @@ export class ProjectMaterialFilesChannel extends Disposable implements IServerCh
 
 	async call<T>(context: string, command: string, value: unknown, token = CancellationToken.None): Promise<T> {
 		this.checkContext(context);
-		if (!['stat', 'readFile', 'writeFile'].includes(command) || !isRecord(value)) throw new TypeError('Invalid project file operation');
+		if (!['stat', 'readFile', 'writeFile', 'delete'].includes(command) || !isRecord(value)) throw new TypeError('Invalid project file operation');
 		const resource = this.parseResource(value.resource);
 		if (command === 'writeFile') this.checkWriteOptions(resource, value.options);
+		if (command === 'delete' && (value.mode !== 'fileOrEmptyDirectory' || value.missing !== 'ignore')) {
+			throw new TypeError('Project file removal requires a single managed path');
+		}
 		if (resource.authority !== projectMaterialFilesKey(this.root().fsPath)) await this.configuration.reloadConfiguration();
 		const { channel, target } = this.resolve(resource);
 		return channel.call(context, command, { ...value, resource: target.toString() }, token);

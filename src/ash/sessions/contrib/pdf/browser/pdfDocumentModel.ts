@@ -8,7 +8,7 @@ import { extname } from '../../../../base/common/path.js';
 import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { FileRevisionConflictError, IFileService } from '../../../../platform/files/common/files.js';
+import { FileRevisionConflictError, FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IPdfService, type IPdfDocument, type PdfAnnotationEdit, type PdfOutlineEntry, type PdfPage } from '../../../../platform/pdf/common/pdfService.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../workbench/common/editor.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -17,6 +17,13 @@ import { localize } from '../../../../nls.js';
 interface PdfEdit { readonly page: number; readonly edit: PdfAnnotationEdit; }
 interface PdfCheckpoint { readonly source: Uint8Array; readonly editCount: number; }
 interface PdfRebuild { readonly document: IPdfDocument; readonly page: PdfPage; readonly checkpoint: PdfCheckpoint | undefined; }
+interface PdfBackup {
+	readonly source: Uint8Array;
+	readonly edits: PdfEdit[];
+	readonly revision?: string;
+	readonly savedEdits?: readonly PdfEdit[];
+	readonly copyOnly: boolean;
+}
 
 const backupVersion = 2;
 const maxBackupEdits = 1000;
@@ -39,6 +46,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	private source: Uint8Array | undefined;
 	private fileRevision: string | undefined;
 	private sourceFileReadOnly = false;
+	private sourceUnavailable = false;
 	private edits: PdfEdit[] = [];
 	private undone: PdfEdit[] = [];
 	private savedEdits: readonly PdfEdit[] | undefined = [];
@@ -65,21 +73,36 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	}
 	public get canUndo(): boolean { return this.edits.length > 0; }
 	public get canRedo(): boolean { return this.undone.length > 0; }
-	public get savesCopy(): boolean { return this.input.readOnly === true || this.input.initialBytes !== undefined || this.sourceFileReadOnly; }
+	public get savesCopy(): boolean { return this.sourceFileReadOnly || this.sourceUnavailable || this.input.initialBytes !== undefined; }
 	public get recoveryError(): unknown { return this.failedRecovery?.error; }
 
-	public open(): Promise<void> {
+	public open(readBackup?: () => Promise<string | undefined>): Promise<void> {
 		return this.serialize(async () => {
 			const signal = this.lifetime.signal;
-			if (!this.input.initialBytes) {
-				const stat = await this.files.stat(this.resource);
-				if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
-				this.sourceFileReadOnly = stat.readonly;
+			try {
+				if (!this.input.initialBytes) {
+					const stat = await this.files.stat(this.resource);
+					if (stat.sizeBytes > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.tooLarge', 'PDFs larger than 64 MiB cannot be opened.')); }
+					this.sourceFileReadOnly = stat.readonly;
+				}
+				const { document, revision, source } = await this.openFile(signal);
+				this.document = document;
+				this.source = source;
+				this.fileRevision = revision;
+			} catch (error) {
+				signal.throwIfAborted();
+				const code = error instanceof Error ? toFileSystemProviderErrorCode(error) : undefined;
+				if (!readBackup || (code !== FileSystemProviderErrorCode.FileNotFound && code !== FileSystemProviderErrorCode.Unavailable)) throw error;
+				const content = await readBackup();
+				if (content === undefined) throw error;
+				const backup = parseBackup(content);
+				// Response bytes can disappear with the conversation row or renderer.
+				// The draft can still be reopened without acquiring a writable origin.
+				if (!backup.copyOnly) throw error;
+				await this.applyBackup(backup);
+				this.sourceUnavailable = true;
+				this.changed.fire();
 			}
-			const { document, revision, source } = await this.openFile(signal);
-			this.document = document;
-			this.source = source;
-			this.fileRevision = revision;
 		});
 	}
 
@@ -212,9 +235,12 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 	public revert(signal: AbortSignal): Promise<void> {
 		return this.serialize(async () => {
 			signal.throwIfAborted();
-			if (this.savesCopy && this.source && this.savedEdits?.length && !this.failedRecovery) {
-				this.install(await this.rebuild(this.source, this.savedEdits));
-				this.edits = this.savedEdits.slice();
+			// A response can release its provider entry while the editor is still open.
+			if (this.savesCopy && this.source && (this.sourceUnavailable || !this.failedRecovery)) {
+				const saved = this.savedEdits ?? [];
+				this.install(await this.rebuild(this.source, saved));
+				this.edits = saved.slice();
+				this.savedEdits = saved;
 				this.undone = [];
 				this.reverted.fire();
 				this.changed.fire();
@@ -252,6 +278,7 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 			edits,
 			revision: this.fileRevision,
 			savedEdits,
+			copyOnly: this.savesCopy || undefined,
 		});
 	}
 
@@ -260,34 +287,26 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		return this.source;
 	}
 
-	public restoreBackup(content: string): void {
-		const value: unknown = JSON.parse(content);
-		if (!value || typeof value !== 'object' || !('source' in value) || typeof value.source !== 'string'
-			|| value.source.length > Math.ceil(maxPdfBytes / 3) * 4
-			|| !('edits' in value)
-			|| !('revision' in value) || typeof value.revision !== 'string'
-			|| ('version' in value && value.version !== backupVersion)) {
-			throw new Error(localize('sessions.pdfPreview.invalidBackup', 'Invalid aspdf recovery data.'));
-		}
-		// The old writer could emit more edits than its reader accepted. Replay and checkpoint those drafts once.
-		const edits = parseBackupEdits(value.edits, 'version' in value ? maxBackupEdits : Infinity);
-		const savedEdits = 'savedEdits' in value ? parseBackupEdits(value.savedEdits) : undefined;
-		const source = decodeBase64(value.source).buffer;
-		if (!source.length || source.length > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.invalidBackup', 'Invalid aspdf recovery data.')); }
-		const revision = value.revision;
-		void this.serialize(async () => {
+	public restoreBackup(content: string): Promise<void> {
+		const backup = parseBackup(content);
+		return this.serialize(async () => {
+			if (this.isDirty) return;
 			try {
-				this.install(await this.rebuild(source, edits));
-				this.source = source;
-				this.fileRevision = revision;
-				this.edits = edits;
-				this.savedEdits = savedEdits;
-				this.undone = [];
+				await this.applyBackup(backup);
 			} catch (error) {
 				this.failedRecovery = { content, error };
 			}
 			this.changed.fire();
 		}).catch(() => undefined);
+	}
+
+	private async applyBackup({ source, edits, revision, savedEdits }: PdfBackup): Promise<void> {
+		this.install(await this.rebuild(source, edits));
+		this.source = source;
+		this.fileRevision = revision;
+		this.edits = edits;
+		this.savedEdits = savedEdits;
+		this.undone = [];
 	}
 
 	private async checkpointForNextEdit(): Promise<PdfCheckpoint | undefined> {
@@ -332,6 +351,27 @@ export class PdfDocumentModel extends Disposable implements IWorkingCopy {
 		this.pending = result.catch(() => undefined);
 		return result;
 	}
+}
+
+function parseBackup(content: string): PdfBackup {
+	const value: unknown = JSON.parse(content);
+	if (!value || typeof value !== 'object' || !('source' in value) || typeof value.source !== 'string'
+		|| value.source.length > Math.ceil(maxPdfBytes / 3) * 4 || !('edits' in value)
+		|| ('copyOnly' in value && value.copyOnly !== true)
+		|| ('version' in value && value.version !== backupVersion)) {
+		throw new Error(localize('sessions.pdfPreview.invalidBackup', 'Invalid aspdf recovery data.'));
+	}
+	const copyOnly = 'copyOnly' in value;
+	const revision = 'revision' in value ? value.revision : undefined;
+	if (typeof revision !== 'string' && (!copyOnly || revision !== undefined)) {
+		throw new Error(localize('sessions.pdfPreview.invalidBackup', 'Invalid aspdf recovery data.'));
+	}
+	// The old writer could emit more edits than its reader accepted. Replay and checkpoint those drafts once.
+	const edits = parseBackupEdits(value.edits, 'version' in value ? maxBackupEdits : Infinity);
+	const savedEdits = 'savedEdits' in value ? parseBackupEdits(value.savedEdits) : undefined;
+	const source = decodeBase64(value.source).buffer;
+	if (!source.length || source.length > maxPdfBytes) { throw new Error(localize('sessions.pdfPreview.invalidBackup', 'Invalid aspdf recovery data.')); }
+	return { source, edits, revision, savedEdits, copyOnly };
 }
 
 function parseBackupEdits(value: unknown, limit = maxBackupEdits): PdfEdit[] {

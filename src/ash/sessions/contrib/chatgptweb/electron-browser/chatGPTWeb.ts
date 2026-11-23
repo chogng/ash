@@ -29,7 +29,7 @@ import { IChatGPTNativeService, IChatGPTService, isChatGPTNewDraft, selectedChat
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
-import { DocumentConversation } from '../../chat/browser/documentConversation.js';
+import { DocumentConversation, documentConversationStorageKeys } from '../../chat/browser/documentConversation.js';
 
 export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
@@ -180,7 +180,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 	) {
 		super();
 		const chatSource = 'chatgpt';
-		const documents = this._register(documentConversations(chat, storage, 'sessions.chatgpt.documentConversations'));
+		const documents = this._register(documentConversations(chat, storage, documentConversationStorageKeys.chatgpt));
 		this._register(chatViews.registerSource(chatSource, chatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const entry: ISessionsEntry = {
@@ -251,7 +251,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 	) {
 		super();
 		const chatSource = 'chatgpt-experimental';
-		const documents = this._register(documentConversations(chat, storage, 'sessions.experimentalChatgpt.documentConversations'));
+		const documents = this._register(documentConversations(chat, storage, documentConversationStorageKeys.experimentalChatgpt));
 		this._register(chatViews.registerSource(chatSource, experimentalChatGPTViewSource));
 		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const newChatCommand = 'sessions.experimentalChatgpt.newChat';

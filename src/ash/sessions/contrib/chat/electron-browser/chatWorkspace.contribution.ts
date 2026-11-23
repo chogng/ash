@@ -39,7 +39,7 @@ import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/
 import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { DocumentConversation } from '../browser/documentConversation.js';
+import { DocumentConversation, documentConversationStorageKeys } from '../browser/documentConversation.js';
 import { INativeChatModelPreferencesService } from '../browser/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
 
@@ -195,7 +195,7 @@ export class ChatWorkspaceContribution extends Disposable {
 	) {
 		super();
 		const chatSource = 'ashChat';
-		const documents = this._register(new DocumentConversation('sessions.ashChat.documentConversations', derived(reader => {
+		const documents = this._register(new DocumentConversation(documentConversationStorageKeys.ash, derived(reader => {
 			const selection = view.chatSelection.read(reader);
 			if (!selection) return undefined;
 			const materialized = sessions.materializedSessions.read(reader);

@@ -27,6 +27,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { EditorPanes as EditorPaneHost } from '../../../src/ash/workbench/browser/parts/editor/editorPanes.js';
 import type { IEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
@@ -42,6 +43,12 @@ import { TestConfigurationService } from '../../../src/ash/workbench/services/co
 import { pdfScrollModeSetting } from '../../../src/ash/sessions/contrib/pdf/browser/pdfPreviewConfiguration.js';
 import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
+import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
+import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
+import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import '../../../src/ash/sessions/contrib/pdf/browser/pdfPreview.contribution.js';
 import '../../../src/ash/sessions/browser/ui/filterTabs.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
@@ -82,7 +89,12 @@ let chatDraft = '';
 services.registerInstance(IChatSessionNavigationService, {
 	appendToActiveDraft(text) { chatDraft += text; },
 } satisfies Pick<IChatSessionNavigationService, 'appendToActiveDraft'> as IChatSessionNavigationService);
-const memory = new InMemoryFileSystemProvider();
+let readOnlyFile: string | undefined;
+const memory = new class extends InMemoryFileSystemProvider {
+	override async stat(resource: URI) {
+		return { ...await super.stat(resource), readonly: resource.path === readOnlyFile };
+	}
+}();
 const files = createTestFileService(memory);
 services.registerInstance(IFileService, files); registerTestComponentServices(services);
 const configuration = new TestConfigurationService();
@@ -122,6 +134,26 @@ const original = new Uint8Array(await (await fetch('/__aspdf_bytes')).arrayBuffe
 await memory.writeFile(resource, original, { create: true, overwrite: false });
 let pane: EditorPane | undefined;
 let split: EditorPane | undefined;
+let toolResponse: ReturnType<IChatResponseResourceFileSystemProvider['associate']> | undefined;
+const viewer = document.getElementById('viewer')!;
+async function openPdf(input: IResourceEditorInput): Promise<EditorPane> {
+	pane?.dispose();
+	const descriptor = EditorPanes.getEditorPane(input)!;
+	const resolved = descriptor.createInput?.(input) ?? input;
+	pane = await descriptor.create({ input: resolved, instantiationService: services });
+	pane.create(viewer); pane.setVisible(true);
+	pane.layout({ width: viewer.clientWidth, height: viewer.clientHeight });
+	await pane.setInput(resolved, new AbortController().signal);
+	return pane;
+}
+services.registerInstance(ILogService, new NullLoggerService());
+services.registerSingleton(ILifecycleService, () => services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: console.error }));
+const editorPart: Pick<IEditorPart, 'domNode' | 'openEditor'> = { domNode: viewer, openEditor: openPdf };
+services.registerInstance(IEditorPart, editorPart as IEditorPart);
+services.registerSingleton(IChatResponseResourceFileSystemProvider, () => services.createInstance(ChatResponseResourceFileSystemProvider));
+const responseFiles = services.createInstance(ChatResponseResourceWorkbenchContribution);
+const contributions = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.pdfPreview.backup']);
+contributions.advance(WorkbenchPhase.BlockRestore);
 const pdfTest = {
 	async createWithPaneHost() {
 		const input = { resource, readOnly: true };
@@ -130,18 +162,21 @@ const pdfTest = {
 		host.create(editor);
 	},
 	async open(readOnly = false, name = 'review.pdf') {
-		pane?.dispose();
 		const target = URI.file(`/fixture/${name}`);
+		readOnlyFile = readOnly ? target.path : undefined;
 		if (target.path !== resource.path && target.path !== reviewCopy.path) {
 			await memory.writeFile(target, original, { create: true, overwrite: true });
 		}
-		const input = { resource: target, readOnly };
-		const descriptor = EditorPanes.getEditorPane(input)!;
-		pane = await descriptor.create({ input, instantiationService: services });
-		pane.create(document.getElementById('viewer')!); pane.setVisible(true);
-		pane.layout({ width: document.getElementById('viewer')!.clientWidth, height: document.getElementById('viewer')!.clientHeight });
-		await pane.setInput(input, new AbortController().signal);
+		await openPdf({ resource: target });
 	},
+	async openToolResponse() {
+		toolResponse = services.get(IChatResponseResourceFileSystemProvider).associate(original, { name: 'tool-report.pdf' });
+		await openPdf({ resource: toolResponse.resource, contentType: 'application/pdf' });
+		return toolResponse.resource.toString();
+	},
+	retireToolResponse() { toolResponse?.dispose(); toolResponse = undefined; },
+	async hasBackup(resource: string) { return (await services.get(IPdfEditorService).backups.list()).some(backup => backup.resource.toString() === resource); },
+	async restoreWorkspace() { await contributions.workspaceRestored(); },
 	resize(width: number, height: number) {
 		const host = document.getElementById('viewer')!; host.style.width = `${width}px`; host.style.height = `${height}px`;
 		pane?.layout({ width, height });
@@ -168,7 +203,7 @@ const pdfTest = {
 		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
 	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
-	dispose() { pane?.dispose(); split?.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
+	dispose() { contributions.dispose(); pane?.dispose(); split?.dispose(); toolResponse?.dispose(); responseFiles.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
 };
 window.aspdfTest = pdfTest;
 declare global {

@@ -18,6 +18,21 @@ const resource = URI.file('/paper.pdf');
 const signal = new AbortController().signal;
 const note = { kind: 'note', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, contents: 'Saved note' } satisfies PdfAnnotationEdit;
 
+test('A writable PDF saves to the original even when opened with a read-only hint', async () => {
+	using store = new DisposableStore();
+	const files = await createFiles(store);
+	using model = new PdfDocumentModel({ resource, readOnly: true }, files, pdf, {
+		async showSaveDialog() { assert.fail('A writable PDF saves directly'); },
+	});
+	await model.open();
+	assert.equal(model.savesCopy, false);
+	await model.render(1, note);
+	await model.save(signal);
+	assert.equal(model.isDirty, false);
+	using reopened = await openPdf(files);
+	assert.equal(reopened.current?.annotations[0]?.contents, note.contents);
+});
+
 test('PDF snapshots can be annotated and saved without changing the source', async () => {
 	using store = new DisposableStore();
 	const files = await createFiles(store);

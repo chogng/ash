@@ -178,6 +178,17 @@ section.ash-projects-materials {
 	white-space: nowrap;
 }
 
+.ash-projects-material-card:has(> .ash-projects-material-card-remove)
+	.ash-file-card-name {
+	max-inline-size: calc(100% - var(--ash-spacing-size240));
+}
+
+.ash-projects-material-card > .ash-projects-material-card-remove {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size60);
+	inset-inline-end: var(--ash-spacing-size60);
+}
+
 .ash-projects-material-card-open > .ash-file-card-size {
 	grid-row: 2;
 	color: var(--ash-description-foreground);

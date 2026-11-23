@@ -3,6 +3,7 @@ import { addDisposableListener, h } from '../../../../../../base/browser/dom.js'
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { getMediaMime } from '../../../../../../base/common/mime.js';
 import { localize } from '../../../../../../nls.js';
 import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
 import { type AgentAttachmentSource, type ChatContentPart } from '../../../../../../platform/agentHost/common/agent.js';
@@ -116,6 +117,7 @@ export class ChatResourceGroupWidget extends Disposable {
 		const bytes = artifact.data.type === 'bytes' ? artifact.data.bytes : new TextEncoder().encode(text!);
 		const name = resourceName(artifact);
 		let association = artifact.source.type === 'resourceLink' ? undefined : lifetime.add(this.files.associate(bytes, { id: identity, name }));
+		let mimeType = artifact.mimeType;
 		const controller = new AbortController();
 		lifetime.add(toDisposable(() => controller.abort()));
 		node.replaceChildren(summary, metadata);
@@ -128,10 +130,12 @@ export class ChatResourceGroupWidget extends Disposable {
 						if (!coordinate) throw new Error(localize('chat.resource.originMissing', 'The originating tool is unavailable.'));
 						const data = await this.threads.readToolResource(coordinate, controller.signal);
 						if (controller.signal.aborted || lifetime.isDisposed) return;
-						association = lifetime.add(this.files.associate(data.bytes, { name: resourceName({ ...artifact, mimeType: data.mimeType }) }));
+						mimeType = data.mimeType;
+						association = lifetime.add(this.files.associate(data.bytes, { name: resourceName({ ...artifact, mimeType }) }));
 					}
 					if (controller.signal.aborted) return;
-					await this.editors.openEditor({ resource: association.resource, readOnly: true, showBreadcrumbs: false }, { pinned: true });
+					const pdf = mimeType.split(';', 1)[0]!.trim().toLowerCase() === 'application/pdf' || getMediaMime(association.resource.path) === 'application/pdf';
+					await this.editors.openEditor({ resource: association.resource, showBreadcrumbs: false, ...(pdf ? { contentType: 'application/pdf' } : { readOnly: true }) }, { pinned: true });
 				} catch (error) {
 					if (!lifetime.isDisposed && !this.isDisposed && node.isConnected) this.notifications.error(localize('chat.resource.openFailed', 'Could not open the response resource: {0}', String(error)));
 				}

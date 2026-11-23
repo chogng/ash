@@ -1,4 +1,3 @@
-import type { Event } from '../../../../base/common/event.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { extname } from '../../../../base/common/path.js';
@@ -13,8 +12,6 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { IndexedDbWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
-import { WorkingCopyBackupTracker } from '../../../../workbench/services/workingCopy/browser/workingCopyBackupTracker.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { PdfDocumentModel } from './pdfDocumentModel.js';
 import { IPdfEditorService, PdfEditorService } from './pdfEditorService.js';
@@ -27,6 +24,8 @@ const id = 'sessions.editor.pdfPreview';
 registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.BlockRestore, accessor => {
 	const editors = accessor.get(IEditorPart);
 	const copies = accessor.get(IWorkingCopyService);
+	const pdfEditors = accessor.get(IPdfEditorService);
+	const { backups } = pdfEditors;
 	const lifecycle = accessor.get(ILifecycleService);
 	const log = accessor.get(ILogService);
 	const notifications = accessor.get(INotificationService);
@@ -38,17 +37,8 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 	};
 	const reportBackupFailure = (error: unknown): void => reportFailure(error, 'PDF backup failed',
 		localize('sessions.pdfPreview.backupFailed', 'Could not back up PDF changes.'));
-	// Recovery needs the original PDF bytes, which can exceed the App Server backup record limit.
-	const backups = lifetime.add(new IndexedDbWorkingCopyBackupService('sessions-pdf'));
 	const isPdf = (copy: IWorkingCopy): copy is PdfDocumentModel => copy instanceof PdfDocumentModel;
-	const pdfEvent = (event: Event<IWorkingCopy>): Event<IWorkingCopy> => (listener, thisArgs, disposables) =>
-		event(copy => { if (isPdf(copy)) listener.call(thisArgs, copy); }, undefined, disposables);
-	const tracker = lifetime.add(new WorkingCopyBackupTracker({
-		getAll: () => copies.getAll().filter(isPdf),
-		get: resource => copies.get(resource).filter(isPdf),
-		onDidRegister: pdfEvent(copies.onDidRegister),
-		onDidUnregister: pdfEvent(copies.onDidUnregister),
-	}, backups, editors.domNode.ownerDocument.defaultView!, reportBackupFailure));
+	const tracker = lifetime.add(pdfEditors.trackBackups(editors.domNode.ownerDocument.defaultView!, reportBackupFailure));
 	lifetime.add(lifecycle.onWillShutdown(event => event.join(async () => {
 		try { await tracker.shutdown(); }
 		catch (error) {
@@ -76,7 +66,7 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 						editorId: id,
 					}, { pinned: true, preserveFocus: true })).workingCopy;
 					if (lifetime.isDisposed) return;
-					if (model instanceof PdfDocumentModel && !model.isDirty) model.restoreBackup(backup.content);
+					if (model instanceof PdfDocumentModel && !model.isDirty) await model.restoreBackup(backup.content);
 				} catch (error) {
 					reportFailure(error, `PDF recovery failed for '${backup.resource.toString()}'`,
 						localize('sessions.pdfPreview.recoveryFailed', 'Could not recover PDF changes for {0}.', basename(backup.resource)));
@@ -93,6 +83,7 @@ registerEditorPane({
 	canOpen: input => !isResourceDiffEditorInput(input) &&
 		(input.contentType === 'application/pdf' || extname(input.resource.path).toLowerCase() === '.pdf')
 		? EditorPaneMatch.Default : EditorPaneMatch.None,
+	createInput: input => input.readOnly && !input.initialBytes ? { ...input, readOnly: undefined } : input,
 	async create({ instantiationService }) {
 		if (!instantiationService) throw new Error('PDF Preview requires Workbench instantiation services');
 		const { PdfPreviewEditor } = await import('./pdfPreviewEditor.js');

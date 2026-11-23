@@ -450,6 +450,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined));
 			files.append(this.projectMaterials.renderCatalog(files, details.key, {
 				rows: materialsSnapshot,
+				preferenceKey: conversationProject.preferenceKey,
 				upload: data?.canEdit && data.materials ? details.upload : undefined,
 				isCurrent,
 				status: !details.load ? undefined : failed ? {

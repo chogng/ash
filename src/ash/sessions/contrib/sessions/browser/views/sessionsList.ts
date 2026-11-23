@@ -21,6 +21,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { isValidBasename } from '../../../../../base/common/extpath.js';
 import { Event } from '../../../../../base/common/event.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, type IDisposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
@@ -50,6 +51,7 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
+import { confirmProjectFileRemoval, projectFileMenuActions, revealCommand } from '../../../projects/browser/projectFileActions.js';
 import { readCatalogProjectEdit, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IProjectsService, type CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
@@ -59,7 +61,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProject, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProject, SessionsCatalogProjectFile, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { cancelOnDispose, CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
@@ -231,6 +233,7 @@ export class SessionsList extends DomWidget {
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
 	private readonly rowMenu = this._register(new MutableDisposable<DisposableStore>());
+	private readonly projectFileOperations = new Set<SessionListItem>();
 	readonly domNode: HTMLElement;
 	readonly loading: IObservable<boolean>;
 	private readonly list: HTMLDivElement;
@@ -750,6 +753,38 @@ export class SessionsList extends DomWidget {
 		}, creator && createProject ? () => createProject(creator, restoreFocus) : undefined);
 	}
 
+	private showProjectFileMenu(file: SessionsCatalogProjectFile, item: SessionListItem, anchor: ContextMenuAnchor): void {
+		if (this.mode !== 'chat') return;
+		const menu = this.rowMenu.value = new DisposableStore();
+		const context = this.contextKeys && menu.add(this.contextKeys.createScoped(item.domNode));
+		const isCurrent = () => !this.isDisposed && this.mode === 'chat' && item.domNode.isConnected;
+		const run = async (operation: () => Promise<void>) => {
+			if (!isCurrent() || this.projectFileOperations.has(item)) return;
+			this.projectFileOperations.add(item);
+			try { await operation(); }
+			catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(toErrorMessage(error)); }
+			finally {
+				this.projectFileOperations.delete(item);
+				if (isCurrent()) this.tree.focusRow(item.domNode, true);
+			}
+		};
+		const { rename, remove, reveal } = file;
+		this.showRowMenu(item, anchor, {
+			cancellationToken: cancelOnDispose(menu),
+			getActions: () => projectFileMenuActions(this.menus, context, {
+				rename: rename && (() => this.renameConversation(item, file.name, async name => {
+					if (isCurrent() && !this.projectFileOperations.has(item)) await rename(name);
+				}, name =>
+					isValidBasename(name, true) && new TextEncoder().encode(name).length <= 200
+						? undefined : localize('sessions.list.invalidProjectFileName', 'Enter a valid file name.'), localize('sessions.list.projectFileName', 'File name'))),
+				remove: remove && (() => run(async () => {
+					if (await confirmProjectFileRemoval(this.dialogs, [file.name]) && isCurrent()) await remove();
+				})),
+				reveal: reveal && (() => run(() => this.commands.executeCommand(revealCommand, reveal))),
+			}, file.destinations, run),
+		});
+	}
+
 	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,
 		delegate: Omit<IContextMenuMenuDelegate, 'getAnchor' | 'autoSelectFirstItem'>): void {
 		const trigger = item.getMenuTrigger(anchor);
@@ -897,7 +932,7 @@ export class SessionsList extends DomWidget {
 
 	private renameConversation(
 		item: SessionListItem, name: string, rename: (title: string) => Promise<void>,
-		validate?: (title: string) => string | undefined,
+		validate?: (title: string) => string | undefined, inputLabel?: string,
 	): void {
 		const row = item.domNode;
 		if (this.isDisposed || !row.isConnected) return;
@@ -913,7 +948,7 @@ export class SessionsList extends DomWidget {
 		store.add(toDisposable(() => row.classList.remove('renaming')));
 		item.hidePreviewHover();
 		const input = startConversationRename(row, store, this.notifications, {
-			name, rename, validate,
+			name, rename, validate, label: inputLabel,
 			finish: restoreFocus => {
 				if (this.inlineRename.value !== store) return;
 				this.inlineRename.clear();
@@ -1355,6 +1390,8 @@ export class SessionsList extends DomWidget {
 					const fileKey = JSON.stringify(['file', project.key, file.id]);
 					const item = itemFor(fileKey, 'file', getBuiltinFileIcon(file.name));
 					item.update(file.name, false, () => this.openProjectFile(fileKey, file.open));
+					item.setContextMenu(this.mode === 'chat' && (file.rename || file.remove || file.reveal || file.destinations?.length)
+						? anchor => this.showProjectFileMenu(file, item, anchor) : undefined);
 					children.push(item.domNode);
 				}
 				if (!children.length && !this.search.matches(project.title)) continue;
@@ -1744,7 +1781,7 @@ class SessionListItem extends AbstractDisposable {
 		this.domNode = this.row.element;
 		this.button = this.row.button;
 		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
-			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
+			ariaLabel: kind === 'file' ? localize('sessions.list.projectFileActions', 'File actions') : localize('sessions.list.actions', 'Chat actions'),
 		});
 		this.moreAction = rowMoreAction(() => this.contextMenu?.(this.actions.element), kind === 'project');
 		if (kind === 'project') this.domNode.classList.add('ash-sessions-list-project-row');
@@ -1787,11 +1824,15 @@ class SessionListItem extends AbstractDisposable {
 
 	hidePreviewHover(): void { this.previewHover.value?.hide(); }
 
-	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
+	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
+		if (!menu) {
+			this.actions.element.hidden = true;
+			return;
+		}
 		if (!this.moreButton) this.actions.setActions([this.moreAction]);
 		this.moreButton?.setAttribute('aria-haspopup', 'menu');
-		if (this.domNode.dataset.projectId && !this.domNode.classList.contains('menu-visible')) {
+		if ((this.domNode.dataset.projectId || this.kind === 'file') && !this.domNode.classList.contains('menu-visible')) {
 			this.moreButton?.setAttribute('aria-expanded', 'false');
 		}
 		this.actions.element.hidden = false;

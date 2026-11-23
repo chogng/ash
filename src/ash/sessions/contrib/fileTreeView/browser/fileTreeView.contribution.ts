@@ -1,6 +1,7 @@
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { getMediaMime } from '../../../../base/common/mime.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IChatWidgetService, type IChatWidget } from '../../../../workbench/contrib/chat/browser/chat.js';
@@ -167,7 +168,10 @@ registerAction2(class BrowseGitHubRepositoryFilesAction extends Action2 {
 			picker.show();
 			void update('');
 		});
-		if (selected && 'resource' in selected) { await editors.openEditor({ resource: selected.resource, readOnly: true }); }
+		if (selected && 'resource' in selected) {
+			const { resource } = selected;
+			await editors.openEditor({ resource, ...(getMediaMime(resource.path) === 'application/pdf' ? {} : { readOnly: true }) });
+		}
 		else if (selected && selected.attachedTo.visible) { selected.attachedTo.inputEditor?.focus(); }
 	}
 });

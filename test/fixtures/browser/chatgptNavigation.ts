@@ -19,6 +19,11 @@ import { ISessionFolderAuthorizationService } from '../../../src/ash/sessions/co
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
+import { documentConversationStorageKeys } from '../../../src/ash/sessions/contrib/chat/browser/documentConversation.js';
+import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
+import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IProjectService, type Project } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -144,6 +149,9 @@ declare global {
 			pauseMaterialRead(name: string): void;
 			isMaterialReadPaused(): boolean;
 			resumeMaterialRead(): Promise<void>;
+			writeSavedMaterial(name: string, text: string): Promise<void>;
+			seedProjectPdfDraft(name: string): Promise<string>;
+			readProjectPdfDraft(uri: string): Promise<{ backup: boolean; conversation: boolean; }>;
 		};
 	}
 }
@@ -192,7 +200,7 @@ configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defau
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new TestNotificationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
-const savedMaterials = new Map<string, string>();
+const savedMaterials = new Map<string, { resource: URI; text: string; }>();
 let pausedMaterialRead: { name: string; started: boolean; release: DeferredPromise<void> } | undefined;
 resources.add(toDisposable(() => void pausedMaterialRead?.release.complete()));
 let openedMaterial: string | undefined;
@@ -337,8 +345,14 @@ if (parameters.has('projectMaterials')) {
 
 		override async writeFile(...args: Parameters<MemoryFileService['writeFile']>) {
 			const written = await super.writeFile(...args);
-			savedMaterials.set(args[0].path.split('/').at(-1)!, this.text(args[0]));
+			savedMaterials.set(args[0].path.split('/').at(-1)!, { resource: args[0], text: this.text(args[0]) });
 			return written;
+		}
+
+		override async delete(...args: Parameters<MemoryFileService['delete']>) {
+			await super.delete(...args);
+			const name = args[0].path.split('/').at(-1)!;
+			if (savedMaterials.get(name)?.resource.toString() === args[0].toString()) savedMaterials.delete(name);
 		}
 	}([]);
 	resources.add(services.get(IFileService).registerProvider(projectMaterialFilesScheme, provider));
@@ -405,7 +419,24 @@ window.ashChatGPTIntegration = {
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
 	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
-	readSavedMaterial: name => savedMaterials.get(name),
+	readSavedMaterial: name => savedMaterials.get(name)?.text,
+	writeSavedMaterial: async (name, text) => {
+		const resource = savedMaterials.get(name)!.resource;
+		await services.get(IFileService).writeFileBytes(resource, new TextEncoder().encode(text), { create: false, overwrite: true });
+	},
+	seedProjectPdfDraft: async name => {
+		const resource = savedMaterials.get(name)!.resource;
+		const key = resource.toString();
+		await services.get(IPdfEditorService).backups.store({ resource, kind: 'structuredDocument', contentType: 'application/pdf', content: 'PDF draft fixture', updatedAt: Date.now() });
+		storage.store(documentConversationStorageKeys.chatgpt, JSON.stringify({ [key]: {
+			scope: 'account-scope', identity: 'project-pdf', reference: { kind: 'conversation', id: 'project-chat' },
+		} }), StorageScope.PROFILE, StorageTarget.MACHINE);
+		return key;
+	},
+	readProjectPdfDraft: async uri => ({
+		backup: !!await services.get(IPdfEditorService).backups.resolve(URI.parse(uri)),
+		conversation: Object.hasOwn(JSON.parse(storage.get(documentConversationStorageKeys.chatgpt, StorageScope.PROFILE, '{}')), uri),
+	}),
 	switchAccount: () => {
 		chatGPTCacheScope = (chatGPTCacheScope[0] === 'a' ? 'b' : 'a').repeat(64);
 		authenticationChanged.fire();
@@ -534,6 +565,11 @@ if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAcc
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
 resources.add(registerChatWorkspaceNavigation(chatGPTViewSource.accessibility));
+let activePane: ProjectsEditorPane | undefined;
+services.registerInstance(IEditorPart, { get activePane() { return activePane; }, activeGroup: { get activePane() { return activePane; } }, groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart);
+services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
+services.registerSingleton(IPdfEditorService, () => services.createInstance(PdfEditorService));
+services.registerInstance(IHistoryService, { getHistory: () => [], remove() { }, goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } });
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const descriptor = descriptors.getViewContainerById(CHAT_WORKSPACE_NAVIGATION_ID)!;
 const view = resources.add(services.createInstance(PaneComposite, host, {
@@ -542,14 +578,12 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
-let activePane: ProjectsEditorPane | undefined;
 if (parameters.has('projects')) {
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);
 	projects.setVisible(true);
 	activePane = projects;
 }
-services.registerInstance(IEditorPart, { activePane, activeGroup: { activePane }, onDidChangeEditors: Event.None } as unknown as IEditorPart);
 resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
