@@ -34,7 +34,9 @@ export interface IEditorGroupView extends IEditorGroup {
 	saveEditor(input: IResourceEditorInput, options?: ISaveEditorsOptions): Promise<IResourceEditorInput | undefined>;
 	saveEditorViewState(input: IResourceEditorInput): SerializedEditorViewState | undefined;
 	restoreEditorViewState(input: IResourceEditorInput, state: SerializedEditorViewState | undefined): boolean;
-	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, instanceId?: EditorInstanceId): Promise<IEditorPane>;
+	/** An open for a move rejects on failure even when it displays an error page. */
+	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, transferredInstanceId?: EditorInstanceId): Promise<IEditorPane>;
+	getEditorPane(input: IResourceEditorInput): IEditorPane | undefined;
 	activateEditor(input: IResourceEditorInput): IEditorPane;
 	confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[], closingEditors?: readonly IEditorIdentifier[]): Promise<boolean>;
 	replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;

@@ -561,13 +561,21 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	async openEditor(
 		input: IResourceEditorInput,
 		options: EditorOpenOptions & { readonly restoring?: boolean; } = {},
-		instanceId?: EditorInstanceId,
+		transferredInstanceId?: EditorInstanceId,
 	): Promise<IEditorPane> {
 		if (input.toUntyped && options.preferredEditorId !== undefined && options.preferredEditorId !== input.editorId) {
-			const pane = await this.openEditor(input.toUntyped(), { ...options, index: this.model.indexOf(input) });
+			const previousIndex = this.model.indexOf(input);
+			const index = transferredInstanceId !== undefined && previousIndex < 0 ? options.index : previousIndex;
+			const pane = await this.openEditor(input.toUntyped(), { ...options, index }, transferredInstanceId);
 			if (this.entry(input)) await this.closeEditor(input);
 			return pane;
 		}
+		const handleOpenError = async (error: unknown, existing: EditorGroupEntry | undefined): Promise<IEditorPane> => {
+			const pane = await this.showOpenError(input, options, error, existing);
+			// The error page reports the failure. Only a completed open can take ownership from the source group.
+			if (transferredInstanceId !== undefined) throw error;
+			return pane;
+		};
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
 		this.pendingOpenSequence = sequence;
@@ -600,7 +608,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			input = descriptor.createInput?.(input) ?? input;
 			existing = this.entry(input);
 		} catch (error) {
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 		const limitedReplacement = this.model.editorLimit === 1 ? this.model.getEditorToReplace(input, options) : undefined;
 		if (!existing && limitedReplacement && !await this.confirmCloseEditor(limitedReplacement.input)) {
@@ -612,7 +620,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			if (confirmation) await confirmation;
 		} catch (error) {
 			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		if (existing?.paneInstance.pane.id === descriptor.id && !options.forceReload) {
@@ -675,7 +683,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			pane = created instanceof Promise ? await created : created;
 		} catch (error) {
 			if (this.isDisposed || sequence !== this.openSequence) { throw new EditorOpenSupersededError(input); }
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 		if (this.isDisposed || sequence !== this.openSequence) {
 			pane.dispose();
@@ -688,13 +696,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const error = new TypeError(
 				`Editor pane factory '${descriptor.id}' created '${pane.id}'`,
 			);
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 		let paneInstance: EditorPaneInstance;
 		try {
 			paneInstance = this.panes.create(pane);
 		} catch (error) {
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 		this.panes.setPending(paneInstance);
 		try {
@@ -706,7 +714,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			if (sequence !== this.openSequence) {
 				throw new EditorOpenSupersededError(input);
 			}
-			return this.showOpenError(input, options, error, existing);
+			return handleOpenError(error, existing);
 		}
 
 		if (
@@ -717,7 +725,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			throw new EditorOpenSupersededError(input);
 		}
 		this.panes.clearPending(paneInstance);
-		return this.commitEditorPane(input, options, paneInstance, existing, instanceId);
+		return this.commitEditorPane(input, options, paneInstance, existing, transferredInstanceId);
 	}
 
 	private commitEditorPane(input: IResourceEditorInput, options: EditorOpenOptions & { readonly restoring?: boolean; }, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
@@ -925,7 +933,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const veto = input.canMove?.(this.id, target.id);
 		if (typeof veto === 'string') throw new Error(veto);
 		const viewState = this.saveEditorViewState(input);
-		await target.openEditor(input, { index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
+		const destination = await target.openEditor(input, { index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
+		if (this.entry(input) !== entry || target.getEditorPane(input) !== destination) throw new EditorOpenSupersededError(input);
 		if (entry.sticky) target.stickEditor(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: 'move' });
 		target.activateEditor(input);

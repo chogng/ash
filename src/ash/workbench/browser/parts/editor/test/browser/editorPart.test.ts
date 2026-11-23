@@ -1494,6 +1494,80 @@ test('EditorPart leaves both previews intact when a cross-group move is rejected
 	}
 });
 
+test('EditorPart keeps the dirty source when a cross-group move opens an error page', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const notes = input('/project/notes.md');
+		using draft = new TestWorkingCopy(notes.resource);
+		const missing = new FileNotFoundError(notes.resource);
+		let fileWasMoved = false;
+		using registration = registry.registerEditorPane(descriptor('test.markdownMove', '.md', () => {
+			const pane = new TestEditorPane('test.markdownMove', draft);
+			if (fileWasMoved) pane.inputError = missing;
+			return pane;
+		}));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const source = editor.activeGroup;
+		const original = await source.openEditor(notes) as TestEditorPane;
+		draft.markDirty();
+		source.stickEditor(notes);
+		const target = editor.addGroup(source.id, Direction.Right);
+
+		fileWasMoved = true;
+		await assert.rejects(source.moveEditorTo(notes, target, 0), error => error === missing);
+		assert.equal(target.activePane?.id, 'workbench.editor.openError');
+		assert.equal(target.isSticky(notes), false);
+		assert.equal(source.activePane, original);
+		assert.equal(original.disposed, false);
+		assert.equal(source.isSticky(notes), true);
+		assert.equal(source.editors[0]!.isDirty, true);
+
+		fileWasMoved = false;
+		await source.moveEditorTo(notes, target, 0);
+		assert.deepEqual(source.inputs, []);
+		assert.equal(original.disposed, true);
+		assert.equal((target.activePane as TestEditorPane).workingCopy, draft);
+		assert.equal(target.editors[0]!.isDirty, true);
+		assert.equal(target.isSticky(notes), true);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorPart keeps the source when the destination closes before the move completes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const resource = input('/project/source.ts');
+		using draft = new TestWorkingCopy(resource.resource);
+		using registration = registry.registerEditorPane(descriptor('test.interruptedMove', '.ts', candidate =>
+			new TestEditorPane('test.interruptedMove', candidate.input === resource ? draft : undefined)));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const source = editor.activeGroup;
+		const original = await source.openEditor(resource) as TestEditorPane;
+		draft.markDirty();
+		const target = editor.addGroup(source.id, Direction.Right);
+		const other = input('/project/other.ts');
+		await target.openEditor(other);
+		let destinationClose: Promise<boolean> | undefined;
+		using listener = target.onDidChangeEditors(event => {
+			if (event.kind === 'editorOpened') {
+				queueMicrotask(() => { destinationClose = target.closeEditor(resource, { skipConfirmation: true }); });
+			}
+		});
+
+		await assert.rejects(source.moveEditorTo(resource, target, 0), { name: 'EditorOpenSupersededError' });
+		assert.equal(await destinationClose, true);
+		assert.deepEqual(target.inputs, [other]);
+		assert.equal(source.activePane, original);
+		assert.equal(original.disposed, false);
+		assert.equal(source.editors[0]!.isDirty, true);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('EditorPart keeps a moved preview without replacing the destination preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
