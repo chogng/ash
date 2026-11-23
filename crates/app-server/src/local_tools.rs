@@ -454,7 +454,7 @@ impl LocalToolComposition {
     }
 
     pub(crate) fn tool_port(&self) -> Result<ToolPort, ToolCompositionError> {
-        let mut port = ToolPort::local(Arc::clone(&self.tools), Arc::clone(&self.policy));
+        let mut port = ToolPort::local(Arc::clone(&self.tools), Arc::clone(&self.policy))?;
         port.command_terminals = self.command_terminals.clone();
         let local_definitions = self.tools.definitions();
         let shell_name =

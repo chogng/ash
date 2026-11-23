@@ -564,6 +564,7 @@ impl ToolExecutionOrchestrator {
             frozen_policy_revision: context.frozen_policy_revision.to_owned(),
             approval_mode: context.approval_mode,
             source_id: call.name.as_str().to_owned(),
+            tool_call_scope: reviewed.tool_call_scope().cloned(),
         });
         let before_sequence = snapshot.sequence;
         let output = self.tools.execute_streaming_with_facts_and_interactions(
@@ -854,6 +855,7 @@ impl ToolExecutionOrchestrator {
             frozen_policy_revision: context.frozen_policy_revision.to_owned(),
             approval_mode: context.approval_mode,
             source_id: call.name.as_str().to_owned(),
+            tool_call_scope: None,
         };
         let outcome = interactions.request_live(
             AgentRequest::ToolResultReview {
@@ -925,6 +927,7 @@ struct CoreToolInteractions {
     frozen_policy_revision: String,
     approval_mode: ApprovalMode,
     source_id: String,
+    tool_call_scope: Option<ash_action_policy::ToolCallScope>,
 }
 
 impl ToolInteractionService for CoreToolInteractions {
@@ -960,6 +963,12 @@ impl ToolInteractionService for CoreToolInteractions {
             ));
         }
         let snapshot = self.threads.read_thread(&self.thread_id)?;
+        // Network requests are separate actions of this same running tool call.
+        let scoped = self
+            .tool_call_scope
+            .as_ref()
+            .map(|scope| request.clone().with_tool_call_scope(scope.clone()));
+        let request = scoped.as_ref().unwrap_or(request);
         let context = core_api::ActionPolicyContext {
             session: &snapshot.session_id,
             thread: &self.thread_id,

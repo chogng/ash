@@ -29,6 +29,7 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
 use ash_protocol::ToolSourceProvenance;
+use ash_tools::ToolDefinition as HostToolDefinition;
 use ash_tools::from_dynamic_tool_spec;
 use ash_tools::to_protocol_tool_definition;
 use core_api::ActionPolicyService;
@@ -40,6 +41,7 @@ const DYNAMIC_TOOL_POLICY_REVISION: &str = "dynamic-tool-user-approval-v1";
 pub(crate) struct DynamicToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
     pub(crate) policy: Arc<dyn ActionPolicyService>,
+    pub(crate) definitions: Arc<[HostToolDefinition]>,
 }
 
 #[derive(Clone)]
@@ -64,12 +66,6 @@ pub(crate) fn compose_dynamic_tools(
             ))
         })?;
         let definition_digest = host_definition.digest().to_string();
-        let definition = to_protocol_tool_definition(&host_definition).map_err(|error| {
-            DynamicToolCompositionError(format!(
-                "could not project dynamic tool '{}': {error}",
-                specification.name
-            ))
-        })?;
         let capabilities = dynamic_tool_capabilities(&specification.name);
         if bindings
             .insert(
@@ -86,20 +82,22 @@ pub(crate) fn compose_dynamic_tools(
                 specification.name
             )));
         }
-        definitions.push(definition);
+        definitions.push(host_definition);
     }
     let bindings = Arc::new(bindings);
+    let definitions: Arc<[_]> = definitions.into();
     Ok(Some(DynamicToolComposition {
         tools: Arc::new(DynamicToolService {
-            definitions,
+            definitions: Arc::clone(&definitions),
             bindings: Arc::clone(&bindings),
         }),
         policy: Arc::new(DynamicToolPolicy { bindings }),
+        definitions,
     }))
 }
 
 struct DynamicToolService {
-    definitions: Vec<ToolDefinition>,
+    definitions: Arc<[HostToolDefinition]>,
     bindings: Arc<BTreeMap<ToolName, DynamicToolBinding>>,
 }
 
@@ -113,7 +111,12 @@ impl DynamicToolService {
 
 impl ToolService for DynamicToolService {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        self.definitions.clone()
+        self.definitions
+            .iter()
+            .map(|definition| {
+                to_protocol_tool_definition(definition).expect("dynamic tools use function schemas")
+            })
+            .collect()
     }
 
     fn source_provenance(&self, name: &ToolName) -> Vec<ToolSourceProvenance> {

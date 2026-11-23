@@ -2455,7 +2455,10 @@ pub fn open_app_server_with_codebase_providers(
         .as_ref()
         .map(|mcp| mcp.status.clone())
         .unwrap_or_else(|| McpRuntimeStatusSnapshot::empty(1));
-    let mcp = mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
+    let mcp = mcp
+        .map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy))
+        .transpose()
+        .map_err(open_error)?;
     server = server.with_mcp_status_snapshot(mcp_status);
     server = if let Some(watcher) = connector_watcher {
         server.with_profile_connector_service(connector_runtime.service, watcher)
@@ -2900,7 +2903,13 @@ impl ToolConfigWatcher {
                     let (mcp, mcp_status) = match composition {
                         Ok(Some(mcp)) => {
                             let status = mcp.status.clone();
-                            (Some(ToolPort::mcp(mcp.tools, mcp.policy)), status)
+                            match ToolPort::mcp(mcp.tools, mcp.policy) {
+                                Ok(port) => (Some(port), status),
+                                Err(error) => {
+                                    env_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            }
                         }
                         Ok(None) => (None, McpRuntimeStatusSnapshot::empty(catalog_generation)),
                         Err(error) => {

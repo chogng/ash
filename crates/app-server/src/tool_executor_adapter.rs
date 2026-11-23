@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::FileWriteReview;
+use ash_action_policy::ToolCallScope;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
@@ -14,7 +15,6 @@ use ash_protocol::ActionDigest;
 use ash_protocol::ContentPart;
 use ash_protocol::ReviewEvidence;
 use ash_protocol::ToolCall;
-use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
@@ -103,7 +103,7 @@ pub(crate) struct ToolExecutorRuntime {
     executor: Arc<dyn ToolExecutor>,
     environment_id: EnvId,
     reviewer: Arc<dyn ToolExecutorReviewer>,
-    prepared: Mutex<BTreeMap<ToolCallId, PreparedToolInvocation>>,
+    prepared: Mutex<BTreeMap<ToolCallScope, PreparedToolInvocation>>,
 }
 
 impl ToolExecutorRuntime {
@@ -125,8 +125,7 @@ impl ToolExecutorRuntime {
     }
 
     pub(crate) fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        let prepared = self.reviewer.prepare(call)?;
-        self.store_prepared(call, prepared)
+        Ok(self.reviewer.prepare(call)?.review)
     }
 
     pub(crate) fn prepare_with_facts(
@@ -135,19 +134,27 @@ impl ToolExecutorRuntime {
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
         let prepared = self.reviewer.prepare_with_facts(call, facts)?;
-        self.store_prepared(call, prepared)
+        let Some(identity) = facts.execution_identity() else {
+            return Ok(prepared.review);
+        };
+        let scope = ToolCallScope {
+            thread_id: identity.thread_id().clone(),
+            turn_id: identity.turn_id().clone(),
+            call_id: call.id.clone(),
+        };
+        Ok(self.store_prepared(scope, prepared))
     }
 
     fn store_prepared(
         &self,
-        call: &ToolCall,
+        scope: ToolCallScope,
         prepared: PreparedToolExecution,
-    ) -> Result<ActionReviewRequest, CoreError> {
+    ) -> ActionReviewRequest {
         self.prepared
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                call.id.clone(),
+                scope,
                 PreparedToolInvocation {
                     review: prepared.review.clone(),
                     payload: prepared.payload,
@@ -156,7 +163,21 @@ impl ToolExecutorRuntime {
                     sandbox_scope: prepared.sandbox_scope,
                 },
             );
-        Ok(prepared.review)
+        prepared.review
+    }
+
+    pub(crate) fn finish_call(&self, scope: &ToolCallScope) {
+        self.prepared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(scope);
+    }
+
+    pub(crate) fn finish_turn(&self, thread_id: &ash_protocol::ThreadId, turn_id: &TurnId) {
+        self.prepared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|scope, _| &scope.thread_id != thread_id || &scope.turn_id != turn_id);
     }
 
     pub(crate) fn evidence(&self, call: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
@@ -231,6 +252,11 @@ impl ToolExecutorRuntime {
         interactions: Option<Arc<dyn ash_core::ToolInteractionService>>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        let scope = ToolCallScope {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+            call_id: call.id.clone(),
+        };
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
         let (review, payload, dir_authorizations, execution_dir, sandbox_scope) = {
@@ -238,7 +264,7 @@ impl ToolExecutorRuntime {
                 .prepared
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let prepared = prepared.get(&call.id).ok_or_else(|| {
+            let prepared = prepared.get(&scope).ok_or_else(|| {
                 CoreError::Execution(format!(
                     "ToolExecutor call {} has no frozen prepared payload",
                     call.id
@@ -263,10 +289,7 @@ impl ToolExecutorRuntime {
         }
         for authorization in &dir_authorizations {
             if authorization.dir().env() != &self.environment_id {
-                self.prepared
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&call.id);
+                self.finish_call(&scope);
                 return Err(CoreError::Execution(format!(
                     "directory authorization belongs to environment {}, but the tool runs in {}",
                     authorization.dir().env(),
@@ -274,10 +297,7 @@ impl ToolExecutorRuntime {
                 )));
             }
             if let Err(error) = authorization.ensure_active() {
-                self.prepared
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&call.id);
+                self.finish_call(&scope);
                 return Err(CoreError::Execution(error.to_string()));
             }
         }
@@ -287,10 +307,7 @@ impl ToolExecutorRuntime {
                     || authorization.dir().requested_path() == execution_dir
             })
         {
-            self.prepared
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&call.id);
+            self.finish_call(&scope);
             return Err(CoreError::Execution(
                 "host-selected execution directory has no matching authorization".into(),
             ));
@@ -355,10 +372,7 @@ impl ToolExecutorRuntime {
                 .with_directory_authorizations(dir_authorizations);
         if managed {
             let interactions = interactions.ok_or_else(|| {
-                self.prepared
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&call.id);
+                self.finish_call(&scope);
                 CoreError::Policy(
                     "managed networking requires Core's live approval authority".into(),
                 )
@@ -393,10 +407,7 @@ impl ToolExecutorRuntime {
             outcome => protocol_execution_output(outcome, sink),
         };
         if !matches!(&output, Ok(ToolExecutionOutput::SandboxDenied(_))) {
-            self.prepared
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&call.id);
+            self.finish_call(&scope);
         }
         output
     }

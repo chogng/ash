@@ -439,6 +439,8 @@ type GoalCreationObserver = dyn Fn(Option<ash_protocol::ReasoningEffort>) + Send
 
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
+    // Some host tools hold the Thread controller. Track their active Turn without owning them.
+    turn_tool_services: Mutex<BTreeMap<(ThreadId, TurnId), Weak<dyn crate::ToolService>>>,
     pub(crate) turn_tool_models: Mutex<
         BTreeMap<
             ThreadId,
@@ -619,6 +621,7 @@ impl ThreadController {
             store,
             diagnostics: None,
             turn_tool_models: Mutex::new(BTreeMap::new()),
+            turn_tool_services: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: None,
@@ -657,6 +660,7 @@ impl ThreadController {
             store,
             diagnostics: None,
             turn_tool_models: Mutex::new(BTreeMap::new()),
+            turn_tool_services: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
             writer_lease: Some(writer_lease),
@@ -2791,7 +2795,12 @@ impl ThreadController {
         };
         let item_id =
             ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty");
-        self.mutate_thread(thread_id, |snapshot| {
+        let scope = ash_action_policy::ToolCallScope {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+            call_id: request.tool_call_id.clone(),
+        };
+        let result = self.mutate_thread(thread_id, |snapshot| {
             let failure_count = crate::tool_repetition::next_tool_failure_count(
                 &snapshot.items,
                 turn_id,
@@ -2823,7 +2832,9 @@ impl ThreadController {
                 item,
                 sequence: snapshot.sequence,
             })
-        })
+        })?;
+        self.finish_tool_call(&scope);
+        Ok(result)
     }
 
     pub fn fail_turn(
@@ -2839,7 +2850,9 @@ impl ThreadController {
                 turn_id: turn_id.clone(),
                 error,
             }],
-        )
+        )?;
+        self.finish_tool_turn(thread_id, turn_id);
+        Ok(())
     }
 
     pub fn interrupt_turn(

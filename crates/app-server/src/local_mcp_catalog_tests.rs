@@ -301,7 +301,7 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
         .with_env_config(&snapshot.values)
         .with_mcp_status_snapshot(initial.status)
         .with_local_env_host(
-            Some(ToolPort::mcp(initial.tools, initial.policy)),
+            Some(ToolPort::mcp(initial.tools, initial.policy).unwrap()),
             crate::server::DirGrantPolicy::UserConfig(config.clone()),
         )
         .unwrap();

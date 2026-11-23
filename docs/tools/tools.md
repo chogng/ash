@@ -718,6 +718,8 @@ MCP list-changed、Plugin update 和 dynamic tool removal 不会把 in-flight bi
 旧 snapshot 持有 runtime lease，直到其 model calls 和 Tool invocations 排空；权限单调收紧仍可取消旧调用，
 精确 owner 断连后的处置遵循[动态工具执行](#112-执行)。
 
+App Server 按 Thread、Turn 和 Tool Call ID 保留调用选定的注册表与策略。Core 提交 Tool Result 后释放该调用，Turn 结束时释放未完成的调用。审批等待保留绑定；动作摘要用于校验审批和执行内容，重复调用各自持有绑定。
+
 目录刷新在后续模型安全点生效，但不能扩大已冻结的 Turn 正向名单。新 MCP 工具即使进入下一份目录，
 也不会自动加入该 Turn。若以后需要 Turn 内受控扩展，应另行定义可信授权和范围版本更新契约，当前尚未实现。
 

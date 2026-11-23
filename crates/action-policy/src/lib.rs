@@ -16,6 +16,7 @@ pub use action::FileWriteReview;
 pub use action::ResolvedAction;
 pub use action::SandboxCompatibility;
 pub use action::ShellReview;
+pub use action::ToolCallScope;
 pub use classifier::ActionClassifier;
 pub use classifier::RecommendationValidationError;
 pub use decision::{

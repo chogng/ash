@@ -145,7 +145,7 @@ pub(crate) fn assert_managed_sandbox_execution(
             name: definition.name().clone(),
             arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
         };
-        runtime.prepare(&call).unwrap();
+        let scope = prepare_test_call(&runtime, &call, "managed-thread", "managed-turn");
         let output = runtime
             .execute_for_turn(
                 &binding,
@@ -163,12 +163,12 @@ pub(crate) fn assert_managed_sandbox_execution(
         assert!(observed.load(Ordering::SeqCst));
         if matches!(authorization, ToolAuthorization::Sandboxed(_)) {
             assert!(matches!(output, ToolExecutionOutput::SandboxDenied(_)));
-            assert!(runtime.prepared.lock().unwrap().contains_key(&call.id));
+            assert!(runtime.prepared.lock().unwrap().contains_key(&scope));
         } else {
             assert!(
                 matches!(output, ToolExecutionOutput::Failure(reason) if reason == "fixture sandbox unavailable")
             );
-            assert!(!runtime.prepared.lock().unwrap().contains_key(&call.id));
+            assert!(!runtime.prepared.lock().unwrap().contains_key(&scope));
         }
     }
 }
@@ -194,6 +194,21 @@ impl ToolExecutor for RecordingExecutor {
 }
 
 struct UnusedReviewer;
+
+fn prepare_test_call(
+    runtime: &ToolExecutorRuntime,
+    call: &ToolCall,
+    thread_id: &str,
+    turn_id: &str,
+) -> ash_action_policy::ToolCallScope {
+    let scope = ash_action_policy::ToolCallScope {
+        thread_id: ash_protocol::ThreadId::new(thread_id).unwrap(),
+        turn_id: TurnId::new(turn_id).unwrap(),
+        call_id: call.id.clone(),
+    };
+    runtime.store_prepared(scope.clone(), runtime.reviewer.prepare(call).unwrap());
+    scope
+}
 
 impl ToolExecutorReviewer for UnusedReviewer {
     fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError> {
@@ -258,6 +273,160 @@ impl ToolOutputSink for RecordingSink {
 }
 
 #[test]
+fn composed_executor_keeps_its_output_schema_in_the_durable_binding() {
+    use ash_core::StartToolTurnRequest;
+    use ash_core::ThreadController;
+    use ash_core::TurnExecutor;
+    use ash_protocol::ThreadItem;
+    use ash_protocol::TurnStatus;
+    use core_api::ActionPolicyService;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    struct SchemaExecutor(ToolDefinition);
+
+    impl ToolExecutor for SchemaExecutor {
+        fn definition(&self) -> ToolDefinition {
+            self.0.clone()
+        }
+
+        fn execute(&self, invocation: ash_tools::ToolInvocation) -> ToolExecutionFuture<'_> {
+            let output = if invocation.binding().definition_digest() == &self.0.digest() {
+                ToolOutput::success(vec![ToolContent::Text("schema executor result".into())])
+            } else {
+                ToolOutput::error(vec![ToolContent::Text(
+                    "executor definition did not match its binding".into(),
+                )])
+            };
+            Box::pin(future::ready(ToolExecutionOutcome::Returned(output)))
+        }
+    }
+
+    struct TestPolicy;
+
+    impl ActionPolicyService for TestPolicy {
+        fn revision(&self) -> String {
+            "test".into()
+        }
+
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &ash_async_utils::CancellationToken,
+        ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+            Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
+                grant_id: GrantId::new("test"),
+            })
+        }
+    }
+
+    struct UnusedModel;
+
+    impl core_api::ModelService for UnusedModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ash_protocol::ModelRequest,
+            _: &ash_async_utils::CancellationToken,
+        ) -> Result<ash_protocol::ModelResponse, CoreError> {
+            panic!("a host-resolved tool turn does not invoke a model")
+        }
+    }
+
+    let name = ToolName::new("schema_executor").unwrap();
+    let definition = ToolDefinition::function(
+        name.clone(),
+        "Executor with a structured output contract",
+        ToolInputSchema::parse(serde_json::json!({"type": "object"})).unwrap(),
+        ToolOutputSchema::Schema(
+            ash_tools::ToolSchema::parse(serde_json::json!({"type": "string"})).unwrap(),
+        ),
+        ToolSchemaMode::ProviderDefault,
+        ToolLoading::Eager,
+    )
+    .unwrap();
+    let port =
+        crate::tool_composition::ToolPort::local(Arc::new(ash_core::NoTools), Arc::new(TestPolicy))
+            .unwrap()
+            .with_executor(
+                Arc::new(SchemaExecutor(definition.clone())),
+                EnvId::local(),
+                Arc::new(UnusedReviewer),
+            )
+            .unwrap();
+    let combined = crate::tool_composition::combine_tool_ports(vec![port])
+        .unwrap()
+        .unwrap();
+    let call = ToolCall {
+        id: ToolCallId::new("schema-call").unwrap(),
+        name,
+        arguments: serde_json::json!({}),
+    };
+    let binding = combined
+        .tools
+        .bind_call(&call, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    assert_eq!(binding.definition_digest, definition.digest().as_str());
+
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    let thread_id = ash_protocol::ThreadId::new("schema-thread").unwrap();
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("schema-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: ash_protocol::SessionId::new("schema-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Schema executor".into(),
+        })
+        .unwrap();
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        Arc::new(UnusedModel),
+        combined.tools,
+        combined.policy,
+    );
+    let turn = threads
+        .start_tool_turn(
+            &thread_id,
+            StartToolTurnRequest {
+                command_id: ash_protocol::CommandId::new("schema-turn").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
+                policy_revision: executor.policy_revision(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                call,
+                binding,
+            },
+        )
+        .unwrap();
+    executor.start_tool(&thread_id, &turn.turn_id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let snapshot = loop {
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if matches!(
+            snapshot.turns[0].status,
+            TurnStatus::Completed | TurnStatus::Failed
+        ) {
+            break snapshot;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "tool turn did not finish: {snapshot:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Completed);
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult { text, is_error: false, .. } if text == "schema executor result"
+    )));
+}
+
+#[test]
 fn executor_runtime_preserves_registry_binding_environment_and_output() {
     let definition = ToolDefinition::function(
         ToolName::new("executor-tool").unwrap(),
@@ -296,7 +465,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
         arguments: serde_json::json!({}),
     };
     let mut sink = RecordingSink::default();
-    runtime.prepare(&call).unwrap();
+    prepare_test_call(&runtime, &call, "thread-7", "turn-7");
 
     let output = runtime
         .execute_for_turn(
@@ -369,7 +538,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
         name: ToolName::new("guarded-executor").unwrap(),
         arguments: serde_json::json!({}),
     };
-    runtime.prepare(&call).unwrap();
+    prepare_test_call(&runtime, &call, "thread-9", "turn-9");
     authorization.revoke();
 
     let result = runtime.execute_for_turn(
@@ -433,7 +602,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
         name: ToolName::new("image-tool").unwrap(),
         arguments: serde_json::json!({}),
     };
-    runtime.prepare(&call).unwrap();
+    prepare_test_call(&runtime, &call, "thread-8", "turn-8");
 
     let output = runtime
         .execute_for_turn(

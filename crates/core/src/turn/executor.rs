@@ -602,11 +602,19 @@ impl TurnExecutor {
             .threads
             .enqueue_turn_execution(thread_id, turn_id, move |execution| {
                 if execution.check_current().is_ok() {
-                    let result = executor.execute(
-                        &queued_thread_id,
-                        &queued_turn_id,
-                        execution.cancellation(),
-                    );
+                    let result = executor
+                        .scope_tools_for_turn(
+                            &queued_thread_id,
+                            &queued_turn_id,
+                            execution.cancellation(),
+                        )
+                        .and_then(|executor| {
+                            executor.execute(
+                                &queued_thread_id,
+                                &queued_turn_id,
+                                execution.cancellation(),
+                            )
+                        });
                     if !matches!(
                         result,
                         Ok(TurnExecutionOutcome::WaitingForApproval
@@ -617,6 +625,9 @@ impl TurnExecutor {
                 } else if execution.cancellation().is_cancelled() {
                     // Superseded wakeups share this Turn's frozen model with the queued wakeup.
                     // Only cancellation ends that ownership before execution reaches a terminal state.
+                        executor
+                            .threads
+                            .finish_tool_turn(&queued_thread_id, &queued_turn_id);
                     executor.release_turn_model(&queued_thread_id, &queued_turn_id);
                 }
             });
@@ -674,12 +685,29 @@ impl TurnExecutor {
         self.threads
             .enqueue_turn_execution(thread_id, turn_id, move |execution| {
                 if execution.check_current().is_ok() {
-                    let _ = executor.execute_model_free(
-                        &queued_thread_id,
-                        &queued_turn_id,
-                        execution.cancellation(),
-                        kind,
-                    );
+                    let result = executor
+                        .scope_tools_for_turn(
+                            &queued_thread_id,
+                            &queued_turn_id,
+                            execution.cancellation(),
+                        )
+                        .and_then(|executor| {
+                            executor.execute_model_free(
+                                &queued_thread_id,
+                                &queued_turn_id,
+                                execution.cancellation(),
+                                kind,
+                            )
+                        });
+                    if !matches!(
+                        result,
+                        Ok(TurnExecutionOutcome::WaitingForApproval
+                            | TurnExecutionOutcome::WaitingForCapability)
+                    ) {
+                        executor
+                            .threads
+                            .finish_tool_turn(&queued_thread_id, &queued_turn_id);
+                    }
                 }
             })
     }
@@ -689,6 +717,22 @@ impl TurnExecutor {
         if self.is_shell_turn(thread_id, turn_id)? {
             self.start_shell(thread_id, turn_id)
         } else if self.is_tool_turn(thread_id, turn_id)? {
+    fn scope_tools_for_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<Self, CoreError> {
+        let mut executor = self.clone();
+        executor.tools =
+            self.threads
+                .scope_turn_tools(thread_id, turn_id, &self.tools, cancellation)?;
+        executor.code_mode = self
+            .code_mode
+            .with_tool_service(Arc::clone(&executor.tools), Arc::clone(&self.policy));
+        Ok(executor)
+    }
+
             self.start_tool(thread_id, turn_id)
         } else {
             self.start(thread_id, turn_id)

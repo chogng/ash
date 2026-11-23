@@ -152,6 +152,10 @@ impl ToolDefinition {
         self.loading
     }
 
+    pub fn set_loading(&mut self, loading: ToolLoading) {
+        self.loading = loading;
+    }
+
     pub fn digest(&self) -> ToolDefinitionDigest {
         let mut hasher = Sha256::new();
         update_string(&mut hasher, self.name.as_str());

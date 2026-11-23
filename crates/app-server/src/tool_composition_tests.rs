@@ -236,7 +236,8 @@ fn small_mcp_catalog_is_exposed_directly() {
                 "local",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
         ToolPort::mcp(
             Arc::new(FakeTools::new(
                 "external_status",
@@ -244,10 +245,20 @@ fn small_mcp_catalog_is_exposed_directly() {
                 "user:mcp:test",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
     ])
     .unwrap()
     .unwrap();
+
+    let all_definitions = combined.tools.definitions();
+    assert_eq!(
+        all_definitions
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["read_file", "external_status"]
+    );
 
     let visible = combined
         .tools
@@ -261,20 +272,27 @@ fn small_mcp_catalog_is_exposed_directly() {
             .collect::<Vec<_>>(),
         vec!["external_status", "read_file"]
     );
+    assert_eq!(
+        visible,
+        [all_definitions[1].clone(), all_definitions[0].clone()]
+    );
 }
 
 #[test]
 fn binding_carries_declared_activity_for_an_opaque_tool_name() {
-    let combined = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(
-            FakeTools::new("opaque_tool", ActionSource::BuiltInTool, "activity").with_activity(
-                ToolActivity::Read {
-                    target: "history".into(),
-                },
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(
+                FakeTools::new("opaque_tool", ActionSource::BuiltInTool, "activity").with_activity(
+                    ToolActivity::Read {
+                        target: "history".into(),
+                    },
+                ),
             ),
-        ),
-        Arc::new(AskPolicy),
-    )])
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap()
     .unwrap();
     let call = ToolCall {
@@ -312,6 +330,7 @@ fn one_tool_can_override_its_source_default_exposure() {
         )),
         Arc::new(AskPolicy),
     )
+    .unwrap()
     .with_tool_exposure(&external, ToolExposure::Direct)
     .unwrap();
     let combined = combine_tool_ports(vec![mcp]).unwrap().unwrap();
@@ -341,7 +360,8 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
                     "local",
                 )),
                 Arc::new(AskPolicy),
-            ),
+            )
+            .unwrap(),
             ToolPort::mcp(
                 Arc::new(FakeTools::catalog(
                     "external",
@@ -350,7 +370,8 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
                     "user:mcp:test",
                 )),
                 Arc::new(AskPolicy),
-            ),
+            )
+            .unwrap(),
         ],
         ash_tools::ToolRegistryGeneration::new(7),
     )
@@ -450,7 +471,9 @@ impl EmbeddingInvoker for TestEmbedding {
 }
 
 fn external_catalog() -> Vec<ToolPort> {
-    let mut port = ToolPort::dynamic(
+    let mut port = ToolPort::from_service(
+        super::ToolPortKind::Dynamic,
+        ToolExposure::Direct,
         Arc::new(FakeTools::catalog(
             "external",
             21,
@@ -458,7 +481,8 @@ fn external_catalog() -> Vec<ToolPort> {
             "test:dynamic",
         )),
         Arc::new(AskPolicy),
-    );
+    )
+    .unwrap();
     for index in 0..21 {
         port = port
             .with_tool_exposure(
@@ -656,7 +680,7 @@ fn app_hidden_routes_preserve_the_model_catalog_and_reject_retired_origins() {
         service.app_only =
             FakeTools::new("app_edit", ActionSource::McpServer, "user:mcp:test").definitions;
         combine_tool_ports_at_generation(
-            vec![ToolPort::mcp(Arc::new(service), Arc::new(AskPolicy))],
+            vec![ToolPort::mcp(Arc::new(service), Arc::new(AskPolicy)).unwrap()],
             ash_tools::ToolRegistryGeneration::new(generation),
         )
         .unwrap()
@@ -867,6 +891,274 @@ fn fake_review(
     ))
 }
 
+fn scoped_tools(
+    ports: &Arc<ReloadableToolPorts>,
+    thread: &str,
+    turn: &str,
+) -> Arc<dyn ToolService> {
+    ports
+        .tools()
+        .scoped_to_turn(
+            &ash_protocol::ThreadId::new(thread).unwrap(),
+            &ash_protocol::TurnId::new(turn).unwrap(),
+        )
+        .unwrap()
+}
+
+#[test]
+fn concurrent_turns_keep_distinct_policies_for_the_same_action_and_call_id() {
+    struct GenerationPolicy(&'static str);
+
+    impl ActionPolicyService for GenerationPolicy {
+        fn revision(&self) -> String {
+            "test".into()
+        }
+
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ExecutionDecision, CoreError> {
+            Ok(ExecutionDecision::RunUnsandboxed {
+                grant_id: GrantId::new(self.0),
+            })
+        }
+    }
+
+    let compose = |generation, grant| {
+        combine_tool_ports_at_generation(
+            vec![
+                ToolPort::local(
+                    Arc::new(FakeTools::new(
+                        "shared_tool",
+                        ActionSource::BuiltInTool,
+                        "same-action",
+                    )),
+                    Arc::new(GenerationPolicy(grant)),
+                )
+                .unwrap(),
+            ],
+            ash_tools::ToolRegistryGeneration::new(generation),
+        )
+        .unwrap()
+    };
+    let call = ToolCall {
+        id: ash_protocol::ToolCallId::new("same-call-id").unwrap(),
+        name: ToolName::new("shared_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let ports = ReloadableToolPorts::new(compose(1, "old-policy"));
+    let older = scoped_tools(&ports, "older-thread", "same-turn-id");
+    let older_binding = older
+        .bind_call(&call, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    let older_review = older.prepare(&call).unwrap();
+    ports.replace(compose(2, "new-policy"));
+    let newer = scoped_tools(&ports, "newer-thread", "same-turn-id");
+    let newer_binding = newer
+        .bind_call(&call, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    let newer_review = newer.prepare(&call).unwrap();
+
+    assert_eq!(
+        older_review.action().digest(),
+        newer_review.action().digest()
+    );
+    assert_eq!(older_binding.registry_generation, 1);
+    assert_eq!(newer_binding.registry_generation, 2);
+    let policy = ports.policy();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let grant = |review| {
+        let ExecutionDecision::RunUnsandboxed { grant_id } =
+            policy.decide(review, &cancellation.token()).unwrap()
+        else {
+            panic!("expected the bound generation's grant");
+        };
+        grant_id
+    };
+    assert_eq!(grant(&older_review), GrantId::new("old-policy"));
+    assert_eq!(grant(&newer_review), GrantId::new("new-policy"));
+    newer.finish_call(newer_review.tool_call_scope().unwrap());
+    assert!(policy.decide(&newer_review, &cancellation.token()).is_err());
+    assert_eq!(grant(&older_review), GrantId::new("old-policy"));
+    let scope = older_review.tool_call_scope().unwrap();
+    older.finish_turn(&scope.thread_id, &scope.turn_id);
+    assert!(policy.decide(&older_review, &cancellation.token()).is_err());
+}
+
+#[test]
+fn policy_denial_releases_the_old_generation_before_the_turn_ends() {
+    use std::sync::Mutex;
+    use std::sync::Weak;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    struct DenyAfterReload {
+        prepared: mpsc::Sender<()>,
+        reloaded: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl ActionPolicyService for DenyAfterReload {
+        fn revision(&self) -> String {
+            "test".into()
+        }
+
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ExecutionDecision, CoreError> {
+            self.prepared.send(()).unwrap();
+            self.reloaded
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            Ok(ExecutionDecision::Block(
+                ash_action_policy::BlockReason::DeterministicRule {
+                    source: None,
+                    reason: "blocked by the fixture".into(),
+                },
+            ))
+        }
+    }
+
+    struct CheckDeniedGeneration {
+        retired: Weak<super::ToolGeneration>,
+        checked: mpsc::Sender<bool>,
+    }
+
+    impl core_api::HookService for CheckDeniedGeneration {
+        fn has_enabled_event(&self, event: ash_protocol::HookEvent) -> bool {
+            event == ash_protocol::HookEvent::PermissionDenied
+        }
+
+        fn event(
+            &self,
+            request: &core_api::HookEventRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<core_api::HookEventDecision, CoreError> {
+            if request.event == ash_protocol::HookEvent::PermissionDenied {
+                self.checked.send(self.retired.upgrade().is_none()).unwrap();
+            }
+            ash_core::NoHooks.event(request, cancellation)
+        }
+
+        fn before_tool(
+            &self,
+            request: &core_api::BeforeToolHookRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<core_api::BeforeToolHookDecision, CoreError> {
+            ash_core::NoHooks.before_tool(request, cancellation)
+        }
+
+        fn after_tool(
+            &self,
+            request: &core_api::AfterToolHookRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<(), CoreError> {
+            ash_core::NoHooks.after_tool(request, cancellation)
+        }
+
+        fn turn_completed(
+            &self,
+            request: &core_api::TurnCompletedHookRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<(), CoreError> {
+            ash_core::NoHooks.turn_completed(request, cancellation)
+        }
+    }
+
+    struct UnusedModel;
+
+    impl core_api::ModelService for UnusedModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ash_protocol::ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ash_protocol::ModelResponse, CoreError> {
+            panic!("a host-resolved tool turn does not invoke the model")
+        }
+    }
+
+    let (prepared, preparing) = mpsc::channel();
+    let (reloaded, reload_gate) = mpsc::channel();
+    let (checked, checking) = mpsc::channel();
+    let ports = ReloadableToolPorts::new(
+        combine_tool_ports(vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "blocked_tool",
+                    ActionSource::BuiltInTool,
+                    "old-route",
+                )),
+                Arc::new(DenyAfterReload {
+                    prepared,
+                    reloaded: Mutex::new(reload_gate),
+                }),
+            )
+            .unwrap(),
+        ])
+        .unwrap(),
+    );
+    let retired = Arc::downgrade(&ports.generation());
+    let threads = Arc::new(ash_core::ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    let thread_id = ash_protocol::ThreadId::new("rejected-tool-thread").unwrap();
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("test-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: ash_protocol::SessionId::new("test-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Rejected tool".into(),
+        })
+        .unwrap();
+    let executor = ash_core::TurnExecutor::new(
+        Arc::clone(&threads),
+        Arc::new(UnusedModel),
+        ports.tools(),
+        ports.policy(),
+    )
+    .with_hooks(Arc::new(CheckDeniedGeneration {
+        retired: retired.clone(),
+        checked,
+    }));
+    let call = ToolCall {
+        id: ash_protocol::ToolCallId::new("blocked-call").unwrap(),
+        name: ToolName::new("blocked_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = executor
+        .bind_tool_call(&call, ash_protocol::ToolCallCaller::Direct)
+        .unwrap();
+    let turn = threads
+        .start_tool_turn(
+            &thread_id,
+            ash_core::StartToolTurnRequest {
+                command_id: ash_protocol::CommandId::new("blocked-turn").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
+                policy_revision: executor.policy_revision(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                call,
+                binding,
+            },
+        )
+        .unwrap();
+    executor.start_tool(&thread_id, &turn.turn_id).unwrap();
+    preparing.recv_timeout(Duration::from_secs(5)).unwrap();
+    ports.replace(None);
+    assert!(retired.upgrade().is_some());
+    reloaded.send(()).unwrap();
+    assert!(checking.recv_timeout(Duration::from_secs(5)).unwrap());
+}
+
 #[test]
 fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
     let combined = combine_tool_ports(vec![
@@ -877,7 +1169,8 @@ fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
                 "local",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
         ToolPort::mcp(
             Arc::new(FakeTools::new(
                 "mcp_tool",
@@ -885,7 +1178,8 @@ fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
                 "user:mcp:test",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
     ])
     .unwrap()
     .unwrap();
@@ -909,14 +1203,17 @@ fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
 #[test]
 fn durable_binding_rejects_same_named_tool_from_a_new_generation() {
     let initial = combine_tool_ports_at_generation(
-        vec![ToolPort::local(
-            Arc::new(FakeTools::new(
-                "shared_tool",
-                ActionSource::BuiltInTool,
-                "initial",
-            )),
-            Arc::new(AskPolicy),
-        )],
+        vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "shared_tool",
+                    ActionSource::BuiltInTool,
+                    "initial",
+                )),
+                Arc::new(AskPolicy),
+            )
+            .unwrap(),
+        ],
         ash_tools::ToolRegistryGeneration::new(3),
     )
     .unwrap()
@@ -938,14 +1235,17 @@ fn durable_binding_rejects_same_named_tool_from_a_new_generation() {
         .unwrap();
 
     let replacement = combine_tool_ports_at_generation(
-        vec![ToolPort::local(
-            Arc::new(FakeTools::new(
-                "shared_tool",
-                ActionSource::BuiltInTool,
-                "replacement",
-            )),
-            Arc::new(AskPolicy),
-        )],
+        vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "shared_tool",
+                    ActionSource::BuiltInTool,
+                    "replacement",
+                )),
+                Arc::new(AskPolicy),
+            )
+            .unwrap(),
+        ],
         ash_tools::ToolRegistryGeneration::new(4),
     )
     .unwrap()
@@ -971,7 +1271,8 @@ fn rejects_duplicate_model_tool_names() {
                 "local",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
         ToolPort::mcp(
             Arc::new(FakeTools::new(
                 "duplicate",
@@ -979,7 +1280,8 @@ fn rejects_duplicate_model_tool_names() {
                 "user:mcp:test",
             )),
             Arc::new(AskPolicy),
-        ),
+        )
+        .unwrap(),
     ]);
 
     assert!(result.is_err());
@@ -987,17 +1289,20 @@ fn rejects_duplicate_model_tool_names() {
 
 #[test]
 fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
-    let initial = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "shared_tool",
-            ActionSource::BuiltInTool,
-            "initial",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let initial = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let reloadable = ReloadableToolPorts::new(initial);
-    let tools = reloadable.tools();
+    let tools = scoped_tools(&reloadable, "thread", "turn");
     let prepared = ToolCall {
         id: ash_protocol::ToolCallId::new("prepared-call").unwrap(),
         name: ToolName::new("shared_tool").unwrap(),
@@ -1007,14 +1312,17 @@ fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
     tools
         .prepare(&prepared)
         .expect("prepare initial generation");
-    let replacement = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "shared_tool",
-            ActionSource::BuiltInTool,
-            "replacement",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let replacement = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "replacement",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     reloadable.replace(replacement);
 
@@ -1054,14 +1362,17 @@ fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
 
 #[test]
 fn capability_catalog_tracks_the_current_tool_generation() {
-    let initial = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "read_file",
-            ActionSource::BuiltInTool,
-            "initial",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let initial = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "read_file",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let ports = ReloadableToolPorts::new(initial);
     assert_eq!(
@@ -1069,14 +1380,17 @@ fn capability_catalog_tracks_the_current_tool_generation() {
         ToolAuthorityDto::DirectoryRead
     );
 
-    let replacement = combine_tool_ports(vec![ToolPort::mcp(
-        Arc::new(FakeTools::new(
-            "external_status",
-            ActionSource::McpServer,
-            "mcp",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let replacement = combine_tool_ports(vec![
+        ToolPort::mcp(
+            Arc::new(FakeTools::new(
+                "external_status",
+                ActionSource::McpServer,
+                "mcp",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     ports.replace(replacement);
     let catalog = ports.catalog();
@@ -1089,17 +1403,20 @@ fn capability_catalog_tracks_the_current_tool_generation() {
 
 #[test]
 fn reload_after_durable_binding_but_before_prepare_keeps_original_generation() {
-    let initial = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "shared_tool",
-            ActionSource::BuiltInTool,
-            "initial",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let initial = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let reloadable = ReloadableToolPorts::new(initial);
-    let tools = reloadable.tools();
+    let tools = scoped_tools(&reloadable, "thread", "turn");
     let call = ToolCall {
         id: ash_protocol::ToolCallId::new("bound-before-prepare").unwrap(),
         name: ToolName::new("shared_tool").unwrap(),
@@ -1111,14 +1428,17 @@ fn reload_after_durable_binding_but_before_prepare_keeps_original_generation() {
         .unwrap();
 
     reloadable.replace(
-        combine_tool_ports(vec![ToolPort::local(
-            Arc::new(FakeTools::new(
-                "shared_tool",
-                ActionSource::BuiltInTool,
-                "replacement",
-            )),
-            Arc::new(AskPolicy),
-        )])
+        combine_tool_ports(vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "shared_tool",
+                    ActionSource::BuiltInTool,
+                    "replacement",
+                )),
+                Arc::new(AskPolicy),
+            )
+            .unwrap(),
+        ])
         .unwrap(),
     );
 
@@ -1143,30 +1463,36 @@ fn reload_after_durable_binding_but_before_prepare_keeps_original_generation() {
 
 #[test]
 fn model_catalog_snapshot_binds_response_to_the_generation_visible_to_the_model() {
-    let initial = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "shared_tool",
-            ActionSource::BuiltInTool,
-            "initial",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let initial = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let reloadable = ReloadableToolPorts::new(initial);
-    let tools = reloadable.tools();
+    let tools = scoped_tools(&reloadable, "thread", "turn");
     let catalog = tools
         .model_catalog_snapshot(&std::collections::BTreeSet::new())
         .expect("freeze model catalog");
 
     reloadable.replace(
-        combine_tool_ports(vec![ToolPort::local(
-            Arc::new(FakeTools::new(
-                "shared_tool",
-                ActionSource::BuiltInTool,
-                "replacement",
-            )),
-            Arc::new(AskPolicy),
-        )])
+        combine_tool_ports(vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "shared_tool",
+                    ActionSource::BuiltInTool,
+                    "replacement",
+                )),
+                Arc::new(AskPolicy),
+            )
+            .unwrap(),
+        ])
         .unwrap(),
     );
 
@@ -1201,14 +1527,17 @@ fn model_catalog_snapshot_binds_response_to_the_generation_visible_to_the_model(
 
 #[test]
 fn durable_binding_from_another_process_incarnation_fails_closed() {
-    let combined = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "shared_tool",
-            ActionSource::BuiltInTool,
-            "initial",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "shared_tool",
+                ActionSource::BuiltInTool,
+                "initial",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let first = ReloadableToolPorts::new(combined);
     let call = ToolCall {
@@ -1223,14 +1552,17 @@ fn durable_binding_from_another_process_incarnation_fails_closed() {
         .unwrap();
 
     let recovered = ReloadableToolPorts::new(
-        combine_tool_ports(vec![ToolPort::local(
-            Arc::new(FakeTools::new(
-                "shared_tool",
-                ActionSource::BuiltInTool,
-                "initial",
-            )),
-            Arc::new(AskPolicy),
-        )])
+        combine_tool_ports(vec![
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "shared_tool",
+                    ActionSource::BuiltInTool,
+                    "initial",
+                )),
+                Arc::new(AskPolicy),
+            )
+            .unwrap(),
+        ])
         .unwrap(),
     );
     let error = recovered
@@ -1249,17 +1581,20 @@ fn sandbox_retry_keeps_the_prepared_generation_across_reload() {
         parameters: serde_json::json!({"type": "object"}),
         strict: false,
     };
-    let initial = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(SandboxThenSuccessTools {
-            definition: definition.clone(),
-            result: "initial",
-            calls: AtomicUsize::new(0),
-        }),
-        Arc::new(AskPolicy),
-    )])
+    let initial = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(SandboxThenSuccessTools {
+                definition: definition.clone(),
+                result: "initial",
+                calls: AtomicUsize::new(0),
+            }),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let reloadable = ReloadableToolPorts::new(initial);
-    let tools = reloadable.tools();
+    let tools = scoped_tools(&reloadable, "thread", "turn");
     let call = ToolCall {
         id: ash_protocol::ToolCallId::new("sandbox-retry").unwrap(),
         name: definition.name,
@@ -1280,19 +1615,22 @@ fn sandbox_retry_keeps_the_prepared_generation_across_reload() {
         ToolExecutionOutput::SandboxDenied(_)
     ));
 
-    let replacement = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(SandboxThenSuccessTools {
-            definition: ToolDefinition {
-                name: ToolName::new("sandboxed-tool").unwrap(),
-                description: "replacement".into(),
-                parameters: serde_json::json!({"type": "object"}),
-                strict: false,
-            },
-            result: "replacement",
-            calls: AtomicUsize::new(1),
-        }),
-        Arc::new(AskPolicy),
-    )])
+    let replacement = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(SandboxThenSuccessTools {
+                definition: ToolDefinition {
+                    name: ToolName::new("sandboxed-tool").unwrap(),
+                    description: "replacement".into(),
+                    parameters: serde_json::json!({"type": "object"}),
+                    strict: false,
+                },
+                result: "replacement",
+                calls: AtomicUsize::new(1),
+            }),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     reloadable.replace(replacement);
 
@@ -1318,10 +1656,13 @@ fn reloadable_and_composite_layers_preserve_durable_execution_facts() {
         parameters: serde_json::json!({"type": "object"}),
         strict: false,
     };
-    let combined = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FactsAwareTools { definition }),
-        Arc::new(AskPolicy),
-    )])
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FactsAwareTools { definition }),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap();
     let reloadable = ReloadableToolPorts::new(combined);
     let tools = reloadable.tools();
@@ -1376,6 +1717,7 @@ fn code_mode_catalog_excludes_direct_model_only_tools_after_reloadable_compositi
             )),
             Arc::new(AskPolicy),
         )
+        .unwrap()
         .with_tool_exposure(&name, ToolExposure::DirectModelOnly)
         .unwrap(),
     ])
@@ -1514,17 +1856,20 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
         let mut ports = vec![
             // Code Mode control requests use the built-in policy; nested calls retain
             // their MCP or dynamic source policy through the real composition path.
-            ToolPort::local(Arc::new(ash_core::NoTools), Arc::clone(&policy)),
-            ToolPort::dynamic(
+            ToolPort::local(Arc::new(ash_core::NoTools), Arc::clone(&policy)).unwrap(),
+            ToolPort::from_service(
+                super::ToolPortKind::Dynamic,
+                ToolExposure::Direct,
                 Arc::new(FakeTools::new(dynamic, ActionSource::DynamicTool, result)),
                 Arc::clone(&policy),
-            ),
+            )
+            .unwrap(),
         ];
         if let Some((version, result)) = mcp {
             let mut tools = FakeTools::new("catalog_status", ActionSource::McpServer, result);
             tools.definitions[0].parameters = mcp_schema(version);
             tools.definitions[0].description = format!("MCP status {version}");
-            ports.push(ToolPort::mcp(Arc::new(tools), policy));
+            ports.push(ToolPort::mcp(Arc::new(tools), policy).unwrap());
         }
         combine_tool_ports_at_generation(ports, ash_tools::ToolRegistryGeneration::new(generation))
             .unwrap()
@@ -1725,6 +2070,7 @@ fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() 
             )),
             Arc::new(AskPolicy),
         )
+        .unwrap()
     };
     let combined = combine_tool_ports(vec![mcp()]).unwrap().unwrap();
     assert_eq!(combined.catalog.len(), 18);
@@ -1752,6 +2098,7 @@ fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() 
                 )),
                 Arc::new(AskPolicy)
             )
+            .unwrap()
         ])
         .is_err()
     );
@@ -1759,14 +2106,17 @@ fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() 
 
 #[test]
 fn configured_hooks_route_to_the_local_policy_revision_and_other_user_actions_are_rejected() {
-    let combined = combine_tool_ports(vec![ToolPort::local(
-        Arc::new(FakeTools::new(
-            "local_tool",
-            ActionSource::BuiltInTool,
-            "local",
-        )),
-        Arc::new(AskPolicy),
-    )])
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "local_tool",
+                ActionSource::BuiltInTool,
+                "local",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
+    ])
     .unwrap()
     .unwrap();
     let provenance = ActionProvenance::new(ActionSource::User, "user:hook:symphony-before-run");
@@ -1799,8 +2149,14 @@ fn capability_scope_combines_named_sets_and_exact_tools_without_category_grants(
     let mut unrelated = FakeTools::new("third_party_read", ActionSource::DynamicTool, "unrelated");
     unrelated.category = Some(ash_protocol::ToolCategory::Read);
     let combined = combine_tool_ports(vec![
-        ToolPort::local(Arc::new(reader), Arc::new(AskPolicy)),
-        ToolPort::dynamic(Arc::new(unrelated), Arc::new(AskPolicy)),
+        ToolPort::local(Arc::new(reader), Arc::new(AskPolicy)).unwrap(),
+        ToolPort::from_service(
+            super::ToolPortKind::Dynamic,
+            ToolExposure::Direct,
+            Arc::new(unrelated),
+            Arc::new(AskPolicy),
+        )
+        .unwrap(),
     ])
     .unwrap()
     .unwrap();

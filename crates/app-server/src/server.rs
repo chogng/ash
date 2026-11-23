@@ -1353,7 +1353,8 @@ impl AppServer {
         let app_tool_port = crate::tool_composition::ToolPort::application(
             Arc::new(app_tools::AppToolService::new(app_tools_host.clone())),
             Arc::new(app_tools::AppToolPolicy),
-        );
+        )
+        .expect("static application tool definitions are valid");
         let application = crate::tool_composition::combine_tool_ports_at_generation_with_search(
             vec![app_tool_port.clone()],
             ash_tools::ToolRegistryGeneration::new(1),
@@ -1426,7 +1427,8 @@ impl AppServer {
         let browser_tool_port = crate::tool_composition::ToolPort::host(
             Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
             Arc::new(BrowserToolPolicy),
-        );
+        )
+        .expect("static browser tool definitions are valid");
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         let request_scheduler = RequestScheduler::default();

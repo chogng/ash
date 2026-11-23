@@ -163,6 +163,16 @@ pub struct ActionReviewRequest {
     phase: ActionReviewPhase,
     file_write: Option<FileWriteReview>,
     shell: Option<ShellReview>,
+    tool_call_scope: Option<ToolCallScope>,
+}
+
+/// Identity of a tool action within one durable Turn. Unlike an action digest, this distinguishes
+/// repeated invocations of the same action and does not participate in permission matching.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ToolCallScope {
+    pub thread_id: ash_protocol::ThreadId,
+    pub turn_id: ash_protocol::TurnId,
+    pub call_id: ash_protocol::ToolCallId,
 }
 
 /// Canonical write targets materialized by the file tool under an opened directory identity.
@@ -202,7 +212,17 @@ impl ActionReviewRequest {
             phase: ActionReviewPhase::Initial,
             file_write: None,
             shell: None,
+            tool_call_scope: None,
         }
+    }
+
+    pub fn with_tool_call_scope(mut self, scope: ToolCallScope) -> Self {
+        self.tool_call_scope = Some(scope);
+        self
+    }
+
+    pub fn tool_call_scope(&self) -> Option<&ToolCallScope> {
+        self.tool_call_scope.as_ref()
     }
 
     pub fn with_file_write(mut self, file_write: FileWriteReview) -> Self {

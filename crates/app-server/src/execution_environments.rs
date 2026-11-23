@@ -890,10 +890,11 @@ pub(crate) fn port(
     permissions: Arc<dyn Fn() -> crate::local_tools::LocalToolConfig + Send + Sync>,
 ) -> Result<crate::tool_composition::ToolPort, String> {
     let tools = Arc::new(EnvironmentTools::new(environments, permissions)?);
-    Ok(crate::tool_composition::ToolPort::environment(
+    crate::tool_composition::ToolPort::environment(
         tools.clone(),
         Arc::new(EnvironmentPolicy { tools: Some(tools) }),
-    ))
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

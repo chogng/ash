@@ -324,6 +324,22 @@ impl OneTimeToolGrant {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Creates a view that pins in-flight calls independently of other Turns. Core keeps the view
+    /// across approval waits and releases it on completion or interruption.
+    fn scoped_to_turn(
+        &self,
+        _: &ash_protocol::ThreadId,
+        _: &ash_protocol::TurnId,
+    ) -> Option<Arc<dyn ToolService>> {
+        None
+    }
+
+    /// Releases process-local execution state after Core commits this call's terminal result.
+    fn finish_call(&self, _: &ash_action_policy::ToolCallScope) {}
+
+    /// Releases calls whose Turn ended before they committed a terminal result.
+    fn finish_turn(&self, _: &ash_protocol::ThreadId, _: &ash_protocol::TurnId) {}
+
     /// Semantic category contributed by the capability owner. Unclassified external tools
     /// remain selectable by exact identity, without guessing their behavior from their names.
     fn tool_category(&self, _: &ash_protocol::ToolName) -> Option<ash_protocol::ToolCategory> {

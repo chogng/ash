@@ -9,6 +9,7 @@ use ash_action_policy::ExecutionDecision;
 use ash_action_policy::GrantId;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
+use ash_action_policy::ToolCallScope;
 use ash_app_server_protocol::protocol::agent::AgentToolCapabilityDto;
 use ash_app_server_protocol::protocol::agent::ToolAuthorityDto;
 use ash_app_server_protocol::protocol::agent::ToolExposureDto;
@@ -29,17 +30,22 @@ use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
 use ash_protocol::CapabilitySet;
 use ash_protocol::ReviewEvidence;
+use ash_protocol::ThreadId;
 use ash_protocol::ToolActivity;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallBinding;
 use ash_protocol::ToolCallCaller;
 use ash_protocol::ToolCallId;
-use ash_protocol::ToolDefinition;
+use ash_protocol::ToolDefinition as ProtocolToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
 use ash_protocol::ToolSourceProvenance;
+use ash_protocol::TurnId;
+use ash_tools::ProtocolToolAdapterError;
 use ash_tools::TOOL_SEARCH_TOOL_NAME;
+use ash_tools::ToolDefinition;
 use ash_tools::ToolExposure;
+use ash_tools::ToolInvocationKind;
 use ash_tools::ToolLoading;
 use ash_tools::ToolRegistryBuilder;
 use ash_tools::ToolRegistryGeneration;
@@ -292,7 +298,7 @@ impl ToolPort {
     pub(crate) fn environment(
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
-    ) -> Self {
+    ) -> Result<Self, ToolCompositionError> {
         Self::from_service(
             ToolPortKind::Environment,
             ToolExposure::Direct,
@@ -304,7 +310,7 @@ impl ToolPort {
     pub(crate) fn application(
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
-    ) -> Self {
+    ) -> Result<Self, ToolCompositionError> {
         Self::from_service(
             ToolPortKind::Application,
             ToolExposure::Direct,
@@ -313,15 +319,37 @@ impl ToolPort {
         )
     }
 
-    pub(crate) fn host(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
+    pub(crate) fn host(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Result<Self, ToolCompositionError> {
         Self::from_service(ToolPortKind::Host, ToolExposure::Direct, tools, policy)
     }
 
-    pub(crate) fn dynamic(
-        tools: Arc<dyn ToolService>,
-        policy: Arc<dyn ActionPolicyService>,
-    ) -> Self {
-        Self::from_service(ToolPortKind::Dynamic, ToolExposure::Direct, tools, policy)
+    pub(crate) fn dynamic(composition: crate::dynamic_tools::DynamicToolComposition) -> Self {
+        let kind = ToolPortKind::Dynamic;
+        let search =
+            ToolSearchMetadata::new(kind.search_label()).expect("static dynamic tool search label");
+        let contributions = composition
+            .definitions
+            .iter()
+            .cloned()
+            .map(|definition| {
+                ToolContribution::service(
+                    Arc::clone(&composition.tools),
+                    definition,
+                    ToolExposure::Direct,
+                    search.clone(),
+                )
+            })
+            .collect();
+        Self {
+            kind,
+            contributions,
+            catalog_only: Vec::new(),
+            policy: composition.policy,
+            command_terminals: None,
+        }
     }
 
     pub(crate) fn extension(
@@ -343,36 +371,40 @@ impl ToolPort {
         Ok(port)
     }
 
-    pub(crate) fn local(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
+    pub(crate) fn local(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Result<Self, ToolCompositionError> {
         Self::from_service(ToolPortKind::Local, ToolExposure::Direct, tools, policy)
     }
 
-    pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
+    pub(crate) fn mcp(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Result<Self, ToolCompositionError> {
         let definitions = tools.definitions();
         let exposed = project_mcp_service(Arc::clone(&tools));
-        let exposed_names = exposed
-            .definitions()
-            .into_iter()
-            .map(|tool| tool.name)
+        let mut port =
+            Self::from_service(ToolPortKind::Mcp, ToolExposure::Direct, exposed, policy)?;
+        let exposed_names = port
+            .contributions
+            .iter()
+            .map(|tool| tool.definition.name().clone())
             .collect::<BTreeSet<_>>();
-        let mut port = Self::from_service(ToolPortKind::Mcp, ToolExposure::Direct, exposed, policy);
         let search = ToolSearchMetadata::new(ToolPortKind::Mcp.search_label())
             .expect("static MCP search label");
-        port.contributions.extend(
-            tools
-                .app_tool_definitions()
-                .into_iter()
-                .filter(|definition| !exposed_names.contains(&definition.name))
-                .map(|definition| ToolContribution {
-                    category: tools.tool_category(&definition.name),
-                    tool_set: tools.tool_set(&definition.name),
-                    source_chain: tools.source_provenance(&definition.name),
-                    definition,
-                    exposure: ToolExposure::Hidden,
-                    search: search.clone(),
-                    runtime: ToolContributionRuntime::Service(Arc::clone(&tools)),
-                }),
-        );
+        for definition in tools
+            .app_tool_definitions()
+            .into_iter()
+            .filter(|definition| !exposed_names.contains(&definition.name))
+        {
+            port.contributions.push(ToolContribution::from_service(
+                Arc::clone(&tools),
+                &definition,
+                ToolExposure::Hidden,
+                search.clone(),
+            )?);
+        }
         // Large MCP catalogs call individual tools through the metadata broker. Keep those
         // source-owned members selectable without exposing all definitions to the model.
         port.catalog_only = definitions
@@ -388,7 +420,7 @@ impl ToolPort {
                 authority: ToolAuthorityDto::ProviderDefined,
             })
             .collect();
-        port
+        Ok(port)
     }
 
     fn from_service(
@@ -396,32 +428,28 @@ impl ToolPort {
         exposure: ToolExposure,
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
-    ) -> Self {
+    ) -> Result<Self, ToolCompositionError> {
         let search = ToolSearchMetadata::new(kind.search_label())
             .expect("static App Server tool search metadata is valid");
         let contributions = tools
             .definitions()
             .into_iter()
             .map(|definition| {
-                let source_chain = tools.source_provenance(&definition.name);
-                ToolContribution {
-                    category: tools.tool_category(&definition.name),
-                    tool_set: tools.tool_set(&definition.name),
-                    definition,
+                ToolContribution::from_service(
+                    Arc::clone(&tools),
+                    &definition,
                     exposure,
-                    search: search.clone(),
-                    runtime: ToolContributionRuntime::Service(Arc::clone(&tools)),
-                    source_chain,
-                }
+                    search.clone(),
+                )
             })
-            .collect();
-        Self {
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
             kind,
             contributions,
             catalog_only: Vec::new(),
             policy,
             command_terminals: None,
-        }
+        })
     }
 
     pub(crate) fn with_executor(
@@ -430,18 +458,12 @@ impl ToolPort {
         environment_id: ash_tools::EnvId,
         reviewer: Arc<dyn ToolExecutorReviewer>,
     ) -> Result<Self, ToolCompositionError> {
-        let host_definition = executor.definition();
-        let definition = to_protocol_tool_definition(&host_definition).map_err(|error| {
-            ToolCompositionError(format!(
-                "could not project executable tool '{}': {error}",
-                host_definition.name()
-            ))
-        })?;
+        let definition = executor.definition();
         let runtime = Arc::new(ToolExecutorRuntime::new(executor, environment_id, reviewer));
         let contribution = ToolContribution {
             category: runtime.executor().category(),
             tool_set: runtime.executor().tool_set(),
-            source_chain: vec![self.kind.source_provenance(&definition.name)],
+            source_chain: vec![self.kind.source_provenance(definition.name())],
             definition,
             exposure: runtime.executor().exposure(),
             search: ToolSearchMetadata::new(self.kind.search_label())
@@ -451,12 +473,12 @@ impl ToolPort {
         if let Some(existing) = self
             .contributions
             .iter_mut()
-            .find(|existing| existing.definition.name == contribution.definition.name)
+            .find(|existing| existing.definition.name() == contribution.definition.name())
         {
             if existing.exposure != ToolExposure::Hidden {
                 return Err(ToolCompositionError(format!(
                     "executable tool contribution duplicates visible tool {}",
-                    contribution.definition.name
+                    contribution.definition.name()
                 )));
             }
             *existing = contribution;
@@ -475,19 +497,22 @@ impl ToolPort {
         let contribution = self
             .contributions
             .iter_mut()
-            .find(|contribution| contribution.definition.name == *name)
+            .find(|contribution| contribution.definition.name() == name)
             .ok_or_else(|| {
                 ToolCompositionError(format!(
                     "cannot set exposure for unavailable tool contribution: {name}"
                 ))
             })?;
-        if let ToolContributionRuntime::Executor(runtime) = &contribution.runtime {
-            let expected_loading = runtime.executor().definition().loading();
-            let requested_loading = loading_for_exposure(exposure);
-            if expected_loading != requested_loading {
-                return Err(ToolCompositionError(format!(
-                    "executable tool {name} declares {expected_loading:?} loading and cannot use {exposure:?} exposure"
-                )));
+        let loading = loading_for_exposure(exposure);
+        match &contribution.runtime {
+            ToolContributionRuntime::Service(_) => contribution.definition.set_loading(loading),
+            ToolContributionRuntime::Executor(_) => {
+                let declared = contribution.definition.loading();
+                if declared != loading {
+                    return Err(ToolCompositionError(format!(
+                        "executable tool {name} declares {declared:?} loading and cannot use {exposure:?} exposure"
+                    )));
+                }
             }
         }
         contribution.exposure = exposure;
@@ -504,6 +529,42 @@ struct ToolContribution {
     search: ToolSearchMetadata,
     runtime: ToolContributionRuntime,
     source_chain: Vec<ToolSourceProvenance>,
+}
+
+impl ToolContribution {
+    fn from_service(
+        tools: Arc<dyn ToolService>,
+        definition: &ProtocolToolDefinition,
+        exposure: ToolExposure,
+        search: ToolSearchMetadata,
+    ) -> Result<Self, ToolCompositionError> {
+        let definition = from_protocol_tool_definition(definition, loading_for_exposure(exposure))
+            .map_err(|error| {
+                ToolCompositionError(format!(
+                    "could not validate model tool '{}': {error}",
+                    definition.name
+                ))
+            })?;
+        Ok(Self::service(tools, definition, exposure, search))
+    }
+
+    fn service(
+        tools: Arc<dyn ToolService>,
+        definition: ToolDefinition,
+        exposure: ToolExposure,
+        search: ToolSearchMetadata,
+    ) -> Self {
+        let name = definition.name();
+        Self {
+            category: tools.tool_category(name),
+            tool_set: tools.tool_set(name),
+            source_chain: tools.source_provenance(name),
+            definition,
+            exposure,
+            search,
+            runtime: ToolContributionRuntime::Service(tools),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -524,18 +585,14 @@ struct ToolGeneration {
     catalog: Vec<AgentToolCapabilityDto>,
 }
 
-struct BoundToolCall {
-    tools: Arc<dyn ToolService>,
-    policy: Arc<dyn ActionPolicyService>,
-    action_digest: Option<ActionDigest>,
-}
+type ToolTurn = (ThreadId, TurnId);
+type TurnToolCalls = BTreeMap<ToolCallId, Arc<ToolGeneration>>;
 
 /// Atomically switches future Tool safe points while retaining bindings for prepared calls.
 pub(crate) struct ReloadableToolPorts {
     incarnation: String,
     current: RwLock<Arc<ToolGeneration>>,
-    calls: Mutex<BTreeMap<ToolCallId, BoundToolCall>>,
-    policies: Mutex<BTreeMap<ActionDigest, Arc<dyn ActionPolicyService>>>,
+    turns: Mutex<BTreeMap<ToolTurn, TurnToolCalls>>,
     diagnostic: Mutex<Option<String>>,
 }
 
@@ -544,8 +601,7 @@ impl ReloadableToolPorts {
         Arc::new(Self {
             incarnation: new_registry_incarnation(),
             current: RwLock::new(Arc::new(tool_generation(initial))),
-            calls: Mutex::new(BTreeMap::new()),
-            policies: Mutex::new(BTreeMap::new()),
+            turns: Mutex::new(BTreeMap::new()),
             diagnostic: Mutex::new(None),
         })
     }
@@ -593,6 +649,7 @@ impl ReloadableToolPorts {
     pub(crate) fn tools(self: &Arc<Self>) -> Arc<dyn ToolService> {
         Arc::new(ReloadableToolService {
             ports: Arc::clone(self),
+            turn: None,
         })
     }
 
@@ -611,40 +668,41 @@ impl ReloadableToolPorts {
         )
     }
 
-    fn bind_call_in_generation(
+    fn pinned_generation(
         &self,
-        generation: &Arc<ToolGeneration>,
-        call: &ToolCall,
-        caller: ToolCallCaller,
-    ) -> Result<Option<ToolCallBinding>, CoreError> {
-        if let Some(tools) = self
-            .calls
+        turn: &ToolTurn,
+        call: &ToolCallId,
+    ) -> Result<Option<Arc<ToolGeneration>>, CoreError> {
+        self.turns
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .map(|binding| Arc::clone(&binding.tools))
-        {
-            return Ok(with_registry_incarnation(
-                tools.bind_call(call, caller)?,
-                &self.incarnation,
-            ));
+            .get(turn)
+            .map(|calls| calls.get(call).cloned())
+            .ok_or_else(|| CoreError::Cancelled("tool Turn is no longer active".into()))
+    }
+
+    fn pin_generation(
+        &self,
+        turn: &ToolTurn,
+        call: &ToolCallId,
+        generation: &Arc<ToolGeneration>,
+    ) -> Result<(), CoreError> {
+        let mut turns = self
+            .turns
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let calls = turns
+            .get_mut(turn)
+            .ok_or_else(|| CoreError::Cancelled("tool Turn is no longer active".into()))?;
+        let pinned = calls
+            .entry(call.clone())
+            .or_insert_with(|| Arc::clone(generation));
+        if !Arc::ptr_eq(pinned, generation) {
+            return Err(CoreError::Policy(format!(
+                "tool call {call} is already bound to another registry generation"
+            )));
         }
-        let binding =
-            with_registry_incarnation(generation.tools.bind_call(call, caller)?, &self.incarnation);
-        if binding.is_some() {
-            self.calls
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(
-                    call.id.clone(),
-                    BoundToolCall {
-                        tools: Arc::clone(&generation.tools),
-                        policy: Arc::clone(&generation.policy),
-                        action_digest: None,
-                    },
-                );
-        }
-        Ok(binding)
+        Ok(())
     }
 }
 
@@ -671,11 +729,61 @@ fn with_registry_incarnation(
     })
 }
 
+#[derive(Clone)]
 struct ReloadableToolService {
     ports: Arc<ReloadableToolPorts>,
+    turn: Option<ToolTurn>,
 }
 
 impl ToolService for ReloadableToolService {
+    fn scoped_to_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Option<Arc<dyn ToolService>> {
+        let turn = (thread_id.clone(), turn_id.clone());
+        self.ports
+            .turns
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry(turn.clone())
+            .or_default();
+        Some(Arc::new(Self {
+            ports: Arc::clone(&self.ports),
+            turn: Some(turn),
+        }))
+    }
+
+    fn finish_call(&self, scope: &ToolCallScope) {
+        let generation = self
+            .ports
+            .turns
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(&(scope.thread_id.clone(), scope.turn_id.clone()))
+            .and_then(|calls| calls.remove(&scope.call_id));
+        if let Some(generation) = generation {
+            generation.tools.finish_call(scope);
+        }
+    }
+
+    fn finish_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+        let turn = (thread_id.clone(), turn_id.clone());
+        let calls = self
+            .ports
+            .turns
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&turn);
+        for (call_id, generation) in calls.into_iter().flatten() {
+            generation.tools.finish_call(&ToolCallScope {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                call_id,
+            });
+        }
+    }
+
     fn list_app_tools(
         &self,
         origin: &ToolCall,
@@ -715,7 +823,6 @@ impl ToolService for ReloadableToolService {
             .tools
             .resolve_app_tool_call(origin, &inner, name, arguments, id)?;
         let binding = self
-            .ports
             .bind_call_in_generation(&generation, &call, ToolCallCaller::Direct)?
             .ok_or_else(|| CoreError::Policy("App tool registry binding is unavailable".into()))?;
         Ok((call, binding))
@@ -727,11 +834,11 @@ impl ToolService for ReloadableToolService {
         uri: &str,
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
-        self.bound_tools(call)
+        self.bound_tools(call)?
             .read_resource(call, uri, cancellation)
     }
 
-    fn definitions(&self) -> Vec<ToolDefinition> {
+    fn definitions(&self) -> Vec<ProtocolToolDefinition> {
         self.ports.generation().tools.definitions()
     }
 
@@ -753,7 +860,7 @@ impl ToolService for ReloadableToolService {
     fn model_definitions(
         &self,
         activated: &BTreeSet<ToolName>,
-    ) -> Result<Vec<ToolDefinition>, CoreError> {
+    ) -> Result<Vec<ProtocolToolDefinition>, CoreError> {
         self.ports.generation().tools.model_definitions(activated)
     }
 
@@ -763,10 +870,10 @@ impl ToolService for ReloadableToolService {
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
         let generation = self.ports.generation();
         let definitions = generation.tools.model_definitions(activated)?;
-        let ports = Arc::clone(&self.ports);
+        let tools = self.clone();
         Ok(
             ModelToolCatalogSnapshot::new(definitions).with_binder(move |call, caller| {
-                ports.bind_call_in_generation(&generation, call, caller)
+                tools.bind_call_in_generation(&generation, call, caller)
             }),
         )
     }
@@ -777,9 +884,9 @@ impl ToolService for ReloadableToolService {
     ) -> Result<ModelToolCatalogSnapshot, CoreError> {
         let generation = self.ports.generation();
         let catalog = generation.tools.code_mode_catalog_snapshot(activated)?;
-        let ports = Arc::clone(&self.ports);
+        let tools = self.clone();
         Ok(catalog.with_binder(move |call, caller| {
-            ports.bind_call_in_generation(&generation, call, caller)
+            tools.bind_call_in_generation(&generation, call, caller)
         }))
     }
 
@@ -789,8 +896,7 @@ impl ToolService for ReloadableToolService {
         caller: ToolCallCaller,
     ) -> Result<Option<ToolCallBinding>, CoreError> {
         let generation = self.ports.generation();
-        self.ports
-            .bind_call_in_generation(&generation, call, caller)
+        self.bind_call_in_generation(&generation, call, caller)
     }
 
     fn validate_call_binding(
@@ -812,21 +918,14 @@ impl ToolService for ReloadableToolService {
         }
         let mut inner_binding = binding.clone();
         inner_binding.registry_incarnation = None;
-        if let Some(bound) = self
-            .ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-        {
-            return bound
-                .tools
-                .validate_call_binding(call, Some(&inner_binding));
-        }
-        self.ports
-            .generation()
+        let generation = self.generation_for_call(call)?;
+        generation
             .tools
-            .validate_call_binding(call, Some(&inner_binding))
+            .validate_call_binding(call, Some(&inner_binding))?;
+        if let Some(turn) = &self.turn {
+            self.ports.pin_generation(turn, &call.id, &generation)?;
+        }
+        Ok(())
     }
 
     fn activated_tool_names(
@@ -844,7 +943,7 @@ impl ToolService for ReloadableToolService {
         &self,
         call: &ToolCall,
     ) -> Result<Option<ash_protocol::AgentRequest>, CoreError> {
-        self.bound_tools(call).execution_interaction(call)
+        self.bound_tools(call)?.execution_interaction(call)
     }
 
     fn resolve_execution_interaction(
@@ -853,12 +952,8 @@ impl ToolService for ReloadableToolService {
         request: &ash_protocol::AgentRequest,
         response: &ash_protocol::AgentResponse,
     ) -> Result<Option<ToolExecutionOutput>, CoreError> {
-        let tools = self.bound_tools(call);
-        let result = tools.resolve_execution_interaction(call, request, response);
-        if matches!(result, Ok(Some(_))) || result.is_err() {
-            self.release(call);
-        }
-        result
+        self.bound_tools(call)?
+            .resolve_execution_interaction(call, request, response)
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
@@ -881,7 +976,7 @@ impl ToolService for ReloadableToolService {
     }
 
     fn review_evidence(&self, call: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
-        self.bound_tools(call).review_evidence(call)
+        self.bound_tools(call)?.review_evidence(call)
     }
 
     fn execute(
@@ -890,10 +985,8 @@ impl ToolService for ReloadableToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let tools = self.bound_tools(call);
-        let result = tools.execute(call, authorization, cancellation);
-        self.release_if_terminal(call, &result);
-        result
+        self.bound_tools(call)?
+            .execute(call, authorization, cancellation)
     }
 
     fn execute_streaming(
@@ -903,10 +996,8 @@ impl ToolService for ReloadableToolService {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let tools = self.bound_tools(call);
-        let result = tools.execute_streaming(call, authorization, cancellation, sink);
-        self.release_if_terminal(call, &result);
-        result
+        self.bound_tools(call)?
+            .execute_streaming(call, authorization, cancellation, sink)
     }
 
     fn execute_with_facts(
@@ -916,10 +1007,8 @@ impl ToolService for ReloadableToolService {
         cancellation: &CancellationToken,
         facts: &ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let tools = self.bound_tools(call);
-        let result = tools.execute_with_facts(call, authorization, cancellation, facts);
-        self.release_if_terminal(call, &result);
-        result
+        self.bound_tools(call)?
+            .execute_with_facts(call, authorization, cancellation, facts)
     }
 
     fn execute_streaming_with_facts(
@@ -930,11 +1019,13 @@ impl ToolService for ReloadableToolService {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let tools = self.bound_tools(call);
-        let result =
-            tools.execute_streaming_with_facts(call, authorization, cancellation, facts, sink);
-        self.release_if_terminal(call, &result);
-        result
+        self.bound_tools(call)?.execute_streaming_with_facts(
+            call,
+            authorization,
+            cancellation,
+            facts,
+            sink,
+        )
     }
 
     fn execute_streaming_with_facts_and_interactions(
@@ -946,100 +1037,78 @@ impl ToolService for ReloadableToolService {
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let tools = self.bound_tools(call);
-        let result = tools.execute_streaming_with_facts_and_interactions(
-            call,
-            authorization,
-            cancellation,
-            facts,
-            interactions,
-            sink,
-        );
-        self.release_if_terminal(call, &result);
-        result
+        self.bound_tools(call)?
+            .execute_streaming_with_facts_and_interactions(
+                call,
+                authorization,
+                cancellation,
+                facts,
+                interactions,
+                sink,
+            )
     }
 }
 
 impl ReloadableToolService {
+    fn bind_call_in_generation(
+        &self,
+        generation: &Arc<ToolGeneration>,
+        call: &ToolCall,
+        caller: ToolCallCaller,
+    ) -> Result<Option<ToolCallBinding>, CoreError> {
+        let binding = generation.tools.bind_call(call, caller)?;
+        if let Some(turn) = &self.turn
+            && binding.is_some()
+        {
+            self.ports.pin_generation(turn, &call.id, generation)?;
+        }
+        Ok(with_registry_incarnation(binding, &self.ports.incarnation))
+    }
+
+    fn generation_for_call(&self, call: &ToolCall) -> Result<Arc<ToolGeneration>, CoreError> {
+        if let Some(turn) = &self.turn
+            && let Some(generation) = self.ports.pinned_generation(turn, &call.id)?
+        {
+            return Ok(generation);
+        }
+        Ok(self.ports.generation())
+    }
+
     fn prepare_bound(
         &self,
         call: &ToolCall,
         facts: Option<&ToolExecutionFacts>,
     ) -> Result<ActionReviewRequest, CoreError> {
-        let generation = self.ports.generation();
-        let (tools, policy) = self
-            .ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .map(|binding| (Arc::clone(&binding.tools), Arc::clone(&binding.policy)))
-            .unwrap_or_else(|| {
-                (
-                    Arc::clone(&generation.tools),
-                    Arc::clone(&generation.policy),
-                )
-            });
+        let generation = self.generation_for_call(call)?;
+        if let Some(turn) = &self.turn {
+            self.ports.pin_generation(turn, &call.id, &generation)?;
+        }
         let request = match facts {
-            Some(facts) => tools.prepare_with_facts(call, facts)?,
-            None => tools.prepare(call)?,
+            Some(facts) => generation.tools.prepare_with_facts(call, facts)?,
+            None => generation.tools.prepare(call)?,
         };
-        let digest = request.action().digest().clone();
-        self.ports
-            .policies
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(digest.clone(), Arc::clone(&policy));
-        self.ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .entry(call.id.clone())
-            .and_modify(|binding| binding.action_digest = Some(digest.clone()))
-            .or_insert(BoundToolCall {
-                tools,
-                policy,
-                action_digest: Some(digest),
-            });
+        if let Some(turn @ (thread_id, turn_id)) = &self.turn {
+            let scope = ToolCallScope {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                call_id: call.id.clone(),
+            };
+            // Preparation can finish after the Turn was interrupted and its leases released.
+            if !matches!(
+                self.ports.pinned_generation(turn, &call.id),
+                Ok(Some(pinned)) if Arc::ptr_eq(&pinned, &generation)
+            ) {
+                generation.tools.finish_call(&scope);
+                return Err(CoreError::Cancelled("tool call is no longer active".into()));
+            }
+            return Ok(request.with_tool_call_scope(scope));
+        }
         Ok(request)
     }
 
-    fn bound_tools(&self, call: &ToolCall) -> Arc<dyn ToolService> {
-        self.ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .map(|binding| Arc::clone(&binding.tools))
-            .unwrap_or_else(|| Arc::clone(&self.ports.generation().tools))
-    }
-
-    fn release(&self, call: &ToolCall) {
-        let binding = self
-            .ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&call.id);
-        if let Some(binding) = binding
-            && let Some(action_digest) = binding.action_digest
-        {
-            self.ports
-                .policies
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&action_digest);
-        }
-    }
-
-    fn release_if_terminal(
-        &self,
-        call: &ToolCall,
-        result: &Result<ToolExecutionOutput, CoreError>,
-    ) {
-        if !matches!(result, Ok(ToolExecutionOutput::SandboxDenied(_))) {
-            self.release(call);
-        }
+    fn bound_tools(&self, call: &ToolCall) -> Result<Arc<dyn ToolService>, CoreError> {
+        self.generation_for_call(call)
+            .map(|generation| Arc::clone(&generation.tools))
     }
 }
 
@@ -1076,15 +1145,19 @@ impl ActionPolicyService for ReloadableActionPolicyService {
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
-        let policy = self
-            .ports
-            .policies
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(request.action().digest())
-            .cloned()
-            .unwrap_or_else(|| Arc::clone(&self.ports.generation().policy));
-        policy.decide(request, cancellation)
+        let generation = match request.tool_call_scope() {
+            Some(scope) => self
+                .ports
+                .pinned_generation(
+                    &(scope.thread_id.clone(), scope.turn_id.clone()),
+                    &scope.call_id,
+                )?
+                .ok_or_else(|| {
+                    CoreError::Policy("tool call policy binding is unavailable".into())
+                })?,
+            None => self.ports.generation(),
+        };
+        generation.policy.decide(request, cancellation)
     }
 }
 
@@ -1106,7 +1179,7 @@ fn tool_generation(combined: Option<CombinedToolPorts>) -> ToolGeneration {
 struct EmptyToolService;
 
 impl ToolService for EmptyToolService {
-    fn definitions(&self) -> Vec<ToolDefinition> {
+    fn definitions(&self) -> Vec<ProtocolToolDefinition> {
         Vec::new()
     }
 
@@ -1192,8 +1265,8 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
                 .map_err(|error| ToolCompositionError(error.to_string()))?;
             let overlay = port.contributions.iter().any(|contribution| {
                 contribution.exposure == ToolExposure::Hidden
-                    && contribution.definition.name == name
-                    && contribution.definition.description == tool.description
+                    && contribution.definition.name() == &name
+                    && contribution.definition.description() == tool.description
                     && contribution.source_chain == tool.source_chain
             });
             if overlay {
@@ -1208,10 +1281,10 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             catalog_only.push(tool);
         }
         for contribution in port.contributions {
-            if !names.insert(contribution.definition.name.clone()) {
+            if !names.insert(contribution.definition.name().clone()) {
                 return Err(ToolCompositionError(format!(
                     "duplicate model tool name during App Server composition: {}",
-                    contribution.definition.name
+                    contribution.definition.name()
                 )));
             }
             definitions.push(CollectedToolDefinition {
@@ -1279,15 +1352,14 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             }
         }
     }
-    let (registry, routes) = build_registry(registry_generation, &definitions)?;
     let mut catalog = definitions
         .iter()
         // Hidden App routes reuse the existing metadata catalog row instead of exposing a second choice.
-        .filter(|collected| !catalog_overlays.contains(&collected.contribution.definition.name))
+        .filter(|collected| !catalog_overlays.contains(collected.contribution.definition.name()))
         .map(|collected| AgentToolCapabilityDto {
             category: collected.contribution.category,
-            name: collected.contribution.definition.name.to_string(),
-            description: collected.contribution.definition.description.clone(),
+            name: collected.contribution.definition.name().to_string(),
+            description: collected.contribution.definition.description().to_owned(),
             source: match collected.kind {
                 ToolPortKind::Environment => ToolSourceDto::Environment,
                 ToolPortKind::Dynamic => ToolSourceDto::Dynamic,
@@ -1313,17 +1385,36 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             tool_sets
                 .entry(id.into())
                 .or_default()
-                .push(collected.contribution.definition.name.clone());
+                .push(collected.contribution.definition.name().clone());
         }
     }
     let tool_sets = tool_sets
         .into_iter()
         .map(|(id, tools)| ash_protocol::ToolSetDefinition { id, tools })
         .collect();
-    let protocol_definitions = definitions
-        .into_iter()
-        .map(|collected| collected.contribution.definition)
-        .collect::<Vec<_>>();
+    let definition_names = definitions
+        .iter()
+        .map(|collected| {
+            let definition = &collected.contribution.definition;
+            match definition.invocation() {
+                ToolInvocationKind::Function { .. } => Ok(definition.name().clone()),
+                ToolInvocationKind::Freeform { .. } => Err(ToolCompositionError(format!(
+                    "could not project executable tool '{}': {}",
+                    definition.name(),
+                    ProtocolToolAdapterError::FreeformToolsUnsupported,
+                ))),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let (registry, routes) = build_registry(registry_generation, definitions)?;
+    let definition_order = definition_names
+        .iter()
+        .map(|name| {
+            registry
+                .position(name)
+                .expect("registry contains every contribution")
+        })
+        .collect();
     let search = registry
         .has_deferred_tools()
         .then(|| ToolSearchRuntime::new(Arc::clone(&registry), &search_options));
@@ -1354,7 +1445,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         tools: Arc::new(CompositeToolService {
             tool_sets,
             categories,
-            definitions: protocol_definitions,
+            definition_order,
             routes,
             registry,
             search,
@@ -1384,7 +1475,7 @@ fn tool_authority(tool: &CollectedToolDefinition) -> ToolAuthorityDto {
             ToolPortKind::Local => unreachable!(),
         };
     }
-    match tool.contribution.definition.name.as_str() {
+    match tool.contribution.definition.name().as_str() {
         "read_file" | "grep" | "glob" => ToolAuthorityDto::DirectoryRead,
         "write_file" | "edit" | "apply_patch" => ToolAuthorityDto::DirectoryWrite,
         "shell-command" | "shell-session" => ToolAuthorityDto::ProcessExecution,
@@ -1396,7 +1487,7 @@ fn tool_source_chain(tool: &CollectedToolDefinition) -> Vec<ToolSourceProvenance
     if tool.contribution.source_chain.is_empty() {
         vec![
             tool.kind
-                .source_provenance(&tool.contribution.definition.name),
+                .source_provenance(tool.contribution.definition.name()),
         ]
     } else {
         tool.contribution.source_chain.clone()
@@ -1411,7 +1502,7 @@ struct CollectedToolDefinition {
 
 fn build_registry(
     generation: ToolRegistryGeneration,
-    definitions: &[CollectedToolDefinition],
+    definitions: Vec<CollectedToolDefinition>,
 ) -> Result<
     (
         Arc<ToolRegistrySnapshot>,
@@ -1422,25 +1513,17 @@ fn build_registry(
     let mut builder = ToolRegistryBuilder::new(generation);
     let mut routes = BTreeMap::new();
     for collected in definitions {
-        let loading = loading_for_exposure(collected.contribution.exposure);
-        let host_definition =
-            from_protocol_tool_definition(&collected.contribution.definition, loading).map_err(
-                |error| {
-                    ToolCompositionError(format!(
-                        "could not validate model tool '{}': {error}",
-                        collected.contribution.definition.name
-                    ))
-                },
-            )?;
+        let source_chain = tool_source_chain(&collected);
+        let contribution = collected.contribution;
         let runtime_key = ToolRuntimeKey::new(format!(
             "{}:{}:{}",
             collected.kind.runtime_namespace(),
             collected.service_index,
-            collected.contribution.definition.name
+            contribution.definition.name()
         ))
         .map_err(|error| ToolCompositionError(error.to_string()))?;
         if routes
-            .insert(runtime_key.clone(), collected.contribution.runtime.clone())
+            .insert(runtime_key.clone(), contribution.runtime)
             .is_some()
         {
             return Err(ToolCompositionError(format!(
@@ -1450,13 +1533,13 @@ fn build_registry(
         builder
             .register(
                 ToolRegistryRegistration::new(
-                    host_definition,
+                    contribution.definition,
                     runtime_key,
-                    collected.contribution.exposure,
-                    collected.contribution.search.clone(),
+                    contribution.exposure,
+                    contribution.search,
                 )
                 .map_err(|error| ToolCompositionError(error.to_string()))?
-                .with_source_chain(tool_source_chain(collected)),
+                .with_source_chain(source_chain),
             )
             .map_err(|error| ToolCompositionError(error.to_string()))?;
     }
@@ -1470,7 +1553,8 @@ fn build_registry(
 struct CompositeToolService {
     tool_sets: Vec<ash_protocol::ToolSetDefinition>,
     categories: BTreeMap<ToolName, Option<ash_protocol::ToolCategory>>,
-    definitions: Vec<ToolDefinition>,
+    /// Composition order for the full catalog. Model selection uses registry order.
+    definition_order: Vec<usize>,
     routes: BTreeMap<ToolRuntimeKey, ToolContributionRuntime>,
     registry: Arc<ToolRegistrySnapshot>,
     search: Option<ToolSearchRuntime>,
@@ -1559,6 +1643,22 @@ pub(crate) fn product_tool_profiles() -> Vec<ash_protocol::ToolProductProfile> {
 }
 
 impl ToolService for CompositeToolService {
+    fn finish_call(&self, scope: &ToolCallScope) {
+        for route in self.routes.values() {
+            if let ToolContributionRuntime::Executor(executor) = route {
+                executor.finish_call(scope);
+            }
+        }
+    }
+
+    fn finish_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+        for route in self.routes.values() {
+            if let ToolContributionRuntime::Executor(executor) = route {
+                executor.finish_turn(thread_id, turn_id);
+            }
+        }
+    }
+
     fn tool_sets(&self) -> Vec<ash_protocol::ToolSetDefinition> {
         self.tool_sets.clone()
     }
@@ -1643,12 +1743,10 @@ impl ToolService for CompositeToolService {
             if let Some(search) = &self.search {
                 names.insert(search.definition().name.clone());
             }
-            if names.iter().any(|name| {
-                !self
-                    .definitions
-                    .iter()
-                    .any(|definition| &definition.name == name)
-            }) {
+            if names
+                .iter()
+                .any(|name| self.registry.resolve(name).is_none())
+            {
                 for name in [MCP_SEARCH_TOOLS_NAME, MCP_CALL_TOOL_NAME] {
                     let name = ToolName::new(name).expect("static MCP bridge name");
                     if self.categories.contains_key(&name) {
@@ -1710,8 +1808,16 @@ impl ToolService for CompositeToolService {
         }
     }
 
-    fn definitions(&self) -> Vec<ToolDefinition> {
-        let mut definitions = self.definitions.clone();
+    fn definitions(&self) -> Vec<ProtocolToolDefinition> {
+        let entries = self.registry.entries();
+        let mut definitions = self
+            .definition_order
+            .iter()
+            .map(|&position| {
+                to_protocol_tool_definition(entries[position].definition())
+                    .expect("App Server composition accepts only function tools")
+            })
+            .collect::<Vec<_>>();
         if let Some(search) = &self.search {
             definitions.push(search.definition().clone());
         }
@@ -1809,28 +1915,13 @@ impl ToolService for CompositeToolService {
     fn model_definitions(
         &self,
         activated: &BTreeSet<ToolName>,
-    ) -> Result<Vec<ToolDefinition>, CoreError> {
-        let by_name = self
-            .definitions
-            .iter()
-            .map(|definition| (definition.name.clone(), definition))
-            .collect::<BTreeMap<_, _>>();
+    ) -> Result<Vec<ProtocolToolDefinition>, CoreError> {
         let mut definitions = self
             .registry
             .model_definitions(activated)
-            .map(|definition| {
-                by_name
-                    .get(definition.name())
-                    .cloned()
-                    .cloned()
-                    .ok_or_else(|| {
-                        CoreError::Execution(format!(
-                            "registry model definition is unavailable: {}",
-                            definition.name()
-                        ))
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(to_protocol_tool_definition)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
         if let Some(search) = &self.search {
             definitions.push(search.definition().clone());
         }
@@ -2270,7 +2361,7 @@ struct ToolSearchOutputMatch {
 
 struct ToolSearchRuntime {
     registry: Arc<ToolRegistrySnapshot>,
-    definition: ToolDefinition,
+    definition: ProtocolToolDefinition,
     state: ToolSearchRuntimeState,
 }
 
@@ -2289,7 +2380,7 @@ impl ToolSearchRuntime {
         }
     }
 
-    fn definition(&self) -> &ToolDefinition {
+    fn definition(&self) -> &ProtocolToolDefinition {
         &self.definition
     }
 
@@ -2449,8 +2540,8 @@ impl ToolSearchRuntime {
     }
 }
 
-fn tool_search_definition() -> ToolDefinition {
-    ToolDefinition {
+fn tool_search_definition() -> ProtocolToolDefinition {
+    ProtocolToolDefinition {
         name: ToolName::new(TOOL_SEARCH_TOOL_NAME).expect("static tool search name is valid"),
         description: "Search the current authorized tool catalog for capabilities needed by the task. Matching tools are loaded for the next model step.".into(),
         parameters: serde_json::json!({

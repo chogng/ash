@@ -224,8 +224,13 @@ impl ToolRegistrySnapshot {
         &self.entries
     }
 
+    /// Returns the entry position within this snapshot.
+    pub fn position(&self, name: &ToolName) -> Option<usize> {
+        self.by_name.get(name).copied()
+    }
+
     pub fn resolve(&self, name: &ToolName) -> Option<&RegisteredTool> {
-        self.by_name.get(name).map(|index| &self.entries[*index])
+        self.position(name).map(|index| &self.entries[index])
     }
 
     pub fn has_deferred_tools(&self) -> bool {

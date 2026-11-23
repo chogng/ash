@@ -1645,7 +1645,7 @@ impl AppServer {
         let Some(composition) = compose_dynamic_tools(specifications)? else {
             return Ok(self);
         };
-        let port = ToolPort::dynamic(composition.tools, composition.policy);
+        let port = ToolPort::dynamic(composition);
         if let Some(tools) = self
             .local_env_host
             .as_ref()
