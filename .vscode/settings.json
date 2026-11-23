@@ -1,5 +1,16 @@
 {
 	"files.eol": "\n",
+	// Extension-initiated file searches can skip .gitignore but still honor files.exclude.
+	"files.exclude": {
+		".build": true,
+		"bazel-*": true,
+		"target": true
+	},
+	"files.watcherExclude": {
+		".build/**": true,
+		"bazel-*/**": true,
+		"target/**": true
+	},
 	"[typescript][typescriptreact][javascript][javascriptreact]": {
 		"editor.defaultFormatter": "wdomitrz.simple-lsp-client",
 		"editor.insertSpaces": false,
