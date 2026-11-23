@@ -357,6 +357,8 @@ import { ITeamsManagementService } from '../services/teams/common/teamsManagemen
 import { SessionsAccountMenu } from '../contrib/accounts/browser/sessionsAccountMenu.js';
 import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modernUI.contribution.js';
 import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPreferences.js';
+import { registerWorktreeStorageSuggestion } from '../contrib/preferences/browser/sessionsStorageContent.js';
+import { IProfileStorageService } from '../../platform/storage/common/profileStorageService.js';
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../common/sessionCommands.js';
@@ -1098,6 +1100,15 @@ export abstract class Workbench extends Disposable {
 			// Code may start with only its tab strip. An explicit Preferences handoff needs visible editor content.
 			this.layoutService.showPart('editor');
 		}));
+		if (services.has(IProfileStorageService)) {
+			this._register(registerWorktreeStorageSuggestion(
+				services.get(ISessionsManagementService), services.get(IProfileStorageService), services.get(INotificationService),
+				async () => {
+					const action = await preferences.openStorage();
+					if (action) await commandService.executeCommand(action === 'restore' ? 'agentSession.restore' : 'agentSession.delete');
+				},
+			));
+		}
 		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
 			const filter = /^@(plugins|skills|connections|connectors)(?:\s+|$)/iu.exec(options.query ?? '');
 			const section = filter?.[1]?.toLowerCase() ?? options.view ?? options.capabilityKind;

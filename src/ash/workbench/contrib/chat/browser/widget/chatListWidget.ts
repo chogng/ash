@@ -66,6 +66,7 @@ interface ChatListWidgetOptions {
 	readonly codeBlockPresentation?: 'card';
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
 	readonly prepareAddSelectionToChat?: (text: string) => (() => void) | undefined;
+	readonly prepareSideChat?: (turnId: string) => ChatContextMenuActionContext['sideChat'];
 	readonly canEditRequest?: () => boolean;
 	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
 	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
@@ -600,9 +601,16 @@ export class ChatListWidget extends DomWidget {
 
 		// The menu can take focus and the transcript can stream while it is open.
 		const { html } = this.getSelectionHtml(selection);
-		const actionContext = new ChatContextMenuActionContext(text, html, this.options.prepareAddSelectionToChat?.(text));
+		const start = ranges[0]?.startContainer;
+		const startRow = (isElement(start) ? start : start?.parentElement)?.closest<HTMLElement>('[data-item-id]');
+		const itemId = startRow?.dataset.itemId;
+		const turnId = itemId && this.renderedItems.get(itemId)?.item.sideChatTurnId;
+		const sideChat = turnId && startRow && ranges.every(range => startRow.contains(range.startContainer) && startRow.contains(range.endContainer))
+			? this.options.prepareSideChat?.(turnId) : undefined;
+		const actionContext = new ChatContextMenuActionContext(text, html, this.options.prepareAddSelectionToChat?.(text), sideChat);
 		using menuContext = this.contextKeys.createScoped(this.transcript.ownerDocument.createElement('div'));
 		ChatContextKeys.contextMenuCanAddSelectionToChat.bindTo(menuContext).set(!!actionContext.addToChat);
+		ChatContextKeys.contextMenuCanAskInSideChat.bindTo(menuContext).set(!!actionContext.sideChat);
 		const actions = getFlatContextMenuActions(
 			this.menuService.getMenuActions(MenuId.ChatContext, { shouldForwardArgs: true }, menuContext),
 		);

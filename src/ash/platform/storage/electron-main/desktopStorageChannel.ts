@@ -1,4 +1,4 @@
-import { lstat, opendir, realpath } from 'node:fs/promises';
+import { lstat, opendir, realpath, statfs } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { CancellationToken, throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
@@ -23,6 +23,7 @@ export class DesktopStorageChannel implements IServerChannel {
 		]);
 		const covered = [profile];
 		if (worktrees && !isWithin(worktrees, profile)) covered.push(worktrees);
+		const stats = worktrees && await statfs(worktrees).catch(() => undefined);
 		let bytes = 0;
 		let complete = true;
 		const pending = [root];
@@ -44,7 +45,7 @@ export class DesktopStorageChannel implements IServerChannel {
 				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') complete = false;
 			}
 		}
-		return { root, bytes, complete };
+		return { root, bytes, complete, ...(stats ? { worktreeAvailableBytes: stats.bavail * stats.bsize } : {}) };
 	}
 }
 

@@ -8,10 +8,11 @@ import { URI } from '../../../base/common/uri.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
-import { parseWorkspace, type IWorkspaceFolder } from '../../workspace/common/workspace.js';
+import { getWorkspaceFolderSessionDirectory, parseWorkspace, type IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
-import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
+import { getProviderRemoteWorkspace, getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
+import { localize } from '../../../nls.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, hasDevelopmentPermissions, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
@@ -25,6 +26,23 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	if (generation !== client.generation || client.state !== 'ready') throw canceled();
+	const [folder] = workspace.folders;
+	const runtime = folder && getProviderRemoteWorkspace(folder.uri);
+	if (folder && runtime) {
+		const sessionDirectory = getWorkspaceFolderSessionDirectory(folder);
+		const unavailable = () => new Error(localize('workspace.runtimeSessionUnavailable', 'The container workspace for this session is unavailable.'));
+		if (!sessionDirectory || workspace.folders.length !== 1 || runtime.providerId !== 'ash.dev-containers') throw unavailable();
+		options.onBindingQueued?.();
+		// The gateway's catalog associates remote Session IDs with their execution hosts.
+		const { sessions } = await client.request(APP_SERVER_METHODS['session/list'], {});
+		if (generation !== client.generation || client.state !== 'ready') throw canceled();
+		const target = sessions.find(session => session.sessionId === sessionDirectory.sessionId)?.executionTarget;
+		if (target?.type !== 'provider' || target.providerId !== runtime.providerId || target.workspace !== runtime.workspace) throw unavailable();
+		const directory = await client.request(APP_SERVER_METHODS['env/dir/read'], { dirId: folder.id });
+		if (generation !== client.generation || client.state !== 'ready') throw canceled();
+		if (!directory.permissions.includes('readFiles')) throw unavailable();
+		return;
+	}
 	await initializeWorkspaceDirectories(client, workspaceTrust, trustApi, workspace.folders.map(folder => ({
 		id: folder.id,
 		path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,

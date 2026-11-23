@@ -1,6 +1,6 @@
 import type { IContentSearchApi } from '../common/searchApi.js';
 import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from '../common/search.js';
-import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
+import { getWorkspaceFolderSessionDirectory, type IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { FileKind, type IFileService } from '../../files/common/files.js';
 import { match } from '../../../base/common/glob.js';
@@ -90,8 +90,10 @@ export class BrowserContentSearchService implements IContentSearchService {
 		options: IContentSearchOptions = {},
 	): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
+		const sessionDirectory = getWorkspaceFolderSessionDirectory(folder);
+		const directory = sessionDirectory ? { sessionDirectory } : { dirId: folder.id };
 		const start = this.api.start({
-			dirId: folder.id,
+			...directory,
 			query: query.wholeWord ? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b` : query.text,
 			patternKind: query.wholeWord ? 'regex' : query.patternKind,
 			freshness: query.freshness ?? 'current',
@@ -106,7 +108,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 		} catch (error) {
 			if (options.signal?.aborted) {
 				// Cancellation ends renderer waiting now; a handle delivered later still belongs to this call.
-				void start.then(job => this.api.cancel({ dirId: folder.id, searchId: job.searchId })).catch(() => { /* Failed starts have no handle; a closed connection already owns cleanup. */ });
+				void start.then(job => this.api.cancel({ ...directory, searchId: job.searchId })).catch(() => { /* Failed starts have no handle; a closed connection already owns cleanup. */ });
 			}
 			throwIfAborted(options.signal);
 			throw error;
@@ -116,7 +118,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 			while (true) {
 				throwIfAborted(options.signal);
 				const read = this.api.read({
-					dirId: folder.id,
+					...directory,
 					searchId: started.searchId,
 					afterMatch: cursor,
 					maxMatches: RESULT_BATCH_SIZE,
@@ -145,7 +147,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 			throw error;
 		} finally {
 			await this.api.cancel({
-				dirId: folder.id,
+				...directory,
 				searchId: started.searchId,
 			}).catch(() => {
 				// Cancellation is cleanup after completion or connection loss.

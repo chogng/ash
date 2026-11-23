@@ -17,6 +17,7 @@ import { observableValue } from '../../../../../base/common/observable.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../../../platform/chat/common/sessionArchiveActions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -104,6 +105,7 @@ async function fixture(wording: 'archive' | 'done', archived = false, catalog?: 
 	await sessions.initialize();
 	const configuration = resources.add(new WorkbenchConfigurationService({ source: JSON.stringify({ [ChatSessionArchiveActionWordingSettingId]: wording }) }));
 	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IProgressService, { withProgress: (_options, run) => run({ report() { } }) });
 	services.registerInstance(ISessionsManagementService, sessions);
 	const opened: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
@@ -280,6 +282,61 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 	}
 }
+
+test('Archive All continues after a provider failure and reports the localized result', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using current = await fixture('archive');
+		const { provider, sessions, commands, services } = current;
+		services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
+		const archive = provider.archive.bind(provider);
+		const failure = new Error('Provider refused to archive first');
+		provider.archive = async value => {
+			if (value.sessionId === 'first') throw failure;
+			return archive(value);
+		};
+
+		await assert.rejects(commands.executeCommand('workbench.action.chat.archiveAllAgentSessions'), {
+			message: '已归档 1 个会话，共 2 个。',
+			errors: [failure],
+		});
+		assert.deepEqual(provider.archived, ['second']);
+		assert.deepEqual(sessions.sessions.map(({ sessionId, status }) => ({ sessionId, status })), [
+			{ sessionId: 'first', status: 'active' },
+			{ sessionId: 'second', status: 'archived' },
+		]);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
+test('Archive All keeps at most three archives in flight and waits for every result', async () => {
+	using current = await fixture('archive');
+	const { provider, sessions, commands, services } = current;
+	provider.items.push(session('third'), session('fourth'));
+	await sessions.refresh();
+	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
+	const release = new DeferredPromise<void>();
+	const started = new DeferredPromise<void>();
+	const archive = provider.archive.bind(provider);
+	let inFlight = 0;
+	let maximum = 0;
+	provider.archive = async value => {
+		inFlight++;
+		maximum = Math.max(maximum, inFlight);
+		if (inFlight === 3) void started.complete();
+		try { await release.p; return await archive(value); }
+		finally { inFlight--; }
+	};
+	const archiving = commands.executeCommand('workbench.action.chat.archiveAllAgentSessions');
+	await started.p;
+	assert.equal(inFlight, 3);
+	assert.deepEqual(provider.archived, []);
+	await release.complete();
+	await archiving;
+	assert.equal(maximum, 3);
+	assert.equal(sessions.sessions.filter(item => item.status === 'archived').length, 4);
+});
 
 test('restoring a selected archived Session opens its canonical root', async () => {
 	using current = await fixture('done', true);

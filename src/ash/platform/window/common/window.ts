@@ -1,6 +1,6 @@
 import { isMacintosh, isWeb } from '../../../base/common/platform.js';
 import type { IConfigurationService } from '../../configuration/common/configuration.js';
-import { createSshRemoteAuthority } from '../../remote/common/remote.js';
+import { createSshRemoteAuthority, getProviderRemoteWorkspace } from '../../remote/common/remote.js';
 import { isRecord } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
 import { parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
@@ -71,14 +71,20 @@ export function validateOpenIdeSessionRequest(value: unknown): { folder?: URI; c
 		return URI.parse(input, true);
 	};
 	const folder = resource(value.folder);
-	if (folder?.scheme === ASH_REMOTE_SCHEME && folder.authority.startsWith('ssh+')) {
+	const conversation = resource(value.conversation);
+	const runtime = folder && getProviderRemoteWorkspace(folder);
+	if (folder && runtime) {
+		if (runtime.providerId !== 'ash.dev-containers' || runtime.hostAuthority || !conversation) {
+			throw new TypeError('Invalid IDE session runtime');
+		}
+		getRemoteWorkspacePath(folder);
+	} else if (folder?.scheme === ASH_REMOTE_SCHEME && folder.authority.startsWith('ssh+')) {
 		getRemoteWorkspacePath(folder);
 	} else if (folder && (folder.scheme !== 'file' || !folder.path.startsWith('/') || folder.query || folder.fragment || /[\x00-\x1f\x7f]/u.test(folder.fsPath))) {
 		throw new TypeError('Invalid IDE session folder');
 	}
-	const conversation = resource(value.conversation);
 	if (conversation && parseOpenSessionLinkUri(conversation).connectionAuthority !== 'local' && folder?.scheme === ASH_REMOTE_SCHEME) {
-		throw new TypeError('A conversation opened with an SSH workspace must address the destination IDE’s ambient host');
+		throw new TypeError('A conversation opened with a remote workspace must address the destination IDE’s ambient host');
 	}
 	return { folder, conversation };
 }

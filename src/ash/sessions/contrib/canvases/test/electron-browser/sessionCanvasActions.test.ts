@@ -8,16 +8,90 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { MenusRegistry, isMenuItem } from '../../../../../platform/actions/common/actions.js';
+import { MenusRegistry, isMenuItem, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import type { ICanvas } from '../../../../../workbench/common/canvasReference.js';
 import { ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, type ICanvasDefinition } from '../../../../../workbench/contrib/canvases/common/canvas.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
-import { OPEN_SESSION_CANVAS_COMMAND_ID, REOPEN_SESSION_CANVAS_COMMAND_ID, registerSessionCanvasActions } from '../../electron-browser/sessionCanvasActions.js';
+import { NewCanvasSessionAction, OPEN_SESSION_CANVAS_COMMAND_ID, REOPEN_SESSION_CANVAS_COMMAND_ID, registerSessionCanvasActions } from '../../electron-browser/sessionCanvasActions.js';
 import { Menus } from '../../../../browser/menus.js';
+import { IPinnedCanvasService } from '../../browser/pinnedCanvases.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 
 suite('Sessions Canvas actions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('New Canvas Session creates only after a pick and pins the first Canvas without sending a turn', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		resources.add(registerAction2(NewCanvasSessionAction));
+		const definitions: ICanvasDefinition[] = [
+			{ extensionId: 'test.canvases', canvasId: 'board', extensionSource: 'user', displayName: 'Board', description: '', requiresInput: false },
+			{ extensionId: 'test.canvases', canvasId: 'form', extensionSource: 'user', displayName: 'Form', description: '', requiresInput: true },
+		];
+		const calls: unknown[] = [];
+		const canvasResource = URI.parse('agent-host-canvas:/board');
+		const live = observableValue<readonly ICanvas[]>('canvases', []);
+		services.registerInstance(ISessionsManagementService, {
+			resolveNewSessionTarget: async () => ({ providerId: 'provider', workspace: { type: 'local', root: '/other' } }),
+			startNewSession: async (title, options) => {
+				calls.push({ title, workspace: options?.workspace, providerId: options?.providerId });
+				return { session: { sessionId: 'session', providerId: 'provider' }, threadId: 'root' };
+			},
+		} as ISessionsManagementService);
+		services.registerInstance(ICanvasService, { enabled: constObservable(true) } as ICanvasService);
+		services.registerInstance(IPinnedCanvasService, {
+			pin: reference => { calls.push({ pinned: reference.canvas }); return true; },
+			show: async target => { calls.push({ shown: target }); },
+		} as IPinnedCanvasService);
+		services.registerInstance(IAgentHostCanvasCollection, {
+			listProviderCanvases: async provider => { assert.equal(provider, 'provider'); return definitions; },
+			createContext: owner => ({
+				owner, canvases: live, definitionProvider: {
+					onDidChangeDefinitions: Event.None, listCanvases: async () => definitions,
+					openCanvas: async (definition, instanceId) => {
+						calls.push({ thread: owner.chat.path, canvas: definition.canvasId });
+						live.set([{ resource: canvasResource, source: URI.parse('https://example.test/board'), title: 'Board', instanceId, extensionId: definition.extensionId, canvasId: definition.canvasId }], undefined);
+					},
+				},
+			}),
+		} satisfies Pick<IAgentHostCanvasCollection, 'listProviderCanvases' | 'createContext'> as unknown as IAgentHostCanvasCollection);
+		services.registerInstance(IChatSessionNavigationService, { revision: 0 } as IChatSessionNavigationService);
+		services.registerInstance(INotificationService, { info: (message: unknown) => assert.fail(String(message)) } as unknown as INotificationService);
+		services.registerInstance(ILogService, { error: (message: unknown) => assert.fail(String(message)) } as unknown as ILogService);
+		const accepted = resources.add(new Emitter<void>());
+		const hidden = resources.add(new Emitter<void>());
+		let shown = new DeferredPromise<void>();
+		const createPicker = () => ({
+			items: [] as readonly IQuickPickItem[], selectedItems: [] as readonly IQuickPickItem[], activeItems: [],
+			onDidAccept: accepted.event, onDidHide: hidden.event, show: () => { void shown.complete(); },
+			hide: () => hidden.fire(), [Symbol.dispose]() { },
+		});
+		let picker: ReturnType<typeof createPicker>;
+		services.registerInstance(IQuickInputService, { createQuickPick: () => picker = createPicker() } as unknown as IQuickInputService);
+		const commands = resources.add(new CommandService(services));
+		const canceled = commands.executeCommand('workbench.action.agentSessions.newCanvasSession');
+		await Promise.race([shown.p, canceled]);
+		assert.deepEqual(picker!.items.map(item => item.label), ['Board']);
+		picker!.hide();
+		await canceled;
+		assert.deepEqual(calls, []);
+		shown = new DeferredPromise<void>();
+		const opening = commands.executeCommand('workbench.action.agentSessions.newCanvasSession');
+		await Promise.race([shown.p, opening]);
+		picker!.selectedItems = [picker!.items[0]!];
+		accepted.fire();
+		await opening;
+		assert.deepEqual(calls, [
+			{ title: 'Board', workspace: { type: 'current' }, providerId: 'provider' },
+			{ thread: '/root', canvas: 'board' }, { pinned: canvasResource },
+			{ shown: { providerId: 'provider', session: URI.parse('ash-session:/session'), chat: URI.parse('ash-thread:/root'), canvas: canvasResource } },
+		]);
+	});
 
 	test('the Activity Bar and open picker exclude a Canvas shown in its fixed page', async () => {
 		using resources = new DisposableStore();

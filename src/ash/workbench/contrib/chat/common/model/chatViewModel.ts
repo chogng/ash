@@ -48,6 +48,8 @@ export interface IChatListItem {
 	/** Execution directory of this reply, independent of the currently selected workspace. */
 	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
+	/** Completed turn represented by selectable reasoning or reply text. */
+	readonly sideChatTurnId?: string;
 	/** Client identity of the accepted request represented by this message or reply. */
 	readonly requestClientId?: string;
 	readonly canGiveModelFeedback?: boolean;
@@ -293,6 +295,10 @@ export function chatTranscriptListItems(
 			return [{ id: entry.entryId, type: 'advisor' as const, text: advice, transient: false, isError: item.isError, label: localize('chat.advisor.modelLabel', 'Advisor · {0}', modelLabel), detail: details }];
 		}
 		let item = chatTranscriptListItem(entry, { actionsEnabled: canRecoverLatest && entry.turnId === latestTurnId });
+		if (source && entry.type === 'item' && !entry.transient && completedTurns.has(entry.turnId)
+			&& (entry.item.type === 'reasoning' || entry.item.type === 'agentMessage')) {
+			item = { ...item, sideChatTurnId: entry.turnId };
+		}
 		const fileReferenceDirectory = item.type === 'agentMessage' && entry.turnId !== undefined ? responseDirectories?.get(entry.turnId) : undefined;
 		if (fileReferenceDirectory) item = { ...item, fileReferenceDirectory };
 		const isFinalReply = finalReplies.get(entry.turnId ?? '') === entry.entryId;

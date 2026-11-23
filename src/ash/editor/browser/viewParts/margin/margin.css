@@ -4,6 +4,10 @@
 	user-select: none;
 }
 
+.stanza-editor.text-cursor-in-decoration-lane .margin {
+	cursor: text;
+}
+
 .stanza-editor .margin > .glyph-margin {
 	position: absolute;
 	inset-block-start: 0;

@@ -7,7 +7,7 @@ import { isNonEmptyString } from '../../../base/common/types.js';
 import {
 	createServiceIdentifier,
 } from '../../instantiation/common/instantiation.js';
-import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
+import { createSshRemoteAuthority, getProviderRemoteWorkspace, getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import { getRemoteAuthority } from '../../remote/common/remoteHosts.js';
 import type { FolderLocationChangeReason, IResolvedFolderLocation } from './folderLocations.js';
 
@@ -46,6 +46,28 @@ export interface IEmptyWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
 export interface ISingleFolderWorkspaceIdentifier
 	extends IBaseWorkspaceIdentifier {
 	readonly uri: URI;
+	readonly sessionId?: string;
+}
+
+/** App Server resolves this folder through the Session's authorized directory. */
+export function sessionWorkspaceFolderId(sessionId: string, path: string): string {
+	return `session:${encodeURIComponent(sessionId)}:${encodeURIComponent(path)}`;
+}
+
+export function getWorkspaceFolderSessionDirectory(folder: IWorkspaceFolder): { readonly sessionId: string; readonly path: string; } | undefined {
+	const encoded = /^session:([^:]+):/u.exec(folder.id)?.[1];
+	if (!encoded || !getProviderRemoteWorkspace(folder.uri)) return undefined;
+	try {
+		const path = getRemoteWorkspacePath(folder.uri);
+		const sessionId = decodeURIComponent(encoded);
+		return isWorkspaceSessionId(sessionId) && sessionWorkspaceFolderId(sessionId, path) === folder.id ? { sessionId, path } : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function isWorkspaceSessionId(id: string): boolean {
+	return id.length > 0 && id.length <= 256 && !/[\x00-\x1f\x7f]/u.test(id);
 }
 
 /** Identifies a workbench opened from a multi-root workspace file. */
@@ -113,7 +135,10 @@ export function workspaceFromIdentifier(identifier: IAnyWorkspaceIdentifier): IW
 	if (isSingleFolderWorkspaceIdentifier(identifier)) {
 		return freezeWorkspace({
 			id: identifier.id,
-			folders: [{ id: identifier.id, uri: identifier.uri, name: resourceName(identifier.uri), index: 0 }],
+			folders: [{
+				id: identifier.sessionId ? sessionWorkspaceFolderId(identifier.sessionId, getRemoteWorkspacePath(identifier.uri)) : identifier.id,
+				uri: identifier.uri, name: resourceName(identifier.uri), index: 0,
+			}],
 		});
 	}
 	return freezeWorkspace({ id: identifier.id, folders: [], ...(identifier.remoteAuthority ? { remoteAuthority: identifier.remoteAuthority } : {}) });
@@ -253,6 +278,7 @@ export function serializeWorkspaceIdentifier(
 		return {
 			id: workspace.id,
 			uri: workspace.uri.toString(),
+			...(workspace.sessionId ? { sessionId: workspace.sessionId } : {}),
 		};
 	}
 	return { id: workspace.id, ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
@@ -273,10 +299,17 @@ export function parseWorkspaceIdentifier(
 		});
 	}
 	if ('uri' in record) {
-		requireExactKeys(record, ['id', 'uri']);
+		const uri = workspaceResourceUri(record.uri, 'workspace folder uri');
+		const sessionId = record.sessionId === undefined ? undefined : nonEmptyString(record.sessionId, 'workspace session id');
+		requireExactKeys(record, sessionId === undefined ? ['id', 'uri'] : ['id', 'sessionId', 'uri']);
+		const runtime = sessionId ? getProviderRemoteWorkspace(uri) : undefined;
+		if (sessionId && (!isWorkspaceSessionId(sessionId) || runtime?.providerId !== 'ash.dev-containers' || runtime.hostAuthority)) {
+			throw new Error('Invalid container workspace session');
+		}
 		return Object.freeze({
 			id,
-			uri: workspaceResourceUri(record.uri, 'workspace folder uri'),
+			uri,
+			...(sessionId ? { sessionId } : {}),
 		});
 	}
 	requireExactKeys(record, record.remoteAuthority === undefined ? ['id'] : ['id', 'remoteAuthority']);

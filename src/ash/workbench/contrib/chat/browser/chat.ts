@@ -32,6 +32,7 @@ export class ChatContextMenuActionContext {
 		readonly text: string,
 		readonly html: string,
 		readonly addToChat: (() => void) | undefined,
+		readonly sideChat?: { readonly resource: URI; readonly turnId: string; readonly isCurrent: () => boolean; },
 	) { }
 }
 

@@ -16,6 +16,7 @@ export namespace ChatContextKeys {
 	export const hasActiveRequest = new RawContextKey<boolean>('chatSessionHasActiveRequest', false);
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
 	export const contextMenuCanAddSelectionToChat = new RawContextKey<boolean>('chatContextMenuCanAddSelectionToChat', false);
+	export const contextMenuCanAskInSideChat = new RawContextKey<boolean>('chatContextMenuCanAskInSideChat', false);
 	export const messageActionSurface = new RawContextKey<'chat' | 'code' | undefined>('chatMessageActionSurface', undefined);
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const requestHasText = new RawContextKey<boolean>('chatRequestHasText', false);

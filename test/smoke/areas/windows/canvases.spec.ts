@@ -282,6 +282,17 @@ exports.activate = context => {
 		await agentCommands.runCommand('acme.canvas.ready');
 		await expect(agents.locator('.ash-session-canvas-page:visible')).toBeVisible();
 		await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
+		const existing = new Set((await connection.client.request(APP_SERVER_METHODS['session/list'], {})).sessions.map(session => session.sessionId));
+		await agentCommands.runCommand('workbench.action.agentSessions.newCanvasSession');
+		await expect(agents.getByRole('option', { name: /Fixture board/ })).toBeVisible();
+		await expect(agents.getByRole('option', { name: /Needs input/ })).toHaveCount(0);
+		await agentCommands.select('Fixture board');
+		await expect(fullPage).toBeVisible();
+		const started = (await connection.client.request(APP_SERVER_METHODS['session/list'], {})).sessions.find(session => !existing.has(session.sessionId));
+		expect(started?.title).toBe('Fixture board');
+		const thread = await connection.client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: started!.sessionId, threadId: started!.threads[0]!.threadId });
+		expect(thread.thread.turns).toHaveLength(0);
+		await expect.poll(async () => (await agentViews()).some(view => view.canvas?.sessionId === started!.sessionId && view.state.visible)).toBe(true);
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 		await page.bringToFront();
 		await page.getByRole('searchbox', { name: 'Search extensions', exact: true }).fill('Canvas provider smoke');

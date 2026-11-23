@@ -78,6 +78,7 @@ export class OpenSessionInAshAction extends Action2 {
 			? buildAgentHostSessionWorkspace(prepared.directory ?? undefined)
 			: draftWorkspace && draftWorkspace.type !== 'current' && draftWorkspace.type !== 'multiple'
 				? buildAgentHostSessionWorkspace(draftWorkspace) : undefined;
+		const runtime = workspace?.runtime;
 		const workspaceAuthority = workspace?.authorityId;
 		const sshWorkspace = workspaceAuthority?.startsWith('ssh+');
 		const ambientConnection = remoteAgent.connection;
@@ -92,7 +93,9 @@ export class OpenSessionInAshAction extends Action2 {
 				&& sessionProviderAuthority(sshAgentHostProviderId(connection), LOCAL_AGENT_HOST_PROVIDER_ID) === link.connectionAuthority));
 		const conversation = link && buildOpenSessionLinkUri(link.sessionId, link.threadId,
 			sameSshHost ? AMBIENT_AGENT_HOST_AUTHORITY : link.connectionAuthority);
-		const folder = workspace && (workspace.authorityId === 'local'
+		const container = runtime?.providerId === 'ash.dev-containers' && !runtime.hostAuthority
+			&& ambientConnection?.kind === 'local' && link?.connectionAuthority === AMBIENT_AGENT_HOST_AUTHORITY;
+		const folder = workspace && (runtime ? container : workspace.authorityId === 'local'
 			|| (sshWorkspace && (!link || sameSshHost)))
 			? sessionWorkspaceUri(workspace) : undefined;
 		// A folderless ambient link would be interpreted by Main on the local

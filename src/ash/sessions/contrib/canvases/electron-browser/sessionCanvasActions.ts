@@ -1,21 +1,108 @@
 import { DisposableMap, DisposableStore, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { canvasOwnerKey, getCanvasReferenceKey, isCanvasOwner } from '../../../../workbench/common/canvasReference.js';
 import {
-	getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, getPresentableCanvasTargets, type ICanvasService, type ICanvasContextService,
+	getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, getPresentableCanvasTargets, ICanvasService, type ICanvasContextService, type ICanvasDefinition,
 } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { showCanvasContextPicker } from '../../../../workbench/contrib/canvases/browser/canvasContextPicker.js';
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { Menus } from '../../../browser/menus.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
+import { disposableTimeout } from '../../../../base/common/async.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { URI } from '../../../../base/common/uri.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
+import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IPinnedCanvasService } from '../browser/pinnedCanvases.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import type { ICanvas } from '../../../../workbench/common/canvasReference.js';
 
 export const OPEN_SESSION_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.openCanvas';
 export const REOPEN_SESSION_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.reopenCanvas';
+
+export class NewCanvasSessionAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.agentSessions.newCanvasSession',
+			title: localize2('canvas.newSession', 'New Canvas Session…'),
+			f1: true,
+			menu: { id: Menus.SessionsViewFilter, group: 'new' },
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const sessions = accessor.get(ISessionsManagementService);
+		const canvasHosts = accessor.get(IAgentHostCanvasCollection);
+		const canvases = accessor.get(ICanvasService);
+		const pins = accessor.get(IPinnedCanvasService);
+		const picker = accessor.get(IQuickInputService);
+		const navigation = accessor.get(IChatSessionNavigationService);
+		const notifications = accessor.get(INotificationService);
+		if (!canvases.enabled.get()) return;
+		const { providerId } = await sessions.resolveNewSessionTarget();
+		const definitions = (await canvasHosts.listProviderCanvases(providerId))?.filter(definition => !definition.requiresInput);
+		if (!definitions?.length) {
+			notifications.info(localize('canvas.newSession.unavailable', 'No Canvas is available to start a session.'));
+			return;
+		}
+		const labels = getCanvasDefinitionLabels(definitions);
+		type CanvasPick = { label: string; description?: string; definition: ICanvasDefinition; };
+		using pickerResources = new DisposableStore();
+		const quickPick = pickerResources.add(picker.createQuickPick<CanvasPick>());
+		quickPick.placeholder = quickPick.ariaLabel = localize('canvas.newSession.pick', 'Choose a Canvas to start the session');
+		quickPick.items = definitions.map((definition, index) => ({ label: labels[index]!, description: definition.description, definition }));
+		const selected = await new Promise<CanvasPick | undefined>(resolve => {
+			pickerResources.add(quickPick.onDidAccept(() => {
+				resolve(quickPick.selectedItems[0] ?? quickPick.activeItems[0]);
+				quickPick.hide();
+			}));
+			pickerResources.add(quickPick.onDidHide(() => resolve(undefined)));
+			quickPick.show();
+		});
+		if (!selected || !canvases.enabled.get()) return;
+		const revision = navigation.revision;
+		const { session, threadId } = await sessions.startNewSession(selected.definition.displayName, {
+			providerId, workspace: { type: 'current' }, creation: { token: CancellationToken.None, kind: 'code' },
+		});
+		const owner = {
+			providerId: session.providerId ?? providerId,
+			session: URI.from({ scheme: 'ash-session', path: '/' + session.sessionId }),
+			chat: URI.from({ scheme: 'ash-thread', path: '/' + threadId }),
+		};
+		const context = canvasHosts.createContext(owner);
+		const instanceId = getCanvasDefinitionInstanceId(selected.definition);
+		try {
+			await context.definitionProvider!.openCanvas(selected.definition, instanceId);
+			using resources = new DisposableStore();
+			const canvas = await new Promise<ICanvas>((resolve, reject) => {
+				resources.add(disposableTimeout(() => reject(new Error(localize('canvas.newSession.timeout', 'The Canvas did not open in time.'))), 15_000));
+				resources.add(autorun(reader => {
+					const opened = context.canvases.read(reader)?.find(candidate => candidate.instanceId === instanceId
+						&& candidate.extensionId === selected.definition.extensionId && candidate.canvasId === selected.definition.canvasId);
+					if (opened) resolve(opened);
+				}));
+			});
+			const reference = { ...owner, canvas: canvas.resource };
+			const pinned = pins.pin(reference);
+			if (navigation.revision !== revision) return;
+			if (pinned) await pins.show(reference);
+			else {
+				await navigation.openConversation(session.sessionId, threadId);
+				await canvases.revealCanvas(reference);
+			}
+		} catch (error) {
+			if (navigation.revision === revision) await navigation.openConversation(session.sessionId, threadId);
+			throw error;
+		}
+	}
+}
 
 export function registerSessionCanvasActions(canvases: ICanvasService, registry: ISessionCanvasRegistryService, contexts: ICanvasContextService): IDisposable {
 	const lifetime = new DisposableStore();

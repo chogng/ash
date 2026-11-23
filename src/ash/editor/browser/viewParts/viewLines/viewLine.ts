@@ -313,8 +313,22 @@ export function projectStanzaSemanticTokenLine(
 	const characterMapping = new CharacterMapping(visibleText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
 	if (visibleText.length === 0) {
+		const appendDecorations = (type: InlineDecorationType.Before | InlineDecorationType.After) => {
+			for (const decoration of lineDecorations) {
+				if (decoration.type === type) {
+					fragment.append(h(ownerDocument, 'span', {
+						className: decoration.inlineClassName,
+						attributes: { 'aria-hidden': 'true' },
+					}));
+				}
+			}
+		};
+		appendDecorations(InlineDecorationType.Before);
+		// The only model column sits between both groups. Map it to its own
+		// empty span so the existing DOM range reader can measure its position.
+		characterMapping.setColumnInfo(1, fragment.childElementCount, 0, 0);
 		fragment.append(h(ownerDocument, 'span'));
-		characterMapping.setColumnInfo(1, 0, 0, 0);
+		appendDecorations(InlineDecorationType.After);
 	}
 	for (let index = 0; index + 1 < boundaries.length; index += 1) {
 		const startColumn = boundaries[index]!;

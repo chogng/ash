@@ -10,6 +10,8 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IChatSideChatService } from '../../common/chatSideChatService.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
@@ -315,7 +317,7 @@ suite('Chat hidden response resources', () => {
 		FontMeasurements.readFontInfo(window, BareFontInfo._create('monospace', 'normal', 14, 'normal', 'normal', 20, 0, 1, true));
 	});
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('hidden response code blocks release documents and restore selection with current content', () => {
+	test('hidden response code blocks release editors and restore selection with current content', () => {
 		using resources = new DisposableStore();
 		const services = resources.add(createChatListTestServices(resources));
 		services.registerInstance(IAccessibilityService, {
@@ -336,24 +338,34 @@ suite('Chat hidden response resources', () => {
 		const items = (value: number) => [{ id: 'reply', type: 'agentMessage' as const, text: `\`\`\`ts\nconst value = ${value};\n\`\`\``, transient: false }];
 		widget.render(items(1));
 		const block = widget.element.querySelector('.ash-chat-code-block');
-		const editor = services.get(ICodeEditorService).listCodeEditors().find(candidate => candidate.getModel()?.getValue() === 'const value = 1;')!;
-		assert.ok(editor);
-		const original = editor.getModel()!;
+		assert.ok(block);
+		const editors = services.get(ICodeEditorService);
+		const [editor] = editors.listCodeEditors();
+		const original = editor?.getModel();
+		assert.equal(original?.getValue(), 'const value = 1;');
+		assert.ok(editor && original);
 		editor.setSelection({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 12 });
 		const selection = editor.getSelections();
 		widget.setVisible(false);
-		assert.equal(editor.getModel(), null);
+		assert.deepEqual(editors.listCodeEditors(), []);
 		assert.equal(original.isDisposed(), true);
 		widget.render(items(2));
-		assert.equal(editor.getModel(), null, 'Hidden streaming updates must not recreate editor documents');
+		assert.deepEqual(editors.listCodeEditors(), [], 'Hidden streaming updates must not recreate editors');
 		assert.equal(widget.element.querySelector('.ash-chat-code-block'), block);
 		widget.setVisible(true);
-		assert.equal(editor.getModel()?.getValue(), 'const value = 2;');
-		assert.notEqual(editor.getModel(), original);
-		assert.deepEqual(editor.getSelections(), selection);
+		const [restored] = editors.listCodeEditors();
+		assert.ok(restored);
+		assert.notEqual(restored, editor);
+		assert.equal(restored.getModel()?.getValue(), 'const value = 2;');
+		assert.deepEqual(restored.getSelections(), selection);
+		assert.equal(widget.element.querySelector('.ash-chat-code-block'), block);
 		widget.setVisible(false);
+		assert.deepEqual(editors.listCodeEditors(), []);
 		widget.setVisible(true);
-		assert.deepEqual(editor.getSelections(), selection);
+		const [restoredAgain] = editors.listCodeEditors();
+		assert.ok(restoredAgain);
+		assert.equal(restoredAgain.getModel()?.getValue(), 'const value = 2;');
+		assert.deepEqual(restoredAgain.getSelections(), selection);
 	});
 });
 
@@ -806,6 +818,13 @@ suite('Chat message copy ownership', () => {
 		let menu: IContextMenuDelegate | undefined;
 		const copies: { text: string; html: string; }[] = [];
 		const draft: string[] = [];
+		const sideQuestions: unknown[] = [];
+		const resource = URI.parse('ash-chat-session:/session/thread');
+		services.registerInstance(IQuickInputService, { input: async () => 'How does this work?' } as unknown as IQuickInputService);
+		services.registerInstance(IChatSideChatService, {
+			canAskInSideChat: target => target === resource,
+			askInSideChat: async (target, query, selection, options) => { sideQuestions.push({ target, query, selection, options }); },
+		} as IChatSideChatService);
 		services.registerInstance(IContextMenuService, {
 			contextMenuStyle: 'custom',
 			onDidShowContextMenu: Event.None,
@@ -823,10 +842,11 @@ suite('Chat message copy ownership', () => {
 		services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {
 			prepareAddSelectionToChat: (text: string) => () => { draft.push(text); },
+			prepareSideChat: (turnId: string) => ({ resource, turnId, isCurrent: () => true }),
 		});
 		document.body.append(widget.element);
 		resources.add(toDisposable(() => widget.element.remove()));
-		widget.render([{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false }]);
+		widget.render([{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false, sideChatTurnId: 'original-turn' }]);
 		const row = widget.getRowElement('reply')!;
 		const selection = document.getSelection()!;
 		resources.add(toDisposable(() => selection.removeAllRanges()));
@@ -849,12 +869,16 @@ suite('Chat message copy ownership', () => {
 		const openedMenu = menu as IContextMenuDelegate | undefined;
 		assert.ok(openedMenu);
 		const actions = openedMenu.getActions();
-		assert.deepEqual(actions.map(action => action.label), ['Copy', 'Add to Chat']);
-		assert.deepEqual(actions.map(action => action.icon?.id), ['copy', 'add']);
+		assert.deepEqual(actions.map(action => action.label), ['Copy', 'Add to Chat', 'Ask in Side Chat']);
+		assert.deepEqual(actions.slice(0, 2).map(action => action.icon?.id), ['copy', 'add']);
 		assert.equal(openedMenu.iconPlacement, 'leading-with-trailing-check');
 		selection.removeAllRanges();
 		await actions[0].run(openedMenu.getActionsContext?.());
 		await actions[1].run(openedMenu.getActionsContext?.());
+		await actions[2].run(openedMenu.getActionsContext?.());
+		assert.deepEqual(sideQuestions, [{
+			target: resource, query: 'How does this work?', selection: { text: 'selected words' }, options: { sourceTurnId: 'original-turn' },
+		}]);
 		assert.equal(copies.length, 2);
 		assert.equal(copies[0]?.text, 'selected words');
 		assert.match(copies[0]?.html ?? '', /<strong>selected words<\/strong>/);

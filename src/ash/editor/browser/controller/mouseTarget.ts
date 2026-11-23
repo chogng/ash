@@ -158,7 +158,14 @@ export class MouseTargetFactory {
 			} else if (relativePos.x >= layout.lineNumbersLeft && relativePos.x < layout.lineNumbersLeft + layout.lineNumbersWidth) {
 				type = MouseTargetType.GUTTER_LINE_NUMBERS;
 			}
-			return MouseTarget.createMargin(type, target, mouseColumn, position, Range.fromPositions(position), this.marginData(relativePos, lane));
+			const detail = this.marginData(relativePos, lane);
+			// Actual decorations were handled above. The unused part of their lane
+			// is an editing surface, including on wrapped continuation lines.
+			if (relativePos.x >= layout.decorationsLeft && !detail.isAfterLines) {
+				const start = new Position(position.lineNumber, this.context.viewModel.getLineMinColumn(position.lineNumber));
+				return MouseTarget.createContentEmpty(target, start.column, start, { isAfterLines: false });
+			}
+			return MouseTarget.createMargin(type, target, mouseColumn, position, Range.fromPositions(position), detail);
 		}
 		const injectedText = this.context.viewModel.getInjectedTextAt(position);
 		const lineWidth = this.viewHelper.getLineWidth(position.lineNumber);

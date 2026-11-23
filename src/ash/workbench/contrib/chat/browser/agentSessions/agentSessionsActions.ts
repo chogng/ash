@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { IProgressService, ProgressLocation } from '../../../../../platform/progress/common/progress.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -230,6 +231,7 @@ export function registerAgentSessionActions(): void {
 			const sessions = accessor.get(IAgentSessionActionsService);
 			const configuration = accessor.get(IConfigurationService);
 			const dialogs = accessor.get(IDialogService);
+			const progressService = accessor.get(IProgressService);
 			await sessions.initialize();
 			const targets = sessions.sessions.filter(session => session.status === 'active').map(session => session.sessionId);
 			if (!targets.length) throw new Error(localize('chatSession.active.none', 'No active sessions are available.'));
@@ -240,7 +242,28 @@ export function registerAgentSessionActions(): void {
 				primaryButton: action.title.value,
 			});
 			if (result.confirmed) {
-				for (const id of targets) await sessions.archiveSession(id);
+				const pending = targets.values();
+				const failures: unknown[] = [];
+				await progressService.withProgress({
+					location: ProgressLocation.Notification,
+					title: localize('chatSession.archiveAll.progress', 'Archiving sessions…'),
+					total: targets.length,
+				}, async progress => {
+					await Promise.all(Array.from({ length: Math.min(3, targets.length) }, async () => {
+						for (const id of pending) {
+							try {
+								await sessions.archiveSession(id);
+							} catch (error) {
+								failures.push(error);
+							} finally {
+								progress.report({ increment: 1 });
+							}
+						}
+					}));
+				});
+				if (failures.length) {
+					throw new AggregateError(failures, localize('chatSession.archiveAll.failed', 'Archived {0} of {1} sessions.', targets.length - failures.length, targets.length));
+				}
 			}
 		}
 	});

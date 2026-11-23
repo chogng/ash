@@ -1,9 +1,9 @@
-.stanza-editor-line-decoration.ash-quick-diff-gutter {
-	pointer-events: auto;
+.stanza-editor .margin-view-overlays .ash-quick-diff-gutter {
+	pointer-events: none;
 	cursor: pointer;
 }
 
-/* The editor owns gutter geometry; the marker paints inside its full click target. */
+/* The gutter spans the lane. Only the painted marker receives pointer input. */
 .stanza-editor-line-decoration.ash-quick-diff-gutter::before {
 	position: absolute;
 	top: 0;
@@ -11,7 +11,7 @@
 	width: 4px;
 	height: 100%;
 	content: "";
-	pointer-events: none;
+	pointer-events: auto;
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-added::before {

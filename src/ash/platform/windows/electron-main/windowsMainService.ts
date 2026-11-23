@@ -384,7 +384,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		if (isWorkspaceIdentifier(workspace)) {
 			host = findWindowOnWorkspaceOrFolder(hosts, workspace.configPath);
 		} else if (isSingleFolderWorkspaceIdentifier(workspace)) {
-			host = findWindowOnWorkspaceOrFolder(hosts, workspace.uri);
+			host = findWindowOnWorkspaceOrFolder(hosts, workspace.uri, workspace.sessionId);
 		} else {
 			host = hosts.find(host => host.openedWorkspace.id === workspace.id);
 		}

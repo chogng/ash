@@ -24,7 +24,8 @@ export class DesktopProfileStorageService implements IProfileStorageService {
 			signal.removeEventListener('abort', cancel);
 		}
 		return {
-			...overview, desktopRoot: desktop?.root, otherBytes: overview.otherBytes + (desktop?.bytes ?? 0), complete: overview.complete && (desktop?.complete ?? false), worktrees: worktrees.map(({ title, identity, sizeBytes }) => ({
+			...overview, desktopRoot: desktop?.root, worktreeAvailableBytes: desktop?.worktreeAvailableBytes,
+			otherBytes: overview.otherBytes + (desktop?.bytes ?? 0), complete: overview.complete && (desktop?.complete ?? false), worktrees: worktrees.map(({ title, identity, sizeBytes }) => ({
 				title, sizeBytes, sessionId: identity.sessionId, threadId: identity.threadId, path: identity.checkoutRoot, revision: identity.expectedSequence,
 			}))
 		};

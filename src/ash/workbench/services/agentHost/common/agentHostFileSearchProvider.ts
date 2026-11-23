@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
-import { IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import { getWorkspaceFolderSessionDirectory, IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 import { localize } from '../../../../nls.js';
 import type { IFileQuery, ISearchComplete, ISearchResultProvider } from '../../search/common/search.js';
 
@@ -50,7 +50,8 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 			let limitHit = false;
 			for (const folder of folders) {
 				if (controller.signal.aborted) { throw new CancellationError(); }
-				const directory = { resource: folder.uri, target: { type: 'workspace' as const, dirId: folder.id } };
+				const session = getWorkspaceFolderSessionDirectory(folder);
+				const directory = { resource: folder.uri, target: session ? { type: 'session' as const, ...session } : { type: 'workspace' as const, dirId: folder.id } };
 				// Each root supplies its best candidates before applying the global result budget.
 				const maxResults = Math.min(5_000, limit + 1);
 				const pending = query.shouldGlobMatchFilePattern

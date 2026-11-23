@@ -425,6 +425,11 @@ test.describe('SCM editor groups', () => {
 		await expect(marker).toHaveCount(1);
 		await expect.poll(() => marker.evaluate(element => getComputedStyle(element, '::before').width)).toBe('4px');
 		await expect(marker).toHaveCSS('cursor', 'pointer');
+		await expect.poll(() => marker.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			const y = bounds.top + bounds.height / 2;
+			return [2, bounds.width - 1].map(offset => document.elementFromPoint(bounds.left + offset, y) === element);
+		})).toEqual([true, false]);
 		await page.emulateMedia({ forcedColors: 'active' });
 		await expect.poll(() => marker.evaluate(element => {
 			const paint = getComputedStyle(element, '::before').backgroundColor;

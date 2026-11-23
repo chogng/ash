@@ -26,6 +26,7 @@ interface CanvasSource { readonly url: string; readonly title?: string; readonly
 
 export const IAgentHostCanvasCollection = createServiceIdentifier<IAgentHostCanvasCollection>('agentHostCanvasCollection');
 export interface IAgentHostCanvasCollection extends IAgentCanvasHost {
+	listProviderCanvases(providerId: string): Promise<readonly ICanvasDefinition[] | undefined>;
 	listCanvases(sessionId: string, threadId: string, signal: AbortSignal, providerId?: string): ReturnType<IAgentCanvasHost['listCanvases']>;
 	openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal, providerId?: string): ReturnType<IAgentCanvasHost['openCanvasSource']>;
 	closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal, providerId?: string): Promise<void>;
@@ -186,12 +187,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 				openRequests: derived(reader => this.requests.read(reader).get(key) ?? new Map()),
 				definitionProvider: {
 					onDidChangeDefinitions: this.changed.event,
-					listCanvases: async () => {
-						await this.activate(owner.providerId);
-						if (this.isDisposed) { throw new CancellationError(); }
-						if (this.definitionLoads.get(owner.providerId) || [...this.suspended.values()].some(value => value.providerId === owner.providerId)) { return undefined; }
-						return [...this.providers.values()].filter(provider => (provider.providerId ?? 'local-agent-host') === owner.providerId && !provider.signal.aborted).map(provider => provider.definition);
-					},
+					listCanvases: () => this.listProviderCanvases(owner.providerId),
 					openCanvas: (definition, instanceId) => this.open(owner, definition, instanceId),
 				},
 				closeCanvas: canvas => this.close(owner, canvas),
@@ -205,6 +201,13 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const definitions = await this.createContext(this.owner(sessionId, threadId, providerId)).definitionProvider!.listCanvases();
 		signal.throwIfAborted();
 		return definitions?.map(definition => ({ id: { extensionId: definition.extensionId, canvasId: definition.canvasId }, displayName: definition.displayName, description: definition.description, requiresInput: definition.requiresInput }));
+	}
+
+	async listProviderCanvases(providerId: string): Promise<readonly ICanvasDefinition[] | undefined> {
+		await this.activate(providerId);
+		if (this.isDisposed) throw new CancellationError();
+		if (this.definitionLoads.get(providerId) || [...this.suspended.values()].some(value => value.providerId === providerId)) return undefined;
+		return [...this.providers.values()].filter(provider => (provider.providerId ?? 'local-agent-host') === providerId && !provider.signal.aborted).map(provider => provider.definition);
 	}
 
 	async openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal, providerId = 'local-agent-host'): Promise<CanvasSource> {

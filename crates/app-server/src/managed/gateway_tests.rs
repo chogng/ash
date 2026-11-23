@@ -1112,6 +1112,37 @@ fn provider_catalog_and_thread_directories_keep_container_authority() {
 }
 
 #[test]
+fn container_file_search_and_cancellation_use_the_session_route() {
+    let profile = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = ProfileAppServerRegistry::open(options, ash_app_server_diff::compute).unwrap();
+    let key = RemoteKey::Provider {
+        provider_id: "ash.dev-containers".into(),
+        workspace: profile.path().to_owned(),
+        root: "/workspace".into(),
+    };
+    let sessions: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
+        "container-session".into(),
+        key.clone(),
+    )])));
+    for method in ["file/search/fuzzy", "file/search/fuzzy/cancel"] {
+        let request = serde_json::json!({
+            "method": method,
+            "params": { "operationId": "query", "target": { "type": "session", "sessionId": "container-session", "path": "/workspace" } }
+        });
+        assert_eq!(
+            selected_execution_target(&registry, &sessions, &request).unwrap(),
+            Some(key.target()),
+        );
+    }
+}
+
+#[test]
 fn preparing_a_runtime_probes_the_real_protocol_and_rejects_incompatible_children() {
     use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
     use ash_app_server_protocol::protocol::initialize::ServerCapabilities;

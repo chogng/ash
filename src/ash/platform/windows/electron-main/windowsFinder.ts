@@ -7,11 +7,11 @@ interface IWindowWithWorkspace {
 }
 
 /** Finds the first live window whose workspace file or folder is this resource. */
-export function findWindowOnWorkspaceOrFolder<TWindow extends IWindowWithWorkspace>(windows: readonly TWindow[], resource: URI): TWindow | undefined {
+export function findWindowOnWorkspaceOrFolder<TWindow extends IWindowWithWorkspace>(windows: readonly TWindow[], resource: URI, sessionId?: string): TWindow | undefined {
 	return windows.find(window => {
 		const workspace = window.openedWorkspace;
-		if (isWorkspaceIdentifier(workspace)) return extUriBiasedIgnorePathCase.isEqual(workspace.configPath, resource);
-		if (isSingleFolderWorkspaceIdentifier(workspace)) return extUriBiasedIgnorePathCase.isEqual(workspace.uri, resource);
+		if (isWorkspaceIdentifier(workspace)) return sessionId === undefined && extUriBiasedIgnorePathCase.isEqual(workspace.configPath, resource);
+		if (isSingleFolderWorkspaceIdentifier(workspace)) return workspace.sessionId === sessionId && extUriBiasedIgnorePathCase.isEqual(workspace.uri, resource);
 		return false;
 	});
 }

@@ -10,8 +10,57 @@ import { localize } from '../../../../nls.js';
 import { IProfileStorageService, type ProfileStorageWorktree } from '../../../../platform/storage/common/profileStorageService.js';
 import { defaultButtonStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { Severity, type INotificationService } from '../../../../platform/notification/common/notification.js';
+import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 export const storageSettingsTitle = () => localize({ bundle: 'ash.sessions', key: 'sessions.storage.title' }, 'Storage');
+
+export function registerWorktreeStorageSuggestion(
+	sessions: ISessionsManagementService,
+	storage: IProfileStorageService,
+	notifications: INotificationService,
+	openStorage: () => Promise<void>,
+) {
+	const store = new DisposableStore();
+	const lifetime = new AbortController();
+	store.add(toDisposable(() => lifetime.abort()));
+	let archived = -1;
+	let notified = false;
+	const scheduler = store.add(new RunOnceScheduler(async () => {
+		try {
+			const overview = await storage.readOverview(lifetime.signal);
+			if (lifetime.signal.aborted || notified || !overview.worktrees.length) return;
+			const gibibyte = 1024 ** 3;
+			const lowDisk = overview.worktreeAvailableBytes !== undefined && overview.worktreeAvailableBytes < 5 * gibibyte;
+			const reclaimable = overview.worktrees.reduce((total, worktree) => total + (worktree.sizeBytes ?? 0), 0);
+			if (!lowDisk && reclaimable < 5 * gibibyte && overview.worktrees.length < 10) return;
+			notified = true;
+			const label = localize({ bundle: 'ash.sessions', key: 'sessions.storage.reviewWorktrees' }, 'Review worktrees');
+			const notification = notifications.notify({
+				severity: lowDisk ? Severity.Warning : Severity.Info,
+				message: lowDisk
+					? localize({ bundle: 'ash.sessions', key: 'sessions.storage.lowDisk' }, 'The worktree volume is low on disk space. Archived worktrees can be cleaned up.')
+					: localize({ bundle: 'ash.sessions', key: 'sessions.storage.cleanupSuggestion' }, 'Archived sessions have worktrees that can be cleaned up.'),
+				actions: { primary: [{ id: 'sessions.storage.reviewWorktrees', label, tooltip: label, enabled: true, run: openStorage }] },
+			});
+			store.add(toDisposable(() => notification.close()));
+		} catch {
+			// Storage diagnostics are optional when the local backend is unavailable.
+		}
+	}, 5000));
+	const schedule = () => {
+		if (sessions.state !== 'ready' || notified) return;
+		const count = sessions.sessions.filter(session => session.status === 'archived' && session.workspace?.authorityId === 'local').length;
+		if (count === archived) return;
+		archived = count;
+		if (count) scheduler.schedule();
+		else scheduler.cancel();
+	};
+	store.add(sessions.onDidChange(schedule));
+	schedule();
+	return store;
+}
 
 export class SessionsStorageContent extends Disposable {
 	private readonly dialog: Dialog;

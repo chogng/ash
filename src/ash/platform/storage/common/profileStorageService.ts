@@ -7,6 +7,7 @@ export interface DesktopStorageUsage {
 	readonly root: string;
 	readonly bytes: number;
 	readonly complete: boolean;
+	readonly worktreeAvailableBytes?: number;
 }
 
 export interface ProfileStorageOverview {
@@ -17,6 +18,7 @@ export interface ProfileStorageOverview {
 	readonly sessionBytes: number;
 	readonly otherBytes: number;
 	readonly complete: boolean;
+	readonly worktreeAvailableBytes?: number;
 	readonly worktrees: readonly ProfileStorageWorktree[];
 }
 

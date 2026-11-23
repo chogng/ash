@@ -14,6 +14,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import type { IView } from '../../../../common/views.js';
 import { CHAT_VIEW_ID } from '../../common/chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { IChatSideChatService } from '../../common/chatSideChatService.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
@@ -75,6 +76,28 @@ export function registerAddSelectionToChatAction(): void {
 
 		override run(_accessor: ServicesAccessor, context: unknown): void {
 			if (context instanceof ChatContextMenuActionContext) context.addToChat?.();
+		}
+	});
+	registerAction2(class AskSelectionInSideChatAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.askSelectionInSideChat',
+				get title() { return localize2('chat.askInSideChat', 'Ask in Side Chat'); },
+				menu: { id: MenuId.ChatContext, group: 'navigation', order: 3, when: ChatContextKeys.contextMenuCanAskInSideChat.isEqualTo(true) },
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (!(context instanceof ChatContextMenuActionContext) || !context.sideChat) return;
+			const { resource, turnId, isCurrent } = context.sideChat;
+			const sideChats = accessor.get(IChatSideChatService);
+			if (!isCurrent() || !sideChats.canAskInSideChat(resource)) return;
+			const query = await accessor.get(IQuickInputService).input({
+				placeHolder: localize('chat.btw.selectionQuestion', 'Enter a question about the selected text'),
+			});
+			if (query?.trim() && isCurrent() && sideChats.canAskInSideChat(resource)) {
+				await sideChats.askInSideChat(resource, query.trim(), { text: context.text }, { sourceTurnId: turnId });
+			}
 		}
 	});
 }

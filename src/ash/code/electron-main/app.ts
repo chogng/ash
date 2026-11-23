@@ -201,6 +201,8 @@ import { validateLanguagePackCatalog } from '../../platform/languagePacks/common
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, OPEN_IDE_SESSION_CHANNEL, validateOpenIdeSessionRequest, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
+import { getProviderRemoteWorkspace } from '../../platform/remote/common/remote.js';
+import { parseOpenSessionLinkUri } from '../../platform/agentHost/common/openSessionLink.js';
 
 // Packaged Main can be bundled independently of the native helpers and utility entries.
 const mainOutput = app.isPackaged
@@ -1076,7 +1078,7 @@ export class AshApplication extends Disposable {
 				if (isWorkspaceIdentifier(workspace) && workspace.configPath.scheme === 'file' && hasWorkspaceFileExtension(workspace.configPath)) {
 					workspace = getWorkspaceIdentifier(workspace.configPath, workspace.remoteAuthority);
 				} else if (isSingleFolderWorkspaceIdentifier(workspace)) {
-					workspace = getSingleFolderWorkspaceIdentifier(workspace.uri);
+					workspace = getSingleFolderWorkspaceIdentifier(workspace.uri, workspace.sessionId);
 				} else if (!/^empty-window-[0-9a-f-]{36}$/u.test(workspace.id) || isWorkspaceIdentifier(workspace)) {
 					throw unavailable();
 				}
@@ -1527,16 +1529,17 @@ export class AshApplication extends Disposable {
 		}
 		// Both IDE and Agents inherit the workspace host. Only the separately named
 		// local connection stays on this computer for profile-owned capabilities.
+		const sessionWorkspace = isSingleFolderWorkspaceIdentifier(workspace) && !!workspace.sessionId;
 		const remote = connectionKind !== 'local' && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
 		const connection = createAppServerDaemonLauncher({
 			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
 			sourceEnvironment: process.env,
 			profileRoot: this.profileRoot,
 			electronExecutable: process.execPath,
-			workspaceRoot: !remote && role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
+			workspaceRoot: !remote && !sessionWorkspace && role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
 			// SSH carriers require Workbench scope; the remote runtime supplies the
 			// execution host while the local Agents lease retains profile capabilities.
-			role: remote ? 'workbench' : role,
+			role: remote ? 'workbench' : sessionWorkspace ? 'agents' : role,
 		});
 		resources.add(connection.launcher);
 		const processLauncher = remote ? this.createRemoteAppServerProcessLauncher(workspace, resources, connection.launcher) : connection.launcher;
@@ -2486,10 +2489,14 @@ export class AshApplication extends Disposable {
 								const { folder, conversation } = value as ReturnType<typeof validateOpenIdeSessionRequest>;
 								const active = this.windowsMainService.getLastActiveWindow('workbench');
 								const activeWorkspace = active && this.workbenchWindowData.get(active.id)?.workspaceContext.getWorkspace();
+								const runtime = folder && getProviderRemoteWorkspace(folder);
+								const sessionFolder = runtime && folder && conversation
+									? getSingleFolderWorkspaceIdentifier(folder, parseOpenSessionLinkUri(conversation).sessionId)
+									: undefined;
 								// A folderless link must not resolve against an unrelated Remote window's ambient host.
-								const workspace = folder
+								const workspace = sessionFolder ?? (folder
 									? folder.scheme === 'file' ? await workspaces.resolveFolder(folder.fsPath) : getSingleFolderWorkspaceIdentifier(folder)
-									: activeWorkspace && !getWorkspaceRemoteAuthority(activeWorkspace) ? activeWorkspace : createEmptyWorkspaceIdentifier();
+									: activeWorkspace && !getWorkspaceRemoteAuthority(activeWorkspace) ? activeWorkspace : createEmptyWorkspaceIdentifier());
 								const opened = await this.openWorkspace(workspace, workspaces);
 								if (opened && conversation) {
 									this.windowsMainService.getWindowById(opened.window.id)?.sendWhenReady(OPEN_IDE_SESSION_CHANNEL, CancellationToken.None, conversation.toString());

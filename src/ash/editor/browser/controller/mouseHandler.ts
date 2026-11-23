@@ -17,6 +17,8 @@ import { LeftRightDragScrolling, TopBottomDragScrolling } from './dragScrolling.
 import { MouseTarget, MouseTargetFactory, PointerHandlerLastRenderData } from './mouseTarget.js';
 import { PointerHandler } from './pointerHandler.js';
 
+const marginTextCursorClass = 'text-cursor-in-decoration-lane';
+
 export interface IPointerHandlerHelper {
 	viewDomNode: HTMLElement;
 	linesContentDomNode: HTMLElement;
@@ -89,6 +91,7 @@ export class MouseHandler extends ViewEventHandler {
 		this._register(addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event), { passive: false }));
 		this._register(addDisposableListener<DragEvent>(viewHelper.viewDomNode, 'drop', event => this._onDrop(event)));
 		this._register(toDisposable(() => this.stopPointerSelection()));
+		this._register(toDisposable(() => viewHelper.viewDomNode.classList.remove(marginTextCursorClass)));
 	}
 
 	public getTargetAtClientPoint(clientX: number, clientY: number): IMouseTarget {
@@ -163,10 +166,15 @@ export class MouseHandler extends ViewEventHandler {
 
 	protected _onMouseMove(event: EditorMouseEvent): void {
 		if (this.gesture) return;
-		this.viewController.emitMouseMove(this.toEditorMouseEvent(event, this._createMouseTarget(event, true)));
+		const target = this._createMouseTarget(event, true);
+		const layout = this._context.configuration.options.get(EditorOption.layoutInfo);
+		this.viewHelper.viewDomNode.classList.toggle(marginTextCursorClass,
+			target.type === MouseTargetType.CONTENT_EMPTY && event.relativePos.x >= layout.decorationsLeft && event.relativePos.x < layout.contentLeft);
+		this.viewController.emitMouseMove(this.toEditorMouseEvent(event, target));
 	}
 
 	protected _onMouseLeave(event: EditorMouseEvent): void {
+		this.viewHelper.viewDomNode.classList.remove(marginTextCursorClass);
 		this.viewController.emitMouseLeave({ event, target: null });
 	}
 
@@ -249,7 +257,7 @@ export class MouseHandler extends ViewEventHandler {
 
 		const lineNumber = viewLayout.getLineNumberAtVerticalOffset(viewLayout.getCurrentScrollTop() + event.relativePos.y);
 		const layoutInfo = this._context.configuration.options.get(EditorOption.layoutInfo);
-		if (event.relativePos.x <= layoutInfo.contentLeft) {
+		if (event.relativePos.x < layoutInfo.decorationsLeft) {
 			const isRtl = model.getTextDirection(lineNumber) === TextDirection.RTL;
 			return MouseTarget.createOutsideEditor(
 				mouseColumn,

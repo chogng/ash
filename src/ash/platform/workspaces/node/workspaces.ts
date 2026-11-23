@@ -14,8 +14,9 @@ export function getWorkspaceIdentifier(configPath: URI, remoteAuthority?: string
 }
 
 /** Creates the stable identity of one single-folder workspace. */
-export function getSingleFolderWorkspaceIdentifier(uri: URI): ISingleFolderWorkspaceIdentifier {
-	return Object.freeze({ id: stableWorkspaceId(uri), uri });
+export function getSingleFolderWorkspaceIdentifier(uri: URI, sessionId?: string): ISingleFolderWorkspaceIdentifier {
+	const identity = sessionId ? uri.with({ query: sessionId }) : uri;
+	return Object.freeze({ id: stableWorkspaceId(identity), uri, ...(sessionId ? { sessionId } : {}) });
 }
 
 export function stableWorkspaceId(uri: URI): string {

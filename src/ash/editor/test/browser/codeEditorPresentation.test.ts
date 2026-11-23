@@ -1756,6 +1756,50 @@ suite('textModel browser component', () => {
 		await expect(page.locator('.stanza-editor')).toHaveAttribute('data-line-decoration-click', '2');
 	});
 
+	test('clicking between the folding chevron and text places the caret without folding', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ lineDecorationsWidth: 44, showFoldingControls: 'always' });
+			editor.setPosition({ lineNumber: 2, column: 3 });
+		});
+		const chevron = page.locator('.folding-control.ash-icon-folding-expanded > .ash-icon').first();
+		const body = page.locator('.view-line[data-logical-line-index="1"] .stanza-editor-line-text');
+		await expect(chevron).toBeVisible();
+		await expect(body).toBeVisible();
+		const caretPosition = () => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition());
+		for (const theme of ['dark', 'contrast'] as const) {
+			await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+			const icon = await chevron.boundingBox();
+			const textBox = await page.locator('.view-line[data-logical-line-index="0"] .stanza-editor-line-text').boundingBox();
+			assertBox(icon, 'chevron');
+			assertBox(textBox, 'text');
+			const x = (icon.x + icon.width + textBox.x) / 2;
+			const y = icon.y + icon.height / 2;
+			expect(x).toBeGreaterThan(icon.x + icon.width);
+			await page.mouse.move(x, y);
+			await expect.poll(() => page.evaluate(({ x, y }) => getComputedStyle(document.elementFromPoint(x, y)!).cursor, { x, y })).toBe('text');
+			await page.mouse.click(x, y);
+			await expect.poll(caretPosition).toEqual({ lineNumber: 1, column: 1 });
+			await expect(body).toBeVisible();
+
+			await page.mouse.down();
+			await page.mouse.move(textBox.x + textBox.width - 1, y);
+			await page.mouse.up();
+			await expect.poll(() => page.evaluate(() => {
+				const selection = window.ashTextModelIntegration.getControl().getSelection()!;
+				return selection.startLineNumber === 1 && selection.startColumn === 1 && selection.endColumn > 1;
+			})).toBe(true);
+
+			await expect(chevron).toHaveCSS('cursor', 'pointer');
+			await chevron.click();
+			await expect(body).toHaveCount(0);
+			await page.locator('.folding-control.ash-icon-folding-collapsed > .ash-icon').first().click();
+			await expect(body).toBeVisible();
+		}
+	});
+
 	test('glyph margin, line numbers, and folding controls keep VS Code gutter order', async function () {
 		const { page } = browserTests;
 
@@ -1959,6 +2003,64 @@ suite('textModel browser component', () => {
 		await expect(lineDecoration).toHaveCount(0);
 		await expect(firstLineDecoration).toHaveCount(0);
 		await expect(blockDecoration).toHaveCount(0);
+	});
+
+	test('the caret on an empty line sits between before and after decorations', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		await page.addStyleTag({
+			content: `
+			.empty-line-before::before { content: 'prefix'; }
+			.empty-line-after::after { content: 'suffix'; }
+		` });
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue('\n\n');
+			editor.updateOptions({ cursorBlinking: 'solid' });
+			editor.createDecorationsCollection([
+				{
+					range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+					options: { description: 'after only', afterContentClassName: 'empty-line-after' },
+				},
+				{
+					range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 },
+					options: { description: 'before and after', beforeContentClassName: 'empty-line-before', afterContentClassName: 'empty-line-after' },
+				},
+				...Array.from({ length: 2 }, (_, index) => ({
+					range: { startLineNumber: 3, startColumn: 1, endLineNumber: 3, endColumn: 1 },
+					options: { description: `before ${index}`, beforeContentClassName: 'empty-line-before' },
+				})),
+			]);
+			editor.focus();
+		});
+		await expect(page.locator('.empty-line-before')).toHaveCount(3);
+		await expect(page.locator('.empty-line-after')).toHaveCount(2);
+		for (const lineNumber of [1, 2, 3]) {
+			await page.evaluate(lineNumber => window.ashTextModelIntegration.getControl().setPosition({ lineNumber, column: 1 }), lineNumber);
+			const line = page.locator(`.view-line[data-logical-line-index="${lineNumber - 1}"]`);
+			const editor = page.locator('.stanza-editor');
+			const caret = editor.locator('.stanza-editor-caret.primary');
+			const before = line.locator('.empty-line-before').last();
+			const after = line.locator('.empty-line-after');
+			await expect(async () => {
+				const [point, prefix, suffix] = await Promise.all([
+					caret.boundingBox(),
+					lineNumber > 1 ? before.boundingBox() : null,
+					lineNumber < 3 ? after.boundingBox() : null,
+				]);
+				assertBox(point, 'caret');
+				if (lineNumber > 1) {
+					assertBox(prefix, 'prefix decoration');
+					expect(Math.abs(point.x - prefix.x - prefix.width)).toBeLessThanOrEqual(1);
+				}
+				if (lineNumber < 3) {
+					assertBox(suffix, 'suffix decoration');
+					expect(Math.abs(point.x - suffix.x)).toBeLessThanOrEqual(1);
+				}
+			}).toPass();
+		}
+		await page.keyboard.insertText('typed');
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getValue())).toBe('\n\ntyped');
 	});
 
 	test('text-model editor has the accessibility contract', async function () {

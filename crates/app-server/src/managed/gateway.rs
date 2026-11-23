@@ -1494,7 +1494,12 @@ fn selected_execution_target(
     // issued while reviewing on that Session's execution runtime. Ignore unrelated
     // top-level identity fields that are not part of these methods' contracts.
     let session_selector = match method {
-        Some("file/search/glob" | "file/search/glob/cancel") => params
+        Some(
+            "file/search/glob"
+            | "file/search/glob/cancel"
+            | "file/search/fuzzy"
+            | "file/search/fuzzy/cancel",
+        ) => params
             .and_then(|params| params.get("target"))
             .filter(|target| target["type"] == "session")
             .and_then(|target| target.get("sessionId")),

@@ -87,7 +87,7 @@ function foldingOption(
 		isWholeLine: true,
 		linesDecorationsTooltip: tooltip,
 		...(icon ? {
-			firstLineDecorationClassName: `${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}`,
+			firstLineDecorationClassName: `folding-control ${alwaysVisible ? 'alwaysShowFoldIcons ' : ''}${ThemeIcon.asClassName(icon)}`,
 			firstLineDecorationIcon: icon,
 		} : {}),
 		...(isCollapsedDescription(description) ? { afterContentClassName: 'inline-folded' } : {}),

@@ -7,7 +7,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { ASH_REMOTE_SCHEME, getProviderRemoteWorkspace, getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../../../platform/workspace/common/workspace.js';
 import {
 	DEVELOPMENT_DIR_PERMISSIONS,
@@ -63,8 +63,9 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 	public isWorkspaceTrusted(): boolean { return this.projection?.isTrusted ?? false; }
 
 	public canSetWorkspaceTrust(): boolean {
+		const { folders } = this.workspace.getWorkspace();
 		return !this.isDisposed && !!this.api.recovery && this.api.recovery.status === 'idle'
-			&& this.workspace.getWorkspace().folders.length > 0;
+			&& folders.length > 0 && folders.every(folder => !getProviderRemoteWorkspace(folder.uri));
 	}
 
 	public resolveWorkspaceTrust(): Promise<void> {
@@ -133,7 +134,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 			for (const uri of uris) {
 				const remote = isRemoteResource(uri);
 				const authority = getWorkspaceRemoteAuthority(workspace);
-				if (remote ? uri.authority !== authority : uri.scheme !== 'file' || !!authority) throw new Error(localize('workspaceTrust.unsupported', 'This host cannot manage directory permissions for this workspace.'));
+				if (remote ? uri.authority !== authority || getProviderRemoteWorkspace(uri) : uri.scheme !== 'file' || !!authority) throw new Error(localize('workspaceTrust.unsupported', 'This host cannot manage directory permissions for this workspace.'));
 				const canonical = remote && this.resolver.getConnectionData(uri.authority) ? await this.resolver.getCanonicalURI(uri) : uri;
 				assertTarget();
 				if (canonical.scheme !== uri.scheme || canonical.authority !== uri.authority) throw new Error(localize('workspaceTrust.unsupported', 'This host cannot manage directory permissions for this workspace.'));

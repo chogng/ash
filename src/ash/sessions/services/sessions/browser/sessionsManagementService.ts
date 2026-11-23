@@ -46,6 +46,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly pendingDetailRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
+	private readonly archives = new Map<SessionId, Promise<void>>();
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
@@ -651,7 +652,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.refresh();
 	}
 
-	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'archiving'); }
+	archiveSession(sessionId: SessionId): Promise<void> {
+		const pending = this.archives.get(sessionId);
+		if (pending) return pending;
+		const archive = this.finishSession(sessionId, 'archiving').finally(() => this.archives.delete(sessionId));
+		this.archives.set(sessionId, archive);
+		return archive;
+	}
 	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'stopping'); }
 
 	async restoreSession(sessionId: SessionId): Promise<void> {

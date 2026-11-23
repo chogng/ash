@@ -171,7 +171,7 @@ import { IDecorationsService } from '../services/decorations/common/decorations.
 import {
 	IThemeService,
 } from '../../platform/theme/common/themeService.js';
-import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace } from '../../platform/workspace/common/workspace.js';
+import { getWorkspaceFolderSessionDirectory, type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace } from '../../platform/workspace/common/workspace.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
 import {
 	type WorkbenchContributionHost,
@@ -818,7 +818,10 @@ export class Workbench extends Disposable {
 			configuration: () => workspaceContext.getWorkspace().configuration,
 			api: api.fs,
 			resourceApi: api.resource,
-			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspaceContext.getWorkspace().folders.map(folder => {
+				const session = getWorkspaceFolderSessionDirectory(folder);
+				return { uri: folder.uri, target: session ? { type: 'session', ...session } : { type: 'environment', dirId: folder.id } };
+			}),
 			isConnectionReady: () => !api.appServer.recovery || api.appServer.recovery.status === 'idle',
 			onDidChange: listener => {
 				const subscriptions = new DisposableStore();

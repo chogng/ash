@@ -1,4 +1,5 @@
-import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
+import { createProviderRemoteWorkspaceUri, createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
+import { sessionWorkspaceFolderId } from '../../../workspace/common/workspace.js';
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -66,6 +67,32 @@ suite('workspace trust during directory opening', () => {
 			persistGrant: async () => { throw new Error('Startup persists its grant through env/dirs/set'); },
 		};
 	}
+
+	test('Dev Container workspace opens through its admitted Session directory', async () => {
+		const root = '/workspaces/project';
+		const providerId = 'ash.dev-containers';
+		const id = sessionWorkspaceFolderId('session-1', root);
+		const uri = createProviderRemoteWorkspaceUri(providerId, '/source', root);
+		const workspaceApi = { getWorkspace: async () => ({ id, folders: [{ id, uri: uri.toString(), name: 'project', index: 0 }] }) } as IWorkspaceContextApi;
+		const requests: unknown[] = [];
+		let workspace = '/source';
+		const client = {
+			state: 'ready', generation: 1, onStateChange: Event.None,
+			request: async (method: { method: string; }, params: unknown) => {
+				requests.push({ method: method.method, params });
+				if (method.method === 'session/list') return { sessions: [{ sessionId: 'session-1', executionTarget: { type: 'provider', providerId, workspace } }] };
+				if (method.method === 'env/dir/read') return { id, path: root, permissions: ['readFiles'] };
+				return assert.fail('The container root must not be bound as a local directory');
+			},
+		} as unknown as AppServerProtocolClient;
+		const requester = { requestDirectoryPermissions: async () => assert.fail('Runtime permissions are already owned by the session') };
+		await host.initializeWorkspace(client, requester, trustApi(new Map(), []), workspaceApi);
+		assert.deepEqual(requests, [{ method: 'session/list', params: {} }, { method: 'env/dir/read', params: { dirId: id } }]);
+		workspace = '/other';
+		requests.length = 0;
+		await assert.rejects(host.initializeWorkspace(client, requester, trustApi(new Map(), []), workspaceApi), /container workspace.*unavailable/u);
+		assert.deepEqual(requests, [{ method: 'session/list', params: {} }]);
+	});
 
 	test('saved partial and empty grants are reused without prompting or widening capabilities', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];

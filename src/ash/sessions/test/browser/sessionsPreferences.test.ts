@@ -55,6 +55,7 @@ import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contri
 import '../../contrib/projects/browser/projects.contribution.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -72,7 +73,9 @@ import { ISessionsService } from '../../services/sessions/browser/sessionsServic
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
-import { IProfileStorageService } from '../../../platform/storage/common/profileStorageService.js';
+import { IProfileStorageService, type ProfileStorageOverview } from '../../../platform/storage/common/profileStorageService.js';
+import { Severity, type INotification, type INotificationService } from '../../../platform/notification/common/notification.js';
+import { registerWorktreeStorageSuggestion } from '../../contrib/preferences/browser/sessionsStorageContent.js';
 import { IWorkbenchEnvironmentService } from '../../../workbench/services/environment/common/environmentService.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../workbench/services/localization/common/locale.js';
@@ -82,6 +85,38 @@ import { ILocalizationService } from '../../../workbench/services/localization/c
 import type { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+
+test('worktree storage suggestion opens review for eligible archived worktrees on a low disk', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	using timers = toDisposable(() => mock.timers.reset());
+	const overview: ProfileStorageOverview = {
+		profileRoot: '/profile', worktreeRoot: '/worktrees', desktopRoot: undefined, worktreeBytes: 1024, sessionBytes: 0, otherBytes: 0, complete: true,
+		worktreeAvailableBytes: 1024, worktrees: [{ sessionId: 'session', threadId: 'thread', revision: 1, path: '/worktrees/one', title: 'Archived', sizeBytes: 1024 }],
+	};
+	const sessions = {
+		state: 'ready', sessions: [{ status: 'archived', workspace: { authorityId: 'local' } }], onDidChange: Event.None,
+	} as unknown as ISessionsManagementService;
+	const notices: INotification[] = [];
+	const notifications = {
+		notify: (notice: INotification) => { notices.push(notice); return { close() { } }; },
+	} as unknown as INotificationService;
+	let opened = 0;
+	const openStorage = async () => { opened++; };
+	const storage: IProfileStorageService = {
+		_serviceBrand: undefined,
+		readOverview: async () => overview,
+		cleanWorktree: async () => assert.fail('Cleanup needs confirmation'),
+	};
+	using empty = registerWorktreeStorageSuggestion(sessions, { ...storage, readOverview: async () => ({ ...overview, worktrees: [] }) }, notifications, openStorage);
+	using eligible = registerWorktreeStorageSuggestion(sessions, storage, notifications, openStorage);
+	assert.equal(notices.length, 0);
+	mock.timers.tick(5000);
+	await Promise.resolve();
+	assert.equal(notices.length, 1);
+	assert.equal(notices[0]!.severity, Severity.Warning);
+	await notices[0]!.actions!.primary![0]!.run();
+	assert.equal(opened, 1);
+});
 
 test('Sessions modified filtering excludes window defaults, fixed values and language-only overrides', async () => {
 	const [{ testConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] = await Promise.all([

@@ -34,6 +34,8 @@ import type { SkillReference } from '../../../../../platform/agentHost/common/ap
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
+import { LocalChatSessionUri } from '../../common/model/chatUri.js';
+import { IChatSideChatService } from '../../common/chatSideChatService.js';
 import { ChatFindWidget, type IChatFindHost } from './chatFind/chatFindWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import { chatResponseFollowups } from '../../common/model/chatFollowup.js';
@@ -299,6 +301,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					if (generation !== model.composerGeneration || !this.canAddSelectionToChat()) return;
 					this.appendToDraft(text);
 					this.focusInput();
+				};
+			},
+			prepareSideChat: (turnId: string) => {
+				const { sessionId, threadId, composerGeneration } = model;
+				if (!sessionId || !threadId || model.inputState.aiDisabled || this.isTranscriptProgressActive) return undefined;
+				const resource = LocalChatSessionUri.forSession(sessionId, threadId);
+				if (!scopedInstantiation.getOptional(IChatSideChatService)?.canAskInSideChat(resource)) return undefined;
+				return {
+					resource,
+					turnId,
+					isCurrent: () => this.visible && model.composerGeneration === composerGeneration
+						&& model.sessionId === sessionId && model.threadId === threadId,
 				};
 			},
 			canEditRequest: () => !this.isTranscriptProgressActive,

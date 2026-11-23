@@ -20,7 +20,7 @@ export function createAppServerFileSearchApi(connection: AppServerProtocolClient
 			const found = await runSearch(connection, signal,
 				// Allow process startup and directory registration before the bounded metadata query.
 				operationId => connection.request(APP_SERVER_METHODS['file/search/fuzzy'], { operationId, target: directory.target, query: query.query, ...(query.includePatterns?.length ? { includePatterns: [...query.includePatterns] } : {}), ...(query.excludePatterns?.length ? { excludePatterns: [...query.excludePatterns] } : {}), maxResults: query.maxResults }, { timeoutMs: 3 * 60_000 }),
-				operationId => appServerRequest(connection, 'file/search/fuzzy/cancel', { operationId }));
+				operationId => appServerRequest(connection, 'file/search/fuzzy/cancel', { operationId, ...(directory.target.type === 'session' ? { target: directory.target } : {}) }));
 			return { matches: found.matches.map(match => ({ ...match, resource: URI.joinPath(directory.resource, match.path) })), totalMatches: found.totalMatches };
 		},
 	};

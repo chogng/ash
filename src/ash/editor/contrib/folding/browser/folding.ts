@@ -286,7 +286,7 @@ export class FoldingController extends Disposable {
 	private handleGutterPointerDown(event: IEditorMouseEvent): void {
 		if (!this.editor.getOption(EditorOption.folding)) return;
 		const target = event.target;
-		const foldingMarker = target.element?.closest<HTMLElement>('.stanza-editor-line-decoration[class*="ash-icon-folding-"]');
+		const foldingMarker = target.element?.closest('.folding-control');
 		if (target.type !== MouseTargetType.GUTTER_LINE_DECORATIONS || !foldingMarker || !target.position) return;
 		const lineIndex = target.position.lineNumber - 1;
 		event.event.preventDefault();

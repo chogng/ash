@@ -122,6 +122,7 @@ const desktopAppSettingsTitle = () => localize('sessions.settings.desktopApp', '
 /** Sessions owns its settings page while reusing the Workbench setting widgets. */
 export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
+	private readonly standaloneStorage = this._register(new MutableDisposable<SessionsStorageContent>());
 	private dialog: Dialog | undefined;
 	private dialogVisible = false;
 	private closeDialog: (() => Promise<boolean>) | undefined;
@@ -160,6 +161,24 @@ export class SessionsPreferences extends Disposable {
 				);
 			},
 		}));
+	}
+
+	public async openStorage(): Promise<'restore' | 'delete' | undefined> {
+		if (this.dialogVisible) {
+			await this.open({ section: 'desktop-app', query: storageSettingsTitle() });
+			return undefined;
+		}
+		return this.showStorage(this.container, this.standaloneStorage);
+	}
+
+	private async showStorage(container: HTMLElement, slot: MutableDisposable<SessionsStorageContent>): Promise<'restore' | 'delete' | undefined> {
+		if (slot.value || this.isDisposed) return undefined;
+		const panel = slot.value = this.instantiationService.createInstance(SessionsStorageContent, container);
+		try {
+			return await panel.show();
+		} finally {
+			slot.clear();
+		}
 	}
 
 	public async open(options: IOpenSettingsOptions = {}): Promise<void> {
@@ -430,14 +449,7 @@ export class SessionsPreferences extends Disposable {
 					id: 'manage', kind: 'action', presentation: 'setting', enabled: true, label: title, description,
 					actionLabel: localize({ bundle: 'ash.sessions', key: 'sessions.storage.manage' }, 'Manage'),
 					run: async () => {
-						if (storageDialog.value) return;
-						const panel = storageDialog.value = contentServices.createInstance(SessionsStorageContent, content);
-						let action: 'restore' | 'delete' | undefined;
-						try {
-							action = await panel.show();
-						} finally {
-							storageDialog.clear();
-						}
+						const action = await this.showStorage(content, storageDialog);
 						if (action && !resources.isDisposed) {
 							await handoff(async () => { await runCommand(action === 'restore' ? 'agentSession.restore' : 'agentSession.delete'); }, false);
 						}

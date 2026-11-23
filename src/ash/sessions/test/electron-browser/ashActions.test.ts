@@ -9,7 +9,7 @@ import { IRemoteAgentHostService, type IRemoteAgentHostConnectionInfo } from '..
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { INativeHostApi } from '../../../platform/native/common/nativeHost.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
+import { createProviderRemoteWorkspaceUri, createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
 import type { RemoteAgentConnection } from '../../../platform/remote/common/remoteAgentApi.js';
 import { OPEN_IDE_SESSION_CHANNEL, validateOpenIdeSessionRequest } from '../../../platform/window/common/window.js';
 import { INativeHostService } from '../../../workbench/common/services.js';
@@ -154,6 +154,19 @@ suite('Open IDE connection routing', () => {
 		using commands = new CommandService(services);
 		await commands.executeCommand(command);
 		assert.deepEqual(requests, [{ folder: 'file:///local-project', conversation: buildOpenSessionLinkUri(link.sessionId, link.threadId, 'local').toString() }]);
+		assert.deepEqual(f.notifications, []);
+	});
+
+	test('opens the original local Dev Container and its conversation in the IDE', async () => {
+		using services = new InstantiationService();
+		const f = fixture(services, { kind: 'local', generation: 1 });
+		f.state.directory = { type: 'provider', providerId: 'ash.dev-containers', workspace: '/source project', root: '/workspaces/project' };
+		using commands = new CommandService(services);
+		await commands.executeCommand(command);
+		assert.deepEqual(requests, [{
+			folder: createProviderRemoteWorkspaceUri('ash.dev-containers', '/source project', '/workspaces/project').toString(),
+			conversation: buildOpenSessionLinkUri(link.sessionId, link.threadId, 'local').toString(),
+		}]);
 		assert.deepEqual(f.notifications, []);
 	});
 

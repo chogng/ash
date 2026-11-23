@@ -54,7 +54,8 @@ export function getChatLinkPreviewAccessibilityHelp(): string {
 }
 
 export function getChatSelectionAccessibilityHelp(): string {
-	return localize('chat.selection.help', 'With text selected in a chat message, press Ctrl or Command+C to copy it. Focus the message input and press Ctrl or Command+V to paste. Right-click the selection or press Shift+F10 to open its menu. Choose Copy to copy the selected text, or Add to Chat when available to append it to the unsent draft. Press Escape to close the menu.');
+	return localize('chat.selection.help', 'With text selected in a chat message, press Ctrl or Command+C to copy it. Focus the message input and press Ctrl or Command+V to paste. Right-click the selection or press Shift+F10 to open its menu. Choose Copy to copy the selected text, or Add to Chat when available to append it to the unsent draft. Press Escape to close the menu.')
+		+ '\n' + localize('chat.btw.selectionHelp', 'Select text in a completed reply or reasoning summary and press Shift+F10. Choose Ask in Side Chat to ask about that text from its original turn.');
 }
 
 export function getChatCodeBlockCardAccessibilityHelp(): string {

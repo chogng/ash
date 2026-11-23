@@ -1,7 +1,7 @@
 import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
+import { sessionWorkspaceFolderId, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
@@ -81,7 +81,7 @@ export class WorkspaceFolderManagementContribution extends Disposable {
 		if (!workspace) return undefined;
 		return {
 			// Moving a Session must not redirect an already open file.
-			id: `session:${encodeURIComponent(session.sessionId)}:${encodeURIComponent(workspace.root)}`,
+			id: sessionWorkspaceFolderId(session.sessionId, workspace.root),
 			uri: sessionWorkspaceUri(workspace),
 			name: this.folderLabels.getWorkspaceFolderLabel(workspace, session.workspace),
 			index: 0,
