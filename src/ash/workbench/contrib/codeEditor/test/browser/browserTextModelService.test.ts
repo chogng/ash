@@ -410,6 +410,50 @@ test('failed Save As keeps the untitled draft dirty', async () => {
 	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: 'draft', dirty: true });
 });
 
+for (const editDuringSaveAs of [false, true]) {
+	test(`Save As preserves a target edited ${editDuringSaveAs ? 'during acquisition' : 'before the request'}`, async () => {
+		const source = URI.file('/source.txt');
+		const target = URI.file('/target.txt');
+		const writes: TextResourceSaveRequest[] = [];
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+			onDidChange: Event.None,
+			resolve: async ({ resource }: TextResourceResolveRequest) => ({
+				resource,
+				text: resource.path === source.path ? 'source on disk' : 'target on disk',
+				encoding: resource.path === source.path ? 'utf16le' : 'utf8',
+				revision: 'initial',
+			}),
+			save: async (request: TextResourceSaveRequest) => {
+				writes.push(request);
+				return { revision: 'saved' };
+			},
+		}, {});
+		const signal = new AbortController().signal;
+		using sourceReference = await models.acquire({ resource: source }, signal);
+		using targetReference = await models.acquire({ resource: target }, signal);
+		sourceReference.model.setValue('source draft');
+		const pendingSave = editDuringSaveAs ? sourceReference.saveAs(target, signal) : undefined;
+		targetReference.model.setValue('target draft');
+		const targetVersion = targetReference.model.version;
+
+		await assert.rejects(pendingSave ?? sourceReference.saveAs(target, signal), /Cannot save as 'target\.txt' because it has unsaved changes/u);
+		assert.equal(writes.length, 0);
+		assert.equal(sourceReference.model.getText(), 'source draft');
+		assert.equal(sourceReference.isDirty, true);
+		assert.equal(targetReference.model.getText(), 'target draft');
+		assert.equal(targetReference.model.version, targetVersion);
+		assert.equal(targetReference.isDirty, true);
+		assert.equal(models.getEncodingSupport(target)?.getEncoding(), 'utf8');
+
+		await targetReference.revert(signal);
+		await sourceReference.saveAs(target, signal);
+		assert.equal(writes.length, 1);
+		assert.equal(writes[0].resource.toString(), target.toString());
+		assert.equal(writes[0].text, 'source draft');
+		assert.equal(writes[0].encoding, 'utf16le');
+	});
+}
+
 test('Stanza text model save tolerates its final reference closing before I/O completes', async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {

@@ -5,6 +5,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { basename } from '../../../../base/common/resources.js';
 import { runWhenWindowIdle } from '../../../../base/browser/dom.js';
 import { TextModelConflictError, TextModelSaveCompletionError, type TextModelInput, type TextModelReference, type TextModelAcquireOptions, type IFileTextModelService, type ITextModelSaveCompletionParticipant, type TextModelSaveCompletion } from '../common/textModelResourceService.js';
 import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type ITextResourceStore } from '../common/textResourceStore.js';
@@ -399,13 +400,19 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const encoding = entry.encoding;
 		// Save As runs against the destination so providers receive its URI and inferred language.
 		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
+		if (target.model === entry.model) return target.save(signal);
+		// Check the resolved, shared model after acquisition so edits made while it was loading are protected.
+		if (target.isDirty) {
+			throw new Error(localize('files.saveAsDirtyTarget', "Cannot save as '{0}' because it has unsaved changes. Choose a different destination to keep both files.", basename(target.resource)));
+		}
 		const targetEntry = this.findEntry(target.resource)?.[1];
-		if (targetEntry && encoding !== undefined) {
-			targetEntry.encoding = encoding;
+		const shouldCarryEncoding = targetEntry && encoding !== undefined;
+		if (shouldCarryEncoding) targetEntry.encoding = encoding;
+		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
+		if (shouldCarryEncoding) {
 			this.encodingChanged.fire(targetEntry.resource);
 			this.refreshDirty(targetEntry);
 		}
-		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
 		await target.save(signal);
 		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty && sameSavedText(entry.savedText, baseline)) {
 			// Only the captured draft was saved. A generated baseline may have advanced during the write.

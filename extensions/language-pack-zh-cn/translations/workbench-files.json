@@ -192,6 +192,7 @@
     "files.dirtyMany": "{0} 个未保存的文件",
     "files.saveConflictTitle": "磁盘上的文件已更改",
     "files.saveConflictMessage": "无法保存“{0}”，因为磁盘上的文件已更改。未保存的修改仍保留在编辑器中。",
+    "files.saveAsDirtyTarget": "“{0}”有未保存的修改，已停止另存为。请选择其他保存位置以保留两份内容。",
     "files.saveFailedTitle": "无法保存文件",
     "files.saveFailedMessage": "无法保存“{0}”：{1}。未保存的修改仍保留在编辑器中。",
     "files.untitledFile": "未命名",
