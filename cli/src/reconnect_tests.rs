@@ -26,7 +26,10 @@ fn transport_failures_retry_with_bounded_backoff_until_success() {
                 Ok("ready")
             }
         },
-        |delay| elapsed.set(elapsed.get() + delay),
+        |delay| {
+            elapsed.set(elapsed.get() + delay);
+            true
+        },
         || elapsed.get(),
         |attempt, delay| reports.borrow_mut().push((attempt, delay)),
     )
@@ -54,7 +57,7 @@ fn protocol_change_stops_without_more_retries() {
             attempts.set(attempts.get() + 1);
             Err(Failure::Terminal("schema changed".into()))
         },
-        |_| {},
+        |_| true,
         || Duration::ZERO,
         |_, _| {},
     )
@@ -74,7 +77,7 @@ fn exhausted_window_does_not_start_an_unbounded_attempt() {
             attempts.set(attempts.get() + 1);
             Err(Failure::Retryable("still closed".into()))
         },
-        |_| {},
+        |_| true,
         || WINDOW,
         |_, _| {},
     )
@@ -102,4 +105,19 @@ fn recovery_error_prints_a_copyable_shell_command() {
         error,
         "connection failed\nReconnect: ash resume 'session with spaces' 'thread'\\''quoted'"
     );
+}
+
+#[test]
+fn cancelling_a_reconnect_wait_prevents_another_attempt() {
+    let (active, cancelled) = std::sync::mpsc::channel();
+    drop(active);
+    let result = retry::<()>(
+        "App Server",
+        "connection lost",
+        || panic!("a cancelled reconnect cannot start a connection"),
+        |duration| super::wait(duration, Some(&cancelled)),
+        || Duration::ZERO,
+        |_, _| {},
+    );
+    assert!(result.is_err());
 }

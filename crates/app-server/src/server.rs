@@ -2110,6 +2110,10 @@ impl AppServer {
         telemetry: ash_otel::Telemetry,
         analytics: Arc<analytics::Analytics>,
     ) -> Self {
+        let metrics = diagnostics.metrics();
+        self.threads.bind_goal_creation_observer(move |effort| {
+            metrics.goal_created(effort.map_or("unknown", ash_protocol::ReasoningEffort::as_str));
+        });
         self.diagnostics = diagnostics;
         self.telemetry = telemetry;
         self.analytics = analytics;

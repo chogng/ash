@@ -504,6 +504,7 @@ async fn responses_reuses_exact_history_but_restarts_after_rollback_or_changed_s
             |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
                 assert_eq!(request.uri().path(), "/v1/responses");
                 assert_eq!(request.headers()["session-id"], "scope");
+                assert_eq!(request.headers()["x-codex-exclude"], "usage.attribution");
                 assert_eq!(request.headers()["authorization"], "Bearer fixture");
                 assert!(request.headers().get("accept").is_none());
                 Ok(response)
@@ -555,7 +556,10 @@ async fn responses_reuses_exact_history_but_restarts_after_rollback_or_changed_s
         .await
         .unwrap();
     assert_eq!(response.text(), "first");
-    assert_eq!(response.usage.unwrap().cached_input_tokens, Some(80));
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.input_tokens, Some(100));
+    assert_eq!(usage.output_tokens, Some(1));
+    assert_eq!(usage.cached_input_tokens, Some(80));
     request.input.extend([
         InputItem::Message(Message::text(MessageRole::Assistant, "first")),
         InputItem::Message(Message::text(MessageRole::User, "next")),

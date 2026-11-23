@@ -1408,6 +1408,7 @@ impl App {
             new_session: Some(self.sessions.input.recovery_draft()),
             threads: self.thread_presentations.recovery_drafts(),
             home_visible: self.fullscreen_home_visible(),
+            language: self.language(),
         }
     }
 

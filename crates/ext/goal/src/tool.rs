@@ -68,8 +68,8 @@ impl GoalToolService {
             }
             CREATE_GOAL_TOOL_NAME => {
                 let arguments: CreateGoalArguments = decode(&call.arguments)?;
-                let goal = self.threads.create_goal(
-                    identity.thread_id(),
+                let goal = self.threads.create_goal_from_tool(
+                    identity,
                     arguments.objective,
                     arguments.token_budget,
                 )?;

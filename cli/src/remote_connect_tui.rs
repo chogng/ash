@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::thread;
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 use ash_remote::RemoteDirPath;
@@ -67,18 +67,34 @@ pub(super) fn run(
                 reason,
             } => {
                 eprintln!("Remote App Server disconnected: {reason}");
-                session = reconnect(&profile, ssh_executable.as_deref(), &reason)
-                    .map_err(|error| {
-                        reconnect::recovery_error(
-                            error,
-                            &recovery_command(
-                                &profile,
-                                ssh_executable.as_deref(),
-                                next_recovery.as_ref(),
-                            ),
+                let reconnect_profile = profile.clone();
+                let reconnect_ssh = ssh_executable.clone();
+                let Some(ready) = reconnect::interactive(
+                    next_recovery.as_ref(),
+                    &next_drafts,
+                    move |cancelled| {
+                        reconnect(
+                            &reconnect_profile,
+                            reconnect_ssh.as_deref(),
+                            &reason,
+                            cancelled,
                         )
-                    })?
-                    .session;
+                    },
+                )
+                .map_err(|error| {
+                    reconnect::recovery_error(
+                        error,
+                        &recovery_command(
+                            &profile,
+                            ssh_executable.as_deref(),
+                            next_recovery.as_ref(),
+                        ),
+                    )
+                })?
+                else {
+                    return Ok(());
+                };
+                session = ready.session;
                 recovery = next_recovery;
                 drafts = Some(next_drafts);
                 start_empty = recovery.is_none() && start_empty;
@@ -134,6 +150,7 @@ fn reconnect(
     profile: &RemoteProfile,
     ssh_executable: Option<&std::path::Path>,
     initial_reason: &str,
+    cancelled: &Receiver<()>,
 ) -> Result<ReadyRemoteRuntime, String> {
     let started = Instant::now();
     reconnect::retry(
@@ -148,14 +165,9 @@ fn reconnect(
                 "Remote App Server reconnect stopped because the verified runtime changed or rejected the connection: {error}"
             ))),
         },
-        thread::sleep,
+        |delay| reconnect::wait(delay, Some(cancelled)),
         || started.elapsed(),
-        |attempt, delay| {
-            eprintln!(
-                "Reconnecting to Remote App Server (attempt {attempt}, retrying in {} ms)...",
-                delay.as_millis()
-            )
-        },
+        |_, _| {},
     )
 }
 

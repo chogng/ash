@@ -3581,6 +3581,7 @@ dependencies = [
  "ash-slash-commands",
  "ash-sprite",
  "ash-state",
+ "ash-terminal",
  "ash-terminal-detection",
  "ash-utils-absolute-path",
  "ash-utils-elapsed",

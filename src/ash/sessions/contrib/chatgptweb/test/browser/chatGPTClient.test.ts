@@ -15,6 +15,26 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('preserves user mentions in streamed and historical transcripts without making them editable', async () => {
+		const mention = { content_type: 'mention', name: 'Builder', path: 'plugin://builder' };
+		const invalid = { content_type: 'mention', name: 'Broken' };
+		const input = {
+			id: 'user', author: { role: 'user' },
+			content: { content_type: 'multimodal_text', parts: ['Use', mention, invalid, 'to continue.'] },
+		};
+		const stream = new Response(`data: ${JSON.stringify({ conversation_id: 'chat', message: input })}\n\ndata: [DONE]\n\n`).body!;
+		const live = (await collect(decodeChatGPTStream(stream, signal()))).find(frame => frame.message)?.message;
+		assert.deepEqual(live?.mentions, [{ name: mention.name, path: mention.path }]);
+		assert.match(live!.text, /^Use\n@Builder\n.*ChatGPT.*\nto continue\.$/u);
+		assert.equal(live?.editableText, undefined);
+		for (const native of [false, true]) {
+			const client = new ChatGPTClient((async () => json(native
+				? { current_node: input.id, messages: [input], page_info: { has_previous_page: false } }
+				: { current_node: input.id, mapping: { [input.id]: { message: input } } })) as typeof fetch, native);
+			assert.deepEqual((await client.history('chat', signal())).messages, [live]);
+		}
+	});
+
 	test('preserves explicit successful completion and rejects failed or partial writing in streams and history', async () => {
 		const cases = [
 			{ status: 'finished_successfully', metadata: {}, expected: 'complete' },

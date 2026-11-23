@@ -1,5 +1,7 @@
 use cli::format_command;
 
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 const WINDOW: Duration = Duration::from_secs(30);
@@ -19,7 +21,7 @@ pub(super) fn retry<T>(
     connection_name: &str,
     initial_reason: &str,
     mut reconnect: impl FnMut() -> Result<T, Failure>,
-    mut wait: impl FnMut(Duration),
+    mut wait: impl FnMut(Duration) -> bool,
     mut elapsed: impl FnMut() -> Duration,
     mut report: impl FnMut(usize, Duration),
 ) -> Result<T, String> {
@@ -34,11 +36,44 @@ pub(super) fn retry<T>(
         };
         attempts += 1;
         report(attempts, delay);
-        wait(delay);
+        if !wait(delay) {
+            return Err("App Server reconnect stopped.".into());
+        }
         match reconnect() {
             Ok(ready) => return Ok(ready),
             Err(Failure::Retryable(error)) => last_reason = error,
             Err(Failure::Terminal(error)) => return Err(error),
+        }
+    }
+}
+
+pub(super) fn interactive<T: Send + 'static>(
+    recovery: Option<&ash_tui::TuiRecoveryState>,
+    drafts: &ash_tui::TuiRecoveryDrafts,
+    reconnect: impl FnOnce(&mpsc::Receiver<()>) -> Result<T, String> + Send + 'static,
+) -> Result<Option<T>, String> {
+    let (active, cancelled) = mpsc::channel();
+    let (complete, outcome) = mpsc::channel();
+    thread::Builder::new()
+        .name("ash-cli-reconnect".into())
+        .spawn(move || {
+            let _ = complete.send(reconnect(&cancelled));
+        })
+        .map_err(|error| error.to_string())?;
+    let result = ash_tui::wait_for_reconnect(outcome, recovery, drafts);
+    drop(active);
+    result
+}
+
+pub(super) fn wait(delay: Duration, cancelled: Option<&mpsc::Receiver<()>>) -> bool {
+    match cancelled {
+        Some(cancelled) => matches!(
+            cancelled.recv_timeout(delay),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ),
+        None => {
+            thread::sleep(delay);
+            true
         }
     }
 }

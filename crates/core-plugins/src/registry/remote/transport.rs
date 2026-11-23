@@ -67,7 +67,7 @@ impl Transport for HttpsTransport {
         .map_err(|error| TransportError::new_with_cause(TransportErrorKind::Other, &url, error))?;
         match response.status() {
             200 => Ok(Box::pin(futures::stream::once(std::future::ready(Ok(
-                bytes::Bytes::copy_from_slice(response.body()),
+                bytes::Bytes::from_owner(response),
             ))))),
             403 | 404 | 410 => Err(TransportError::new(TransportErrorKind::FileNotFound, url)),
             _ => Err(TransportError::new(TransportErrorKind::Other, url)),

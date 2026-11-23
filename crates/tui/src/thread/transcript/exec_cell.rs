@@ -8,6 +8,7 @@ use ash_protocol::ToolActivity;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
+use ash_terminal::resolve_command_output;
 use ash_utils_string::take_bytes_at_char_boundary;
 use ash_utils_string::truncate_middle_with_marker;
 use std::collections::BTreeSet;
@@ -42,6 +43,13 @@ struct ExecCall {
 }
 
 impl ExecCall {
+    fn command_output(&self) -> bool {
+        matches!(
+            self.activity,
+            Some(ToolActivity::Command { .. } | ToolActivity::Run)
+        )
+    }
+
     fn failure_label(&self, language: Language) -> String {
         let (template, target) = match self.activity.as_ref() {
             Some(ToolActivity::Read { target }) => ("Failed to read {0}", target.as_str()),
@@ -372,6 +380,11 @@ impl ExecCell {
         let Some(call) = self.call_mut(tool_call_id) else {
             return;
         };
+        let text = if call.command_output() {
+            resolve_command_output(&text, MAX_LINE_BYTES as u16)
+        } else {
+            std::borrow::Cow::Borrowed(text.as_str())
+        };
         let text = bounded_text(&text, MAX_LIVE_BYTES, MAX_LIVE_LINES);
         match stream {
             ToolOutputStream::Stdout => {
@@ -398,6 +411,8 @@ impl ExecCell {
         call.result_entry_id = Some(entry_id);
         let result = if call.name == "advisor" {
             advisor_text(result)
+        } else if call.command_output() {
+            normalize_command_result(result)
         } else {
             result
         };
@@ -556,6 +571,39 @@ fn localized_activity(language: Language, template: &str, target: &str) -> Strin
     let mut text = Text::template(template, vec![Text::from(target.to_owned())]);
     text.localize(language);
     text.to_string()
+}
+
+fn normalize_command_result(result: String) -> String {
+    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&result) else {
+        return match resolve_command_output(&result, MAX_LINE_BYTES as u16) {
+            std::borrow::Cow::Borrowed(_) => result,
+            std::borrow::Cow::Owned(text) => text,
+        };
+    };
+    let Some(object) = json.as_object_mut() else {
+        return result;
+    };
+    let output = if object.contains_key("result") {
+        object
+            .get_mut("result")
+            .and_then(serde_json::Value::as_object_mut)
+    } else {
+        Some(object)
+    };
+    let Some(output) = output else {
+        return result;
+    };
+    let mut changed = false;
+    for field in ["stdout", "stderr"] {
+        if let Some(serde_json::Value::String(text)) = output.get_mut(field)
+            && let std::borrow::Cow::Owned(visible) =
+                resolve_command_output(text, MAX_LINE_BYTES as u16)
+        {
+            *text = visible;
+            changed = true;
+        }
+    }
+    if changed { json.to_string() } else { result }
 }
 
 fn bounded_text(text: &str, max_bytes: usize, max_lines: usize) -> String {

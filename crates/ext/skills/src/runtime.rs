@@ -784,22 +784,14 @@ fn compose_sources(
         }
     }
     if let Some(dir_root) = dir_root {
-        let root = dir_root.join(".ash/skills");
-        match std::fs::symlink_metadata(&root) {
-            Ok(_) => add_source(
-                dir_id.clone(),
-                root,
-                SourceKind::Directory,
-                &mut fingerprint,
-                &mut roots,
-                &mut diagnostics,
-            ),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => diagnostics.push(source_unavailable_diagnostic(
-                &dir_id,
-                "the native Directory Skill source cannot be inspected",
-            )),
-        }
+        add_source(
+            dir_id,
+            dir_root.join(".ash/skills"),
+            SourceKind::Directory,
+            &mut fingerprint,
+            &mut roots,
+            &mut diagnostics,
+        );
     }
     fingerprint.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(SourceComposition {
@@ -818,12 +810,12 @@ fn add_source(
     diagnostics: &mut Vec<SkillRuntimeDiagnostic>,
 ) {
     let source = match kind {
-        SourceKind::BuiltIn => SkillSourceRoot::built_in(id.clone(), &root),
-        SourceKind::User => SkillSourceRoot::user(id.clone(), &root),
-        SourceKind::Directory => SkillSourceRoot::directory(id.clone(), &root),
+        SourceKind::BuiltIn => SkillSourceRoot::built_in(id.clone(), &root).map(Some),
+        SourceKind::User => SkillSourceRoot::user(id.clone(), &root).map(Some),
+        SourceKind::Directory => SkillSourceRoot::optional_directory(id.clone(), &root),
     };
     match source {
-        Ok(source) => {
+        Ok(Some(source)) => {
             fingerprint.push(SourceFingerprint {
                 id,
                 root,
@@ -831,6 +823,7 @@ fn add_source(
             });
             roots.push(source);
         }
+        Ok(None) => {}
         Err(error) => diagnostics.push(source_unavailable_diagnostic(&id, &error.to_string())),
     }
 }

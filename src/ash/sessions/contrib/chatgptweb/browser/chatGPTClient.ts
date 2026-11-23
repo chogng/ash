@@ -1,5 +1,5 @@
 import { getArtifactRequestContext, isRequestArtifactKind } from '../../../common/artifactKind.js';
-import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage } from '../../../common/chatReplyBackend.js';
+import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMention, ChatReplyMessage } from '../../../common/chatReplyBackend.js';
 export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference } from '../../../common/chatReplyBackend.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -1272,6 +1272,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	const url = conversationId ? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}` : 'https://chatgpt.com/';
 	const fallback = `[${localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT')}](${url})`;
 	const resources: ChatGPTResource[] = [];
+	const mentions: ChatReplyMention[] = [];
 	const resourcePart = (part: Record<string, unknown>): ChatGPTResource | undefined => {
 		const uri = ['asset_pointer', 'audio_asset_pointer', 'video_asset_pointer', 'url'].map(key => part[key]).find(value => typeof value === 'string') ?? (typeof part.file_id === 'string' ? `file-service://${part.file_id}` : undefined);
 		if (typeof uri !== 'string' || uri.length > 8192) return undefined;
@@ -1290,6 +1291,15 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	const partText = (part: unknown): string | undefined => {
 		if (typeof part === 'string') { return part; }
 		if (!isRecord(part)) { return part == null ? '' : fallback; }
+		if (user && part.content_type === 'mention') {
+			const { name, path } = part;
+			if (typeof name !== 'string' || !name.trim() || name.length > 256 || /[\p{Cc}]/u.test(name)
+				|| typeof path !== 'string' || !path.trim() || path.length > 8192 || /[\p{Cc}]/u.test(path)) {
+				return fallback;
+			}
+			mentions.push({ name, path });
+			return literal(`@${name}`);
+		}
 		// Keep mixed text/media parts in source order. Selecting only string parts
 		// used to silently discard an image whenever that same message had a caption.
 		if (['text', 'audio_transcription', 'text_audio'].includes(part.content_type as string) && typeof part.text === 'string') { return part.text; }
@@ -1383,6 +1393,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		...(isRecord(value.metadata) && value.metadata.has_versions === true && { hasVersions: true }),
 		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
 		...(resources.length ? { resources: mergeChatGPTResources(resources) } : {}),
+		...(mentions.length ? { mentions } : {}),
 		...(references.length ? { references } : {}), ...(imageGroups.length ? { imageGroups } : {}),
 	};
 }

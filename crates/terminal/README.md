@@ -1,6 +1,6 @@
 # `ash-terminal`
 
-CLI 的 TUI 和 Remote 集成测试使用本 crate 解析 PTY 输出，读取终端画面和滚动历史，并应答终端查询。
+TUI 命令记录使用本 crate 解析单行进度重绘。CLI 的 TUI 和 Remote 集成测试用它解析 PTY 输出、读取滚动历史和应答终端查询。
 
 ## 所有权
 
@@ -30,6 +30,7 @@ CLI PTY tests
 | Symbol                           | 调用者看到什么                                              | 不变量                                                  |
 | -------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
 | `GridSize`                       | 非零 rows/columns                                           | `new` 把零规范化为一                                    |
+| `resolve_command_output`         | 消解同一行内的回车覆盖和清行                                | 普通输出原样借用，重绘行受列数上限约束                  |
 | `TerminalCore::process_output`   | 增量消费任意 byte chunk                                     | parser state 跨 chunk 保留                              |
 | `TerminalCore::resize`           | 调整 grid cell dimensions                                   | cursor 和保存位置始终 clamp 在 grid 内                  |
 | `TerminalCore::active_screen`    | 当前 primary/alternate projection                           | `grid` 返回当前屏幕                                     |

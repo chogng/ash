@@ -8,6 +8,33 @@ use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 
 #[test]
+fn command_progress_agrees_in_live_output_and_completed_results() {
+    let call = call_id("progress");
+    let mut cell = ExecCell::start(
+        "progress-call".into(),
+        call.clone(),
+        &tool_name("run_command"),
+        "{}".into(),
+        Some(ToolActivity::Run),
+    );
+    let raw = "starting\r\x1b[K90%\nfinished";
+    cell.apply_output("out".into(), &call, ToolOutputStream::Stdout, raw.into());
+    insta::assert_snapshot!(&cell.calls[0].stdout, @"
+90%
+finished
+");
+    cell.complete(
+        "result".into(),
+        &call,
+        serde_json::json!({"result": {"stdout": raw, "exit_code": 0}}).to_string(),
+        false,
+    );
+    let completed: serde_json::Value =
+        serde_json::from_str(cell.calls[0].result.as_deref().unwrap()).unwrap();
+    assert_eq!(completed["result"]["stdout"], cell.calls[0].stdout);
+}
+
+#[test]
 fn bounded_output_includes_the_omission_notice_in_its_byte_budget() {
     let input = format!("head{}tail", "😀".repeat(80));
     let output = super::bounded_text(&input, 32, 100);

@@ -93,6 +93,20 @@ fn dir_source_preserves_dir_provenance() {
     let _ = fs::remove_dir(&root);
 }
 
+#[test]
+fn optional_directory_distinguishes_an_absent_source_from_a_file() {
+    let parent = tempfile::tempdir().unwrap();
+    let path = parent.path().join("skills");
+    let id = SkillSourceId::new("dir:skill-source:.ash").unwrap();
+    assert!(
+        SkillSourceRoot::optional_directory(id.clone(), &path)
+            .unwrap()
+            .is_none()
+    );
+    fs::write(&path, "").unwrap();
+    assert!(SkillSourceRoot::optional_directory(id, &path).is_err());
+}
+
 #[cfg(unix)]
 #[test]
 fn source_root_rejects_symbolic_links() {

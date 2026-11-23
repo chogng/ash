@@ -807,6 +807,7 @@ impl ToolExecutionFacts {
                 thread_id: snapshot.thread_id.clone(),
                 turn_id: turn_id.clone(),
                 model: turn.model.clone(),
+                reasoning_effort: turn.reasoning_effort,
                 policy_revision: turn.policy_revision.clone(),
                 tool_profile: turn.tool_profile.clone(),
             }),
@@ -897,6 +898,7 @@ pub struct ToolExecutionIdentity {
     thread_id: ash_protocol::ThreadId,
     turn_id: ash_protocol::TurnId,
     model: Option<ash_protocol::ModelRef>,
+    reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     policy_revision: String,
     tool_profile: Option<ash_protocol::ToolProfileSnapshot>,
 }
@@ -916,6 +918,10 @@ impl ToolExecutionIdentity {
 
     pub fn model(&self) -> Option<&ash_protocol::ModelRef> {
         self.model.as_ref()
+    }
+
+    pub(crate) fn reasoning_effort(&self) -> Option<ash_protocol::ReasoningEffort> {
+        self.reasoning_effort
     }
 
     pub fn policy_revision(&self) -> &str {

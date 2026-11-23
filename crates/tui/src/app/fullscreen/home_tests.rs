@@ -383,6 +383,23 @@ fn home_page_focus_without_an_action_accepts_text_and_paste() {
 }
 
 #[test]
+fn first_frame_after_paste_shows_the_updated_composer() {
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_paste("first pasted line\nsecond pasted line".into());
+    assert_eq!(app.input(), "first pasted line\nsecond pasted line");
+    let frame = text(&render(&app, 100, 30));
+    assert!(frame.contains("first pasted line"));
+    assert!(frame.contains("second pasted line"));
+
+    let mut app = unstarted_app();
+    app.open_home();
+    app.handle_paste("x".repeat(1_001));
+    let frame = text(&render(&app, 100, 30));
+    assert!(frame.contains("[Pasted Content 1001 chars]"));
+}
+
+#[test]
 fn pasting_into_the_home_menu_returns_to_the_composer() {
     let mut app = unstarted_app();
     app.open_home();

@@ -669,8 +669,15 @@ impl AgentRuntime for Runtime<'_> {
         thread_id: &ThreadId,
         request: SetGoalRequest,
     ) -> Result<SetGoalResult, CoreError> {
-        let before = self.threads.read_thread(thread_id)?.sequence;
+        let snapshot = self.threads.read_thread(thread_id)?;
         let result = self.threads.set_goal(thread_id, request)?;
+        if result.created {
+            self.threads.observe_goal_creation(|| {
+                self.executor.goal_creation_effort(snapshot.turns.last())
+            });
+        }
+        let before = snapshot.sequence;
+        drop(snapshot);
         self.publish(thread_id, before)?;
         if result.changed && result.goal.status == ThreadGoalStatus::Active {
             self.executor.resume_extension_continuation(thread_id)?;

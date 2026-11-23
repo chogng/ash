@@ -59,6 +59,7 @@ ash-protocol = { workspace = true }
 ash-product-update = { workspace = true }
 ash-slash-commands = { workspace = true }
 ash-sprite = { workspace = true }
+ash-terminal = { workspace = true }
 ash-terminal-detection = { workspace = true }
 ash-utils-elapsed = { workspace = true }
 ash-utils-image = { workspace = true }

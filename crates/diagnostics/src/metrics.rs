@@ -167,6 +167,16 @@ impl Metrics {
         }
     }
 
+    /// Records durable Goal creation with one of the host's bounded effort labels.
+    pub fn goal_created(&self, reasoning_effort: &'static str) {
+        self.0
+            .provider
+            .meter("ash")
+            .u64_counter("ash.goal.created")
+            .build()
+            .add(1, &[KeyValue::new("reasoning_effort", reasoning_effort)]);
+    }
+
     /// Records provider-reported usage only; missing token information stays absent.
     pub fn guardian_tokens(
         &self,

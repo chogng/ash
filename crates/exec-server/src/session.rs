@@ -227,11 +227,13 @@ impl StreamBuffer {
     }
 
     fn append(&mut self, bytes: &[u8]) {
-        self.bytes.extend(bytes);
-        while self.bytes.len() > self.capacity {
-            self.bytes.pop_front();
-            self.start += 1;
-        }
+        let incoming_offset = bytes.len().saturating_sub(self.capacity);
+        let tail = &bytes[incoming_offset..];
+        let available = self.capacity - tail.len();
+        let expired = self.bytes.len().saturating_sub(available);
+        self.start += (expired + incoming_offset) as u64;
+        self.bytes.retain_back(available);
+        self.bytes.extend(tail);
     }
 
     fn text_end(&self) -> u64 {

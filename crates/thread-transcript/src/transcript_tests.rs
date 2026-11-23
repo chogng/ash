@@ -562,6 +562,50 @@ fn snapshot_includes_current_transient_entries_for_late_consumers() {
 }
 
 #[test]
+fn tool_output_keeps_new_progress_after_the_retained_text_limit() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    for (index, text) in [
+        format!("expired output\n{}\nprogress 10%", "界".repeat(100_000)),
+        "\r\x1b[".into(),
+        "Kprogress 90%".into(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        apply(
+            &mut accumulator,
+            transient(
+                index as u64 + 1,
+                ThreadUpdate::ToolOutputDelta {
+                    turn_id: turn_id(),
+                    tool_call_id: ToolCallId::new("progress").unwrap(),
+                    stream: ToolOutputStream::Stdout,
+                    text,
+                },
+            ),
+        );
+    }
+    let snapshot = accumulator
+        .snapshot(&thread_with_turn(
+            turn_id(),
+            ash_protocol::TurnStatus::Running,
+        ))
+        .unwrap();
+    let text = snapshot
+        .entries
+        .iter()
+        .find_map(|entry| match entry {
+            ThreadTranscriptEntry::ToolOutput { text, .. } => Some(text),
+            _ => None,
+        })
+        .unwrap();
+    assert!(text.len() <= 256 * 1024);
+    assert!(text.starts_with("… transient output truncated …\n"));
+    assert!(text.ends_with("progress 10%\r\x1b[Kprogress 90%"));
+    assert!(!text.contains("expired output"));
+}
+
+#[test]
 fn reconnect_snapshot_keeps_streamed_entries_unique_and_in_first_seen_order() {
     let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
     let tool_call_id = ToolCallId::new("call-1").unwrap();

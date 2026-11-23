@@ -327,6 +327,27 @@ fn new_file_requires_contextual_and_nested_rules_before_writing() {
 }
 
 #[test]
+fn required_reads_only_loads_rules_from_new_ancestors() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("src/new")).unwrap();
+    fs::write(root.path().join("src/AGENTS.md"), "Common instructions").unwrap();
+    fs::write(root.path().join("src/ASH.md"), "Common Ash instructions").unwrap();
+    fs::write(root.path().join("src/new/ASH.md"), "New Ash instructions").unwrap();
+    let catalog = InstructionCatalog::discover(root.path());
+    assert_eq!(
+        catalog.required_reads(
+            &[
+                PathBuf::from("src/new/file.rs"),
+                PathBuf::from("src/new/other.rs")
+            ],
+            &[PathBuf::from("src/known.rs")],
+            &[],
+        ),
+        vec![root.path().join("src/new/ASH.md")],
+    );
+}
+
+#[test]
 fn invalid_description_is_diagnosed_and_deleted_selection_disappears_after_refresh() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join(".ash/instructions");

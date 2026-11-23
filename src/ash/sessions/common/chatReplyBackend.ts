@@ -34,6 +34,12 @@ export interface ChatReplyReference {
 	/** The provider attached this source to the reply itself. */
 	readonly cited?: true;
 }
+/** A named reference preserved from a received message. The path is opaque provider data. */
+export interface ChatReplyMention {
+	readonly name: string;
+	readonly path: string;
+}
+
 export interface ChatReplyMessage {
 	readonly id: string;
 	readonly role: 'user' | 'assistant';
@@ -41,6 +47,7 @@ export interface ChatReplyMessage {
 	/** Message time in Unix milliseconds. Older history may omit it. */
 	readonly timestamp?: number;
 	readonly resources?: readonly ChatReplyResource[];
+	readonly mentions?: readonly ChatReplyMention[];
 	readonly references?: readonly ChatReplyReference[];
 	/** Execution content stays in the conversation record, separate from answer Markdown. */
 	readonly activity?: { readonly kind: 'call' | 'result' | 'progress'; readonly tool?: string; readonly failed: boolean; };

@@ -40,6 +40,63 @@ use core_api::TurnReceipt;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+#[test]
+fn client_goal_creation_uses_the_configured_default_before_the_first_turn() {
+    struct GoalModel;
+    impl ModelService for GoalModel {
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            panic!("recording a Goal must not invoke a model");
+        }
+
+        fn reasoning_config(
+            &self,
+            selection: ModelSelection<'_>,
+            requested: Option<ash_protocol::ReasoningEffort>,
+        ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
+            assert!(matches!(selection, ModelSelection::ConfiguredDefault));
+            assert_eq!(requested, None);
+            Ok(Some(ash_protocol::ReasoningConfig {
+                effort: ash_protocol::ReasoningEffort::Medium,
+                summary: false,
+            }))
+        }
+    }
+
+    let mut fixture = Fixture::new(Failure::None);
+    fixture.executor = TurnExecutor::without_tools(fixture.threads.clone(), Arc::new(GoalModel));
+    let captured = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let meter = captured.clone();
+    fixture
+        .threads
+        .bind_goal_creation_observer(move |effort| meter.lock().unwrap().push(effort));
+    let runtime = fixture.runtime();
+    let request = || SetGoalRequest {
+        objective: Some("finish the work".into()),
+        ..Default::default()
+    };
+    assert!(
+        runtime
+            .set_goal(&fixture.thread_id, request())
+            .unwrap()
+            .created
+    );
+    assert!(
+        !runtime
+            .set_goal(&fixture.thread_id, request())
+            .unwrap()
+            .created
+    );
+    assert_eq!(
+        *captured.lock().unwrap(),
+        vec![Some(ash_protocol::ReasoningEffort::Medium)]
+    );
+}
+
 struct UnusedModel;
 impl ModelService for UnusedModel {
     fn invoke(

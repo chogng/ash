@@ -69,6 +69,15 @@ impl SkillSourceRoot {
         Self::new(id, SkillSourceKind::Directory, root.as_ref())
     }
 
+    /// Discovers an optional native source without probing the path twice.
+    /// A missing directory is normal, while an invalid source remains a diagnostic.
+    pub fn optional_directory(
+        id: SkillSourceId,
+        root: impl AsRef<Path>,
+    ) -> Result<Option<Self>, SkillError> {
+        Self::inspect(id, SkillSourceKind::Directory, root.as_ref())
+    }
+
     /// Admits one package-owned descriptor to Skill discovery after validating its Skill contract.
     pub fn from_plugin(root: PluginSkillRoot) -> Result<Self, SkillError> {
         let id = SkillSourceId::new(root.source_id()).map_err(|error| {
@@ -113,16 +122,28 @@ impl SkillSourceRoot {
     }
 
     fn new(id: SkillSourceId, kind: SkillSourceKind, root: &Path) -> Result<Self, SkillError> {
-        let metadata = fs::symlink_metadata(root).map_err(|_| source_unavailable(&id))?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        Self::inspect(id.clone(), kind, root)?.ok_or_else(|| source_unavailable(&id))
+    }
+
+    fn inspect(
+        id: SkillSourceId,
+        kind: SkillSourceKind,
+        root: &Path,
+    ) -> Result<Option<Self>, SkillError> {
+        let metadata = match fs::symlink_metadata(root) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(source_unavailable(&id)),
+        };
+        if !metadata.is_dir() {
             return Err(source_unavailable(&id));
         }
         let canonical_root = root.canonicalize().map_err(|_| source_unavailable(&id))?;
-        Ok(Self {
+        Ok(Some(Self {
             view: SkillSourceView { id, kind },
             canonical_root,
             layout: SkillSourceLayout::Collection,
-        })
+        }))
     }
 
     fn new_exact(

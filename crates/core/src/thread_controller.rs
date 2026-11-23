@@ -81,6 +81,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicU64;
@@ -434,6 +435,8 @@ enum GoalWriteSource {
     Agent,
 }
 
+type GoalCreationObserver = dyn Fn(Option<ash_protocol::ReasoningEffort>) + Send + Sync;
+
 /// Coordinates durable mutations for each loaded Thread.
 pub struct ThreadController {
     pub(crate) turn_tool_models: Mutex<
@@ -457,6 +460,7 @@ pub struct ThreadController {
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<ExtensionRegistries>,
     attachments: Arc<Attachments>,
+    goal_creation_observer: OnceLock<Box<GoalCreationObserver>>,
     next_id: AtomicU64,
 }
 
@@ -624,6 +628,7 @@ impl ThreadController {
             attachments,
             loaded_threads,
             agent_spawn_gates: Mutex::new(BTreeMap::new()),
+            goal_creation_observer: OnceLock::new(),
             next_id: AtomicU64::new(1),
         }
     }
@@ -661,6 +666,7 @@ impl ThreadController {
             attachments,
             loaded_threads,
             agent_spawn_gates: Mutex::new(BTreeMap::new()),
+            goal_creation_observer: OnceLock::new(),
             next_id: AtomicU64::new(1),
         }
     }
@@ -2005,6 +2011,36 @@ impl ThreadController {
             self.record_batch(snapshot, events)?;
             Ok(goal)
         })
+    }
+
+    /// Creates a Goal from the exact Turn that invoked the tool.
+    pub fn create_goal_from_tool(
+        &self,
+        identity: &crate::ToolExecutionIdentity,
+        objective: String,
+        token_budget: Option<u64>,
+    ) -> Result<ThreadGoal, CoreError> {
+        let goal = self.create_goal(identity.thread_id(), objective, token_budget)?;
+        self.observe_goal_creation(|| identity.reasoning_effort());
+        Ok(goal)
+    }
+
+    /// Installs the host meter once for a Thread store shared by multiple connections.
+    pub fn bind_goal_creation_observer(
+        &self,
+        observer: impl Fn(Option<ash_protocol::ReasoningEffort>) + Send + Sync + 'static,
+    ) {
+        self.goal_creation_observer
+            .get_or_init(|| Box::new(observer));
+    }
+
+    pub(crate) fn observe_goal_creation(
+        &self,
+        effort: impl FnOnce() -> Option<ash_protocol::ReasoningEffort>,
+    ) {
+        if let Some(observer) = self.goal_creation_observer.get() {
+            observer(effort());
+        }
     }
 
     pub(crate) fn clear_goal(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {

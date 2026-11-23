@@ -138,6 +138,21 @@ pub enum TurnExecutionOutcome {
 }
 
 impl TurnExecutor {
+    pub(crate) fn goal_creation_effort(
+        &self,
+        last_turn: Option<&crate::thread_reducer::TurnSnapshot>,
+    ) -> Option<ash_protocol::ReasoningEffort> {
+        let selection = last_turn
+            .and_then(|turn| turn.model.as_ref())
+            .map_or(ModelSelection::ConfiguredDefault, ModelSelection::Session);
+        let requested = last_turn.and_then(|turn| turn.reasoning_effort);
+        self.model_source
+            .reasoning_config(selection, requested)
+            .ok()
+            .flatten()
+            .map(|reasoning| reasoning.effort)
+    }
+
     /// Releases process-local cells and stored values when a session is stopped or archived.
     pub fn close_code_mode_session(&self, session_id: &SessionId) {
         self.close_directory_code_mode(session_id);

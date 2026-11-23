@@ -51,9 +51,12 @@ pub struct CellStyle {
     pub foreground: TerminalColor,
     pub background: TerminalColor,
     pub bold: bool,
+    pub dim: bool,
     pub italic: bool,
     pub underline: bool,
     pub inverse: bool,
+    pub hidden: bool,
+    pub crossed_out: bool,
 }
 
 /// One terminal cell. Wide-character continuation cells have empty text.
@@ -383,6 +386,14 @@ impl TerminalGrid {
         *self = Self::with_scrollback_limit(self.size, self.scrollback_limit);
     }
 
+    pub(crate) fn style(&self) -> CellStyle {
+        self.style
+    }
+
+    pub(crate) fn set_style(&mut self, style: CellStyle) {
+        self.style = style;
+    }
+
     pub(crate) fn set_graphics_rendition(&mut self, values: &[u16]) {
         let values = if values.is_empty() { &[0][..] } else { values };
         let mut index = 0;
@@ -390,13 +401,21 @@ impl TerminalGrid {
             match values[index] {
                 0 => self.style = CellStyle::default(),
                 1 => self.style.bold = true,
+                2 => self.style.dim = true,
                 3 => self.style.italic = true,
                 4 => self.style.underline = true,
                 7 => self.style.inverse = true,
-                22 => self.style.bold = false,
+                8 => self.style.hidden = true,
+                9 => self.style.crossed_out = true,
+                22 => {
+                    self.style.bold = false;
+                    self.style.dim = false;
+                }
                 23 => self.style.italic = false,
                 24 => self.style.underline = false,
                 27 => self.style.inverse = false,
+                28 => self.style.hidden = false,
+                29 => self.style.crossed_out = false,
                 30..=37 => {
                     self.style.foreground = TerminalColor::Indexed((values[index] - 30) as u8)
                 }

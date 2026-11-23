@@ -207,6 +207,39 @@ fn xai_replays_complete_encrypted_reasoning_and_requests_it_without_a_summary() 
 }
 
 #[test]
+fn codex_usage_attribution_exclusion_is_backend_specific_and_additive() {
+    let request = ModelRequest::text("hello");
+    let target = ResolvedApiTarget::new(
+        "https://chatgpt.com/backend-api/codex",
+        vec![ash_http_client::HttpHeader::new(
+            "x-codex-exclude",
+            "example",
+        )],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
+    let excluded = |endpoint: ApiEndpoint| {
+        endpoint
+            .headers(&target, "gpt-test", &request)
+            .unwrap()
+            .into_iter()
+            .find(|header| header.name().eq_ignore_ascii_case("x-codex-exclude"))
+            .unwrap()
+            .value()
+            .to_owned()
+    };
+    assert_eq!(
+        excluded(ApiEndpoint::ChatGptResponses),
+        "example,usage.attribution"
+    );
+    assert_eq!(excluded(ApiEndpoint::OpenAiResponses), "example");
+    assert_eq!(excluded(ApiEndpoint::ChatGptPlanResponses), "example");
+    assert_eq!(excluded(ApiEndpoint::XaiSubscriptionResponses), "example");
+}
+
+#[test]
 fn xai_requests_use_conversation_affinity_and_fresh_request_ids() {
     let mut request = ModelRequest::text("hello");
     request.prompt_cache_key = Some("ash-thread-1".into());

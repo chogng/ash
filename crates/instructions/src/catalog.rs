@@ -168,11 +168,20 @@ impl InstructionCatalog {
                 required.insert(file);
             }
         }
-        let known_nested = self.nested_instructions(known);
-        let target_nested = self.nested_instructions(targets);
-        for path in target_nested.files {
-            if !known_nested.files.contains(&path) && !selected.contains(&self.root.join(&path)) {
-                required.insert(self.root.join(path));
+        if self.nested {
+            let (known_dirs, _) = nested_directories(known);
+            let known_dirs = known_dirs.into_iter().collect::<BTreeSet<_>>();
+            let (mut target_dirs, diagnostics) = nested_directories(targets);
+            // Both inputs use the same host-local catalog. Shared ancestors have
+            // no newly required files, even when one of the candidate names is absent.
+            target_dirs.retain(|dir| !known_dirs.contains(dir));
+            for path in self
+                .load_nested_instructions(target_dirs, diagnostics)
+                .files
+            {
+                if !selected.contains(&self.root.join(&path)) {
+                    required.insert(self.root.join(path));
+                }
             }
         }
         required.into_iter().collect()
@@ -183,54 +192,20 @@ impl InstructionCatalog {
         if !self.nested || paths.is_empty() {
             return NestedInstructions::default();
         }
-        let mut diagnostics = Vec::new();
-        let mut dirs = BTreeSet::new();
-        for path in paths {
-            if path.is_absolute()
-                || path.components().any(|component| {
-                    matches!(
-                        component,
-                        std::path::Component::CurDir
-                            | std::path::Component::ParentDir
-                            | std::path::Component::Prefix(_)
-                    )
-                })
-            {
-                continue;
-            }
-            let mut depth_reported = false;
-            for ancestor in path.parent().into_iter().flat_map(Path::ancestors) {
-                if ancestor.as_os_str().is_empty() {
-                    break;
-                }
-                if ancestor.components().count() > MAX_NESTED_DEPTH {
-                    if !depth_reported {
-                        diagnostics.push(diagnostic(
-                            Some(ancestor.to_path_buf()),
-                            InstructionDiagnosticCode::EntryLimitExceeded,
-                            "nested Instruction depth exceeds 16 directories",
-                        ));
-                        depth_reported = true;
-                    }
-                    continue;
-                }
-                dirs.insert(ancestor.to_path_buf());
-            }
-        }
-        let mut dirs = dirs.into_iter().collect::<Vec<_>>();
-        dirs.sort_by(|left, right| {
-            left.components()
-                .count()
-                .cmp(&right.components().count())
-                .then(left.cmp(right))
-        });
-        if dirs.len() > MAX_NESTED_DIRS {
-            dirs.truncate(MAX_NESTED_DIRS);
-            diagnostics.push(diagnostic(
-                None,
-                InstructionDiagnosticCode::EntryLimitExceeded,
-                "only the first 64 nested Instruction directories are inspected",
-            ));
+        let (dirs, diagnostics) = nested_directories(paths);
+        self.load_nested_instructions(dirs, diagnostics)
+    }
+
+    fn load_nested_instructions(
+        &self,
+        dirs: Vec<PathBuf>,
+        mut diagnostics: Vec<InstructionDiagnostic>,
+    ) -> NestedInstructions {
+        if dirs.is_empty() {
+            return NestedInstructions {
+                diagnostics,
+                ..NestedInstructions::default()
+            };
         }
         let Ok(canonical_root) = fs::canonicalize(&self.root) else {
             diagnostics.push(diagnostic(
@@ -276,6 +251,59 @@ impl InstructionCatalog {
             diagnostics,
         }
     }
+}
+
+fn nested_directories(paths: &[PathBuf]) -> (Vec<PathBuf>, Vec<InstructionDiagnostic>) {
+    let mut diagnostics = Vec::new();
+    let mut dirs = BTreeSet::new();
+    for path in paths {
+        if path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::CurDir
+                        | std::path::Component::ParentDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            continue;
+        }
+        let mut depth_reported = false;
+        for ancestor in path.parent().into_iter().flat_map(Path::ancestors) {
+            if ancestor.as_os_str().is_empty() {
+                break;
+            }
+            if ancestor.components().count() > MAX_NESTED_DEPTH {
+                if !depth_reported {
+                    diagnostics.push(diagnostic(
+                        Some(ancestor.to_path_buf()),
+                        InstructionDiagnosticCode::EntryLimitExceeded,
+                        "nested Instruction depth exceeds 16 directories",
+                    ));
+                    depth_reported = true;
+                }
+                continue;
+            }
+            dirs.insert(ancestor.to_path_buf());
+        }
+    }
+    let mut dirs = dirs.into_iter().collect::<Vec<_>>();
+    dirs.sort_by(|left, right| {
+        left.components()
+            .count()
+            .cmp(&right.components().count())
+            .then(left.cmp(right))
+    });
+    if dirs.len() > MAX_NESTED_DIRS {
+        dirs.truncate(MAX_NESTED_DIRS);
+        diagnostics.push(diagnostic(
+            None,
+            InstructionDiagnosticCode::EntryLimitExceeded,
+            "only the first 64 nested Instruction directories are inspected",
+        ));
+    }
+    (dirs, diagnostics)
 }
 
 fn scan(

@@ -458,7 +458,7 @@ impl TranscriptAccumulator {
         let ThreadTranscriptEntry::ToolOutput { text: output, .. } = entry else {
             return;
         };
-        append_bounded(output, text);
+        append_tool_output_tail(output, text);
         let entry = entry.clone();
         self.trim_transient(changes);
         changes.push(ThreadTranscriptChange::Upsert { entry });
@@ -652,6 +652,26 @@ fn append_matching_delta(item: &mut ThreadItem, delta: &ItemDelta) -> bool {
     };
     append_bounded(target, addition);
     true
+}
+
+fn append_tool_output_tail(target: &mut String, addition: &str) {
+    const PREFIX: &str = "… transient output truncated …\n";
+    let already_truncated = target.starts_with(PREFIX);
+    if !already_truncated && target.len().saturating_add(addition.len()) <= MAX_TRANSIENT_TEXT_BYTES
+    {
+        target.push_str(addition);
+        return;
+    }
+
+    let start = if already_truncated { PREFIX.len() } else { 0 };
+    let capacity = MAX_TRANSIENT_TEXT_BYTES - PREFIX.len();
+    let kept_addition =
+        &addition[addition.ceil_char_boundary(addition.len().saturating_sub(capacity))..];
+    let keep_target = capacity - kept_addition.len();
+    let target_start =
+        target.ceil_char_boundary(start.max(target.len().saturating_sub(keep_target)));
+    target.replace_range(..target_start, PREFIX);
+    target.push_str(kept_addition);
 }
 
 fn append_bounded(target: &mut String, addition: &str) {

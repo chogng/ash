@@ -179,6 +179,32 @@ suite('workspace trust during directory opening', () => {
 		});
 	}
 
+	test('disconnect takes precedence over a queued trust confirmation', async () => {
+		using changes = new Emitter<'ready' | 'stopped'>();
+		const entered = new DeferredPromise<void>();
+		const choice = new DeferredPromise<'development'>();
+		const grants: WorkspaceTrustPermission[][] = [];
+		const client = {
+			state: 'ready', generation: 1,
+			onStateChange: changes.event,
+			request: async () => { throw new Error('The retired connection cannot write directories'); },
+		} as unknown as AppServerProtocolClient;
+		const setup = host.initializeWorkspaceDirectories(client, {
+			requestDirectoryPermissions: () => { void entered.complete(); return choice.p; },
+		}, trustApi(new Map(), grants), [{ id: 'remote-root', path: '/srv/project' }]);
+		const rejected = assert.rejects(setup, isCancellationError);
+		await entered.p;
+
+		const confirmed = choice.complete('development');
+		changes.fire('stopped');
+		changes.fire('ready');
+		await confirmed;
+		await rejected;
+
+		assert.deepEqual(grants, []);
+		assert.equal(changes.hasListeners(), false);
+	});
+
 	test('retired directory setup observes a late prompt rejection without granting or writing directories', async () => {
 		const entered = new DeferredPromise<void>();
 		const choice = new DeferredPromise<'restricted'>();

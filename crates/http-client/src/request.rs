@@ -200,6 +200,12 @@ fn retry_deadline(headers: &[HttpHeader], received_at: ResponseReceivedAt) -> Op
     received_at.monotonic.checked_add(delay)
 }
 
+impl AsRef<[u8]> for HttpResponse {
+    fn as_ref(&self) -> &[u8] {
+        self.body()
+    }
+}
+
 impl Drop for HttpResponse {
     fn drop(&mut self) {
         self.body.zeroize();

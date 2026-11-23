@@ -127,6 +127,10 @@ fn every_generation_profile_builds_json_and_stream_headers_at_the_api_boundary()
                 (endpoint == ApiEndpoint::ChatGptResponses).then_some("session-one")
             );
             assert_eq!(
+                header(&request, "x-codex-exclude"),
+                (endpoint == ApiEndpoint::ChatGptResponses).then_some("usage.attribution")
+            );
+            assert_eq!(
                 header(&request, "anthropic-version"),
                 matches!(
                     endpoint,

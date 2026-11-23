@@ -12,6 +12,50 @@ use std::time::Instant;
 #[cfg(unix)]
 const DICTATION_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
 
+#[cfg(unix)]
+#[test]
+fn actual_tui_keeps_local_commands_available_while_the_app_server_reconnects() {
+    let server = ScenarioServer::start([]);
+    let fixture = Fixture::new().with_gated_app_server_reconnect();
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nscreenMode = \"fullscreen\"\nautoUpdate = \"never\"\n");
+    let mut process = TuiProcess::start(&fixture, &["code"], LARGE_SIZE);
+    process.wait_for_stable_screen("? for shortcuts");
+    process.send(b"draft survives disconnect");
+    process.wait_for_stable_screen("draft survives disconnect");
+
+    let proxy = std::fs::read_to_string(fixture.profile().join("app-server-proxy.pid"))
+        .unwrap()
+        .trim()
+        .parse::<u32>()
+        .unwrap()
+        .to_string();
+    assert!(
+        Command::new("kill")
+            .args(["-KILL", &proxy])
+            .status()
+            .unwrap()
+            .success()
+    );
+    process.wait_for_stable_screen("Reconnecting to App Server");
+    process.wait_for_stable_screen("/quit");
+    process.send(b"model");
+    process.wait_for_stable_screen("/model");
+    process.send(b"\r");
+    process.wait_for_stable_screen("Requires an App Server connection.");
+    process.send(b"\x1b");
+    process.wait_for_stable_screen("/quit");
+    process.send(b"status");
+    process.wait_for_stable_screen("/status");
+    process.send(b"\r");
+    process.wait_for_stable_screen("No conversation was open.");
+
+    std::fs::write(fixture.profile().join("allow-reconnect"), []).unwrap();
+    process.wait_for_stable_screen("draft survives disconnect");
+    process.quit();
+    assert_eq!(server.request_count(), 0);
+}
+
 #[test]
 fn actual_tui_terminal_program_status_tracks_work_and_clears_on_exit_in_both_modes() {
     for mode in ["fullscreen", "inline"] {

@@ -454,6 +454,40 @@ fn failure_is_durable_before_snapshot_exposes_it() {
 }
 
 #[test]
+fn tool_goal_creation_uses_the_invoking_turn_effort_and_does_not_count_rejections() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let meter = Arc::clone(&recorded);
+    threads.bind_goal_creation_observer(move |effort| meter.lock().unwrap().push(effort));
+    let thread = create_thread(&threads, "goal effort");
+    let turn = threads
+        .start_turn(
+            &thread,
+            StartTurnRequest {
+                reasoning_effort: Some(ash_protocol::ReasoningEffort::High),
+                ..start_request("create-goal-with-high")
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let snapshot = threads.read_thread(&thread).unwrap();
+    let facts = crate::ToolExecutionFacts::for_turn(&snapshot, &turn, []).unwrap();
+    let identity = facts.execution_identity().unwrap();
+    threads
+        .create_goal_from_tool(identity, "finish the implementation".into(), None)
+        .unwrap();
+    assert!(
+        threads
+            .create_goal_from_tool(identity, "a duplicate objective".into(), None)
+            .is_err()
+    );
+    assert_eq!(
+        *recorded.lock().unwrap(),
+        vec![Some(ash_protocol::ReasoningEffort::High)]
+    );
+}
+
+#[test]
 fn thread_goal_lifecycle_is_durable_and_unfinished_goals_cannot_be_replaced() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store.clone());

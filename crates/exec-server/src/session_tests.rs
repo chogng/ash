@@ -35,6 +35,19 @@ fn output_buffer_reports_an_explicit_gap_after_tail_truncation() {
 }
 
 #[test]
+fn output_buffer_keeps_absolute_offsets_when_one_chunk_replaces_the_entire_tail() {
+    let mut output = StreamBuffer::new(4);
+    output.append(b"abc");
+    output.append(b"defghijkl");
+    output.append(b"");
+    let chunk = output.read(3).unwrap();
+    assert_eq!(chunk.text, "ijkl");
+    assert_eq!(chunk.next_cursor, 12);
+    assert!(chunk.gap);
+    assert!(!output.read(8).unwrap().gap);
+}
+
+#[test]
 fn output_buffer_waits_for_every_byte_of_a_utf8_character() {
     for text in ["中", "🚀"] {
         let mut output = StreamBuffer::new(16);

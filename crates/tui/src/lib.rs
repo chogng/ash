@@ -22,6 +22,8 @@ mod memories;
 mod memory;
 mod models;
 mod nls;
+mod reconnecting;
+pub use reconnecting::wait_for_reconnect;
 mod projects;
 mod render;
 mod sessions;
@@ -336,6 +338,7 @@ pub struct TuiRecoveryDrafts {
     pub(crate) new_session: Option<crate::thread::composer::ChatInputDraft>,
     pub(crate) threads: BTreeMap<ThreadId, crate::thread::composer::ChatInputDraft>,
     pub(crate) home_visible: bool,
+    pub(crate) language: crate::nls::Language,
 }
 
 impl fmt::Debug for TuiRecoveryDrafts {

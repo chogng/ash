@@ -257,6 +257,36 @@ impl Fixture {
         self
     }
 
+    #[cfg(unix)]
+    pub fn with_gated_app_server_reconnect(mut self) -> Self {
+        use std::os::unix::ffi::OsStrExt;
+
+        let daemon = self.ash.with_file_name("ash-app-server-daemon");
+        let mut executable = daemon.as_os_str().as_bytes().to_vec();
+        executable.push(b'\n');
+        fs::write(self.profile.join("real-app-server-connector"), executable).unwrap();
+        let bin = self.root.join("reconnect-bin");
+        fs::create_dir(&bin).unwrap();
+        let cli = bin.join("ash");
+        cargo_bin::copy_executable(&self.ash, &cli).unwrap();
+        let wrapper = bin.join("ash-app-server-daemon");
+        cargo_bin::write_executable(
+            &wrapper,
+            r#"#!/bin/sh
+IFS= read -r executable < "$ASH_HOME/real-app-server-connector" || exit 1
+if [ -e "$ASH_HOME/app-server-proxy.pid" ]; then
+    while [ ! -e "$ASH_HOME/allow-reconnect" ]; do sleep 0.05; done
+else
+    printf '%s\n' "$$" > "$ASH_HOME/app-server-proxy.pid"
+fi
+exec "$executable" "$@"
+"#,
+        )
+        .unwrap();
+        self.ash = cli;
+        self
+    }
+
     pub fn with_missing_voice_host(mut self) -> Self {
         self.voice_host = Some(self.root.join("missing-voice-host"));
         self

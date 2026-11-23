@@ -1,7 +1,7 @@
 use std::env;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::thread;
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 use ash_app_server_client::AppServerSession;
@@ -95,10 +95,29 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
                 reason,
             } => {
                 eprintln!("Local App Server disconnected: {reason}");
-                session =
-                    reconnect(&executable, &dir_root, &profile_root, &reason).map_err(|error| {
-                        reconnect::recovery_error(error, &recovery_command(next_recovery.as_ref()))
-                    })?;
+                let reconnect_executable = executable.clone();
+                let reconnect_dir = dir_root.clone();
+                let reconnect_profile = profile_root.clone();
+                let Some(ready) = reconnect::interactive(
+                    next_recovery.as_ref(),
+                    &next_drafts,
+                    move |cancelled| {
+                        reconnect(
+                            &reconnect_executable,
+                            &reconnect_dir,
+                            &reconnect_profile,
+                            &reason,
+                            Some(cancelled),
+                        )
+                    },
+                )
+                .map_err(|error| {
+                    reconnect::recovery_error(error, &recovery_command(next_recovery.as_ref()))
+                })?
+                else {
+                    return Ok(());
+                };
+                session = ready;
                 if let Some(updater) = &updater {
                     updater.replace_client(session.client());
                 }
@@ -163,6 +182,7 @@ fn connect_or_reconnect(
             dir_root,
             profile_root,
             &ClientError::ServerShuttingDown.to_string(),
+            None,
         ),
         result => result.map_err(|error| error.to_string()),
     }
@@ -173,19 +193,22 @@ fn reconnect(
     dir_root: &std::path::Path,
     profile_root: &std::path::Path,
     initial_reason: &str,
+    cancelled: Option<&Receiver<()>>,
 ) -> Result<AppServerSession, String> {
     let started = Instant::now();
     reconnect::retry(
         "Local App Server",
         initial_reason,
         || connect(executable, dir_root, profile_root).map_err(classify_error),
-        thread::sleep,
+        |delay| reconnect::wait(delay, cancelled),
         || started.elapsed(),
         |attempt, delay| {
-            eprintln!(
-                "Reconnecting to Local App Server (attempt {attempt}, retrying in {} ms)...",
-                delay.as_millis()
-            );
+            if cancelled.is_none() {
+                eprintln!(
+                    "Reconnecting to Local App Server (attempt {attempt}, retrying in {} ms)...",
+                    delay.as_millis()
+                );
+            }
         },
     )
 }

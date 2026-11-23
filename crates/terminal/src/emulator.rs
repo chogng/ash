@@ -146,7 +146,7 @@ impl GridPerformer<'_> {
     }
 }
 
-fn flat_params(params: &Params) -> Vec<u16> {
+pub(crate) fn flat_params(params: &Params) -> Vec<u16> {
     params
         .iter()
         .map(|param| param.first().copied().unwrap_or(0))
@@ -163,7 +163,7 @@ fn param(params: &Params, index: usize, default: u16) -> usize {
         .unwrap_or(default) as usize
 }
 
-fn raw_param(params: &Params, index: usize) -> u16 {
+pub(crate) fn raw_param(params: &Params, index: usize) -> u16 {
     params
         .iter()
         .nth(index)

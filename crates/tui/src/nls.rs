@@ -5547,6 +5547,36 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("quit Ash", "Ash を終了", "退出 Ash", "quitter Ash"),
     translation(
+        "Reconnecting to App Server…",
+        "App Server に再接続中…",
+        "正在重新连接 App Server…",
+        "Reconnexion au serveur…",
+    ),
+    translation(
+        "Requires an App Server connection.",
+        "App Server への接続が必要です。",
+        "需要连接 App Server。",
+        "Une connexion au serveur est nécessaire.",
+    ),
+    translation(
+        "↑/↓ Select · Enter Run · Ctrl+C Quit",
+        "↑/↓ 選択 · Enter 実行 · Ctrl+C 終了",
+        "↑/↓ 选择 · Enter 执行 · Ctrl+C 退出",
+        "↑/↓ Choisir · Entrée Exécuter · Ctrl+C Quitter",
+    ),
+    translation(
+        "No conversation was open.",
+        "会話は開かれていませんでした。",
+        "断线前没有打开会话。",
+        "Aucune conversation n’était ouverte.",
+    ),
+    translation(
+        "App Server reconnect stopped.",
+        "App Server への再接続が停止しました。",
+        "已停止重新连接 App Server。",
+        "La reconnexion au serveur s’est arrêtée.",
+    ),
+    translation(
         "dictate into the current draft; run again to stop",
         "音声を現在の下書きに入力します。もう一度実行すると停止します",
         "将语音转写到当前草稿；再次运行可停止听写",

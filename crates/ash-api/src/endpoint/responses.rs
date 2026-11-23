@@ -808,10 +808,27 @@ pub(super) fn headers(
     request: &ModelRequest,
     headers: &mut Vec<ash_http_client::HttpHeader>,
 ) -> Result<(), ApiError> {
-    if endpoint == ApiEndpoint::ChatGptResponses
-        && let Some(scope) = &request.prompt_cache_key
-    {
-        crate::headers::insert(headers, "session-id", scope)?;
+    if endpoint == ApiEndpoint::ChatGptResponses {
+        if let Some(scope) = &request.prompt_cache_key {
+            crate::headers::insert(headers, "session-id", scope)?;
+        }
+        // The Codex backend can omit per-item attribution while keeping aggregate usage.
+        // HTTP requests and Responses WebSocket handshakes share these headers.
+        const EXCLUDE: &str = "x-codex-exclude";
+        const ATTRIBUTION: &str = "usage.attribution";
+        let existing = headers
+            .iter()
+            .find(|header| header.name().eq_ignore_ascii_case(EXCLUDE))
+            .map_or("", |header| header.value());
+        if !existing.split(',').any(|field| field.trim() == ATTRIBUTION) {
+            let value = if existing.trim().is_empty() {
+                ATTRIBUTION.to_owned()
+            } else {
+                format!("{existing},{ATTRIBUTION}")
+            };
+            headers.retain(|header| !header.name().eq_ignore_ascii_case(EXCLUDE));
+            crate::headers::insert(headers, EXCLUDE, &value)?;
+        }
     }
     Ok(())
 }
