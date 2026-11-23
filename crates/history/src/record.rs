@@ -1,3 +1,4 @@
+use ash_protocol::AgentMode;
 use ash_protocol::CommandId;
 use ash_protocol::ThreadCommand;
 use ash_protocol::ThreadEvent;
@@ -24,6 +25,15 @@ use serde::ser::SerializeStruct;
 /// Older records retain their hashed byte representation.
 pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 36;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
+const SWARM_SCHEMA_VERSION: u32 = 36;
+
+fn with_record_encoding<T>(schema_version: u32, codec: impl FnOnce() -> T) -> T {
+    if schema_version < SWARM_SCHEMA_VERSION {
+        AgentMode::with_legacy_history_encoding(codec)
+    } else {
+        codec()
+    }
+}
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.
@@ -137,6 +147,11 @@ pub struct StoredEvent {
 }
 
 impl StoredEvent {
+    /// Serializes the event payload with its original mode IDs for context provenance.
+    pub fn event_value_for_digest(&self) -> serde_json::Result<serde_json::Value> {
+        with_record_encoding(self.schema_version, || serde_json::to_value(&self.event))
+    }
+
     /// Time of a durable user message or assistant reply, from the original journal record.
     pub fn message_timestamp(&self) -> Option<u64> {
         match &self.event {
@@ -156,6 +171,12 @@ impl Serialize for StoredEvent {
     where
         S: Serializer,
     {
+        with_record_encoding(self.schema_version, || self.serialize_record(serializer))
+    }
+}
+
+impl StoredEvent {
+    fn serialize_record<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut record = serializer.serialize_struct("StoredEvent", 8)?;
         if let Some(time_context) = &self.time_context {
             record.serialize_field("timeContext", time_context)?;
@@ -580,20 +601,22 @@ impl<'de> Deserialize<'de> for StoredEvent {
                 thread_created_kind_encoding = ThreadCreatedKindEncoding::Omitted;
             }
         }
-        Ok(Self {
-            time_context: record.time_context,
-            schema_version: record.schema_version,
-            event_id: record.event_id,
-            sequence: record.sequence,
-            thread_id: record.thread_id,
-            recorded_at: record.recorded_at,
-            command: record
-                .command
-                .map(serde_json::from_value)
-                .transpose()
-                .map_err(D::Error::custom)?,
-            event: serde_json::from_value(record.event).map_err(D::Error::custom)?,
-            thread_created_kind_encoding,
+        with_record_encoding(record.schema_version, || {
+            Ok(Self {
+                time_context: record.time_context,
+                schema_version: record.schema_version,
+                event_id: record.event_id,
+                sequence: record.sequence,
+                thread_id: record.thread_id,
+                recorded_at: record.recorded_at,
+                command: record
+                    .command
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(D::Error::custom)?,
+                event: serde_json::from_value(record.event).map_err(D::Error::custom)?,
+                thread_created_kind_encoding,
+            })
         })
     }
 }

@@ -495,7 +495,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     CoreError::Journal("Thread creation timestamp exceeds u64".into())
                 })?;
                 let mut event_digests = BTreeMap::new();
-                event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
+                event_digests.insert(envelope.sequence, event_digest(envelope)?);
                 Ok(ThreadSnapshot {
                     recorded_at_floor: envelope.recorded_at,
                     voice_transcripts: Vec::new(),
@@ -2598,7 +2598,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
     }
     snapshot
         .event_digests
-        .insert(envelope.sequence, event_digest(&envelope.event)?);
+        .insert(envelope.sequence, event_digest(envelope)?);
     snapshot.recorded_at_floor = snapshot.recorded_at_floor.max(envelope.recorded_at);
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
@@ -3299,8 +3299,8 @@ fn validate_context_checkpoint(
     Ok(())
 }
 
-fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
-    let mut value = serde_json::to_value(event).map_err(|error| {
+fn event_digest(record: &StoredEvent) -> Result<String, CoreError> {
+    let mut value = record.event_value_for_digest().map_err(|error| {
         CoreError::Journal(format!("failed to serialize Thread event: {error}"))
     })?;
     canonicalize_json(&mut value);

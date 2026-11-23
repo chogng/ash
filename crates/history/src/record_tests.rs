@@ -90,6 +90,118 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
 }
 
 #[test]
+fn legacy_multitask_history_replays_as_swarm_without_changing_hashed_bytes() {
+    let base =
+        ash_protocol::TurnInstructions::new("modes", "multitask", "v1", "multitask").unwrap();
+    let instructions =
+        base.clone()
+            .with_model_guidance(ash_protocol::ModelInstructionSelection::Specialized {
+                model: ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("test").unwrap(),
+                    ash_protocol::ModelId::new("model").unwrap(),
+                ),
+                instructions: base.as_text(),
+                digest: ash_protocol::ContentDigest::sha256(base.body().as_bytes()),
+                messages: Some(ash_protocol::ModelInstructionMessages {
+                    agent_modes: [(ash_protocol::AgentMode::Swarm, base.as_text())].into(),
+                    ..Default::default()
+                }),
+            });
+    let turn = serde_json::json!({
+        "turnId": "turn",
+        "status": "completed",
+        "mode": "swarm",
+        "directory": { "type": "local", "root": "/repo" },
+        "items": [],
+        "startedToolCallIds": ["tool"]
+    });
+    let records = [
+        serde_json::json!({
+            "event": {
+                "type": "turnAccepted", "threadId": "old", "turnId": "turn",
+                "instructions": &instructions
+            }
+        }),
+        serde_json::json!({
+            "command": {
+                "commandId": "start",
+                "command": {
+                    "type": "startTurn", "kind": "coding", "mode": "swarm",
+                    "contextPolicy": { "mode": "summary", "contextWindowAsToolOutput": true },
+                    "input": [{ "type": "text", "text": "multitask" }]
+                }
+            },
+            "event": {
+                "type": "turnAccepted", "threadId": "old", "turnId": "turn", "mode": "swarm",
+                "directory": { "type": "local", "root": "/repo" }
+            }
+        }),
+        serde_json::json!({
+            "event": {
+                "type": "turnModeChanged", "threadId": "old", "turnId": "turn",
+                "fromMode": "swarm", "mode": "plan",
+                "instructions": &instructions
+            }
+        }),
+        serde_json::json!({
+            "event": {
+                "type": "historyImported", "threadId": "old", "sourceThreadId": "source",
+                "beforeTurnId": "before", "turns": [turn.clone()]
+            }
+        }),
+        serde_json::json!({
+            "event": {
+                "type": "forkHistoryImported", "threadId": "old", "sourceThreadId": "source",
+                "sourceSequence": 1, "turns": [turn.clone()]
+            }
+        }),
+        serde_json::json!({
+            "event": {
+                "type": "forkTurnImported", "threadId": "old", "sourceThreadId": "source",
+                "sourceSequence": 1, "turnIndex": 0, "turn": turn
+            }
+        }),
+    ];
+    for mut value in records {
+        value["schemaVersion"] = serde_json::json!(CURRENT_STORED_EVENT_SCHEMA_VERSION);
+        value["eventId"] = "old-event".into();
+        value["threadId"] = "old".into();
+        value["sequence"] = 2.into();
+        value["recordedAt"] = 1.into();
+        let expected: StoredEvent = serde_json::from_value(value).unwrap();
+        let current = serde_json::to_string(&expected).unwrap();
+        let old_mode = current
+            .replace(r#""mode":"swarm""#, r#""mode":"multitask""#)
+            .replace(r#""fromMode":"swarm""#, r#""fromMode":"multitask""#)
+            .replace(
+                r#""collaborationModes":{"swarm":"#,
+                r#""collaborationModes":{"multitask":"#,
+            );
+        assert!(serde_json::from_str::<StoredEvent>(&old_mode).is_err());
+        let current_version = format!(r#""schemaVersion":{CURRENT_STORED_EVENT_SCHEMA_VERSION}"#);
+        let legacy = old_mode.replace(&current_version, r#""schemaVersion":35"#);
+        let mut restored: StoredEvent = serde_json::from_str(&legacy).unwrap();
+        assert_eq!(serde_json::to_string(&restored).unwrap(), legacy);
+        assert_eq!(
+            restored.event_value_for_digest().unwrap(),
+            serde_json::from_str::<serde_json::Value>(&legacy).unwrap()["event"]
+        );
+        let creation = r#"{"schemaVersion":35,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","kind":"code"}}"#;
+        let prefix = crate::HistoryPrefix {
+            events: vec![serde_json::from_str(creation).unwrap(), restored.clone()],
+        };
+        assert_eq!(
+            prefix.reference().unwrap().digest,
+            ash_protocol::ContentDigest::sha256(
+                format!(r#"{{"events":[{creation},{legacy}]}}"#).as_bytes()
+            )
+        );
+        restored.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION;
+        assert_eq!(restored, expected);
+    }
+}
+
+#[test]
 fn stored_event_round_trip_preserves_history_contract() {
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {

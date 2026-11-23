@@ -189,9 +189,9 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	}
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
-	getCompositeIdToRestore(): string | undefined {
+	getCompositeIdToRestore({ requireActiveViews = false } = {}): string | undefined {
 		const available = this.viewDescriptorService.getViewContainers(this.location).filter(container =>
-			!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
+			(!requireActiveViews && !container.hideIfEmpty) || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
 		const stored = this.storageService.get(
 			this.activeCompositeStorageKey,
 			StorageScope.WORKSPACE,

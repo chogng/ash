@@ -2049,6 +2049,11 @@ test('Pane Composite Parts restore workspace selections with Registry fallback',
 		viewDescriptorService: viewDescriptors,
 	});
 	assert.equal(first.getCompositeIdToRestore(), 'ash.explorer');
+	assert.equal(first.getCompositeIdToRestore({ requireActiveViews: true }), undefined);
+	using explorerView = registry.registerViews('ash.explorer', [
+		{ id: 'ash.explorer.test', title: 'Explorer', ctorDescriptor: new SyncDescriptor(TestPanelView) },
+	]);
+	assert.equal(first.getCompositeIdToRestore({ requireActiveViews: true }), 'ash.explorer');
 	const search = createComposite('ash.search');
 	first.addComposite(search);
 	first.showComposite(search.id);
@@ -2066,6 +2071,7 @@ test('Pane Composite Parts restore workspace selections with Registry fallback',
 		viewDescriptorService: viewDescriptors,
 	});
 	assert.equal(restored.getCompositeIdToRestore(), 'ash.search');
+	assert.equal(restored.getCompositeIdToRestore({ requireActiveViews: true }), 'ash.explorer');
 	restoredStorage.switchWorkspace('workspace-b');
 	assert.equal(restored.getCompositeIdToRestore(), 'ash.explorer');
 	restoredStorage.switchWorkspace('workspace-a');

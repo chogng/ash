@@ -1,8 +1,9 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
+import { AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, IsAuxiliaryWindowContext, TitleBarRightSideBarShowsChatContext } from '../../../common/contextkeys.js';
 import { ViewContainerLocation } from '../../../common/views.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
@@ -25,7 +26,7 @@ export class ToggleAuxiliaryBarAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.TitleBar,
-					when: IsAuxiliaryWindowContext.isEqualTo(false),
+					when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(false), TitleBarRightSideBarShowsChatContext.isEqualTo(false)),
 					group: 'navigation',
 					order: 10,
 				},
