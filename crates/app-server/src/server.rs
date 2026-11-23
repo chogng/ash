@@ -2602,6 +2602,9 @@ impl AppServer {
     ) -> Result<Self, String> {
         let mut builder =
             ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
+        if let Some(github) = &self.github_processor {
+            github.install_agent_tools(&mut builder);
+        }
         let items = Arc::new(ash_extension_api::ExtensionItemStore::new(builder.state()));
         builder.item_contributor("results", items.clone());
         sleep::install(&mut builder, items.clone());

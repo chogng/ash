@@ -1,5 +1,7 @@
 //! Product adapter for the optional GitHub API capability. No GitHub API implementation
 //! is linked here: the host grants each invocation only its captured account and network.
+pub(crate) mod agent_tools;
+
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_external_ext::ActivationAuthority;

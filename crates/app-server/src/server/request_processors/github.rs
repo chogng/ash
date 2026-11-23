@@ -296,6 +296,17 @@ pub(super) struct GitHubRequestProcessor {
 }
 
 impl GitHubRequestProcessor {
+    pub(super) fn install_agent_tools(
+        &self,
+        builder: &mut ash_extension_api::ExtensionRegistryBuilder,
+    ) {
+        crate::github_extension::agent_tools::install(
+            builder,
+            self.credentials.clone(),
+            self.provider.clone(),
+        );
+    }
+
     pub(super) fn request_blocking(
         processor: Option<&Self>,
         method: ClientMethod,

@@ -27,6 +27,10 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
 use ash_protocol::ToolSourceProvenance;
+use ash_tools::ToolRegistrySnapshot;
+use ash_tools::ToolSearchLimit;
+use ash_tools::ToolSearchQuery;
+use ash_tools::to_protocol_tool_definition;
 use core_api::CoreError;
 use sha2::Digest;
 use sha2::Sha256;
@@ -39,14 +43,9 @@ const MCP_SEARCH_RESULT_LIMIT: usize = 5;
 const MCP_SEARCH_QUERY_BYTE_LIMIT: usize = 1_000;
 const MCP_CATALOG_POLICY_REVISION: &str = "mcp-catalog-search-v1";
 
-pub(super) fn project_mcp_service(tools: Arc<dyn ToolService>) -> Arc<dyn ToolService> {
-    let definitions = tools.definitions();
-    let estimate = estimate_definition_tokens(&definitions);
-    if definitions.len() <= MCP_DIRECT_TOOL_LIMIT && estimate <= MCP_DIRECT_TOKEN_LIMIT {
-        tools
-    } else {
-        Arc::new(McpMetaToolService::new(tools, definitions))
-    }
+pub(super) fn should_defer_mcp_catalog(definitions: &[ToolDefinition]) -> bool {
+    definitions.len() > MCP_DIRECT_TOOL_LIMIT
+        || estimate_definition_tokens(definitions) > MCP_DIRECT_TOKEN_LIMIT
 }
 
 pub(super) fn decide_mcp_catalog_search(
@@ -77,18 +76,11 @@ fn estimate_definition_tokens(definitions: &[ToolDefinition]) -> usize {
     ash_utils_string::approx_tokens_from_byte_count(bytes)
 }
 
-struct McpMetaToolService {
+pub(super) struct McpMetaToolService {
     tools: Arc<dyn ToolService>,
-    definitions: Vec<ToolDefinition>,
-    by_name: BTreeMap<ToolName, CatalogEntry>,
+    definition_digests: BTreeMap<ToolName, String>,
     catalog_digest: String,
     meta_definitions: Vec<ToolDefinition>,
-}
-
-struct CatalogEntry {
-    definition: ToolDefinition,
-    definition_digest: String,
-    search_text: String,
 }
 
 impl McpMetaToolService {
@@ -109,37 +101,27 @@ impl McpMetaToolService {
         Ok(parsed)
     }
 
-    fn new(tools: Arc<dyn ToolService>, mut definitions: Vec<ToolDefinition>) -> Self {
-        definitions.sort_by(|left, right| left.name.cmp(&right.name));
-        let catalog_digest = digest_json(&definitions);
-        let by_name = definitions
+    pub(super) fn new(tools: Arc<dyn ToolService>, definitions: &[ToolDefinition]) -> Self {
+        let definition_digests = definitions
             .iter()
-            .cloned()
             .map(|definition| {
-                let definition_digest = digest_json(&definition);
-                let search_text = format!(
-                    "{} {} {}",
-                    definition.name, definition.description, definition.parameters
-                )
-                .to_lowercase();
-                (
-                    definition.name.clone(),
-                    CatalogEntry {
-                        definition,
-                        definition_digest,
-                        search_text,
-                    },
-                )
+                let provenance = tools.source_provenance(&definition.name);
+                let digest = digest_json(&(definition, provenance));
+                (definition.name.clone(), digest)
             })
-            .collect();
+            .collect::<BTreeMap<_, _>>();
+        let catalog_digest = digest_json(&definition_digests);
         let meta_definitions = meta_definitions();
         Self {
             tools,
-            definitions,
-            by_name,
+            definition_digests,
             catalog_digest,
             meta_definitions,
         }
+    }
+
+    pub(super) fn contains(&self, name: &ToolName) -> bool {
+        self.definition_digests.contains_key(name)
     }
 
     fn parse(&self, call: &ToolCall) -> Result<MetaCall, CoreError> {
@@ -169,10 +151,7 @@ impl McpMetaToolService {
                 }
                 let name = ToolName::new(arguments.tool)
                     .map_err(|error| CoreError::Policy(error.to_string()))?;
-                let entry = self.by_name.get(&name).ok_or_else(|| {
-                    CoreError::Policy(format!("unknown tool {name}; use search_tools first"))
-                })?;
-                if arguments.definition_digest != entry.definition_digest {
+                if self.definition_digests.get(&name) != Some(&arguments.definition_digest) {
                     return Err(CoreError::Policy(format!(
                         "unknown tool {name}; use search_tools first"
                     )));
@@ -211,12 +190,13 @@ impl McpMetaToolService {
         ))
     }
 
-    fn execute_search(
+    pub(super) fn execute_search(
         &self,
-        query: &str,
+        call: &ToolCall,
+        registry: &ToolRegistrySnapshot,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
-        disabled: &[ToolName],
+        facts: Option<&ToolExecutionFacts>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
@@ -230,60 +210,60 @@ impl McpMetaToolService {
                 "MCP catalog search requires the host read-only grant".into(),
             ));
         }
-        let normalized = query.to_lowercase();
-        let terms = normalized
-            .split(|character: char| !character.is_alphanumeric())
-            .filter(|term| !term.is_empty())
-            .collect::<Vec<_>>();
-        let mut ranked = self
-            .by_name
-            .values()
-            .filter(|entry| !disabled.contains(&entry.definition.name))
-            .filter_map(|entry| {
-                let name = entry.definition.name.as_str().to_lowercase();
-                let mut score = terms
-                    .iter()
-                    .filter(|term| entry.search_text.contains(**term))
-                    .count() as u64;
-                if name == normalized {
-                    score += 10_000;
-                } else if name.contains(&normalized) {
-                    score += 1_000;
-                }
-                (score > 0).then_some((score, entry))
+        let MetaCall::Search(query) = self.parse(call)? else {
+            return Err(CoreError::Policy("expected an MCP search call".into()));
+        };
+        let query = ToolSearchQuery::new(
+            query,
+            ToolSearchLimit::new(MCP_SEARCH_RESULT_LIMIT).expect("valid MCP search limit"),
+        )
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let excluded = registry
+            .search_documents()
+            .iter()
+            .map(|document| document.name())
+            .filter(|name| {
+                !self.contains(name) || facts.is_some_and(|facts| !facts.allows_tool(name))
             })
+            .cloned()
             .collect::<Vec<_>>();
-        ranked.sort_by(|(left_score, left), (right_score, right)| {
-            right_score
-                .cmp(left_score)
-                .then_with(|| left.definition.name.cmp(&right.definition.name))
-        });
-        ranked.truncate(MCP_SEARCH_RESULT_LIMIT);
-        if ranked.is_empty() {
+        // The compatibility bridge has an in-process review grant. The shared lexical
+        // index also works when the optional embedding provider is unavailable.
+        let ranked = registry.search_excluding(&query, &excluded);
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        if ranked.matches().is_empty() {
             let servers = self
-                .definitions
-                .iter()
-                .filter(|definition| !disabled.contains(&definition.name))
-                .filter_map(|definition| definition.name.as_str().split_once("__"))
+                .definition_digests
+                .keys()
+                .filter(|name| !excluded.contains(name))
+                .filter_map(|name| name.as_str().split_once("__"))
                 .map(|(server, _)| server)
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>()
                 .join(", ");
             return Ok(ToolExecutionOutput::Failure(format!(
-                "no MCP tools match {query:?}. Available servers: {servers}"
+                "no MCP tools match {:?}. Available servers: {servers}",
+                query.text()
             )));
         }
         let tools = ranked
-            .into_iter()
-            .map(|(_, entry)| SearchMatch {
-                name: entry.definition.name.clone(),
-                description: entry.definition.description.clone(),
-                schema: entry.definition.parameters.clone(),
-                catalog_digest: self.catalog_digest.clone(),
-                definition_digest: entry.definition_digest.clone(),
+            .matches()
+            .iter()
+            .map(|matched| {
+                let definition = to_protocol_tool_definition(matched.loadable().definition())
+                    .map_err(|error| CoreError::Execution(error.to_string()))?;
+                Ok(SearchMatch {
+                    definition_digest: self.definition_digests[&definition.name].clone(),
+                    name: definition.name,
+                    description: definition.description,
+                    schema: definition.parameters,
+                    catalog_digest: self.catalog_digest.clone(),
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, CoreError>>()?;
         serde_json::to_string(&SearchOutput { tools })
             .map(ToolExecutionOutput::Success)
             .map_err(|error| CoreError::Execution(error.to_string()))
@@ -294,6 +274,19 @@ impl McpMetaToolService {
             MetaCall::Invoke(call) => Ok(call),
             MetaCall::Search(_) => Err(CoreError::Policy(
                 "search_tools does not route to an MCP executor".into(),
+            )),
+        }
+    }
+
+    fn selected_nested_call(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ToolCall, CoreError> {
+        match self.parse_selected(call, facts)? {
+            MetaCall::Invoke(call) => Ok(call),
+            MetaCall::Search(_) => Err(CoreError::Execution(
+                "MCP search requires the composed tool registry".into(),
             )),
         }
     }
@@ -397,12 +390,8 @@ impl ToolService for McpMetaToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse(call)? {
-            MetaCall::Search(query) => {
-                self.execute_search(&query, authorization, cancellation, &[])
-            }
-            MetaCall::Invoke(call) => self.tools.execute(&call, authorization, cancellation),
-        }
+        self.tools
+            .execute(&self.nested_call(call)?, authorization, cancellation)
     }
 
     fn execute_with_facts(
@@ -412,23 +401,12 @@ impl ToolService for McpMetaToolService {
         cancellation: &CancellationToken,
         facts: &ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => self.execute_search(
-                &query,
-                authorization,
-                cancellation,
-                &self
-                    .by_name
-                    .keys()
-                    .filter(|name| !facts.allows_tool(name))
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ),
-            MetaCall::Invoke(call) => {
-                self.tools
-                    .execute_with_facts(&call, authorization, cancellation, facts)
-            }
-        }
+        self.tools.execute_with_facts(
+            &self.selected_nested_call(call, facts)?,
+            authorization,
+            cancellation,
+            facts,
+        )
     }
 
     fn execute_streaming(
@@ -438,15 +416,8 @@ impl ToolService for McpMetaToolService {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse(call)? {
-            MetaCall::Search(query) => {
-                self.execute_search(&query, authorization, cancellation, &[])
-            }
-            MetaCall::Invoke(call) => {
-                self.tools
-                    .execute_streaming(&call, authorization, cancellation, sink)
-            }
-        }
+        self.tools
+            .execute_streaming(&self.nested_call(call)?, authorization, cancellation, sink)
     }
 
     fn execute_streaming_with_facts(
@@ -457,26 +428,13 @@ impl ToolService for McpMetaToolService {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => self.execute_search(
-                &query,
-                authorization,
-                cancellation,
-                &self
-                    .by_name
-                    .keys()
-                    .filter(|name| !facts.allows_tool(name))
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ),
-            MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts(
-                &call,
-                authorization,
-                cancellation,
-                facts,
-                sink,
-            ),
-        }
+        self.tools.execute_streaming_with_facts(
+            &self.selected_nested_call(call, facts)?,
+            authorization,
+            cancellation,
+            facts,
+            sink,
+        )
     }
 
     fn execute_streaming_with_facts_and_interactions(
@@ -488,27 +446,14 @@ impl ToolService for McpMetaToolService {
         interactions: Arc<dyn ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse_selected(call, facts)? {
-            MetaCall::Search(query) => self.execute_search(
-                &query,
-                authorization,
-                cancellation,
-                &self
-                    .by_name
-                    .keys()
-                    .filter(|name| !facts.allows_tool(name))
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ),
-            MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts_and_interactions(
-                &call,
-                authorization,
-                cancellation,
-                facts,
-                interactions,
-                sink,
-            ),
-        }
+        self.tools.execute_streaming_with_facts_and_interactions(
+            &self.selected_nested_call(call, facts)?,
+            authorization,
+            cancellation,
+            facts,
+            interactions,
+            sink,
+        )
     }
 }
 

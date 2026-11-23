@@ -1332,14 +1332,12 @@ typed validation error，不以无限结果或静默全量 catalog 作为 fallba
 当前 App Server 的 exposure policy 是：built-in Directory 与 client-hosted dynamic port 直接暴露，
 extension executor 使用自身声明的 exposure；聚合 MCP port 先对排序后的 canonical definitions 做
 稳定估算。工具数 ≤15 且 `ceil(canonical JSON bytes / 4)` ≤5000 时全部直接暴露；任一阈值超限时，
-整个 MCP port 不向 registry 添加实际定义，只直接暴露固定的 `search_tools` 与 `call_mcp_tool`。
-边界不会出现一部分平铺、一部分 deferred 的混合状态。
+整个 MCP port 的模型工具以 `Deferred` 注册。首轮只暴露发现和转调入口，`tool_search` 命中后
+将精确定义加入下一次模型调用。仅供 MCP App 使用的工具保留隐藏路由。
 
-超阈值投影冻结 catalog digest；`search_tools` 最多返回 5 个按确定性分数/名称排序的 definition，
-并携带 catalog digest 与各 definition digest。`call_mcp_tool` 必须回传两者，catalog 刷新或同名 tool
-schema/description 变化都会 fail closed，要求重新 search。该 MCP 专用元工具不替代通用 registry
-`tool_search`：后者仍只在其他 contribution 确实声明 `Deferred` 时出现。Plugin、Connector 和
-dynamic contribution 继续经过同一 composition/collision contract，不能各自创建旁路。
+`search_tools` 使用同一注册表的词法索引，先按 MCP 来源和本轮范围筛选，再返回至多五个匹配。
+兼容转调 `call_mcp_tool` 要求回传目录和定义 digest。工具定义或 MCP 连接代次变化后，旧 digest
+失效。兼容搜索可在未配置或无法使用嵌入模型时运行。
 
 ### 12.3 索引与排序
 

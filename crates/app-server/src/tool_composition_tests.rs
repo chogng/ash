@@ -387,7 +387,7 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["call_mcp_tool", "read_file", "search_tools"]
+        vec!["call_mcp_tool", "read_file", "search_tools", "tool_search"]
     );
 
     let search_call = ToolCall {
@@ -424,7 +424,7 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
         next.iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["call_mcp_tool", "read_file", "search_tools"]
+        vec!["call_mcp_tool", "read_file", "search_tools", "tool_search"]
     );
     let output = serde_json::from_str::<serde_json::Value>(&output).unwrap();
     assert_eq!(output["tools"].as_array().unwrap().len(), 5);
@@ -693,7 +693,7 @@ fn app_hidden_routes_preserve_the_model_catalog_and_reject_retired_origins() {
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
-        ["call_mcp_tool", "search_tools"]
+        ["call_mcp_tool", "search_tools", "tool_search"]
     );
     let catalog = ports.catalog();
     assert_eq!(
@@ -2073,7 +2073,7 @@ fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() 
         .unwrap()
     };
     let combined = combine_tool_ports(vec![mcp()]).unwrap().unwrap();
-    assert_eq!(combined.catalog.len(), 18);
+    assert_eq!(combined.catalog.len(), 19);
     for index in 0..16 {
         let name = format!("external_{index}");
         let entry = combined

@@ -23,18 +23,26 @@ use super::MCP_DIRECT_TOKEN_LIMIT;
 use super::MCP_SEARCH_TOOLS_NAME;
 use super::decide_mcp_catalog_search;
 use super::estimate_definition_tokens;
-use super::project_mcp_service;
+use crate::tool_composition::ToolPort;
+use crate::tool_composition::combine_tool_ports;
 
 struct CatalogTools {
     definitions: Vec<ToolDefinition>,
+    connection_generation: u64,
 }
 
 impl CatalogTools {
     fn with_count(count: usize) -> Self {
         Self {
             definitions: (0..count)
-                .map(|index| definition(format!("server__tool_{index}"), "test capability"))
+                .map(|index| {
+                    definition(
+                        format!("server__tool_{index}"),
+                        &format!("test tool capability number {index}"),
+                    )
+                })
                 .collect(),
+            connection_generation: 1,
         }
     }
 }
@@ -42,6 +50,15 @@ impl CatalogTools {
 impl ToolService for CatalogTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
+    }
+
+    fn source_provenance(&self, name: &ToolName) -> Vec<ash_protocol::ToolSourceProvenance> {
+        vec![ash_protocol::ToolSourceProvenance::Mcp {
+            server_id: "server".into(),
+            remote_name: name.to_string(),
+            catalog_generation: 1,
+            connection_generation: self.connection_generation,
+        }]
     }
 
     fn read_resource(
@@ -88,32 +105,66 @@ impl ToolService for CatalogTools {
     }
 }
 
+struct CatalogPolicy;
+
+impl core_api::ActionPolicyService for CatalogPolicy {
+    fn revision(&self) -> String {
+        "test-policy".into()
+    }
+
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+        Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
+            grant_id: ash_action_policy::GrantId::new("test"),
+        })
+    }
+}
+
+fn compose_mcp(tools: Arc<dyn ToolService>) -> crate::tool_composition::CombinedToolPorts {
+    combine_tool_ports(vec![ToolPort::mcp(tools, Arc::new(CatalogPolicy)).unwrap()])
+        .unwrap()
+        .unwrap()
+}
+
+fn model_definitions(service: &dyn ToolService) -> Vec<ToolDefinition> {
+    service.model_definitions(&Default::default()).unwrap()
+}
+
 #[test]
 fn tool_count_threshold_switches_the_entire_mcp_catalog() {
-    let direct = project_mcp_service(Arc::new(CatalogTools::with_count(15)));
-    assert_eq!(direct.definitions().len(), 15);
+    let direct = compose_mcp(Arc::new(CatalogTools::with_count(15))).tools;
+    assert_eq!(model_definitions(direct.as_ref()).len(), 15);
     assert!(
-        direct
-            .definitions()
+        model_definitions(direct.as_ref())
             .iter()
             .all(|definition| definition.name.as_str().starts_with("server__"))
     );
 
-    let meta = project_mcp_service(Arc::new(CatalogTools::with_count(16)));
+    let meta = compose_mcp(Arc::new(CatalogTools::with_count(16))).tools;
     assert_eq!(
-        meta.definitions()
+        model_definitions(meta.as_ref())
             .into_iter()
             .map(|definition| definition.name.to_string())
             .collect::<Vec<_>>(),
-        vec![MCP_SEARCH_TOOLS_NAME, MCP_CALL_TOOL_NAME]
+        vec![MCP_CALL_TOOL_NAME, MCP_SEARCH_TOOLS_NAME, "tool_search"]
     );
 }
 
 #[test]
 fn catalog_changes_keep_meta_definitions_stable_and_reject_previous_bindings() {
-    let original = project_mcp_service(Arc::new(CatalogTools::with_count(16)));
-    let updated = project_mcp_service(Arc::new(CatalogTools::with_count(17)));
-    assert_eq!(original.definitions(), updated.definitions());
+    let original = compose_mcp(Arc::new(CatalogTools::with_count(16))).tools;
+    let updated = compose_mcp(Arc::new(CatalogTools {
+        connection_generation: 2,
+        ..CatalogTools::with_count(16)
+    }))
+    .tools;
+    assert_eq!(
+        model_definitions(original.as_ref()),
+        model_definitions(updated.as_ref())
+    );
 
     let search = ToolCall {
         id: ash_protocol::ToolCallId::new("search-original").unwrap(),
@@ -184,22 +235,97 @@ fn catalog_changes_keep_meta_definitions_stable_and_reject_previous_bindings() {
 fn token_threshold_is_inclusive_and_uses_the_stable_v1_estimate() {
     let at_limit = definition_with_token_estimate(MCP_DIRECT_TOKEN_LIMIT);
     assert_eq!(estimate_definition_tokens(&[at_limit.clone()]), 5_000);
-    let direct = project_mcp_service(Arc::new(CatalogTools {
+    let direct = compose_mcp(Arc::new(CatalogTools {
         definitions: vec![at_limit],
-    }));
-    assert_eq!(direct.definitions()[0].name.as_str(), "server__large");
+        connection_generation: 1,
+    }))
+    .tools;
+    assert_eq!(
+        model_definitions(direct.as_ref())[0].name.as_str(),
+        "server__large"
+    );
 
     let over_limit = definition_with_token_estimate(MCP_DIRECT_TOKEN_LIMIT + 1);
-    let meta = project_mcp_service(Arc::new(CatalogTools {
+    let meta = compose_mcp(Arc::new(CatalogTools {
         definitions: vec![over_limit],
-    }));
-    assert_eq!(meta.definitions().len(), 2);
-    assert_eq!(meta.definitions()[0].name.as_str(), MCP_SEARCH_TOOLS_NAME);
+        connection_generation: 1,
+    }))
+    .tools;
+    assert_eq!(model_definitions(meta.as_ref()).len(), 3);
+}
+
+#[test]
+fn large_mcp_catalog_loads_one_bound_definition_through_shared_discovery() {
+    let combined = compose_mcp(Arc::new(CatalogTools::with_count(512)));
+    let before = model_definitions(combined.tools.as_ref());
+    assert_eq!(before.len(), 3);
+    let target = ToolName::new("server__tool_417").unwrap();
+    let scoped = combined
+        .tools
+        .resolve_tool_scope(&ash_protocol::ToolScope {
+            tools: vec![target.clone()],
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(
+        scoped.iter().map(ToolName::as_str).collect::<Vec<_>>(),
+        [
+            "call_mcp_tool",
+            "search_tools",
+            "server__tool_417",
+            "tool_search"
+        ]
+    );
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let mut results = Vec::new();
+    for (name, arguments) in [
+        (MCP_SEARCH_TOOLS_NAME, serde_json::json!({"query":target})),
+        (
+            "tool_search",
+            serde_json::json!({"query":target,"strategy":"bm25","limit":1}),
+        ),
+    ] {
+        let call = ToolCall {
+            id: ash_protocol::ToolCallId::new(name).unwrap(),
+            name: ToolName::new(name).unwrap(),
+            arguments,
+        };
+        let request = combined.tools.prepare(&call).unwrap();
+        let ash_action_policy::ExecutionDecision::RunUnsandboxed { grant_id } = combined
+            .policy
+            .decide(&request, &cancellation.token())
+            .unwrap()
+        else {
+            panic!("discovery requires its host grant");
+        };
+        let ToolExecutionOutput::Success(output) = combined
+            .tools
+            .execute(
+                &call,
+                &ToolAuthorization::UnsandboxedGrant { grant_id },
+                &cancellation.token(),
+            )
+            .unwrap()
+        else {
+            panic!("discovery did not find the exact tool");
+        };
+        let payload: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(payload["tools"][0]["name"], target.as_str());
+        results.push(combined.tools.activated_tool_names(&call, &output).unwrap());
+    }
+    assert!(results[0].is_empty());
+    assert_eq!(results[1], vec![target.clone()]);
+    let after = combined
+        .tools
+        .model_definitions(&results.remove(1).into_iter().collect())
+        .unwrap();
+    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.iter().any(|definition| definition.name == target));
 }
 
 #[test]
 fn meta_call_requires_the_exact_search_result_binding() {
-    let meta = project_mcp_service(Arc::new(CatalogTools::with_count(16)));
+    let meta = compose_mcp(Arc::new(CatalogTools::with_count(16))).tools;
     let search = ToolCall {
         id: ash_protocol::ToolCallId::new("search").unwrap(),
         name: ToolName::new(MCP_SEARCH_TOOLS_NAME).unwrap(),
@@ -270,13 +396,17 @@ fn definition(name: String, description: &str) -> ToolDefinition {
 }
 
 fn definition_with_token_estimate(target: usize) -> ToolDefinition {
-    for size in 1..=target * 4 {
-        let candidate = definition("server__large".into(), &"x".repeat(size));
-        if estimate_definition_tokens(std::slice::from_ref(&candidate)) == target {
-            return candidate;
-        }
-    }
-    panic!("could not construct definition with {target} estimated tokens");
+    let mut candidate = definition("server__large".into(), "test capability");
+    candidate.parameters = serde_json::json!({
+        "type": "object",
+        "properties": {"value": {"type": "string", "description": ""}},
+    });
+    let overhead = serde_json::to_vec(std::slice::from_ref(&candidate))
+        .unwrap()
+        .len();
+    candidate.parameters["properties"]["value"]["description"] =
+        serde_json::json!("x".repeat(target * 4 - overhead));
+    candidate
 }
 
 #[test]
@@ -311,25 +441,6 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
                     .ok_or_else(|| CoreError::Execution("unexpected model call".into()))
             }
         }
-        struct CatalogPolicy;
-        impl core_api::ActionPolicyService for CatalogPolicy {
-            fn revision(&self) -> String {
-                "test-policy".into()
-            }
-            fn decide(
-                &self,
-                request: &ActionReviewRequest,
-                cancellation: &CancellationToken,
-            ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
-                if request.provenance().source_id() == MCP_SEARCH_TOOLS_NAME {
-                    decide_mcp_catalog_search(request, cancellation)
-                } else {
-                    Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
-                        grant_id: ash_action_policy::GrantId::new("test"),
-                    })
-                }
-            }
-        }
         struct CountedTools {
             inner: CatalogTools,
             calls: std::sync::atomic::AtomicUsize,
@@ -356,12 +467,10 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
             inner: CatalogTools::with_count(16),
             calls: std::sync::atomic::AtomicUsize::new(0),
         });
-        let service = Arc::new(super::McpMetaToolService::new(
-            actual.clone(),
-            actual.definitions(),
-        ));
+        let service = super::McpMetaToolService::new(actual.clone(), &actual.definitions());
+        let combined = compose_mcp(actual.clone());
         let disabled = ToolName::new("server__tool_7").unwrap();
-        let entry = service.by_name.get(&disabled).unwrap();
+        let definition_digest = service.definition_digests.get(&disabled).unwrap();
         let calls = [
             ToolCall {
                 id: ash_protocol::ToolCallId::new("selected-search").unwrap(),
@@ -371,7 +480,7 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
             ToolCall {
                 id: ash_protocol::ToolCallId::new("disabled-nested-call").unwrap(),
                 name: ToolName::new(MCP_CALL_TOOL_NAME).unwrap(),
-                arguments: serde_json::json!({"tool":disabled, "catalog_digest":service.catalog_digest, "definition_digest":entry.definition_digest, "arguments":{}}),
+                arguments: serde_json::json!({"tool":disabled, "catalog_digest":service.catalog_digest, "definition_digest":definition_digest, "arguments":{}}),
             },
         ];
         let model = Arc::new(CatalogModel(Mutex::new(
@@ -400,7 +509,7 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
                 title: "selection".into(),
             })
             .unwrap();
-        let executor = TurnExecutor::new(threads.clone(), model, service, Arc::new(CatalogPolicy));
+        let executor = TurnExecutor::new(threads.clone(), model, combined.tools, combined.policy);
         let turn = threads
             .start_turn(
                 &thread_id,
@@ -414,7 +523,7 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
                     reasoning_effort: None,
-                    policy_revision: "test-policy".into(),
+                    policy_revision: executor.policy_revision(),
                     approval_mode: ash_protocol::ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
@@ -474,7 +583,12 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
                 } if tool_call_id.as_str() == "selected-search" => Some(text),
                 _ => None,
             })
-            .unwrap();
+            .unwrap_or_else(|| {
+                panic!(
+                    "search did not succeed under selection {positive}: {:?}",
+                    snapshot.items
+                )
+            });
         let result: serde_json::Value = serde_json::from_str(search).unwrap();
         assert!(
             result["tools"]

@@ -69,8 +69,9 @@ mod mcp_exposure;
 
 use mcp_exposure::MCP_CALL_TOOL_NAME;
 use mcp_exposure::MCP_SEARCH_TOOLS_NAME;
+use mcp_exposure::McpMetaToolService;
 use mcp_exposure::decide_mcp_catalog_search;
-use mcp_exposure::project_mcp_service;
+use mcp_exposure::should_defer_mcp_catalog;
 
 const TOOL_SEARCH_EMBEDDING_PROBE_TEXT: &str = "ash tool search embedding readiness probe";
 const TOOL_SEARCH_POLICY_REVISION: &str = "tool-search-v1";
@@ -289,7 +290,7 @@ impl ToolPortKind {
 pub(crate) struct ToolPort {
     kind: ToolPortKind,
     contributions: Vec<ToolContribution>,
-    catalog_only: Vec<AgentToolCapabilityDto>,
+    mcp_catalog: Option<Arc<McpMetaToolService>>,
     policy: Arc<dyn ActionPolicyService>,
     pub(crate) command_terminals: Option<Arc<dyn crate::local_tools::CommandTerminalService>>,
 }
@@ -346,7 +347,7 @@ impl ToolPort {
         Self {
             kind,
             contributions,
-            catalog_only: Vec::new(),
+            mcp_catalog: None,
             policy: composition.policy,
             command_terminals: None,
         }
@@ -361,7 +362,7 @@ impl ToolPort {
         let mut port = Self {
             kind: ToolPortKind::Extension,
             contributions: Vec::new(),
-            catalog_only: Vec::new(),
+            mcp_catalog: None,
             policy,
             command_terminals: None,
         };
@@ -383,16 +384,41 @@ impl ToolPort {
         policy: Arc<dyn ActionPolicyService>,
     ) -> Result<Self, ToolCompositionError> {
         let definitions = tools.definitions();
-        let exposed = project_mcp_service(Arc::clone(&tools));
-        let mut port =
-            Self::from_service(ToolPortKind::Mcp, ToolExposure::Direct, exposed, policy)?;
+        let mut port = if should_defer_mcp_catalog(&definitions) {
+            let catalog = Arc::new(McpMetaToolService::new(Arc::clone(&tools), &definitions));
+            let mut port = Self::from_service(
+                ToolPortKind::Mcp,
+                ToolExposure::Direct,
+                catalog.clone(),
+                policy,
+            )?;
+            port.mcp_catalog = Some(catalog);
+            port
+        } else {
+            Self::from_service(
+                ToolPortKind::Mcp,
+                ToolExposure::Direct,
+                Arc::clone(&tools),
+                policy,
+            )?
+        };
+        let search = ToolSearchMetadata::new(ToolPortKind::Mcp.search_label())
+            .expect("static MCP search label");
+        if port.mcp_catalog.is_some() {
+            for definition in &definitions {
+                port.contributions.push(ToolContribution::from_service(
+                    Arc::clone(&tools),
+                    definition,
+                    ToolExposure::Deferred,
+                    search.clone(),
+                )?);
+            }
+        }
         let exposed_names = port
             .contributions
             .iter()
             .map(|tool| tool.definition.name().clone())
             .collect::<BTreeSet<_>>();
-        let search = ToolSearchMetadata::new(ToolPortKind::Mcp.search_label())
-            .expect("static MCP search label");
         for definition in tools
             .app_tool_definitions()
             .into_iter()
@@ -405,21 +431,6 @@ impl ToolPort {
                 search.clone(),
             )?);
         }
-        // Large MCP catalogs call individual tools through the metadata broker. Keep those
-        // source-owned members selectable without exposing all definitions to the model.
-        port.catalog_only = definitions
-            .into_iter()
-            .filter(|tool| !exposed_names.contains(&tool.name))
-            .map(|tool| AgentToolCapabilityDto {
-                category: tools.tool_category(&tool.name),
-                source_chain: tools.source_provenance(&tool.name),
-                name: tool.name.to_string(),
-                description: tool.description,
-                source: ToolSourceDto::Mcp,
-                exposure: ToolExposureDto::Deferred,
-                authority: ToolAuthorityDto::ProviderDefined,
-            })
-            .collect();
         Ok(port)
     }
 
@@ -446,7 +457,7 @@ impl ToolPort {
         Ok(Self {
             kind,
             contributions,
-            catalog_only: Vec::new(),
+            mcp_catalog: None,
             policy,
             command_terminals: None,
         })
@@ -1249,8 +1260,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         return Ok(None);
     }
     let mut definitions = Vec::new();
-    let mut catalog_only = Vec::new();
-    let mut catalog_overlays = BTreeSet::new();
+    let mut mcp_catalog = None;
     let mut names = BTreeSet::new();
     let mut local_policy = None;
     let mut mcp_policy = None;
@@ -1260,26 +1270,6 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut application_policy = None;
     let mut environment_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
-        for tool in port.catalog_only {
-            let name = ToolName::new(tool.name.clone())
-                .map_err(|error| ToolCompositionError(error.to_string()))?;
-            let overlay = port.contributions.iter().any(|contribution| {
-                contribution.exposure == ToolExposure::Hidden
-                    && contribution.definition.name() == &name
-                    && contribution.definition.description() == tool.description
-                    && contribution.source_chain == tool.source_chain
-            });
-            if overlay {
-                catalog_overlays.insert(name.clone());
-            }
-            if !overlay && !names.insert(name) {
-                return Err(ToolCompositionError(format!(
-                    "duplicate tool catalog name during App Server composition: {}",
-                    tool.name
-                )));
-            }
-            catalog_only.push(tool);
-        }
         for contribution in port.contributions {
             if !names.insert(contribution.definition.name().clone()) {
                 return Err(ToolCompositionError(format!(
@@ -1324,6 +1314,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             }
             ToolPortKind::Mcp if mcp_policy.is_none() => {
                 mcp_policy = Some(Arc::clone(&port.policy));
+                mcp_catalog = port.mcp_catalog;
             }
             ToolPortKind::Dynamic => {
                 return Err(ToolCompositionError(
@@ -1354,8 +1345,6 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     }
     let mut catalog = definitions
         .iter()
-        // Hidden App routes reuse the existing metadata catalog row instead of exposing a second choice.
-        .filter(|collected| !catalog_overlays.contains(collected.contribution.definition.name()))
         .map(|collected| AgentToolCapabilityDto {
             category: collected.contribution.category,
             name: collected.contribution.definition.name().to_string(),
@@ -1378,7 +1367,6 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             authority: tool_authority(collected),
         })
         .collect::<Vec<_>>();
-    catalog.append(&mut catalog_only);
     let mut tool_sets = BTreeMap::<String, Vec<ToolName>>::new();
     for collected in &definitions {
         if let Some(id) = collected.contribution.tool_set {
@@ -1449,6 +1437,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             routes,
             registry,
             search,
+            mcp_catalog,
         }),
         policy: Arc::new(CompositeActionPolicyService {
             dynamic: dynamic_policy,
@@ -1558,6 +1547,7 @@ struct CompositeToolService {
     routes: BTreeMap<ToolRuntimeKey, ToolContributionRuntime>,
     registry: Arc<ToolRegistrySnapshot>,
     search: Option<ToolSearchRuntime>,
+    mcp_catalog: Option<Arc<McpMetaToolService>>,
 }
 
 impl CompositeToolService {
@@ -1567,6 +1557,26 @@ impl CompositeToolService {
             .filter(|name| !facts.allows_tool(name))
             .cloned()
             .collect()
+    }
+
+    fn execute_search(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: Option<&ToolExecutionFacts>,
+    ) -> Option<Result<ToolExecutionOutput, CoreError>> {
+        if call.name.as_str() == MCP_SEARCH_TOOLS_NAME {
+            return self.mcp_catalog.as_ref().map(|catalog| {
+                catalog.execute_search(call, &self.registry, authorization, cancellation, facts)
+            });
+        }
+        let search = self.search.as_ref()?;
+        if call.name != search.definition().name {
+            return None;
+        }
+        let excluded = facts.map_or_else(Vec::new, |facts| self.excluded_tools(facts));
+        Some(search.execute_selected(call, authorization, cancellation, &excluded))
     }
 
     fn runtime(
@@ -1611,6 +1621,7 @@ pub(crate) fn product_tool_profiles() -> Vec<ash_protocol::ToolProductProfile> {
                 "core.execution",
                 "core.browser",
                 "core.web",
+                "core.github",
                 "core.memory",
                 "core.skills",
                 "core.images",
@@ -1743,9 +1754,10 @@ impl ToolService for CompositeToolService {
             if let Some(search) = &self.search {
                 names.insert(search.definition().name.clone());
             }
-            if names
-                .iter()
-                .any(|name| self.registry.resolve(name).is_none())
+            if self
+                .mcp_catalog
+                .as_ref()
+                .is_some_and(|catalog| names.iter().any(|name| catalog.contains(name)))
             {
                 for name in [MCP_SEARCH_TOOLS_NAME, MCP_CALL_TOOL_NAME] {
                     let name = ToolName::new(name).expect("static MCP bridge name");
@@ -2035,10 +2047,8 @@ impl ToolService for CompositeToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if let Some(search) = &self.search
-            && call.name == search.definition().name
-        {
-            return search.execute(call, authorization, cancellation);
+        if let Some(result) = self.execute_search(call, authorization, cancellation, None) {
+            return result;
         }
         let (_, runtime) = self.runtime(call)?;
         match runtime {
@@ -2058,10 +2068,8 @@ impl ToolService for CompositeToolService {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if let Some(search) = &self.search
-            && call.name == search.definition().name
-        {
-            return search.execute(call, authorization, cancellation);
+        if let Some(result) = self.execute_search(call, authorization, cancellation, None) {
+            return result;
         }
         let (_, runtime) = self.runtime(call)?;
         match runtime {
@@ -2081,15 +2089,8 @@ impl ToolService for CompositeToolService {
         cancellation: &CancellationToken,
         facts: &ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if let Some(search) = &self.search
-            && call.name == search.definition().name
-        {
-            return search.execute_selected(
-                call,
-                authorization,
-                cancellation,
-                &self.excluded_tools(facts),
-            );
+        if let Some(result) = self.execute_search(call, authorization, cancellation, Some(facts)) {
+            return result;
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -2115,15 +2116,8 @@ impl ToolService for CompositeToolService {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if let Some(search) = &self.search
-            && call.name == search.definition().name
-        {
-            return search.execute_selected(
-                call,
-                authorization,
-                cancellation,
-                &self.excluded_tools(facts),
-            );
+        if let Some(result) = self.execute_search(call, authorization, cancellation, Some(facts)) {
+            return result;
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -2145,15 +2139,8 @@ impl ToolService for CompositeToolService {
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if let Some(search) = &self.search
-            && call.name == search.definition().name
-        {
-            return search.execute_selected(
-                call,
-                authorization,
-                cancellation,
-                &self.excluded_tools(facts),
-            );
+        if let Some(result) = self.execute_search(call, authorization, cancellation, Some(facts)) {
+            return result;
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -2433,15 +2420,6 @@ impl ToolSearchRuntime {
             },
             ActionPolicyRevision::new(TOOL_SEARCH_POLICY_REVISION),
         ))
-    }
-
-    fn execute(
-        &self,
-        call: &ToolCall,
-        authorization: &ToolAuthorization,
-        cancellation: &CancellationToken,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_selected(call, authorization, cancellation, &[])
     }
 
     fn execute_selected(
