@@ -4318,7 +4318,7 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 	} finally { resetNlsResolver(); }
 });
 
-for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help stays local and restores its trigger (${locale})`, async () => {
+for (const locale of ['en', 'zh-CN']) test(`Permission menu exposes option descriptions and restores focus after accessibility help (${locale})`, async () => {
 	initializeTestLocalization(locale);
 	try {
 		using fixture = await sessionsInputFixture();
@@ -4328,6 +4328,22 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 		await nextTask();
 		const menu = document.querySelector<HTMLElement>('.ash-chat-permission-menu')!;
 		assert.ok(menu);
+		const options = menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
+		const [firstOption, secondOption] = options;
+		assert.ok(firstOption && secondOption);
+		const initialFocus = document.activeElement;
+		assert.ok(initialFocus && menu.contains(initialFocus));
+		initialFocus.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+		assert.equal(document.activeElement, firstOption);
+		assert.equal(firstOption.getAttribute('aria-expanded'), null);
+		firstOption.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		assert.equal(document.activeElement, secondOption);
+		for (const option of options) {
+			const description = option.querySelector('.ash-action-widget-summary')?.textContent;
+			assert.ok(description);
+			assert.equal(option.getAttribute('aria-description'), description);
+			assert.equal(option.getAttribute('aria-expanded'), null);
+		}
 		const selected = document.activeElement;
 		fixture.model.selectMode('plan');
 		assert.ok(menu.isConnected);
