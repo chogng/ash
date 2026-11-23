@@ -54,7 +54,7 @@ import { IContextKeyService, type IScopedContextKeyService } from '../../../../p
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
+import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorIdentifier, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
 import type { FileElement } from './breadcrumbsModel.js';
@@ -175,8 +175,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	private get activeEntry(): EditorGroupEntry | undefined {
-		const active = this.model.activeEditor;
-		return active ? this.entry(active) : undefined;
+		const id = this.model.activeEditorInstanceId;
+		return id === undefined ? undefined : this.paneEntries.get(id);
 	}
 
 	private ordinaryContent: Element | undefined;
@@ -417,6 +417,16 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	get activeInput(): IResourceEditorInput | undefined {
 		return this.activeEntry?.input;
+	}
+
+	public get activeEditor(): EditorIdentifier | undefined {
+		const id = this.model.activeEditorInstanceId;
+		return id === undefined ? undefined : this.getEditorIdentifier(id);
+	}
+
+	public getEditorIdentifier(instanceId: EditorInstanceId): EditorIdentifier | undefined {
+		const entry = this.paneEntries.get(instanceId);
+		return entry && Object.freeze({ groupId: this.id, instanceId, paneId: entry.paneInstance.pane.id, input: entry.input });
 	}
 
 	get isLocked(): boolean {

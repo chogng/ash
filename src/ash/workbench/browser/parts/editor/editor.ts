@@ -2,7 +2,7 @@ import type { IResourceEditorInput, IEditorPane, IEditorIdentifier } from '../..
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
-import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/common/editorState.js';
+import type { EditorGroupId, EditorIdentifier, EditorInstanceId } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import type { MenuId } from '../../../../platform/actions/common/actions.js';
@@ -31,6 +31,8 @@ export interface IEditorGroupView extends IEditorGroup {
 	readonly domNode: HTMLElement;
 	readonly headerElement: HTMLElement;
 	readonly activePane: IEditorPane | undefined;
+	readonly activeEditor: EditorIdentifier | undefined;
+	getEditorIdentifier(instanceId: EditorInstanceId): EditorIdentifier | undefined;
 	saveEditor(input: IResourceEditorInput, options?: ISaveEditorsOptions): Promise<IResourceEditorInput | undefined>;
 	saveEditorViewState(input: IResourceEditorInput): SerializedEditorViewState | undefined;
 	restoreEditorViewState(input: IResourceEditorInput, state: SerializedEditorViewState | undefined): boolean;

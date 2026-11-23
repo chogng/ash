@@ -64,9 +64,8 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	}
 
 	get visibleEditors(): readonly IResourceEditorInput[] {
-		const state = this.editorPart.getEditorState();
 		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);
-		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
+		if (this.editorPart.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
 		return Object.freeze(editors);
 	}
 
@@ -193,20 +192,18 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	}
 
 	private getActiveEditorSignature(): string {
-		const state = this.editorPart.getEditorState();
-		if (state.isModalEditorVisible) return `modal:${editorInputSignature(this.editorPart.activeInput)}`;
-		return state.activeEditor ? `${state.activeEditor.instanceId}:${state.activeEditor.paneId}` : '';
+		if (this.editorPart.isModalEditorVisible) return `modal:${editorInputSignature(this.editorPart.activeInput)}`;
+		const active = this.editorPart.activeGroup.activeEditor;
+		return active ? `${active.instanceId}:${active.paneId}` : '';
 	}
 
 	private getVisibleEditorSignature(): string {
-		const state = this.editorPart.getEditorState();
 		const visible = this.editorPart.groups.flatMap(group => {
 			if (!this.editorPart.isGroupVisible(group.id)) return [];
-			const groupState = group.getEditorState();
-			const active = groupState.editors.find(editor => editor.instanceId === groupState.activeEditorInstanceId);
+			const active = group.activeEditor;
 			return active ? [`${active.instanceId}:${active.paneId}`] : [];
 		});
-		if (state.isModalEditorVisible) visible.unshift(`modal:${editorInputSignature(this.editorPart.activeInput)}`);
+		if (this.editorPart.isModalEditorVisible) visible.unshift(`modal:${editorInputSignature(this.editorPart.activeInput)}`);
 		return visible.join('\0');
 	}
 }

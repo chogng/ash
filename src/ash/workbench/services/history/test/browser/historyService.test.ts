@@ -236,6 +236,32 @@ test('canceling a reopen preserves the resource for a later attempt', async () =
 	assert.equal(fixture.editor.activeInput, input);
 });
 
+test('removing a resource during a canceled reopen keeps it out of history', async () => {
+	using fixture = new HistoryFixture();
+	const first = resource('first');
+	const removed = resource('removed');
+	for (const input of [first, removed]) {
+		await fixture.editor.openEditor(input);
+		await fixture.close(input);
+	}
+	const gate = new DeferredPromise<void>();
+	const started = new DeferredPromise<void>();
+	const key = removed.resource.toString();
+	fixture.gates.set(key, gate);
+	fixture.started.set(key, started);
+	fixture.failures.set(key, new CancellationError());
+	const reopening = fixture.history.reopenLastClosedEditor();
+	await started.p;
+	fixture.history.remove(removed.resource);
+	await gate.complete();
+	await reopening;
+	fixture.failures.delete(key);
+
+	await fixture.history.reopenLastClosedEditor();
+	assert.equal(fixture.editor.activeInput, first);
+	assert.deepEqual(fixture.history.getHistory(), [first]);
+});
+
 test('disposing history drops queued reopens and later commands without opening more resources', async () => {
 	using fixture = new HistoryFixture();
 	const first = resource('first');

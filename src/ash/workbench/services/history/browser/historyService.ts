@@ -8,7 +8,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorPaneSelectionChangeReason, isEditorPaneWithSelection } from '../../../common/editor.js';
-import type { EditorPartChangeEvent } from '../../editor/common/editorState.js';
+import type { EditorIdentifier, EditorPartChangeEvent } from '../../editor/common/editorState.js';
 import { GoFilter, type IHistoryService } from '../common/history.js';
 import type { IExpression } from '../../../../base/common/glob.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -33,11 +33,20 @@ interface HistoryTimeline {
 	index: number;
 }
 
+interface ClosedEditor {
+	readonly resource: URI;
+	readonly editorId: string | undefined;
+	readonly restore: () => IResourceEditorInput;
+	readonly preferredEditorId: string;
+	readonly index: number;
+}
+
 /** Owns editor and location history and its command availability. */
 export class HistoryService extends Disposable implements IHistoryService {
 	private readonly recentlyOpened = new Map<string, IResourceEditorInput>();
-	private readonly recentlyClosed: Array<{ readonly resource: URI; readonly editorId: string | undefined; readonly restore: () => IResourceEditorInput; readonly preferredEditorId: string; readonly index: number; }> = [];
+	private readonly recentlyClosed: ClosedEditor[] = [];
 	private readonly reopenQueue = new TaskQueue();
+	private reopening: ClosedEditor | undefined;
 	private readonly timelines = new Map<GoFilter, HistoryTimeline>([
 		[GoFilter.NONE, { entries: [], index: -1 }],
 		[GoFilter.EDITS, { entries: [], index: -1 }],
@@ -85,6 +94,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 		}));
 		this.recordActiveEditor();
 		this.listenToActivePane();
+		this.updateContextKeys();
 	}
 
 	public getHistory(): readonly IResourceEditorInput[] {
@@ -93,6 +103,9 @@ export class HistoryService extends Disposable implements IHistoryService {
 
 	public remove(resource: URI): void {
 		if (this.recentlyOpened.delete(extUri.getComparisonKey(resource))) this.saveHistory();
+		if (this.reopening && extUri.isEqual(this.reopening.resource, resource)) {
+			this.reopening = undefined;
+		}
 		for (let index = this.recentlyClosed.length - 1; index >= 0; index--) {
 			if (extUri.isEqual(this.recentlyClosed[index].resource, resource)) this.recentlyClosed.splice(index, 1);
 		}
@@ -134,23 +147,26 @@ export class HistoryService extends Disposable implements IHistoryService {
 			if (this.editorPart.activeGroup.inputs.some(input => input.editorId === closed.editorId && extUri.isEqual(input.resource, closed.resource))) {
 				continue;
 			}
+			this.reopening = closed;
 			try {
 				const input = closed.restore();
 				const choices = this.editorPart.getEditorPaneChoices(input, { includeExplicit: true });
 				const preferredEditorId = choices.find(choice => choice.id === closed.preferredEditorId)?.id;
 				const pane = await this.editorPart.openEditor(input, { preferredEditorId, pinned: true, index: closed.index, ignoreError: true });
-				if (!this.isDisposed) {
+				if (!this.isDisposed && this.reopening === closed) {
 					pane.focus();
 				}
 				return;
 			} catch (error) {
 				if (isCancellationError(error)) {
-					if (!this.isDisposed) {
+					if (!this.isDisposed && this.reopening === closed) {
 						this.recentlyClosed.unshift(closed);
 					}
 					return;
 				}
 				// Missing resources and unavailable providers cannot block older closed editors.
+			} finally {
+				this.reopening = undefined;
 			}
 		}
 	}
@@ -217,26 +233,27 @@ export class HistoryService extends Disposable implements IHistoryService {
 			this.saveHistory();
 		}
 		if (this.isNavigating) return;
-		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;
-		if (!editorId || !this.includeInHistory(editorId)) return;
+		const editor = this.editorPart.activeGroup.activeEditor;
+		if (!editor || this.resourceExcludeMatcher.matches(editor.input.resource)) return;
+		const editorId = editor.instanceId;
 		const timeline = this.timeline(GoFilter.NONE);
 		if (timeline.entries[timeline.index]?.editorId === editorId) return;
 		const pane = this.editorPart.activePane;
 		const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
 		this.append(timeline, { editorId, selection, fromActivation: true });
-		this.updateContextKeys();
 	}
 
 	private recordSelection(reason: EditorPaneSelectionChangeReason): void {
 		if (this.isNavigating) return;
 		const pane = this.editorPart.activePane;
 		if (!isEditorPaneWithSelection(pane)) return;
-		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;
+		const editor = this.editorPart.activeGroup.activeEditor;
+		if (!editor || this.resourceExcludeMatcher.matches(editor.input.resource)) return;
 		const selection = pane.getSelection();
-		if (!editorId || !selection || !this.includeInHistory(editorId)) return;
+		if (!selection) return;
 		const all = this.timeline(GoFilter.NONE);
 		const previous = all.entries[all.index];
-		const entry: HistoryEntry = { editorId, selection, fromActivation: false };
+		const entry: HistoryEntry = { editorId: editor.instanceId, selection, fromActivation: false };
 		if (!previous) {
 			this.append(all, entry);
 			this.updateContextKeys();
@@ -265,7 +282,8 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private appendIfDistinct(timeline: HistoryTimeline, entry: HistoryEntry, reason: EditorPaneSelectionChangeReason): void {
-		if (!this.includeInHistory(entry.editorId)) return;
+		const editor = this.findEditor(entry.editorId);
+		if (!editor || this.resourceExcludeMatcher.matches(editor.input.resource)) return;
 		const current = timeline.entries[timeline.index];
 		if (current && !this.isDistinct(current, entry, reason)) {
 			timeline.entries.splice(timeline.index + 1);
@@ -285,7 +303,6 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private append(timeline: HistoryTimeline, entry: HistoryEntry): void {
-		if (!this.includeInHistory(entry.editorId)) return;
 		timeline.entries.splice(timeline.index + 1);
 		timeline.entries.push(entry);
 		if (timeline.entries.length > 50) timeline.entries.shift();
@@ -297,14 +314,14 @@ export class HistoryService extends Disposable implements IHistoryService {
 		this.updateContextKeys();
 		const timeline = this.timeline(filter);
 		const current = timeline.entries[timeline.index];
-		const active = this.editorPart.getEditorState().activeEditor;
-		const activeExcluded = active && !this.includeInHistory(active.instanceId);
-		const index = direction === -1 && (filter !== GoFilter.NONE || activeExcluded) && current && !this.matchesActiveLocation(current)
+		const active = this.editorPart.activeGroup.activeEditor;
+		const activeExcluded = active && this.resourceExcludeMatcher.matches(active.input.resource);
+		const index = direction === -1 && (filter !== GoFilter.NONE || activeExcluded) && current && !this.matchesActiveLocation(current, active?.instanceId)
 			? timeline.index
 			: timeline.index + direction;
 		if (index < 0 || index >= timeline.entries.length) return;
 		const entry = timeline.entries[index]!;
-		const target = this.editorPart.groups.flatMap(group => group.editors).find(editor => editor.instanceId === entry.editorId);
+		const target = this.findEditor(entry.editorId);
 		if (!target) return;
 		timeline.index = index;
 		this.isNavigating = true;
@@ -319,15 +336,22 @@ export class HistoryService extends Disposable implements IHistoryService {
 		}
 	}
 
-	private matchesActiveLocation(entry: HistoryEntry): boolean {
-		if (entry.editorId !== this.editorPart.getEditorState().activeEditor?.instanceId) return false;
+	private matchesActiveLocation(entry: HistoryEntry, activeEditorId: string | undefined): boolean {
+		if (entry.editorId !== activeEditorId) return false;
 		const pane = this.editorPart.activePane;
 		const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
 		return !entry.selection || !!selection && entry.selection.startLineNumber === selection.startLineNumber;
 	}
 
 	private pruneClosedEditors(): void {
-		const openIds = new Set(this.editorPart.groups.flatMap(group => group.editors.filter(editor => this.includeInHistory(editor.instanceId)).map(editor => editor.instanceId)));
+		const openIds = new Set<string>();
+		for (const group of this.editorPart.groups) {
+			for (const editor of group.editors) {
+				if (!this.resourceExcludeMatcher.matches(editor.input.resource)) {
+					openIds.add(editor.instanceId);
+				}
+			}
+		}
 		for (const timeline of this.timelines.values()) {
 			for (let index = timeline.entries.length - 1; index >= 0; index -= 1) {
 				if (openIds.has(timeline.entries[index]!.editorId)) continue;
@@ -337,9 +361,14 @@ export class HistoryService extends Disposable implements IHistoryService {
 		}
 	}
 
-	private includeInHistory(editorId: string): boolean {
-		const input = this.editorPart.groups.flatMap(group => group.editors).find(editor => editor.instanceId === editorId)?.input;
-		return !!input && !this.resourceExcludeMatcher.matches(input.resource);
+	private findEditor(editorId: string): EditorIdentifier | undefined {
+		for (const group of this.editorPart.groups) {
+			const editor = group.getEditorIdentifier(editorId);
+			if (editor) {
+				return editor;
+			}
+		}
+		return undefined;
 	}
 
 	private timeline(filter: GoFilter): HistoryTimeline {
@@ -350,12 +379,12 @@ export class HistoryService extends Disposable implements IHistoryService {
 		const all = this.timeline(GoFilter.NONE);
 		const edits = this.timeline(GoFilter.EDITS);
 		const navigation = this.timeline(GoFilter.NAVIGATION);
-		const active = this.editorPart.getEditorState().activeEditor;
-		this.canNavigateBack.set(all.index > 0 || all.index >= 0 && !!active && !this.includeInHistory(active.instanceId));
+		const active = this.editorPart.activeGroup.activeEditor;
+		this.canNavigateBack.set(all.index > 0 || all.index >= 0 && !!active && this.resourceExcludeMatcher.matches(active.input.resource));
 		this.canNavigateForward.set(all.index < all.entries.length - 1);
-		this.canNavigateBackInEdits.set(edits.index > 0 || edits.index >= 0 && !this.matchesActiveLocation(edits.entries[edits.index]!));
+		this.canNavigateBackInEdits.set(edits.index > 0 || edits.index >= 0 && !this.matchesActiveLocation(edits.entries[edits.index]!, active?.instanceId));
 		this.canNavigateForwardInEdits.set(edits.index >= 0 && edits.index < edits.entries.length - 1);
-		this.canNavigateBackInNavigation.set(navigation.index > 0 || navigation.index >= 0 && !this.matchesActiveLocation(navigation.entries[navigation.index]!));
+		this.canNavigateBackInNavigation.set(navigation.index > 0 || navigation.index >= 0 && !this.matchesActiveLocation(navigation.entries[navigation.index]!, active?.instanceId));
 		this.canNavigateForwardInNavigation.set(navigation.index >= 0 && navigation.index < navigation.entries.length - 1);
 	}
 }

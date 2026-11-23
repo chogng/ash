@@ -53,6 +53,10 @@ export class EditorGroupModel {
 		return this.active?.input;
 	}
 
+	public get activeEditorInstanceId(): EditorInstanceId | undefined {
+		return this.active?.instanceId;
+	}
+
 	public get previewEditor(): IResourceEditorInput | undefined {
 		return this.editors.find(editor => editor.preview)?.input;
 	}

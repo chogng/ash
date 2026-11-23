@@ -542,7 +542,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return Object.freeze({
 			groups: Object.freeze(this._groups.map(({ group }) => group.getEditorState())),
 			activeGroupId: this._activeGroup.id,
-			activeEditor: this.activeEditorIdentifier(),
+			activeEditor: this._activeGroup.activeEditor,
 			isModalEditorVisible: this.modalEditor.isVisible,
 		});
 	}
@@ -735,7 +735,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	activateEditorIdentifier(identifier: EditorIdentifier): IEditorPane | undefined {
 		const host = this._groups.find(candidate => candidate.group.id === identifier.groupId);
-		const editor = host?.group.editors.find(candidate => candidate.instanceId === identifier.instanceId);
+		const editor = host?.group.getEditorIdentifier(identifier.instanceId);
 		if (!host || !editor) return undefined;
 		this.setActiveGroup(host.group);
 		return host.group.activateEditor(editor.input);
@@ -762,7 +762,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	async closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean> {
 		const host = this._groups.find(candidate => candidate.group.id === identifier.groupId);
-		const editor = host?.group.editors.find(candidate => candidate.instanceId === identifier.instanceId);
+		const editor = host?.group.getEditorIdentifier(identifier.instanceId);
 		return host && editor ? host.group.closeEditor(editor.input) : false;
 	}
 
@@ -1538,12 +1538,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (this._activeGroup === group) return;
 		this._activeGroup = group;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeGroupChanged', groupId: group.id }));
-	}
-
-	private activeEditorIdentifier(): EditorIdentifier | undefined {
-		const editor = this._activeGroup.editors.find(candidate => candidate.isActive);
-		if (!editor) return undefined;
-		return Object.freeze({ groupId: editor.groupId, instanceId: editor.instanceId, paneId: editor.paneId, input: editor.input });
 	}
 }
 

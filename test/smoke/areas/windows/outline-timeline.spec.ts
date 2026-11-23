@@ -137,7 +137,7 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 			}
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		});
-		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
 	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	await page.locator('[data-view-id="timeline"] .ash-pane-view-header-button').click();
@@ -163,17 +163,21 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 	await timeline.getByRole('tree').focus();
 	await timeline.getByRole('tree').press('ArrowDown');
 	await expect(page.getByRole('region', { name: 'Diff editor: Original and Modified', exact: true })).toHaveCount(0);
-	const breadcrumbs = workbench.editors.groupAt(0).title.getByRole('navigation', { name: 'Editor breadcrumbs' });
-	const modifiedResource = await breadcrumbs.getAttribute('title');
-	expect(modifiedResource).not.toBeNull();
+	const group = workbench.editors.groupAt(0);
 	await timeline.getByRole('treeitem').last().focus();
 	await page.keyboard.press('Enter');
-	const diff = workbench.editors.groupAt(0).content.getByRole('region', { name: 'Diff editor: Original and Modified', exact: true });
+	const diff = group.content.getByRole('region', { name: 'Diff editor: Original and Modified', exact: true });
 	await expect(diff).toBeVisible();
 	await expect(diff).toContainText('const first = 1;');
 	await expect(diff).toContainText('const second = 2;');
-	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last().locator('.ash-icon-label-text')).toHaveText('main.ts');
-	await expect(breadcrumbs).toHaveAttribute('title', modifiedResource!);
+	const diffBreadcrumbs = group.title.getByRole('navigation', { name: 'Diff editor breadcrumbs', exact: true });
+	const comparedFile = diffBreadcrumbs.getByRole('button', { name: 'main.ts', exact: true });
+	await expect(comparedFile).toBeDisabled();
+	await expect(diffBreadcrumbs).toHaveAttribute('title', /\.snapshot → .*\/main\.ts$/u);
+
+	const mainTab = group.element.getByRole('tab', { name: 'main.ts', exact: true });
+	await mainTab.click();
+	const breadcrumbs = group.title.getByRole('navigation', { name: 'Editor breadcrumbs', exact: true });
 	await breadcrumbs.locator('.ash-breadcrumb-item').last().focus();
 	await page.keyboard.press('Enter');
 	const breadcrumbPicker = page.locator('.ash-quick-pick');
@@ -182,13 +186,17 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 	await page.keyboard.press('Enter');
 	await expect(breadcrumbPicker).toHaveCount(0);
 	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last().locator('.ash-icon-label-text')).toHaveText('other.ts');
-	await workbench.editors.groupAt(0).element.getByRole('tab', { name: 'main.ts', exact: true }).click();
+	await mainTab.click();
 	await expect(timeline.locator('.ash-pane-view-header .ash-view-pane-header-description')).toHaveText('main.ts');
 	const other = page.locator('.ash-explorer').getByRole('treeitem', { name: 'other.ts', exact: true });
+	await timelineHeader.press('ArrowLeft');
 	await other.dblclick();
 	await expect(timeline.locator('.ash-pane-view-header .ash-view-pane-header-description')).toHaveText('other.ts');
+	await expect(timelineHeader).toHaveAttribute('aria-expanded', 'false');
+	await timelineHeader.press('ArrowRight');
+	await expect(timeline.getByRole('status')).toHaveText('No timeline information was provided.');
 	await expect(timeline.getByRole('treeitem')).toHaveCount(0);
-	await workbench.editors.groupAt(0).element.getByRole('tab', { name: 'main.ts', exact: true }).click();
+	await mainTab.click();
 	await expect(timeline.getByRole('treeitem')).toHaveCount(2);
 	const actions = timeline.getByRole('button', { name: 'More Actions', exact: true });
 	await timeline.hover();

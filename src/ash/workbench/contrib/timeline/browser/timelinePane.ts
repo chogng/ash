@@ -53,6 +53,7 @@ export class TimelinePane extends ViewPane {
 	private uri: URI | undefined;
 	private pinned = false;
 	private generation = 0;
+	private needsScrollReset = false;
 
 	constructor(
 		container: HTMLElement,
@@ -117,6 +118,8 @@ export class TimelinePane extends ViewPane {
 			if (!visible) { return; }
 			if (!this.pinned && !extUri.isEqual(this.activeUri(), this.uri)) {
 				this.refresh();
+			} else if (this.needsScrollReset) {
+				this.renderRefreshedTimeline();
 			} else {
 				this.loadMissingSources();
 			}
@@ -157,15 +160,25 @@ export class TimelinePane extends ViewPane {
 		this.pending.clearAndDisposeAll();
 		this.timelines.clear();
 		this.failedSources.clear();
-		this.tree.scrollTop = 0;
 		if (!this.pinned) this.uri = this.activeUri();
+		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
+		// The header can be visible while the tree is collapsed. Defer DOM work until it is expanded.
+		this.needsScrollReset = true;
+		if (this.isBodyVisible()) {
+			this.renderRefreshedTimeline();
+		}
+	}
+
+	private renderRefreshedTimeline(): void {
+		this.needsScrollReset = false;
+		this.tree.scrollTop = 0;
 		this.loadMissingSources();
 		this.render();
 	}
 
 	public getAccessibleContent(): string {
 		const entries = this.items().map(({ item }) => [item!.label, item!.description].filter(Boolean).join(', '));
-		return [localize('timeline.title', 'Timeline'), this.uri ? basename(this.uri) : '', entries.length ? entries.join('\n') : this.messageDomNode.textContent].filter(Boolean).join('\n');
+		return [localize('timeline.title', 'Timeline'), this.uri ? basename(this.uri) : '', entries.length ? entries.join('\n') : this.emptyMessage()].filter(Boolean).join('\n');
 	}
 
 	private activeUri(): URI | undefined {
@@ -246,11 +259,14 @@ export class TimelinePane extends ViewPane {
 		this.tree.element.hidden = entries.length + more.length === 0;
 		this.tree.element.setAttribute('aria-busy', String(this.pending.size > 0));
 		this.messageDomNode.hidden = !this.tree.element.hidden;
-		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
-		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
-		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
-		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
-		else this.messageDomNode.textContent = localize('timeline.empty', 'No timeline information was provided.');
+		this.messageDomNode.textContent = this.emptyMessage();
+	}
+
+	private emptyMessage(): string {
+		if (this.pending.size > 0) return localize('timeline.loading', 'Loading timeline…');
+		if (!this.uri) return localize('timeline.noFile', 'Select a file to view its timeline.');
+		if (this.failedSources.size > 0) return localize('timeline.failed', 'Could not load timeline entries.');
+		return localize('timeline.empty', 'No timeline information was provided.');
 	}
 
 	private renderRow(row: TimelineRow): HTMLElement {
