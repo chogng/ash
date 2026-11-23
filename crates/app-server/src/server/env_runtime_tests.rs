@@ -4591,6 +4591,47 @@ fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
 }
 
 #[test]
+fn env_dirs_set_leaves_settled_thread_history_unloaded() {
+    let folder = TestDir::new("directory-cold-history", "file.txt");
+    let store = Arc::new(InMemoryThreadStore::default());
+    let make_server = || {
+        AppServer::new(
+            Arc::new(ThreadController::with_store(store.clone())),
+            Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+            ash_app_server_diff::compute,
+        )
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, host_policy())
+        .unwrap()
+    };
+    let writer = make_server();
+    let thread_id = start_directory_approval(&writer);
+    let server = make_server();
+    let bind_folder = |server: &AppServer| {
+        server.activate_local_dirs(vec![("folder".into(), folder.authorization())])
+    };
+
+    assert!(server.threads.list_loaded_threads().unwrap().is_empty());
+    assert_eq!(bind_folder(&server), Err(EnvRuntimeError::Busy));
+    let active = server.threads.read_thread(&thread_id).unwrap();
+    server
+        .threads
+        .interrupt_turn(
+            &thread_id,
+            InterruptTurnRequest {
+                command_id: CommandId::new("settle-directory-approval").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(active.sequence),
+                turn_id: active.turns.last().unwrap().turn_id.clone(),
+            },
+        )
+        .unwrap();
+
+    let reopened = make_server();
+    assert!(bind_folder(&reopened).is_ok());
+    assert!(reopened.threads.list_loaded_threads().unwrap().is_empty());
+}
+
+#[test]
 fn env_dirs_set_is_idempotent_while_approval_pending() {
     let first = TestDir::new("directory-reopen", "first.txt");
     let other = TestDir::new("directory-change", "other.txt");

@@ -3023,6 +3023,27 @@ impl ThreadController {
         self.read_catalog(|store| store.list_catalog())
     }
 
+    /// Checks for unfinished Turns without replaying settled Thread histories.
+    pub fn has_active_turns(&self) -> Result<bool, CoreError> {
+        for record in self.list_thread_catalog()? {
+            // The recovery flag also covers Goals and Hooks. Inspect Turn state only for
+            // candidates so an evicted Thread can still protect its active Turn.
+            if !record.requires_startup_recovery {
+                continue;
+            }
+            if self.with_loaded_thread(&record.thread.thread_id, |loaded| {
+                Ok(loaded
+                    .snapshot
+                    .turns
+                    .iter()
+                    .any(|turn| is_interruptible_turn(turn.status)))
+            })? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Reads bounded local activity without restoring Threads or loading conversation content.
     pub fn recent_tool_calls(
         &self,
@@ -4253,17 +4274,10 @@ fn thread_requires_startup_recovery(snapshot: &ThreadSnapshot) -> bool {
             .hook_runs
             .iter()
             .any(|run| run.status == ash_protocol::HookRunStatus::Running)
-        || snapshot.turns.iter().any(|turn| {
-            matches!(
-                turn.status,
-                TurnStatus::Created
-                    | TurnStatus::Running
-                    | TurnStatus::WaitingForApproval
-                    | TurnStatus::WaitingForUserInput
-                    | TurnStatus::WaitingForCapability
-                    | TurnStatus::Cancelling
-            )
-        })
+        || snapshot
+            .turns
+            .iter()
+            .any(|turn| is_interruptible_turn(turn.status))
 }
 
 fn thread_manager_info(snapshot: &ThreadSnapshot) -> SessionManagerInfo {

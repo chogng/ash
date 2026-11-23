@@ -4182,22 +4182,11 @@ impl AppServer {
     }
 
     fn ensure_directory_transition_is_idle(&self) -> Result<(), EnvRuntimeError> {
-        let threads = self
+        if self
             .threads
-            .list_threads()
-            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        let busy = threads.iter().flat_map(|thread| &thread.turns).any(|turn| {
-            matches!(
-                turn.status,
-                TurnStatus::Created
-                    | TurnStatus::Running
-                    | TurnStatus::WaitingForApproval
-                    | TurnStatus::WaitingForUserInput
-                    | TurnStatus::WaitingForCapability
-                    | TurnStatus::Cancelling
-            )
-        });
-        if busy {
+            .has_active_turns()
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
+        {
             return Err(EnvRuntimeError::Busy);
         }
         Ok(())
