@@ -75,6 +75,8 @@ export interface EditorPaneCreationOptions {
 
 export enum EditorPaneMatch {
 	None,
+	/** Available for explicit requests and recovery actions. */
+	ExplicitOnly,
 	Optional,
 	/** Product editor used when no resource-specific default matches. */
 	Builtin,

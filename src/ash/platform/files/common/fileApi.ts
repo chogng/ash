@@ -67,7 +67,7 @@ export interface IFileApi {
 		readonly readAccess?: string;
 		readonly encoding?: string;
 	}): Promise<{ readonly content: string; readonly revision: string; readonly encoding?: string; }>;
-	readBinaryFile(params: FileTarget): Promise<{ readonly resource: ResourceMetadataResult; readonly revision: string; }>;
+	readBinaryFile(params: FileTarget & { readonly maxBytes?: number; }): Promise<{ readonly resource: ResourceMetadataResult; readonly revision: string; }>;
 	writeFile(params: FileTarget & {
 		readonly content: string;
 		readonly expectedRevision?: string | null;

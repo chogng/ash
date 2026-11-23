@@ -378,6 +378,7 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
             dir_id: None,
             session_directory: None,
             path: "paper.pdf".into(),
+            max_bytes: None,
         })
         .unwrap();
     let metadata = client

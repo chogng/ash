@@ -11,6 +11,7 @@ import { dirname, extUri } from '../../../base/common/resources.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import {
+	assertFileReadSize,
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
 	toFileSystemProviderErrorCode,
@@ -27,6 +28,7 @@ import {
 	type FileMissingTargetBehavior,
 	type IFileBytes,
 	type IFileReadSnapshot,
+	type IFileReadLimits,
 	type IFileChangeEvent,
 	type IFileRenameEvent,
 	type IFileContent,
@@ -207,10 +209,16 @@ export class FileService extends Disposable implements IFileService {
 		});
 	}
 
-	public readFileBytes(resource: URI): Promise<IFileBytes> {
+	public readFileBytes(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes> {
 		const provider = this.provider(resource);
 		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
-		return provider.readFile(resource);
+		const size = limits?.size;
+		if (size === undefined) return provider.readFile(resource);
+		if (!Number.isSafeInteger(size) || size <= 0) throw new RangeError('Invalid file read size limit');
+		return provider.readFile(resource, { size }).then(content => {
+			assertFileReadSize(content.bytes.byteLength, { size });
+			return content;
+		});
 	}
 
 	public async openReadSnapshot(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined> {
@@ -417,7 +425,7 @@ function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSy
 		token: CancellationToken.None,
 		stat: provider.stat.bind(provider),
 		readDirectory: provider.readDirectory.bind(provider),
-		readFile: provider.readFile.bind(provider),
+		readFile: (uri: URI) => provider.readFile(uri),
 		writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
 		createDirectory: provider.createDirectory.bind(provider),
 		rename: provider.rename.bind(provider),

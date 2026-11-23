@@ -3,6 +3,7 @@ use super::RpcError;
 use super::decode;
 use super::resources_processor::resource_rpc_error;
 use super::result;
+use crate::resource_store::ResourceError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::fs::FsCancelElevatedWriteParams;
 use ash_app_server_protocol::protocol::fs::FsCopyParams;
@@ -264,6 +265,9 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: FsReadBinaryFileParams = decode(params)?;
+        if params.max_bytes == Some(0) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let files = self.file_system_for_request(
             params.dir_id.as_deref(),
             params.session_directory.as_ref(),
@@ -271,10 +275,17 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         )?;
         // The bounded read checks the size of the opened file. A separate metadata
         // request would require browse permission even for a read-only grant.
-        let small = match files
-            .read_file_with_revision(&params.path, MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES)
-        {
+        let limit = params
+            .max_bytes
+            .map_or(MAX_BINARY_EDITOR_FILE_BYTES, |bytes| {
+                MAX_BINARY_EDITOR_FILE_BYTES.min(bytes as usize)
+            });
+        let memory_limit = limit.min(MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES);
+        let small = match files.read_file_with_revision(&params.path, memory_limit) {
             Ok(content) => Some(content),
+            Err(FileSystemError::ReadLimitExceeded { .. }) if memory_limit == limit => {
+                return Err(resource_rpc_error(ResourceError::TooLarge));
+            }
             Err(FileSystemError::ReadLimitExceeded { .. }) => None,
             Err(error) => return Err(file_system_error(error)),
         };
@@ -290,7 +301,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                     mime_type,
                     content.bytes,
                     BINARY_PREVIEW_RESOURCE_TTL,
-                    MAX_BINARY_EDITOR_FILE_BYTES,
+                    limit,
                 )
                 .map_err(resource_rpc_error)?;
             (metadata, content.revision)
@@ -300,8 +311,13 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
             let mut snapshot = tempfile::tempfile()
                 .map_err(|error| file_system_error(FileSystemError::Io(error.to_string())))?;
             let (size, revision) = files
-                .copy_file_with_revision(&params.path, MAX_BINARY_EDITOR_FILE_BYTES, &mut snapshot)
-                .map_err(file_system_error)?;
+                .copy_file_with_revision(&params.path, limit, &mut snapshot)
+                .map_err(|error| match error {
+                    FileSystemError::ReadLimitExceeded { .. } if params.max_bytes.is_some() => {
+                        resource_rpc_error(ResourceError::TooLarge)
+                    }
+                    error => file_system_error(error),
+                })?;
             let metadata = self
                 .resources
                 .lock()

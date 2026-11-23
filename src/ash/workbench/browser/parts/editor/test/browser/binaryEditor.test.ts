@@ -36,10 +36,15 @@ test('Binary editor renders a bounded hexadecimal and ascii preview', async () =
 	dom.window.close();
 });
 
-test('binary editor descriptor is default for explicit binary content and optional for files', () => {
+test('binary editor descriptor offers known binary types and accepts explicit requests for other files', () => {
 	const descriptor = binaryEditorDescriptor();
 	assert.equal(descriptor.canOpen({ resource: URI.file('C:\\project\\sample.bin'), contentType: 'application/octet-stream' }), EditorPaneMatch.Default);
 	assert.equal(descriptor.canOpen({ resource: URI.file('C:\\project\\sample.bin') }), EditorPaneMatch.Optional);
+	assert.equal(descriptor.canOpen({ resource: URI.file('/project/sample.png') }), EditorPaneMatch.Optional);
+	assert.equal(descriptor.canOpen({ resource: URI.file('/project/sample'), contentType: 'audio/wav' }), EditorPaneMatch.Optional);
+	assert.equal(descriptor.canOpen({ resource: URI.file('/project/sample.md') }), EditorPaneMatch.ExplicitOnly);
+	assert.equal(descriptor.canOpen({ resource: URI.file('/project/sample.svg') }), EditorPaneMatch.ExplicitOnly);
+	assert.equal(descriptor.canOpen({ resource: URI.file('/project/sample.png'), contentType: 'text/plain' }), EditorPaneMatch.ExplicitOnly);
 	assert.equal(descriptor.canOpen({ resource: URI.parse('untitled:/sample.bin') }), EditorPaneMatch.None);
 });
 

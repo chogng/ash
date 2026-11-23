@@ -195,6 +195,10 @@ pub struct FsReadBinaryFileParams {
     #[ts(optional)]
     pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
+    /// Optional positive file size limit in bytes, subject to the server's own cap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_bytes: Option<u32>,
 }
 
 /// Connection-owned binary resource opened from one directory file.

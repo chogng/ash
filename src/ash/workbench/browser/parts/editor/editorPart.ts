@@ -112,7 +112,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void>;
 	splitActiveGroupHorizontal(): Promise<void>;
 	splitActiveGroupVertical(): Promise<void>;
-	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[];
+	getEditorPaneChoices(input?: IResourceEditorInput, options?: { readonly includeExplicit?: boolean; }): readonly IEditorPaneDescriptor[];
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined>;
 	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet;
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void>;
@@ -634,7 +634,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		let displayError = error;
 		if (error instanceof TextFileBinaryError) {
 			const editorId = this.groupOptions.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || 'ash.editor.binary';
-			const binaryEditor = this.groupOptions.registry.getEditorPanesForInput(input).find(candidate => candidate.id === editorId);
+			const binaryEditor = this.groupOptions.registry.getEditorPanesForInput(input, { includeExplicit: true }).find(candidate => candidate.id === editorId);
 			const actions: IAction[] = binaryEditor ? [{
 				id: 'workbench.editor.openAsBinary',
 				label: localize('workbench.editorOpenAsBinary', 'Open as Binary'),
@@ -907,8 +907,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 	}
 
-	getEditorPaneChoices(input: IResourceEditorInput | undefined = this.activeInput): readonly IEditorPaneDescriptor[] {
-		return input ? this.groupOptions.registry.getEditorPanesForInput(input) : [];
+	getEditorPaneChoices(input: IResourceEditorInput | undefined = this.activeInput, options?: { readonly includeExplicit?: boolean; }): readonly IEditorPaneDescriptor[] {
+		return input ? this.groupOptions.registry.getEditorPanesForInput(input, options) : [];
 	}
 
 	async reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> {

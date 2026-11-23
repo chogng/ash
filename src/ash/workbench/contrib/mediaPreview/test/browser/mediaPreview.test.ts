@@ -16,7 +16,7 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
+import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities, createFileSystemProviderError, FileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
@@ -24,7 +24,7 @@ import { AppServerExtensionService } from '../../../../services/extensions/brows
 import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { MediaPreview } from '../../browser/mediaPreview.js';
-import { AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
+import { AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID, PLAYBACK_PREVIEW_MAX_BYTES } from '../../common/mediaPreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -200,6 +200,21 @@ class MediaFixture extends Disposable {
 		mediaPrototype.load = function (this: HTMLMediaElement): void { fixture.operations.push(this.hasAttribute('src') ? 'load-with-source' : 'load-cleared'); };
 	}
 }
+
+test('Audio and video admit inline bytes at the limit and reject an extra byte without a new source', async () => {
+	const oversize = new Uint8Array(PLAYBACK_PREVIEW_MAX_BYTES + 1);
+	for (const [kind, name] of [['audio', 'song.wav'], ['video', 'clip.webm']] as const) {
+		using fixture = new MediaFixture(kind);
+		const resource = URI.file(`/media/${name}`);
+		await fixture.preview.setInput({ resource, initialBytes: oversize.subarray(0, PLAYBACK_PREVIEW_MAX_BYTES) }, new AbortController().signal);
+		const acceptedUrl = fixture.player.getAttribute('src');
+		assert.ok(acceptedUrl?.startsWith('blob:'));
+		await fixture.preview.setInput({ resource, initialBytes: oversize }, new AbortController().signal);
+		assert.deepEqual(fixture.revoked, [acceptedUrl]);
+		assert.equal(fixture.player.hasAttribute('src'), false);
+		assert.match(fixture.preview.getAccessibleContent(), /The file exceeds the preview limit of 32 MiB/);
+	}
+});
 
 test('Media view state waits for metadata, clamps the seek and rejects invalid persisted values', async () => {
 	for (const kind of ['audio', 'video'] as const) {
@@ -406,9 +421,12 @@ test('Playback failure and accessible metadata are translated into Chinese', asy
 	fixture.player.dispatchEvent(new fixture.browser.window.Event('error'));
 	assert.match(fixture.browser.window.document.querySelector('[role="alert"]')!.textContent!, /无法播放此媒体文件/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
-	fixture.read = async () => { throw new Error('Read denied'); };
-	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
-	assert.match(fixture.preview.getAccessibleContent(), /无法加载媒体：Error: Read denied/);
+	for (const [code, message] of [[FileSystemProviderErrorCode.NoPermissions, '没有权限读取此文件。'], [FileSystemProviderErrorCode.FileNotFound, '找不到文件。']] as const) {
+		fixture.read = async () => { throw createFileSystemProviderError('File service detail', code); };
+		await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
+		assert.equal(fixture.preview.getAccessibleContent(), `无法加载媒体：${message}`);
+		assert.equal(fixture.browser.window.document.querySelector('[role="alert"]')?.textContent, `无法加载媒体：${message}`);
+	}
 	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '以只读文本打开' && !button.hidden), true);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
 });

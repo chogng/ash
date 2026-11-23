@@ -3,13 +3,69 @@ import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { readUserSettings } from '../../../automation/settings.js';
-import { createMediaPreviewFixture, mediaPreviewEvidence } from './mediaPreviewFixture.js';
+import { createMediaPreviewFixture, mediaPreviewEvidence, retryMediaPreviewAfterRepair } from './mediaPreviewFixture.js';
 
 declare global {
 	interface Window {
 		readonly imagePreviewRevokedURLs: Set<string>;
 	}
 }
+
+test('Image preview admits the byte and pixel boundaries and rejects one step over', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.setTimeout(90_000);
+	const page = workbench.page;
+	const [small, atPixels, overPixels] = await page.evaluate(() => [[64, 64], [4096, 3072], [4096, 3073]].map(([width, height]) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = width!;
+		canvas.height = height!;
+		const context = canvas.getContext('2d')!;
+		context.fillStyle = '#2675a8';
+		context.fillRect(0, 0, canvas.width, canvas.height);
+		return canvas.toDataURL().split(',')[1]!;
+	}));
+	const byteLimit = 16 * 1024 * 1024;
+	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench, [
+		// The PNG ends at IEND. Sparse trailing padding isolates the byte boundary from decoding.
+		{ name: 'at-byte-limit.png', bytes: Buffer.from(small!, 'base64'), sizeBytes: byteLimit },
+		{ name: 'over-byte-limit.png', bytes: Buffer.from(small!, 'base64'), sizeBytes: byteLimit + 1 },
+		{ name: 'at-pixel-limit.png', bytes: Buffer.from(atPixels!, 'base64') },
+		{ name: 'over-pixel-limit.png', bytes: Buffer.from(overPixels!, 'base64') },
+	]);
+	try {
+		const explorer = page.locator('.ash-explorer');
+		const preview = workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible');
+		const image = preview.locator('img');
+		const open = (name: string) => explorer.getByRole('treeitem', { name, exact: true }).dblclick();
+		const close = () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		for (const [name, width, height] of [['at-byte-limit.png', 64, 64], ['at-pixel-limit.png', 4096, 3072]] as const) {
+			await open(name);
+			await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([width, height]);
+			const url = await image.getAttribute('src');
+			await close();
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(url);
+		}
+		const before = await mediaPreviewEvidence(page);
+		await open('over-byte-limit.png');
+		await expect(preview.getByRole('alert')).toContainText('The file exceeds the preview limit of 16 MiB.');
+		await expect(image).not.toHaveAttribute('src');
+		const byteRejection = await mediaPreviewEvidence(page);
+		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+			expect(byteRejection.reads).not.toContain('over-byte-limit.png');
+		} else {
+			expect(byteRejection.failedReads.at(-1)?.name).toBe('over-byte-limit.png');
+		}
+		expect(byteRejection.releasedResources).toEqual(before.releasedResources);
+		await close();
+		await open('over-pixel-limit.png');
+		await expect(preview.getByRole('alert')).toContainText('The image exceeds the preview limit of 12582912 pixels.');
+		await expect(image).not.toHaveAttribute('src');
+		const evidence = await mediaPreviewEvidence(page);
+		expect(evidence.completedReads).toContain('over-pixel-limit.png');
+		expect(evidence.created).toEqual(before.created);
+		expect(evidence.liveResources).toEqual([]);
+		await testInfo.attach('image-budget', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+	} finally { await fixture.dispose(); }
+});
 
 test('Image preview opens workspace images, zooms, exposes metadata and releases resources', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, application }, testInfo) => {
 	const page = workbench.page;
@@ -23,6 +79,14 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 			encoded: canvas.toDataURL(mediaType).split(',')[1]!,
 		}));
 		images.push({ name: 'icon.svg', encoded: btoa('<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150"><circle cx="75" cy="75" r="60" fill="none" stroke="black" stroke-width="8"/></svg>') });
+		// Small encoded samples for formats that the browser canvas cannot write.
+		images.push(
+			{ name: 'product.gif', encoded: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' },
+			{ name: 'product.bmp', encoded: 'Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAADEDgAAxA4AAAAAAAAAAAAAAAD/AA==' },
+			{ name: 'product.avif', encoded: 'AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADrbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAAAAAAAOcGl0bQAAAAAAAQAAAB5pbG9jAAAAAEQAAAEAAQAAAAEAAAETAAAAHgAAAChpaW5mAAAAAAABAAAAGmluZmUCAAAAAAEAAGF2MDFDb2xvcgAAAABqaXBycAAAAEtpcGNvAAAAFGlzcGUAAAAAAAAAAgAAAAIAAAAQcGl4aQAAAAADCAgIAAAADGF2MUOBAAwAAAAAE2NvbHJuY2x4AAEADQAGgAAAABdpcG1hAAAAAAAAAAEAAQQBAoMEAAAAJm1kYXQSAAoFGAA2BCAyExQAAwwwxAAAeUzU33xM1O1T0oA=' },
+			{ name: 'product.ico', encoded: 'AAABAAEAEBAAAAAAIABZAAAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAQAAAAEAgCAAAAkJFoNgAAACBJREFUeJxj/M9AGmAiUT3DqAZiABNRqpDAqAZiAMkaAEAuAR9Zta6gAAAAAElFTkSuQmCC' },
+			{ name: 'mislabeled.jpg', encoded: images[0]!.encoded },
+		);
 		return images;
 	});
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
@@ -37,7 +101,7 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 			await invalid.write(new Uint8Array([137, 80, 78, 71])); await invalid.close();
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		}, images);
-		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
 	} else {
 		for (const image of images) { await writeFile(join(testWorkspace.directory, image.name), Buffer.from(image.encoded, 'base64')); }
 		await writeFile(join(testWorkspace.directory, 'broken.png'), new Uint8Array([137, 80, 78, 71]));
@@ -147,6 +211,7 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	expect(geometry.imageHeight).toBeLessThanOrEqual(geometry.height);
 	await viewport.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Press Plus or Minus[\s\S]*original file stays intact/);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Image Preview supports PNG, JPEG, GIF, BMP, WebP, AVIF, SVG, ICO\./);
 	await page.keyboard.press('Escape');
 	await expect(viewport).toBeFocused();
 	await viewport.press('Alt+F2');
@@ -158,11 +223,13 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 		await expect(page.locator('[data-part="statusbar"]')).toContainText('120 × 90 pixels');
 		await expect.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), originalURL)).toBe(true);
 	}
-	for (const name of ['product.jpg', 'product.webp']) {
+	for (const [name, width] of [
+		['product.jpg', 800], ['product.webp', 800], ['product.gif', 1], ['product.bmp', 1], ['product.avif', 2], ['product.ico', 16],
+	] as const) {
 		await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
 		const activeImage = workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible img');
 		await expect(activeImage).toHaveAttribute('alt', name);
-		await expect.poll(() => activeImage.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
+		await expect.poll(() => activeImage.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(width);
 	}
 	const lastURL = await workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible img').getAttribute('src');
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
@@ -186,6 +253,16 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	await testInfo.attach('adaptive-small-svg', { body: await svgViewport.screenshot(), contentType: 'image/png' });
 	await explorer.getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
 	await expect(workbench.editors.groupAt(0).content.getByRole('alert')).toContainText('The image data could not be decoded.');
+	await explorer.getByRole('treeitem', { name: 'mislabeled.jpg', exact: true }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	const content = group.content;
+	await expect(content.getByRole('alert')).toContainText('The file type is JPEG. The image contains PNG data.');
+	await expect(content.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+	const openAsText = content.getByRole('button', { name: 'Open as read-only text', exact: true });
+	await openAsText.focus();
+	await openAsText.press('Enter');
+	await group.editor.waitForEditorContents(text => text.includes('PNG'));
+	await expect(group.editor.input).toHaveAttribute('aria-readonly', 'true');
 });
 
 test('Image preview retries a first read failure, recovers corrupted content and ignores a late read', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
@@ -198,11 +275,10 @@ test('Image preview retries a first read failure, recovers corrupted content and
 		const image = preview.locator('img');
 		await page.evaluate(() => window.mediaRetryProbe.fail.add('retry.png'));
 		await explorer.getByRole('treeitem', { name: 'retry.png', exact: true }).dblclick();
-		await expect(preview.getByRole('alert')).toContainText('Could not load image:');
+		await expect(preview.getByRole('alert').locator('.ash-image-preview-summary-text')).toHaveText('Could not load image: The file could not be found.');
 		const firstFailure = await mediaPreviewEvidence(page);
 		expect(firstFailure.failedReads).toHaveLength(1);
 		expect(firstFailure.failedReads[0]!.name).toBe('retry.png');
-		if (target.appServerMode === 'disabled') { await expect(preview.getByRole('alert')).toContainText(firstFailure.failedReads[0]!.message); }
 		expect(firstFailure.created).toEqual([]);
 		await expect(image).not.toHaveAttribute('src');
 		await testInfo.attach('image-read-failure', { body: await preview.screenshot(), contentType: 'image/png' });
@@ -229,15 +305,11 @@ test('Image preview retries a first read failure, recovers corrupted content and
 		await explorer.getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
 		await expect(preview.getByRole('alert')).toContainText('The image data could not be decoded.');
 		const failedDecode = await mediaPreviewEvidence(page);
-		expect(failedDecode.created).toHaveLength(2);
-		expect(failedDecode.revoked).toContain(failedDecode.created[1]);
+		expect(failedDecode.created).toEqual([url]);
 		await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
 		await testInfo.attach('image-decode-failure', { body: await preview.screenshot(), contentType: 'image/png' });
 		await fixture.repair('broken.png');
-		// A filesystem observer may recover before the explicit action is reached.
-		if (await preview.getByRole('button', { name: 'Retry', exact: true }).isVisible()) {
-			await preview.getByRole('button', { name: 'Retry', exact: true }).click();
-		}
+		await retryMediaPreviewAfterRepair(preview);
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
 		await expect(page.locator('[data-part="statusbar"]')).toContainText('800 × 600 pixels');
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');

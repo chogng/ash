@@ -19,6 +19,7 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFileReadLimits,
 	type IFileChangeEvent,
 	type IFileEntry,
 	type IFileSystemProviderWithFileReadStreamCapability,
@@ -59,8 +60,8 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string; }[]>('readdir', resource);
 		return entries.map(entry => ({ ...entry, resource: URI.parse(entry.resource) }));
 	}
-	public async readFile(resource: URI): Promise<IFileBytes> {
-		const content = await this.call<{ bytes: string; revision: string; }>('readFile', resource);
+	public async readFile(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes> {
+		const content = await this.call<{ bytes: string; revision: string; }>('readFile', resource, limits ? { options: { limits } } : undefined);
 		if (typeof content?.bytes !== 'string' || typeof content.revision !== 'string') throw new TypeError('Invalid file content');
 		return { bytes: decodeBase64(content.bytes).buffer, revision: content.revision, resource };
 	}

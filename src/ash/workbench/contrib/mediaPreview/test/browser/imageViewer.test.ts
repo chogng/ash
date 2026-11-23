@@ -154,8 +154,13 @@ suite('Built-in image viewer', () => {
 		await viewport.evaluate(element => { element.scrollLeft = 200; element.scrollTop = 100; });
 		await page.evaluate(() => window.imagePreviewFixture.close());
 		await expect(page.locator('#status')).toBeEmpty();
+		const editor = page.locator('#editor');
+		await editor.evaluate(element => element.setAttribute('hidden', ''));
 		await page.evaluate(() => window.imagePreviewFixture.open('png'));
-		await expect.poll(() => page.evaluate(() => window.imagePreviewFixture.state())).toEqual({ scale: 1.5, scrollLeft: 200, scrollTop: 100 });
+		await expect(viewport).toBeHidden();
+		expect(await page.evaluate(() => window.imagePreviewFixture.state())).toEqual({ scale: 1.5, scrollLeft: 200, scrollTop: 100 });
+		await editor.evaluate(element => element.removeAttribute('hidden'));
+		await expect.poll(() => viewport.evaluate(({ scrollLeft, scrollTop }) => [scrollLeft, scrollTop])).toEqual([200, 100]);
 		await viewport.focus();
 		await viewport.dispatchEvent('wheel', { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true });
 		await expect.poll(async () => (await page.evaluate(() => window.imagePreviewFixture.state()))!.scale).not.toBe(1.5);

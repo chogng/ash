@@ -482,7 +482,9 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
 		return part.splitEditors(groupId, inputs, direction);
 	}
-	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
+	getEditorPaneChoices(input?: IResourceEditorInput, options?: { readonly includeExplicit?: boolean; }): readonly IEditorPaneDescriptor[] {
+		return this._activePart.getEditorPaneChoices(input, options);
+	}
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
 	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet { return this._activePart.saveWorkingSet(id, excludedGroups); }
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void> { return this._activePart.applyWorkingSet(workingSet, options); }

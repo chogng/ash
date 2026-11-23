@@ -5158,20 +5158,20 @@ test('Editor open error offers a registered Binary Editor for unsafe text conten
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(
-		descriptor('ash.editor.text', '.bin', () => {
+		descriptor('ash.editor.text', '.txt', () => {
 			const pane = new TestEditorPane('ash.editor.text');
-			pane.inputError = new TextFileBinaryError(URI.file('C:\\project\\unsafe.bin'));
+			pane.inputError = new TextFileBinaryError(URI.file('C:\\project\\unsafe.txt'));
 			return pane;
 		}),
 	);
 	registry.registerEditorPane({
 		id: 'ash.editor.binary',
 		name: 'Binary Editor',
-		canOpen: () => EditorPaneMatch.Optional,
+		canOpen: () => EditorPaneMatch.ExplicitOnly,
 		create: () => new TestEditorPane('ash.editor.binary'),
 	});
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	await editor.openEditor(input('C:\\project\\unsafe.bin'));
+	await editor.openEditor(input('C:\\project\\unsafe.txt'));
 	const button = [
 		...editor.domNode.querySelectorAll<HTMLButtonElement>('.ash-editor-open-error-actions button'),
 	].find(candidate => candidate.textContent === 'Open as Binary');

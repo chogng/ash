@@ -94,12 +94,23 @@ test('Media Save As preserves bytes through the command, cancellation and replac
 	}
 });
 
-test('Damaged images can be opened as text from the keyboard in Ash', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Damaged images can be reopened in Binary Editor or as read-only text', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const fixture = await createMediaPreviewFixture(workbench.page, target, testWorkspace.directory, workbench);
 	try {
 		await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
 		const group = workbench.editors.groupAt(0);
 		const recovery = group.content.getByRole('button', { name: 'Open as read-only text', exact: true });
+		await expect(recovery).toBeVisible();
+
+		const picker = workbench.page.locator('.ash-quick-pick');
+		const reopenWith = async (name: string) => {
+			await workbench.quickaccess.runCommand('workbench.action.reopenWithEditor');
+			await picker.getByText(name, { exact: true }).click();
+		};
+		await reopenWith('Binary Editor');
+		await expect(group.content.locator('.ash-binary-editor-content')).toContainText('89 50 4e 47 0d 0a 1a 0a 00 00 00 0d');
+		await reopenWith('Image preview');
+
 		await expect(recovery).toBeVisible();
 		await recovery.focus();
 		await recovery.press('Enter');

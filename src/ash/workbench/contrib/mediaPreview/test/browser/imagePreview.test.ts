@@ -12,13 +12,13 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
-import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
+import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities, createFileSystemProviderError, FileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes } from '../../../../browser/editor.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ImagePreviewEditor } from '../../browser/imagePreviewEditor.js';
 import { ImagePreviewInfo } from '../../browser/imagePreviewInfo.js';
-import { IMAGE_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
+import { IMAGE_PREVIEW_EDITOR_ID, IMAGE_PREVIEW_MAX_BYTES, IMAGE_PREVIEW_MAX_PIXELS } from '../../common/mediaPreview.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
@@ -30,13 +30,15 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
-const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+// The fixture's decoder is stubbed, but the preview reads the actual IHDR dimensions.
+const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 3, 32, 0, 0, 2, 88]);
 const resource = URI.file('/images/product.png');
 
 class ImageFixture extends Disposable {
 	public readonly browser = new JSDOM('<!doctype html><body></body>');
 	public readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly services = this._register(new InstantiationService());
+	public created = 0;
 	public readonly revoked: string[] = [];
 	public readonly preview: ImagePreviewEditor;
 	public readonly opened: IResourceEditorInput[] = [];
@@ -48,8 +50,9 @@ class ImageFixture extends Disposable {
 	constructor() {
 		super();
 		this._register(toDisposable(() => this.preview.dispose()));
+		const originalCreate = URL.createObjectURL;
 		const originalRevoke = URL.revokeObjectURL;
-		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
+		this._register(toDisposable(() => { this.browser.window.close(); URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], {}));
 		const fixture = this;
 		this.browser.window.HTMLImageElement.prototype.decode = async function (): Promise<void> {
@@ -60,6 +63,7 @@ class ImageFixture extends Disposable {
 		this.services.registerInstance(IClipboardService, this._register(new BrowserClipboardService(undefined)));
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
+		URL.createObjectURL = blob => { this.created++; return originalCreate(blob); };
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerSingleton(IFileService, () => createTestFileService({
@@ -156,6 +160,33 @@ test('Image preview keeps a first-open read failure in the pane and retries it',
 	assert.deepEqual(fixture.revoked, [url]);
 });
 
+test('Image preview reports a recognized image signature that disagrees with the file type', async () => {
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource: URI.file('/images/picture.jpg'), initialBytes: png }, new AbortController().signal);
+	const document = fixture.browser.window.document;
+	assert.equal(document.querySelector('[role="alert"] .ash-image-preview-summary-text')?.textContent, 'Could not load image: The file type is JPEG. The image contains PNG data.');
+	assert.equal(document.querySelector('img')?.hasAttribute('src'), false);
+	assert.ok(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Retry' && !button.hidden));
+	assert.ok(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Open as read-only text' && !button.hidden));
+});
+
+test('Image preview rejects excessive source bytes and canvas dimensions before creating a URL', async () => {
+	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	using fixture = new ImageFixture();
+	fixture.decode = async () => { throw new Error('Oversized images must not reach the decoder'); };
+	await fixture.preview.setInput({ resource, initialBytes: new Uint8Array(IMAGE_PREVIEW_MAX_BYTES + 1) }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：文件超过 16 MiB/);
+	const largeCanvas = png.slice();
+	const header = new DataView(largeCanvas.buffer);
+	header.setUint32(16, 4096);
+	header.setUint32(20, IMAGE_PREVIEW_MAX_PIXELS / 4096 + 1);
+	await fixture.preview.setInput({ resource, initialBytes: largeCanvas }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：图片超过 12582912 像素/);
+	assert.equal(fixture.created, 0);
+	assert.equal(fixture.browser.window.document.querySelector('[role="alert"] .ash-image-preview-summary-text')?.textContent, '无法加载图片：图片超过 12582912 像素的预览上限。');
+});
+
 test('Image preview cancellation cannot replace a newer image or retain a preview URL', async () => {
 	using fixture = new ImageFixture();
 	const first = new DeferredPromise<Uint8Array>();
@@ -209,9 +240,12 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	assert.deepEqual(Array.from(document.querySelectorAll('.ash-image-preview-info dt')).map(term => term.textContent), ['文件名', '格式', '尺寸', '文件大小']);
 	assert.equal(document.querySelectorAll('.ash-image-preview-info dd')[2].textContent, '800 × 600 像素');
 	fixture.preview.clearInput();
-	fixture.read = async () => { throw new Error('Read denied'); };
-	await fixture.preview.setInput({ resource }, new AbortController().signal);
-	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
+	for (const [code, message] of [[FileSystemProviderErrorCode.NoPermissions, '没有权限读取此文件。'], [FileSystemProviderErrorCode.FileNotFound, '找不到文件。']] as const) {
+		fixture.read = async () => { throw createFileSystemProviderError('File service detail', code); };
+		await fixture.preview.setInput({ resource }, new AbortController().signal);
+		assert.equal(fixture.preview.getAccessibleContent(), `无法加载图片：${message}`);
+		assert.equal(document.querySelector('[role="alert"] .ash-image-preview-summary-text')?.textContent, `无法加载图片：${message}`);
+	}
 	assert.equal(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === '以只读文本打开' && !button.hidden), true);
 	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'), true);
 });

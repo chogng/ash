@@ -1,7 +1,7 @@
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -17,14 +17,14 @@ import { ImageResource } from '../../../../base/browser/image.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { getMediaMime } from '../../../../base/common/mime.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ImageViewer, type IImageViewerViewState } from './imageViewer.js';
-import { IMAGE_PREVIEW_EDITOR_ID, isGitLfsPointer } from '../common/mediaPreview.js';
+import { getImageResourceMime, getImageSignatureMime, IMAGE_PREVIEW_EDITOR_ID, IMAGE_PREVIEW_MAX_BYTES, imagePreviewFormatName, isGitLfsPointer } from '../common/mediaPreview.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ImagePreviewEditorInput } from './imagePreviewEditorInput.js';
-import { reopenInTextEditor } from './mediaPreviewErrors.js';
+import { assertImagePreviewPixelLimit, validateImagePreviewDimensions } from './imagePreviewDimensions.js';
+import { mediaPreviewReadErrorMessage, readMediaPreviewBytes, reopenInTextEditor } from './mediaPreviewErrors.js';
 import './media/imagePreviewEditor.css';
 
 export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEditorPaneWithViewState {
@@ -171,12 +171,18 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEdit
 		this.loading.value = toDisposable(() => { cancellation.abort(); this.viewer.cancelPendingSource(); });
 		const combined = AbortSignal.any([signal, cancellation.signal]);
 		throwIfCancelled(combined);
-		const bytes = input.initialBytes ?? (await raceCancellationError(this.files.readFileBytes(input.resource), combined)).bytes;
+		const bytes = await readMediaPreviewBytes(input, this.files, IMAGE_PREVIEW_MAX_BYTES, combined);
 		throwIfCancelled(combined);
 		if (isGitLfsPointer(input.resource, bytes)) {
 			throw new Error(localize('mediaPreview.gitLfsPointer', 'This Git revision contains a Git LFS pointer instead of media content. Open it as text to inspect the pointer.'));
 		}
-		const mediaType = getMediaMime(input.resource.path) ?? input.contentType?.split(';', 1)[0].trim().toLowerCase() ?? '';
+		const mediaType = getImageResourceMime(input);
+		if (!mediaType) throw new TypeError(localize('media.image.unsupportedFormat', 'This image format is unsupported.'));
+		const detectedType = getImageSignatureMime(bytes);
+		if (detectedType && detectedType !== mediaType) {
+			throw new TypeError(localize('media.image.formatMismatch', 'The file type is {0}. The image contains {1} data.', imagePreviewFormatName(mediaType), imagePreviewFormatName(detectedType)));
+		}
+		validateImagePreviewDimensions(bytes, mediaType, getWindow(this.domNode));
 		const resource = new ImageResource(bytes, mediaType);
 		let accepted = false;
 		try {
@@ -184,6 +190,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEdit
 				alt: input.label ?? basename(input.resource),
 				viewState: resetScale ? this.readViewState(input) : this.viewer.getViewState(),
 				data: { mimeType: mediaType, read: async () => bytes },
+				validateDecodedDimensions: assertImagePreviewPixelLimit,
 			}), combined);
 			throwIfCancelled(combined);
 		} finally {
@@ -207,7 +214,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEdit
 		this.clearInput();
 		// Retain the resource so the user can retry or see a later file-change recovery.
 		this.input = input;
-		this.loadFailure = error instanceof Error ? error.message : String(error);
+		this.loadFailure = mediaPreviewReadErrorMessage(error, IMAGE_PREVIEW_MAX_BYTES) ?? (error instanceof Error ? error.message : String(error));
 		this.updateLabels();
 	}
 
@@ -226,10 +233,10 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEdit
 		if (!input || this.loadFailure === undefined) { return; }
 		const cancellation = new AbortController();
 		this.loading.value = toDisposable(() => cancellation.abort());
-		void reopenInTextEditor(input, this.files, this.editors, this.group, cancellation.signal).catch(error => {
+		void reopenInTextEditor(input, this.files, this.editors, this.group, IMAGE_PREVIEW_MAX_BYTES, cancellation.signal).catch(error => {
 			if (cancellation.signal.aborted) { return; }
 			if (this.isDisposed || this.input !== input || this.generation !== generation) { return; }
-			this.loadFailure = localize('mediaPreview.openAsTextFailed', 'Could not open text preview: {0}', error instanceof Error ? error.message : String(error));
+			this.loadFailure = localize('mediaPreview.openAsTextFailed', 'Could not open text preview: {0}', mediaPreviewReadErrorMessage(error, IMAGE_PREVIEW_MAX_BYTES) ?? (error instanceof Error ? error.message : String(error)));
 			this.updateLabels();
 		});
 	}

@@ -719,8 +719,10 @@ test('Binary content shows an editor error with a working alternative', { tag: [
 	expect(styles.actionGap).toBe('8px');
 	expect(styles.color).not.toBe('rgba(0, 0, 0, 0)');
 	await alternative.click();
-	await expect(content.locator('.ash-binary-editor-content')).toContainText('48 69 00 ff 00');
-	expect(await content.getByRole('region').evaluate(element => ({
+	const binary = content.locator('.ash-binary-editor');
+	await expect(binary).toHaveAccessibleName('Binary editor: main.ts');
+	await expect(binary.locator('.ash-binary-editor-content')).toContainText('48 69 00 ff 00');
+	expect(await binary.evaluate(element => ({
 		display: getComputedStyle(element).display,
 		direction: getComputedStyle(element).flexDirection,
 		buttonAlignment: getComputedStyle(element.querySelector('.ash-binary-open-as-text')!).alignSelf,
@@ -730,16 +732,15 @@ test('Binary content shows an editor error with a working alternative', { tag: [
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.input.fill(theme);
 		await workbench.quickaccess.input.press('Enter');
-		await expect(content.getByRole('region')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(content.getByRole('region')).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
-		await expect(content.locator('.ash-binary-editor-summary')).toHaveCSS('border-bottom-style', 'solid');
+		await expect(binary).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(binary).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		await expect(binary.locator('.ash-binary-editor-summary')).toHaveCSS('border-bottom-style', 'solid');
 	}
 	const textPreview = content.getByRole('button', { name: 'Open as Read-Only Text' });
 	await textPreview.focus();
 	await expect(textPreview).toBeFocused();
 	await textPreview.press('Enter');
-	await expect(content.locator('.stanza-editor-input')).toBeAttached();
-	await expect(content.locator('.stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
+	await expect(content.getByRole('textbox', { name: 'main.ts', exact: true })).toHaveAttribute('aria-readonly', 'true');
 	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
 });
 
@@ -790,23 +791,18 @@ test('Compare open files as binary shows both byte views', { tag: ['@browser-app
 	}
 });
 
-test('Reopen With switches the active file to Binary Editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-
+test('Reopen With omits Binary Editor for text files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 	const page = workbench.page;
-	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
-	await fileRow.click();
-	const content = workbench.editors.groupAt(0).content;
-	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n');
-	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	const filename = 'editor-choices.md';
+	await writeFile(join(testWorkspace.directory, filename), '# Editor choices\n');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: filename, exact: true }).dblclick();
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: filename })).toHaveAttribute('aria-selected', 'true');
 
 	await workbench.quickaccess.runCommand('workbench.action.reopenWithEditor');
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select an editor');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: 'Binary Editor' }).click();
-
-	await expect(picker).toHaveCount(0);
-	await expect(content.locator('.ash-binary-editor-content')).toContainText('63 6f 6e 73 74');
+	await expect(picker.getByText('Text Editor', { exact: true })).toBeVisible();
+	await expect(picker.getByText('Binary Editor', { exact: true })).toHaveCount(0);
 });
 
 test('Reopen Closed Editor reads the real file again and preserves its tab position', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -1631,7 +1627,8 @@ test('file open failures stay in the editor and binary actions work with an exis
 	await expect(main).toBeVisible();
 	await main.dblclick();
 	const group = workbench.editors.groupAt(0);
-	await expect(group.content.locator('.stanza-editor')).toBeVisible();
+	const source = group.content.getByRole('region', { name: 'main.ts', exact: true });
+	await expect(source).toBeVisible();
 	const unsafe = explorer.getByRole('treeitem', { name: 'unsafe.txt', exact: true });
 	await expect(unsafe).toBeVisible();
 	await unsafe.click();
@@ -1665,8 +1662,8 @@ test('file open failures stay in the editor and binary actions work with an exis
 	await expect(group.content.locator('.ash-binary-editor-content')).toContainText('BINARY');
 	await expect(group.tabs.filter({ hasText: 'unsafe.txt' })).toHaveCount(1);
 	await group.tabs.filter({ hasText: 'main.ts' }).click();
-	await expect(group.content.locator('.stanza-editor')).toBeVisible();
-	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+	await expect(source).toBeVisible();
+	await expect(source.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
 });
 
 test('file state checks keep unchanged documents clean and report disk conflicts only after saving', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {

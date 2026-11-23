@@ -8,6 +8,7 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { getMediaMime, Mimes } from '../../../../base/common/mime.js';
 import { basename } from '../../../../base/common/resources.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -222,7 +223,14 @@ export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 		name: 'Binary Editor',
 		canOpen: input => {
 			if (input.initialBytes === undefined && input.resource.scheme !== 'file' && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
-			return input.contentType?.toLowerCase().startsWith('application/octet-stream') ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
+			const contentType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
+			if (contentType === Mimes.binary) return EditorPaneMatch.Default;
+			if (input.initialText !== undefined) return EditorPaneMatch.ExplicitOnly;
+			const mime = contentType && contentType !== Mimes.unknown ? contentType : getMediaMime(input.resource.path);
+			const binaryType = mime && mime !== 'image/svg+xml' && (
+				mime === Mimes.binary || /^(?:audio|font|image|video)\/|^application\/(?:pdf|wasm|zip)$/u.test(mime)
+			);
+			return binaryType ? EditorPaneMatch.Optional : EditorPaneMatch.ExplicitOnly;
 		},
 		create: options => {
 			if (!options.instantiationService) throw new Error('Binary editor requires Workbench instantiation services');

@@ -1,6 +1,5 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,9 +16,9 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { isGitLfsPointer, AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID } from '../common/mediaPreview.js';
+import { isGitLfsPointer, AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID, PLAYBACK_PREVIEW_MAX_BYTES } from '../common/mediaPreview.js';
 import { MediaPlayerEditorInput } from './mediaPlayerEditorInput.js';
-import { reopenInTextEditor } from './mediaPreviewErrors.js';
+import { mediaPreviewReadErrorMessage, readMediaPreviewBytes, reopenInTextEditor } from './mediaPreviewErrors.js';
 
 interface MediaViewState {
 	readonly currentTime: number;
@@ -134,7 +133,7 @@ export class MediaPreview extends EditorPane implements IEditorPaneWithViewState
 			if (!input || event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource))) { return; }
 			void this.setInput(input, new AbortController().signal).catch(error => {
 				if (this.isDisposed || error instanceof CancellationError || this.input !== input) { return; }
-				this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', String(error));
+				this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', mediaPreviewReadErrorMessage(error, PLAYBACK_PREVIEW_MAX_BYTES) ?? String(error));
 				this.updateLabels();
 			});
 		}));
@@ -153,7 +152,7 @@ export class MediaPreview extends EditorPane implements IEditorPaneWithViewState
 		this.loading.value = toDisposable(() => cancellation.abort());
 		const combined = AbortSignal.any([signal, cancellation.signal]);
 		try {
-			const bytes = input.initialBytes ?? (await raceCancellationError(this.files.readFileBytes(input.resource), combined)).bytes;
+			const bytes = await readMediaPreviewBytes(input, this.files, PLAYBACK_PREVIEW_MAX_BYTES, combined);
 			combined.throwIfAborted();
 			if (!this.isCurrentInput(mediaInput, generation)) { throw new CancellationError(); }
 			if (isGitLfsPointer(input.resource, bytes)) {
@@ -309,7 +308,7 @@ export class MediaPreview extends EditorPane implements IEditorPaneWithViewState
 		this.clearInput();
 		this.input = input;
 		this.pendingViewState = viewState;
-		this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', String(error));
+		this.failure = localize('media.playback.loadFailed', 'Could not load media: {0}', mediaPreviewReadErrorMessage(error, PLAYBACK_PREVIEW_MAX_BYTES) ?? String(error));
 		this.updateLabels();
 	}
 
@@ -328,10 +327,10 @@ export class MediaPreview extends EditorPane implements IEditorPaneWithViewState
 		if (!input || this.failure === undefined) { return; }
 		const cancellation = new AbortController();
 		this.loading.value = toDisposable(() => cancellation.abort());
-		void reopenInTextEditor(input, this.files, this.editors, this.group, cancellation.signal).catch(error => {
+		void reopenInTextEditor(input, this.files, this.editors, this.group, PLAYBACK_PREVIEW_MAX_BYTES, cancellation.signal).catch(error => {
 			if (cancellation.signal.aborted) { return; }
 			if (!this.isCurrentInput(input, generation)) { return; }
-			this.failure = localize('mediaPreview.openAsTextFailed', 'Could not open text preview: {0}', error instanceof Error ? error.message : String(error));
+			this.failure = localize('mediaPreview.openAsTextFailed', 'Could not open text preview: {0}', mediaPreviewReadErrorMessage(error, PLAYBACK_PREVIEW_MAX_BYTES) ?? (error instanceof Error ? error.message : String(error)));
 			this.updateLabels();
 		});
 	}

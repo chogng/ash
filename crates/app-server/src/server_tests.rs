@@ -7412,6 +7412,42 @@ fn account_rpc_projects_login_completion_without_credentials() {
 }
 
 #[test]
+fn bounded_binary_read_does_not_require_browse_permission() {
+    let root = tempfile::tempdir().unwrap();
+    let bytes = b"read-only bytes";
+    std::fs::write(root.path().join("preview.bin"), bytes).unwrap();
+    let server = server().with_file_system(Arc::new(LocalFileSystem::new(
+        ash_file_access::Grant::for_environment(
+            Dir::open_local(root.path()).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+        ),
+    )));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let metadata = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"fs/getMetadata","params":{"path":"preview.bin"}}),
+    );
+    assert!(metadata.get("error").is_some(), "{metadata}");
+    let oversized = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"fs/readBinaryFile","params":{"path":"preview.bin","maxBytes":bytes.len() - 1}}),
+    );
+    assert_eq!(oversized["error"]["data"]["kind"], "ResourceTooLarge");
+    assert!(oversized.get("result").is_none());
+    let admitted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"fs/readBinaryFile","params":{"path":"preview.bin","maxBytes":bytes.len()}}),
+    );
+    assert_eq!(admitted["result"]["resource"]["size"], bytes.len());
+}
+
+#[test]
 fn filesystem_rpc_lists_and_describes_paths() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-files-{}-{}",
@@ -7661,13 +7697,23 @@ fn filesystem_rpc_lists_and_describes_paths() {
     let large_bytes = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":14,"method":"fs/readBinaryFile","params":{"path":"large.txt"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":14,"method":"fs/readBinaryFile","params":{"path":"large.txt","maxBytes":large_size}}),
     );
     assert_eq!(
         large_text["result"]["content"].as_str().unwrap().len(),
         large_size
     );
     assert_eq!(large_bytes["result"]["resource"]["size"], large_size);
+    let large_over_limit = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":40,"method":"fs/readBinaryFile","params":{"path":"large.txt","maxBytes":large_size - 1}}),
+    );
+    assert_eq!(
+        large_over_limit["error"]["data"]["kind"],
+        "ResourceTooLarge"
+    );
+    assert!(large_over_limit.get("result").is_none());
     assert_eq!(
         large_bytes["result"]["revision"],
         large_text["result"]["revision"]

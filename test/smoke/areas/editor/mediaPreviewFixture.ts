@@ -1,6 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import type { PlaywrightTarget } from '../../../automation/testTarget.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
@@ -26,7 +26,7 @@ declare global {
 }
 
 /** Real files and fault timing belong to the scenario; product services stay intact. */
-export async function createMediaPreviewFixture(page: Page, target: PlaywrightTarget, directory: string, workbench: Workbench): Promise<{ repair(name: 'broken.png' | 'broken.webm'): Promise<void>; refresh(): Promise<void>; dispose(): Promise<void>; }> {
+export async function createMediaPreviewFixture(page: Page, target: PlaywrightTarget, directory: string, workbench: Workbench, extraFiles: readonly { name: string; bytes: Buffer; sizeBytes?: number; }[] = []): Promise<{ repair(name: 'broken.png' | 'broken.webm'): Promise<void>; refresh(): Promise<void>; dispose(): Promise<void>; }> {
 	const png = await page.evaluate(() => {
 		const canvas = document.createElement('canvas');
 		canvas.width = 800; canvas.height = 600;
@@ -40,12 +40,13 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 	wave.writeUInt32LE(8000, 24); wave.writeUInt32LE(16000, 28); wave.writeUInt16LE(2, 32); wave.writeUInt16LE(16, 34);
 	wave.write('data', 36); wave.writeUInt32LE(wave.length - 44, 40);
 	const video = await readFile(new URL('../../fixtures/media-preview.webm', import.meta.url));
-	const files = [
+	const files: readonly { name: string; bytes: Buffer; sizeBytes?: number; }[] = [
 		...['product.png', 'retry.png', 'pending.png'].map(name => ({ name, bytes: Buffer.from(png, 'base64') })),
 		{ name: 'broken.png', bytes: Buffer.from(png, 'base64').subarray(0, 12) },
 		...['retry.wav', 'pending.wav'].map(name => ({ name, bytes: wave })),
 		{ name: 'retry.webm', bytes: video },
 		{ name: 'broken.webm', bytes: Buffer.from('broken video') },
+		...extraFiles,
 	];
 	const browserFiles = target.kind === 'browser' && target.appServerMode === 'disabled';
 	if (browserFiles) {
@@ -54,16 +55,22 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 			for (const file of files) {
 				const writer = await (await folder.getFileHandle(file.name, { create: true })).createWritable();
 				await writer.write(Uint8Array.from(atob(file.encoded), character => character.charCodeAt(0)));
+				if (file.sizeBytes !== undefined) { await writer.truncate(file.sizeBytes); }
 				await writer.close();
 			}
 			Object.defineProperty(window, 'mediaRetryFolder', { value: folder, configurable: true });
 			Object.defineProperty(window, 'showDirectoryPicker', { value: async () => folder, configurable: true });
-		}, files.map(file => ({ name: file.name, encoded: file.bytes.toString('base64') })));
-		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+		}, files.map(file => ({ name: file.name, encoded: file.bytes.toString('base64'), sizeBytes: file.sizeBytes })));
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
 	} else {
-		for (const file of files) { await writeFile(join(directory, file.name), file.bytes); }
+		for (const file of files) {
+			const path = join(directory, file.name);
+			await writeFile(path, file.bytes);
+			if (file.sizeBytes !== undefined) { await truncate(path, file.sizeBytes); }
+		}
 	}
-	await page.evaluate(browserFiles => {
+	await page.evaluate(({ browserFiles, names }) => {
+		const mediaNames = new Set(names);
 		const created: string[] = [];
 		const revoked: string[] = [];
 		const reads: string[] = [];
@@ -82,18 +89,19 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 		if (browserFiles) {
 			const arrayBuffer = File.prototype.arrayBuffer;
 			File.prototype.arrayBuffer = async function (): Promise<ArrayBuffer> {
+				if (!mediaNames.has(this.name)) return arrayBuffer.call(this);
 				reads.push(this.name);
 				if (hold.delete(this.name)) { await new Promise<void>(resolve => pending.set(this.name, () => { pending.delete(this.name); resolve(); })); }
 				if (fail.delete(this.name)) {
-					const message = `Media fixture read denied: ${this.name}`;
+					const message = `Media fixture file missing: ${this.name}`;
 					failedReads.push({ name: this.name, message });
-					throw new Error(message);
+					throw new DOMException(message, 'NotFoundError');
 				}
 				try { return await arrayBuffer.call(this); } finally { completedReads.push(this.name); }
 			};
 			cleanups.push(() => { File.prototype.arrayBuffer = arrayBuffer; });
 		} else {
-			const requests = new Map<number | string, { method: string; name?: string; resourceId?: string; }>();
+			const requests = new Map<number | string, { method: 'fs/readBinaryFile'; name: string; } | { method: 'resource/release'; resourceId: string; }>();
 			const observedPorts = new Set<MessagePort>();
 			const observedSockets = new Set<WebSocket>();
 			const observe = (text: string): void => {
@@ -103,23 +111,26 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 				if (!request) { return; }
 				requests.delete(frame.id);
 				if (request.method === 'fs/readBinaryFile') {
-					completedReads.push(request.name!);
-					if (frame.error) { failedReads.push({ name: request.name!, message: frame.error.message }); }
+					completedReads.push(request.name);
+					if (frame.error) { failedReads.push({ name: request.name, message: frame.error.message }); }
 					if (frame.result?.resource) { liveResources.add(frame.result.resource.resourceId); }
-				} else if (request.method === 'resource/release' && !frame.error) {
-					liveResources.delete(request.resourceId!); releasedResources.add(request.resourceId!);
+				} else if (!frame.error) {
+					liveResources.delete(request.resourceId); releasedResources.add(request.resourceId);
 				}
 			};
 			const outgoing = (text: string, send: (text: string) => void): void => {
 				const frame = JSON.parse(text) as { id?: string | number; method?: string; params?: { path?: string; resourceId?: string; }; };
-				if (frame.id !== undefined && frame.method) {
+				if (frame.id !== undefined) {
 					const name = frame.params?.path?.split('/').at(-1);
-					requests.set(frame.id, { method: frame.method, name, resourceId: frame.params?.resourceId });
-					if (frame.method === 'fs/readBinaryFile' && name) {
+					const resourceId = frame.params?.resourceId;
+					if (frame.method === 'fs/readBinaryFile' && name && mediaNames.has(name)) {
+						requests.set(frame.id, { method: frame.method, name });
 						reads.push(name);
 						// Request a missing sibling through the real authorized backend read boundary.
 						if (fail.delete(name)) { frame.params!.path += '.unavailable'; text = JSON.stringify(frame); }
 						if (hold.delete(name)) { pending.set(name, () => { pending.delete(name); send(text); }); return; }
+					} else if (frame.method === 'resource/release' && resourceId && liveResources.has(resourceId)) {
+						requests.set(frame.id, { method: frame.method, resourceId });
 					}
 				}
 				send(text);
@@ -175,7 +186,7 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 				},
 			} satisfies PreviewProbe
 		});
-	}, browserFiles);
+	}, { browserFiles, names: files.map(file => file.name) });
 	return {
 		async repair(name: 'broken.png' | 'broken.webm'): Promise<void> {
 			const bytes = name === 'broken.png' ? Buffer.from(png, 'base64') : video;
@@ -206,4 +217,11 @@ export async function mediaPreviewEvidence(page: Page): Promise<{ created: strin
 		liveResources: [...window.mediaRetryProbe.liveResources],
 		releasedResources: [...window.mediaRetryProbe.releasedResources],
 	}));
+}
+
+export async function retryMediaPreviewAfterRepair(preview: Locator): Promise<void> {
+	// A file change can recover the preview between separate visibility and click calls.
+	await preview.getByRole('button', { name: 'Retry', exact: true, includeHidden: true }).evaluate((button: HTMLButtonElement) => {
+		if (!button.hidden) button.click();
+	});
 }

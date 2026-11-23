@@ -84,10 +84,28 @@ suite('Agent Host filesystem authority routes', () => {
 		using provider = new AgentHostFileSystemProvider(connection(workspace, 'primary', {
 			resolvePath: async () => { throw new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' }); },
 			readFile: async () => { throw new AppServerRemoteError(-32043, 'FileSystemPermissionDenied', { kind: 'FileSystemPermissionDenied' }); },
+			readBinaryFile: async () => { throw new AppServerRemoteError(-32044, 'FileSystemPermissionDenied', { kind: 'FileSystemPermissionDenied' }); },
 		}));
 		const isPermissionError = (error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.NoPermissions;
 		await assert.rejects(provider.stat(URI.file('/checkout/themes/theme.json')), isPermissionError);
 		await assert.rejects(provider.readTextFile(URI.joinPath(workspace, 'restricted.json'), 'utf8'), isPermissionError);
+		await assert.rejects(provider.readFile(URI.joinPath(workspace, 'restricted.png')), isPermissionError);
+	});
+
+	test('bounded binary reads release an oversized snapshot without transferring its chunks', async () => {
+		const workspace = URI.file('/workspace');
+		const releases: string[] = [];
+		using provider = new AgentHostFileSystemProvider(connection(workspace, 'primary', {
+			async readBinaryFile(target) {
+				assert.deepEqual(target, { dirId: 'primary', path: 'sample.png', maxBytes: 3 });
+				return { revision: 'exact', resource: { resourceId: 'oversized', size: 4, mimeType: 'image/png', sha256: 'sha256:exact' } };
+			},
+		}, {
+			async release({ resourceId }) { releases.push(resourceId); },
+		}));
+		await assert.rejects(provider.readFile(URI.joinPath(workspace, 'sample.png'), { size: 3 }),
+			(error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge);
+		assert.deepEqual(releases, ['oversized']);
 	});
 
 	test('unbound workspace directories cancel file reads until authorization recovers', async () => {

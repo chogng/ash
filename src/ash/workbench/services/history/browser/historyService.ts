@@ -125,7 +125,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 			}
 			try {
 				const input = closed.restore();
-				const choices = this.editorPart.getEditorPaneChoices(input);
+				const choices = this.editorPart.getEditorPaneChoices(input, { includeExplicit: true });
 				const preferredEditorId = choices.find(choice => choice.id === closed.preferredEditorId)?.id;
 				const pane = await this.editorPart.openEditor(input, { preferredEditorId, pinned: true, index: closed.index, ignoreError: true });
 				if (!this.isDisposed) {

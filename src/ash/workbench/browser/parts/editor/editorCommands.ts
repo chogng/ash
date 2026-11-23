@@ -131,7 +131,7 @@ CommandsRegistry.register(API_OPEN_WITH_EDITOR_COMMAND_ID, async (accessor, reso
 	const input = matching.find(input => !input.editorId) ?? matching[0]?.toUntyped?.() ?? { resource: uri };
 	const column = Array.isArray(columnAndOptions) ? columnAndOptions[0] : undefined;
 	const preferredEditorId = id === 'default' ? CODE_EDITOR_ID : id;
-	const descriptor = part.getEditorPaneChoices(input).find(choice => choice.id === preferredEditorId);
+	const descriptor = part.getEditorPaneChoices(input, { includeExplicit: true }).find(choice => choice.id === preferredEditorId);
 	if (!descriptor) throw new RangeError(`No matching editor '${preferredEditorId}'`);
 	const opened = descriptor.createInput ? descriptor.createInput(input) : input;
 	if (column === -2) {

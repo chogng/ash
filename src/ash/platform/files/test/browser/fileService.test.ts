@@ -4,7 +4,7 @@ import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
 import type { FileInvalidation, IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
 import { InMemoryFileSystemProvider } from '../../common/inMemoryFilesystemProvider.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
+import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
 import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteResult } from '../../../../platform/files/common/files.js';
 import assert from 'node:assert/strict';
@@ -662,6 +662,9 @@ test('FileService decodes text from provider bytes without changing revisions or
 	provider.addFile(resource, bytes);
 	assert.deepEqual(await service.readFile(resource), { resource, content: '\uFEFF你好\r\n', revision: 'exact-byte-revision' });
 	assert.deepEqual(await service.readFileBytes(resource), { resource, bytes, revision: 'exact-byte-revision' });
+	assert.deepEqual(await service.readFileBytes(resource, { size: bytes.length }), { resource, bytes, revision: 'exact-byte-revision' });
+	await assert.rejects(service.readFileBytes(resource, { size: bytes.length - 1 }),
+		(error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge);
 	const binary = URI.file('/workspace/binary.bin');
 	provider.addFile(binary, new Uint8Array([0xff, 0x00, 0x80]));
 	assert.deepEqual((await service.readFileBytes(binary)).bytes, new Uint8Array([0xff, 0x00, 0x80]));

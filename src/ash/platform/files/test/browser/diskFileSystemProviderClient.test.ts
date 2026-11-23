@@ -89,6 +89,9 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		const empty = await client.readFile(resource);
 		await client.writeFile(resource, new TextEncoder().encode('{"test":true}'), { create: true, overwrite: true, expectedRevision: empty.revision });
 		const loaded = await client.readFile(resource);
+		assert.deepEqual(await client.readFile(resource, { size: loaded.bytes.length }), loaded);
+		await assert.rejects(client.readFile(resource, { size: loaded.bytes.length - 1 }),
+			(error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge);
 		const streamed = await consumeStream(client.readFileStream(resource, { position: 1, length: 6 }, CancellationToken.None), chunks => Buffer.concat(chunks));
 		assert.equal(streamed.toString(), '"test"');
 		await assert.rejects(consumeStream(client.readFileStream(resource, { limits: { size: 0 } }, CancellationToken.None)),
@@ -128,6 +131,24 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		assert.equal(await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome'), URI.file(tmpdir()).toString());
 		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome', {}), /No arguments expected/);
 		await assert.rejects(client.readDirectory(URI.file(tmpdir())), /outside the granted roots/);
+	} finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('desktop byte reads enforce the limit when the file grows after preflight', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-growing-byte-read-'));
+	const resource = URI.file(join(directory, 'growing.bin'));
+	class GrowingFileProvider extends DiskFileSystemProvider {
+		public override async stat(target: URI) {
+			const stat = await super.stat(target);
+			await writeFile(resource.fsPath, Uint8Array.of(0, 1, 2));
+			return stat;
+		}
+	}
+	using provider = new GrowingFileProvider([URI.file(directory)]);
+	try {
+		await writeFile(resource.fsPath, Uint8Array.of(0, 1));
+		await assert.rejects(provider.readFile(resource, { size: 2 }),
+			(error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 

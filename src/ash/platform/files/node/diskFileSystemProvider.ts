@@ -15,6 +15,7 @@ import { URI } from '../../../base/common/uri.js';
 import { Promises } from '../../../base/node/pfs.js';
 import { readFileIntoStream } from '../common/io.js';
 import {
+	assertFileReadSize,
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
 	FileKind,
@@ -25,6 +26,7 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFileReadLimits,
 	type IFileChangeEvent,
 	type IFileEntry,
 	type IFileSystemProvider,
@@ -244,9 +246,10 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		} catch (error) { throw fileError(error, resource); }
 	}
 
-	public async readFile(resource: URI): Promise<IFileBytes> {
+	public async readFile(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes> {
 		try {
-			const bytes = await consumeStream(this.readFileStream(resource, {}, CancellationToken.None), chunks => {
+			if (limits?.size !== undefined) assertFileReadSize((await this.stat(resource)).sizeBytes, limits);
+			const bytes = await consumeStream(this.readFileStream(resource, { limits }, CancellationToken.None), chunks => {
 				const result = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.byteLength, 0));
 				let offset = 0;
 				for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }

@@ -12,6 +12,7 @@ import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { WebFileSystemAccess, WebFileSystemObserver, type FileSystemObserver, type FileSystemObserverRecord } from './webFileSystemAccess.js';
 import {
+	assertFileReadSize,
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
 	FileKind,
@@ -25,6 +26,7 @@ import {
 	type IFileBytes,
 	type IFileChangeEvent,
 	type IFileEntry,
+	type IFileReadLimits,
 	type IFileSystemProviderWithFileReadStreamCapability,
 	type IFileReadStreamOptions,
 	type IFileStat,
@@ -140,10 +142,13 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		return entries;
 	}
 
-	public async readFile(resource: URI): Promise<IFileBytes> {
-		const file = await this.file(resource);
-		const bytes = new Uint8Array(await file.arrayBuffer());
-		return { resource, bytes, revision: await revision(bytes) };
+	public async readFile(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes> {
+		try {
+			const file = await this.file(resource);
+			assertFileReadSize(file.size, limits);
+			const bytes = new Uint8Array(await file.arrayBuffer());
+			return { resource, bytes, revision: await revision(bytes) };
+		} catch (error) { throw fileError(error, resource); }
 	}
 
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
@@ -159,9 +164,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 			let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 			try {
 				const file = await raceCancellationError(this.file(resource), cancellation.token);
-				if (options.limits?.size !== undefined && file.size > options.limits.size) {
-					throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
-				}
+				assertFileReadSize(file.size, options.limits);
 				const start = options.position ?? 0;
 				reader = file.slice(start, options.length === undefined ? undefined : start + options.length).stream().getReader();
 				const activeReader = reader;
@@ -173,7 +176,8 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 					await raceCancellationError(Promise.resolve(stream.write(chunk.value)), cancellation.token);
 				}
 			} catch (error) {
-				stream.error(error instanceof Error ? error : new Error(String(error)));
+				const failure = fileError(error, resource);
+				stream.error(failure instanceof Error ? failure : new Error(String(failure)));
 			} finally {
 				this.reads.deleteAndDispose(lifetime);
 				reader?.releaseLock();

@@ -100,7 +100,8 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 			case 'stat': result = { ...await this.provider.stat(resource), resource: resource.toString() }; break;
 			case 'readdir': result = (await this.provider.readDirectory(resource)).map(entry => ({ ...entry, resource: entry.resource.toString() })); break;
 			case 'readFile': {
-				const content = await this.provider.readFile(resource);
+				const limits = value.options === undefined ? undefined : this.readOptions(value.options).limits;
+				const content = await this.provider.readFile(resource, limits);
 				result = { resource: resource.toString(), bytes: Buffer.from(content.bytes).toString('base64'), revision: content.revision };
 				break;
 			}

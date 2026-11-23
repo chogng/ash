@@ -111,6 +111,7 @@ test('files select the text editor before language extensions load while special
 	for (const filename of ['main.ts', 'main.rs', 'custom.unknown', 'README', 'sample.bin']) {
 		const input = { resource: URI.file(`/project/${filename}`) };
 		assert.equal(registry.getEditorPane(input)?.id, CODE_EDITOR_ID, filename);
+		assert.deepEqual(registry.getEditorPanesForInput(input).map(editor => editor.id), filename === 'sample.bin' ? [CODE_EDITOR_ID, BINARY_EDITOR_ID] : [CODE_EDITOR_ID]);
 		assert.equal(registry.getEditorPane(input, { preferredEditorId: BINARY_EDITOR_ID })?.id, BINARY_EDITOR_ID);
 	}
 	assert.equal(registry.getEditorPane({ resource: URI.file('/project/paper.pdf') })?.id, PDF_EDITOR_ID);

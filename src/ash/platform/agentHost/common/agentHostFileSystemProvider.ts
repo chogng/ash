@@ -3,7 +3,7 @@ import { localize } from '../../../nls.js';
 import { Schemas } from '../../../base/common/network.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
-import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
+import { assertFileReadSize, createFileSystemProviderError, FileSystemProviderErrorCode, type IFileReadLimits } from '../../files/common/files.js';
 import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from './appServerApi.js';
 import { AppServerRemoteError } from './appServerError.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
@@ -532,10 +532,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}));
 	}
 
-	async readFile(resource: URI): Promise<IFileBytes> {
+	async readFile(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes> {
 		const route = this.connectionRoute(resource);
-		if (route) { return this.onRoute(route, provider => provider.readFile(resource)); }
-		return this.readFileOnConnection(resource);
+		if (route) { return this.onRoute(route, provider => provider.readFile(resource, limits)); }
+		return this.readFileOnConnection(resource, undefined, limits);
 	}
 
 	async openReadSnapshot(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined> {
@@ -555,10 +555,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			// The PDF service belongs to the profile, while Session directories can route elsewhere.
 			if (target.sessionDirectory) { return undefined; }
 			result = await this.api.readBinaryFile(target);
-		} catch (error) {
-			if (isFileNotFound(error)) { throw new FileNotFoundError(resource); }
-			throw error;
-		}
+		} catch (error) { throw fileReadError(resource, error); }
 		const resourceId = result.resource.resourceId;
 		let consumed = false;
 		const lease = toDisposable(() => {
@@ -579,7 +576,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
-	private async readFileOnConnection(resource: URI, assertScope?: () => void): Promise<IFileBytes> {
+	private async readFileOnConnection(resource: URI, assertScope?: () => void, limits?: IFileReadLimits): Promise<IFileBytes> {
 		if (this.isConfiguration(resource)) return this.configurationFiles!.read(resource);
 		const generation = this.resourceApi.connectionGeneration;
 		const epoch = this.connectionEpoch;
@@ -588,11 +585,12 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			const target = await this.fileTarget(resource);
 			this.assertResourceConnection(generation, epoch);
 			assertScope?.();
-			result = await this.api.readBinaryFile(target);
+			result = await this.api.readBinaryFile(limits?.size === undefined ? target : { ...target, maxBytes: Math.min(limits.size, MAX_FILE_READ_BYTES) });
 		}
-		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
+		catch (error) { throw fileReadError(resource, error); }
 		try {
 			this.assertResourceConnection(generation, epoch);
+			assertFileReadSize(result.resource.size, limits);
 			const bytes = await this.readResourceBytes(result.resource, generation, epoch);
 			this.assertResourceConnection(generation, epoch);
 			return Object.freeze({ resource, bytes, revision: result.revision });
@@ -692,7 +690,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 					await raceCancellationError(Promise.resolve(stream.write(chunk)), cancellation.token);
 				}
 			} catch (error) {
-				stream.error(isFileNotFound(error) ? new FileNotFoundError(resource) : error instanceof Error ? error : new Error(String(error)));
+				const failure = fileReadError(resource, error);
+				stream.error(failure instanceof Error ? failure : new Error(String(failure)));
 			} finally {
 				if (snapshot && this.isCurrentResourceConnection(generation, epoch)) {
 					try {
@@ -1052,6 +1051,9 @@ function isFileNotFound(error: unknown): boolean {
 
 function fileReadError(resource: URI, error: unknown): unknown {
 	if (isFileNotFound(error)) return new FileNotFoundError(resource);
+	if (error instanceof AppServerRemoteError && error.errorName === 'ResourceTooLarge') {
+		return createFileSystemProviderError(error, FileSystemProviderErrorCode.FileTooLarge);
+	}
 	if (error instanceof AppServerRemoteError && (error.errorName === 'PermissionRequired' || error.errorName === 'FileSystemPermissionDenied')) {
 		return createFileSystemProviderError(error, FileSystemProviderErrorCode.NoPermissions);
 	}
@@ -1059,7 +1061,7 @@ function fileReadError(resource: URI, error: unknown): unknown {
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;
-// Both backend file-read endpoints accept this limit; preview panes apply their own smaller bounds.
+// Bound byte reads in the renderer. The backend can serve larger snapshots to direct consumers.
 const MAX_FILE_READ_BYTES = 50 * 1024 * 1024;
 
 function encodeBinaryFile(bytes: Uint8Array): string {

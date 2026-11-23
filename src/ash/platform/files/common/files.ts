@@ -143,6 +143,13 @@ export function toFileSystemProviderErrorCode(error: Error | undefined | null): 
 
 export interface IFileReadLimits { readonly size?: number; }
 
+/** Reject as soon as the opened file or the bytes read exceed the requested limit. */
+export function assertFileReadSize(size: number, limits?: IFileReadLimits): void {
+	if (limits?.size !== undefined && size > limits.size) {
+		throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
+	}
+}
+
 export interface IFileReadStreamOptions {
 	readonly position?: number;
 	readonly length?: number;
@@ -243,7 +250,7 @@ export interface IFileSystemProvider {
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
-	readFile(resource: URI): Promise<IFileBytes>;
+	readFile(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes>;
 	openReadSnapshot?(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined>;
 	/** Text codecs are provider-owned; absence limits this provider to UTF-8. */
 	readTextFile?(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent>;
@@ -303,7 +310,7 @@ export interface IFileService {
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent>;
-	readFileBytes(resource: URI): Promise<IFileBytes>;
+	readFileBytes(resource: URI, limits?: IFileReadLimits): Promise<IFileBytes>;
 	openReadSnapshot?(resource: URI, owner: IResourceApi, signal: AbortSignal): Promise<IFileReadSnapshot | undefined>;
 	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;

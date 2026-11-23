@@ -30,7 +30,7 @@ export interface IEditorPaneRegistry {
 	registerEditorPane(descriptor: IEditorPaneDescriptor): IDisposable;
 	getEditorPane(input: IResourceEditorInput, options?: EditorOpenOptions): IEditorPaneDescriptor | undefined;
 	getEditorPanes(): readonly IEditorPaneDescriptor[];
-	getEditorPanesForInput(input: IResourceEditorInput): readonly IEditorPaneDescriptor[];
+	getEditorPanesForInput(input: IResourceEditorInput, options?: { readonly includeExplicit?: boolean; }): readonly IEditorPaneDescriptor[];
 }
 
 /** Product renderers are selected only by declarations in their built-in package. */
@@ -111,14 +111,15 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 	}
 
 	/** Registration order breaks ties between equally suitable panes. */
-	public getEditorPanesForInput(input: IResourceEditorInput): readonly IEditorPaneDescriptor[] {
+	public getEditorPanesForInput(input: IResourceEditorInput, options?: { readonly includeExplicit?: boolean; }): readonly IEditorPaneDescriptor[] {
+		const minimumMatch = options?.includeExplicit ? EditorPaneMatch.ExplicitOnly : EditorPaneMatch.Optional;
 		return Array.from(this.descriptors.values())
 			.map((descriptor, index) => {
 				const match = descriptor.canOpen(input);
 				validateMatch(match, descriptor.id);
 				return { descriptor, index, match };
 			})
-			.filter(({ match }) => match !== EditorPaneMatch.None)
+			.filter(({ match }) => match >= minimumMatch)
 			.sort((left, right) => right.match - left.match || left.index - right.index)
 			.map(({ descriptor }) => descriptor);
 	}
@@ -177,7 +178,7 @@ function validateDescriptor(descriptor: IEditorPaneDescriptor): void {
 }
 
 function validateMatch(match: EditorPaneMatch, editorId: string): void {
-	if (match !== EditorPaneMatch.None && match !== EditorPaneMatch.Optional && match !== EditorPaneMatch.Builtin && match !== EditorPaneMatch.Default) {
+	if (match !== EditorPaneMatch.None && match !== EditorPaneMatch.ExplicitOnly && match !== EditorPaneMatch.Optional && match !== EditorPaneMatch.Builtin && match !== EditorPaneMatch.Default) {
 		throw new TypeError(`Editor pane '${editorId}' returned an invalid match`);
 	}
 }

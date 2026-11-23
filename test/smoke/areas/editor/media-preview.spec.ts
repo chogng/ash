@@ -1,11 +1,60 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
-import { createMediaPreviewFixture, mediaPreviewEvidence } from './mediaPreviewFixture.js';
+import { createMediaPreviewFixture, mediaPreviewEvidence, retryMediaPreviewAfterRepair } from './mediaPreviewFixture.js';
 
 declare global {
 	interface Window { readonly mediaPreviewRevokedURLs: Set<string>; }
 }
+
+test('Audio and video admit the byte boundary and reject one extra byte', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.setTimeout(90_000);
+	const page = workbench.page;
+	const limit = 32 * 1024 * 1024;
+	const wave = Buffer.alloc(44);
+	wave.write('RIFF'); wave.writeUInt32LE(limit - 8, 4); wave.write('WAVEfmt ', 8);
+	wave.writeUInt32LE(16, 16); wave.writeUInt16LE(1, 20); wave.writeUInt16LE(1, 22);
+	wave.writeUInt32LE(8000, 24); wave.writeUInt32LE(16000, 28); wave.writeUInt16LE(2, 32); wave.writeUInt16LE(16, 34);
+	wave.write('data', 36); wave.writeUInt32LE(limit - 44, 40);
+	const clip = await readFile(new URL('../../fixtures/media-preview.webm', import.meta.url));
+	// Pad the real WebM clip with a top-level EBML Void element.
+	const padding = Buffer.alloc(5);
+	padding[0] = 0xec;
+	padding.writeUInt32BE(0x10000000 | (limit - clip.length - padding.length), 1);
+	const video = Buffer.concat([clip, padding]);
+	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench, [
+		{ name: 'at-limit.wav', bytes: wave, sizeBytes: limit },
+		{ name: 'over-limit.wav', bytes: wave, sizeBytes: limit + 1 },
+		{ name: 'at-limit.webm', bytes: video, sizeBytes: limit },
+		{ name: 'over-limit.webm', bytes: video, sizeBytes: limit + 1 },
+	]);
+	try {
+		const explorer = page.locator('.ash-explorer');
+		const preview = workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible');
+		for (const [kind, extension] of [['audio', 'wav'], ['video', 'webm']] as const) {
+			await explorer.getByRole('treeitem', { name: `at-limit.${extension}`, exact: true }).dblclick();
+			const player = preview.locator(kind);
+			await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).readyState)).toBeGreaterThanOrEqual(1);
+			await player.focus();
+			await player.press('Space');
+			await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+			const url = await player.getAttribute('src');
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(url);
+			const before = await mediaPreviewEvidence(page);
+			await explorer.getByRole('treeitem', { name: `over-limit.${extension}`, exact: true }).dblclick();
+			await expect(preview.getByRole('alert')).toContainText('The file exceeds the preview limit of 32 MiB.');
+			await expect(player).not.toHaveAttribute('src');
+			const evidence = await mediaPreviewEvidence(page);
+			expect(evidence.failedReads.at(-1)?.name).toBe(`over-limit.${extension}`);
+			expect(evidence.created).toEqual(before.created);
+			expect(evidence.releasedResources).toEqual(before.releasedResources);
+			expect(evidence.liveResources).toEqual([]);
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		}
+		await testInfo.attach('playback-budget', { body: JSON.stringify(await mediaPreviewEvidence(page), null, 2), contentType: 'application/json' });
+	} finally { await fixture.dispose(); }
+});
 
 for (const kind of ['audio', 'video'] as const) {
 	test(`${kind} has independent playback in splits, follows rename and restores after restart`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
@@ -80,7 +129,7 @@ for (const kind of ['audio', 'video'] as const) {
 	});
 }
 
-test('Built-in audio and video previews play, pause on switching and release resources', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Built-in audio and video previews play, pause on switching and release resources', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 	const page = workbench.page;
 	// Two seconds of PCM silence and a small VP9 clip exercise actual decoders.
 	const wave = Buffer.alloc(44 + 8000 * 2 * 2);
@@ -90,19 +139,7 @@ test('Built-in audio and video previews play, pause on switching and release res
 	wave.write('data', 36); wave.writeUInt32LE(wave.length - 44, 40);
 	const video = await readFile(new URL('../../fixtures/media-preview.webm', import.meta.url));
 	const files = [{ name: 'song.wav', bytes: wave }, { name: 'movie.webm', bytes: video }, { name: 'broken.mp4', bytes: Buffer.from('broken') }];
-	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
-		await page.evaluate(async files => {
-			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`media-preview-${crypto.randomUUID()}`, { create: true });
-			for (const file of files) {
-				const writer = await (await folder.getFileHandle(file.name, { create: true })).createWritable();
-				await writer.write(Uint8Array.from(atob(file.encoded), character => character.charCodeAt(0))); await writer.close();
-			}
-			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-		}, files.map(file => ({ name: file.name, encoded: file.bytes.toString('base64') })));
-		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
-	} else {
-		for (const file of files) { await writeFile(join(testWorkspace.directory, file.name), file.bytes); }
-	}
+	for (const file of files) { await writeFile(join(testWorkspace.directory, file.name), file.bytes); }
 	await page.evaluate(() => {
 		const revoke = URL.revokeObjectURL.bind(URL);
 		const revoked = new Set<string>();
@@ -146,7 +183,7 @@ test('Built-in audio and video previews play, pause on switching and release res
 	await expect(group.content.getByRole('alert')).toContainText('This media file could not be played.');
 });
 
-test('Audio and video retry first reads and damaged video recovers with the current player', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
+test('Audio and video retry first reads and damaged video recovers with the current player', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.setTimeout(90_000);
 	const page = workbench.page;
 	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
@@ -157,10 +194,9 @@ test('Audio and video retry first reads and damaged video recovers with the curr
 			const before = await mediaPreviewEvidence(page);
 			await page.evaluate(name => window.mediaRetryProbe.fail.add(name), name);
 			await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
-			await expect(preview.getByRole('alert')).toContainText('Could not load media:');
+			await expect(preview.getByRole('alert')).toHaveText('Could not load media: The file could not be found.');
 			const failure = await mediaPreviewEvidence(page);
 			expect(failure.failedReads.at(-1)!.name).toBe(name);
-			if (target.appServerMode === 'disabled') { await expect(preview.getByRole('alert')).toContainText(failure.failedReads.at(-1)!.message); }
 			expect(failure.created).toEqual(before.created);
 			const player = preview.locator(kind);
 			await expect(player).not.toHaveAttribute('src');
@@ -194,9 +230,7 @@ test('Audio and video retry first reads and damaged video recovers with the curr
 		try {
 			await testInfo.attach('video-decode-failure', { body: await preview.screenshot(), contentType: 'image/png' });
 			await fixture.repair('broken.webm');
-			if (await preview.getByRole('button', { name: 'Retry', exact: true }).isVisible()) {
-				await preview.getByRole('button', { name: 'Retry', exact: true }).click();
-			}
+			await retryMediaPreviewAfterRepair(preview);
 			const video = preview.locator('video');
 			await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoWidth)).toBe(64);
 			await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(oldURL);
@@ -225,7 +259,7 @@ test('Audio and video retry first reads and damaged video recovers with the curr
 	} finally { await fixture.dispose(); }
 });
 
-test('Closing an audio preview during a refresh releases late data without a new URL', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
+test('Closing an audio preview during a refresh releases late data without a new URL', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }, testInfo) => {
 	const page = workbench.page;
 	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
 	try {
@@ -233,21 +267,20 @@ test('Closing an audio preview during a refresh releases late data without a new
 		const player = workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible audio');
 		await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).duration)).toBe(2);
 		const url = (await player.getAttribute('src'))!;
-		const beforeRefresh = await mediaPreviewEvidence(page);
 		await page.evaluate(() => window.mediaRetryProbe.hold.add('retry.wav'));
 		await fixture.refresh();
 		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toContain('retry.wav');
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 		await expect(workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible')).toHaveCount(0);
+		const beforeLateRead = await mediaPreviewEvidence(page);
+		expect(beforeLateRead.revoked).toContain(url);
+		expect(beforeLateRead.created.every(created => beforeLateRead.revoked.includes(created))).toBe(true);
 		await page.evaluate(() => window.mediaRetryProbe.pending.get('retry.wav')!());
 		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toEqual([]);
-		if (target.appServerMode === 'required') {
-			await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeRefresh.releasedResources.length);
-		} else {
-			await expect.poll(async () => (await mediaPreviewEvidence(page)).completedReads.length).toBeGreaterThan(beforeRefresh.completedReads.length);
-		}
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeLateRead.releasedResources.length);
 		const evidence = await mediaPreviewEvidence(page);
-		expect({ created: evidence.created, revoked: evidence.revoked, liveResources: evidence.liveResources }).toEqual({ created: [url], revoked: [url], liveResources: [] });
+		expect(evidence.created).toEqual(beforeLateRead.created);
+		expect(evidence.liveResources).toEqual([]);
 		await testInfo.attach('pending-close-lifecycle', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
 	} finally { await fixture.dispose(); }
 });

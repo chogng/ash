@@ -31,6 +31,7 @@ export interface IImageViewerSourceOptions {
 	readonly alt: string;
 	readonly viewState?: IImageViewerViewState;
 	readonly data?: { readonly mimeType: string; read(): Promise<Uint8Array>; };
+	readonly validateDecodedDimensions?: (width: number, height: number) => void;
 	/** Side from which the decoded image enters during gallery navigation. */
 	readonly slideFrom?: 'left' | 'right';
 }
@@ -54,6 +55,7 @@ export class ImageViewer extends Disposable {
 	private readonly displayScaleChanged = this._register(new Emitter<number>());
 	public readonly onDidChangeDisplayScale = this.displayScaleChanged.event;
 	private currentScale: ImageViewerScale = 'fit';
+	private pendingScrollPosition: Pick<IImageViewerViewState, 'scrollLeft' | 'scrollTop'> | undefined;
 	private size: { readonly width: number; readonly height: number; } | undefined;
 	private sourceData: IImageViewerSourceOptions['data'] | undefined;
 	private generation = 0;
@@ -169,7 +171,10 @@ export class ImageViewer extends Disposable {
 			event.preventDefault();
 			event.stopPropagation();
 		}));
-		const observer = new (getWindow(this.domNode).ResizeObserver)(() => this.layout());
+		const window = getWindow(this.domNode);
+		const resizeLayout = this._register(new AnimationFrameScheduler(window, () => this.layout()));
+		// Fitting the image can change the observed viewport's scrollbar geometry.
+		const observer = new window.ResizeObserver(() => resizeLayout.schedule());
 		observer.observe(this.domNode);
 		this._register(toDisposable(() => observer.disconnect()));
 	}
@@ -187,8 +192,14 @@ export class ImageViewer extends Disposable {
 		probe.src = src;
 		this.pending.value = toDisposable(() => probe.removeAttribute('src'));
 		try {
-			await probe.decode();
+			try {
+				await probe.decode();
+			} catch (error) {
+				if (this.isDisposed || generation !== this.generation) return false;
+				throw new TypeError(localize('media.image.invalid', 'The image data could not be decoded.'), { cause: error });
+			}
 			if (this.isDisposed || generation !== this.generation) return false;
+			options.validateDecodedDimensions?.(probe.naturalWidth, probe.naturalHeight);
 			this.cancelWheelZoom();
 			this.pan?.stopMonitoring(true);
 			this.size = { width: probe.naturalWidth, height: probe.naturalHeight };
@@ -196,10 +207,9 @@ export class ImageViewer extends Disposable {
 			this.imageDomNode.src = src;
 			this.imageDomNode.alt = options.alt;
 			this.currentScale = options.viewState?.scale ?? this.defaultScale();
+			this.pendingScrollPosition = options.viewState ?? { scrollLeft: 0, scrollTop: 0 };
 			this.domNode.classList.add('ready');
 			this.layout();
-			this.domNode.scrollLeft = options.viewState?.scrollLeft ?? 0;
-			this.domNode.scrollTop = options.viewState?.scrollTop ?? 0;
 			if (options.slideFrom) {
 				const offset = options.slideFrom === 'left' ? -10 : 10;
 				const animation = animateElement(this.imageDomNode, [
@@ -210,9 +220,6 @@ export class ImageViewer extends Disposable {
 			}
 			this.scaleChanged.fire(this.scale);
 			return true;
-		} catch (error) {
-			if (this.isDisposed || generation !== this.generation) return false;
-			throw new TypeError(localize('media.image.invalid', 'The image data could not be decoded.'), { cause: error });
 		} finally {
 			if (generation === this.generation) this.pending.clear();
 		}
@@ -231,6 +238,7 @@ export class ImageViewer extends Disposable {
 		this.size = undefined;
 		this.sourceData = undefined;
 		this.currentScale = 'fit';
+		this.pendingScrollPosition = undefined;
 		this.domNode.classList.remove('ready', 'pannable');
 		this.imageDomNode.removeAttribute('src');
 		this.imageDomNode.alt = '';
@@ -245,13 +253,14 @@ export class ImageViewer extends Disposable {
 				scrollTop: zoom.y.scrollPosition,
 			};
 		}
-		return { scale: this.scale, scrollLeft: this.domNode.scrollLeft, scrollTop: this.domNode.scrollTop };
+		const { scrollLeft, scrollTop } = this.pendingScrollPosition ?? this.domNode;
+		return { scale: this.scale, scrollLeft, scrollTop };
 	}
 
 	public restoreViewState(state: IImageViewerViewState): void {
 		this.setScale(state.scale);
-		this.domNode.scrollLeft = state.scrollLeft;
-		this.domNode.scrollTop = state.scrollTop;
+		this.pendingScrollPosition = state;
+		this.applyPendingScrollPosition();
 	}
 
 	public setScale(scale: ImageViewerScale): void {
@@ -298,7 +307,17 @@ export class ImageViewer extends Disposable {
 		this.imageDomNode.style.height = `${this.size.height * scale}px`;
 		this.imageDomNode.classList.toggle('pixelated', scale >= 3 && this.sourceData?.mimeType !== 'image/svg+xml');
 		if (this.pan) this.domNode.classList.toggle('pannable', this.canPan());
+		this.applyPendingScrollPosition();
 		this.displayScaleChanged.fire(scale);
+	}
+
+	private applyPendingScrollPosition(): void {
+		const position = this.pendingScrollPosition;
+		// Session restore can load and size a pane before its group makes the viewport visible.
+		if (!position || this.domNode.clientWidth === 0 || this.domNode.clientHeight === 0) return;
+		this.domNode.scrollLeft = position.scrollLeft;
+		this.domNode.scrollTop = position.scrollTop;
+		this.pendingScrollPosition = undefined;
 	}
 
 	private canPan(): boolean {
