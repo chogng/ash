@@ -38,15 +38,16 @@ test('malformed legacy drafts preserve their raw entries while valid drafts stil
 	assert.deepEqual(readNewChatDraftState(storage, 'valid', chatInputStatePersistence), draft);
 });
 
-test('migration deduplicates matching drafts with differently ordered fields', () => {
+test('migration deduplicates a legacy Multitask draft against a matching Swarm draft', () => {
 	using fixture = createStorage();
 	const { storage } = fixture;
-	writeNewChatDraftState(storage, draft, 'same', chatInputStatePersistence);
-	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: draft.mode }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const swarmDraft = { ...draft, mode: 'swarm' as const };
+	writeNewChatDraftState(storage, swarmDraft, 'same', chatInputStatePersistence);
+	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: 'multitask' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 
 	assert.deepEqual(migrateNewChatDraftState(storage, chatInputStatePersistence), []);
 	assert.equal(storage.get('sessions.draftState:same', StorageScope.WORKSPACE), undefined);
-	assert.deepEqual(readNewChatDraftState(storage, 'same', chatInputStatePersistence), draft);
+	assert.deepEqual(readNewChatDraftState(storage, 'same', chatInputStatePersistence), swarmDraft);
 });
 
 test('a corrupt destination preserves both copies and does not block another draft', () => {
@@ -77,6 +78,31 @@ test('migration keeps a legacy entry when writing its replacement fails', () => 
 	assert.deepEqual(errors, [failure]);
 	assert.equal(storage.get('sessions.draftState:source', StorageScope.WORKSPACE), JSON.stringify(draft));
 	assert.equal(readNewChatDraftState(storage, 'source', chatInputStatePersistence), undefined);
+});
+
+test('a stored Multitask draft recovers as Swarm and keeps its separate attachment after editing', () => {
+	using fixture = createStorage();
+	const { storage } = fixture;
+	const attachments = '34d83c82-ca55-4745-ae31-94faf41b034f';
+	const draftKey = 'sessions.inputDraft:untitled:upgrade';
+	const attachmentKey = `sessions.inputDraftAttachments:untitled:upgrade:${attachments}`;
+	const oldState = JSON.stringify({ ...draft, mode: 'multitask', contexts: [] });
+	const record = JSON.stringify({ state: oldState, attachments });
+	const payload = JSON.stringify(draft.contexts);
+	storage.store(attachmentKey, payload, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store(draftKey, record, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+
+	const restored = readNewChatDraftState(storage, 'untitled:upgrade', chatInputStatePersistence);
+	assert.deepEqual(restored, { ...draft, mode: 'swarm' });
+	assert.equal(storage.get(draftKey, StorageScope.WORKSPACE), record);
+
+	const edited = { ...restored!, text: `${draft.text} after upgrading` };
+	writeNewChatDraftState(storage, edited, 'untitled:upgrade', chatInputStatePersistence);
+	assert.deepEqual(JSON.parse(storage.get(draftKey, StorageScope.WORKSPACE)!), {
+		state: JSON.stringify({ ...edited, contexts: [] }), attachments,
+	});
+	assert.equal(storage.get(attachmentKey, StorageScope.WORKSPACE), payload);
+	assert.deepEqual(readNewChatDraftState(storage, 'untitled:upgrade', chatInputStatePersistence), edited);
 });
 
 test('editing text reuses the image payload while the input record stays small', () => {

@@ -44,7 +44,7 @@ function readStoredDraft(storage: IStorageService, draftId: string, persistence:
 	const value: unknown = JSON.parse(raw);
 	const stored = storedInput(value);
 	if (!stored) {
-		return { draft: validateChatDraft(value), combined: true };
+		return { draft: decodeStoredChatDraft(value), combined: true };
 	}
 	const state = persistence.deserializeUntitledInputState(stored.state);
 	if (!isRecord(state) || !Array.isArray(state.contexts) || state.contexts.length !== 0) throw new TypeError('Invalid stored Chat input state');
@@ -54,10 +54,14 @@ function readStoredDraft(storage: IStorageService, draftId: string, persistence:
 		if (payload === undefined) throw new TypeError('Missing stored Chat draft attachments');
 		contexts = persistence.deserializeUntitledInputAttachments(payload);
 	}
-	return { draft: validateChatDraft({ ...state, contexts }), combined: false };
+	return { draft: decodeStoredChatDraft({ ...state, contexts }), combined: false };
 }
 
-function validateChatDraft(draft: unknown): ChatDraft {
+function decodeStoredChatDraft(draft: unknown): ChatDraft {
+	// Multitask is a legacy ID in local draft storage. The Agents Window contract uses Swarm.
+	if (isRecord(draft) && draft.mode === 'multitask') {
+		draft = { ...draft, mode: 'swarm' };
+	}
 	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'swarm', 'ask'].includes(draft.mode as string)
 		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
 		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'
@@ -104,7 +108,7 @@ export function migrateNewChatDraftState(storage: IStorageService, persistence: 
 	for (const prefix of prefixes) {
 		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
 			try {
-				const draft = validateChatDraft(persistence.deserializeUntitledInputState(storage.get(key, StorageScope.WORKSPACE)!));
+				const draft = decodeStoredChatDraft(persistence.deserializeUntitledInputState(storage.get(key, StorageScope.WORKSPACE)!));
 				const identity = key.slice(prefix.length + 1);
 				const existing = identity ? readStoredDraft(storage, identity, persistence)?.draft : undefined;
 				if (!identity || existing && !structuralEquals(existing, draft)) {

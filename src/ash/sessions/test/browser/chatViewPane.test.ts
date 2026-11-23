@@ -101,6 +101,8 @@ import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/b
 import { IApprovalEnvironmentService } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 import { constObservable } from '../../../base/common/observable.js';
 import { test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -1570,6 +1572,24 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	await newResult.complete();
 	await newSending;
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
+});
+
+test('Sessions composer restores an unsent Multitask draft and its attachment as Swarm', async () => {
+	const draft = {
+		mode: 'multitask',
+		text: 'Review task.ts ',
+		contexts: [{ id: 'source', kind: 'file', name: 'task.ts', content: 'Unsaved code', resource: 'file:///project/task.ts', reference: { start: 7, end: 14 } }],
+	};
+	using fixture = await sessionsInputFixture(undefined, JSON.stringify(draft));
+	const { input, storage, notices, identity } = fixture;
+	const restored = { ...draft, mode: 'swarm' };
+	assert.deepEqual(notices.model.getNotifications(), []);
+	assert.deepEqual((await input.captureDraft())?.draft, restored);
+
+	input.appendToDraft('Keep this edit');
+	const editedText = `${draft.text}\n\nKeep this edit`;
+	await waitFor(() => readNewChatDraftState(storage, identity, chatInputStatePersistence)?.text === editedText);
+	assert.deepEqual(readNewChatDraftState(storage, identity, chatInputStatePersistence), { ...restored, text: editedText });
 });
 
 test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {
@@ -5541,31 +5561,42 @@ test('ChatWidgetModel inherits profile approval and preserves a conversation ove
 
 
 test('Chat context usage refresh ignores an estimate from an older connection', async () => {
-	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
-	const sample = await fake.api.thread.readContext({ sessionId: 'session-1', threadId: 'thread-1' });
-	const oldRead = new DeferredPromise<typeof sample>();
-	const currentRead = new DeferredPromise<typeof sample>();
-	let reads = 0;
-	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, readContext: () => (++reads === 1 ? oldRead : currentRead).p } });
-	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
-	await model.initialize();
-	const contextUsage = () => model.inputState.contextUsage;
-	await waitFor(() => reads === 1);
-	assert.deepEqual(contextUsage(), undefined);
-	fake.emitReady();
-	await waitFor(() => reads === 2);
-	await currentRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 400 } });
-	await waitFor(() => contextUsage()?.estimatedTokens === 400);
-	assert.deepEqual(contextUsage(), {
-		estimatedTokens: 400, contextWindow: 1000, autoCompactAt: 800,
-		model: { provider: 'test', model: 'test-model' }, latestRequestTokens: 180,
-		categories: [{ category: 'conversation', tokens: 200 }],
-	});
-	await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
-	await nextTask();
-	assert.equal(contextUsage()?.estimatedTokens, 400);
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const activeSession = session('session-1', 'thread-1');
+		const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
+		const sample = await fake.api.thread.readContext({ sessionId: 'session-1', threadId: 'thread-1' });
+		const oldRead = new DeferredPromise<typeof sample>();
+		const currentRead = new DeferredPromise<typeof sample>();
+		let reads = 0;
+		using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, readContext: () => (++reads === 1 ? oldRead : currentRead).p } });
+		using sessions = new SessionsManagementService(fake.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		const contextUsage = () => model.inputState.contextUsage;
+		mock.timers.tick(100);
+		assert.equal(reads, 1);
+		assert.equal(contextUsage(), undefined);
+
+		const rebound = new DeferredPromise<void>();
+		using bindingListener = Event.once(model.onDidFinishHistoryBinding)(() => void rebound.complete(undefined));
+		fake.emitReady();
+		await rebound.p;
+		mock.timers.tick(100);
+		assert.equal(reads, 2);
+		await currentRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 400 } });
+		await setImmediate();
+		assert.deepEqual(contextUsage(), {
+			estimatedTokens: 400, contextWindow: 1000, autoCompactAt: 800,
+			model: { provider: 'test', model: 'test-model' }, latestRequestTokens: 180,
+			categories: [{ category: 'conversation', tokens: 200 }],
+		});
+		await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
+		await setImmediate();
+		assert.equal(contextUsage()?.estimatedTokens, 400);
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as const) test(`${kind} goal banner localizes every status and retains raw objectives in ${locale}`, async () => {
