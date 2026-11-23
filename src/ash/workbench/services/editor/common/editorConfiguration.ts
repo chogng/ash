@@ -11,6 +11,7 @@ export type EditorLabelFormat = 'default' | 'short' | 'medium' | 'long';
 export type EditorTabSizing = 'fit' | 'shrink' | 'fixed';
 export type EditorTitleScrollbarSizing = 'default' | 'large';
 export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
+type EditorTitleScrollbarPosition = 'auto' | 'top' | 'bottom';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -183,6 +184,26 @@ export const EditorTitleScrollbarVisibilityConfiguration = configurationRegistry
 				{ value: 'auto' as const, label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto') },
 				{ value: 'visible' as const, label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible') },
 				{ value: 'hidden' as const, label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden') },
+			];
+		},
+	},
+});
+
+export const EditorTitleScrollbarPositionConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarPosition>({
+	key: 'workbench.editor.titleScrollbarPosition',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['auto', 'top', 'bottom'] },
+	defaultValue: 'auto',
+	parse: value => value === 'top' || value === 'bottom' ? value : 'auto',
+	setting: {
+		get title() { return localize('workbench.editor.titleScrollbarPosition.title', 'Workbench › Editor: Tab Scrollbar Position'); },
+		get description() { return localize('workbench.editor.titleScrollbarPosition.description', 'Positions the horizontal scrollbar for editor tabs. Follow Layout places it at the top in Modern and at the bottom in Flat.'); },
+		valueType: 'select',
+		get options() {
+			return [
+				{ value: 'auto' as const, label: localize('workbench.editor.titleScrollbarPosition.auto', 'Follow Layout') },
+				{ value: 'top' as const, label: localize('workbench.editor.titleScrollbarPosition.top', 'Top') },
+				{ value: 'bottom' as const, label: localize('workbench.editor.titleScrollbarPosition.bottom', 'Bottom') },
 			];
 		},
 	},

@@ -15,6 +15,17 @@
 	display: none;
 }
 
+/* Keep the tab strip's lower edge clear where it meets the editor. */
+:is(
+		.modern-ui
+			.ash-multi-editor-tabs-control[data-scrollbar-position="auto"],
+		.ash-multi-editor-tabs-control[data-scrollbar-position="top"]
+	)
+	> .ash-tab-list
+	> .ash-scrollbar-track-horizontal {
+	inset-block: 0 auto;
+}
+
 .ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-primary-action {
 	visibility: visible;
 }

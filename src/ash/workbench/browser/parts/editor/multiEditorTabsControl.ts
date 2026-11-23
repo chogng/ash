@@ -20,7 +20,12 @@ import { basename, dirname } from '../../../../base/common/resources.js';
 import { shorten } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
-import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, type EditorLabelFormat } from '../../../services/editor/common/editorConfiguration.js';
+import {
+	EditorLabelFormatConfiguration,
+	EditorShowIconsConfiguration,
+	EditorTitleScrollbarPositionConfiguration,
+	type EditorLabelFormat,
+} from '../../../services/editor/common/editorConfiguration.js';
 import { WorkbenchTabsControl } from './workbenchTabsControl.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { isEditorTabCopyRequested } from './editorTabDragAndDrop.js';
@@ -56,8 +61,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.tabContext = this._register(contextKeyService.createScoped(this.domNode));
 		this.labels = this._register(resourceLabels.createGroup());
 		this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
+		this.updateScrollbarPosition();
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorShowIconsConfiguration)) this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
+			if (event.affectsConfiguration(EditorTitleScrollbarPositionConfiguration)) this.updateScrollbarPosition();
 			if (event.affectsConfiguration(EditorLabelFormatConfiguration)) {
 				this.setEditors(this.editors, this.activeInput, this.selectedIds);
 			}
@@ -123,6 +130,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			event.stopPropagation();
 			this.delegate.pinEditor(editor.input);
 		}));
+	}
+
+	private updateScrollbarPosition(): void {
+		this.domNode.dataset.scrollbarPosition = this.configurationService.getValue(EditorTitleScrollbarPositionConfiguration);
 	}
 
 	private getDropEffect(event: DragEvent): 'move' | 'copy' {

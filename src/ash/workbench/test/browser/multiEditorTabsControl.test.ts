@@ -23,7 +23,7 @@ import type { EditorTabsDelegate } from '../../browser/parts/editor/editorTabsCo
 import { MultiEditorTabsControl } from '../../browser/parts/editor/multiEditorTabsControl.js';
 import { updateConnectedTabClipping } from '../../browser/parts/editor/connectedTabClipping.js';
 import { EditorTitleControl } from '../../browser/parts/editor/editorTitleControl.js';
-import { EditorTabsModeConfiguration } from '../../services/editor/common/editorConfiguration.js';
+import { EditorTabsModeConfiguration, EditorTitleScrollbarPositionConfiguration } from '../../services/editor/common/editorConfiguration.js';
 import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration } from '../../browser/parts/editor/breadcrumbs.js';
 
 import { WorkbenchConfiguration } from '../../common/configuration.js';
@@ -61,6 +61,10 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 		assert.ok(sizing.valueType === 'select');
 		assert.deepEqual(sizing.options.map(option => option.label), ['完整显示', '空间不足时缩小', '等宽']);
 		assert.deepEqual([EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration].map(key => Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key)!.setting!.title), ['工作台 › 编辑器：等宽标签最小宽度', '工作台 › 编辑器：等宽标签最大宽度']);
+		const scrollbarPosition = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorTitleScrollbarPositionConfiguration)?.setting;
+		assert.equal(scrollbarPosition?.title, '工作台 › 编辑器：标签滚动条位置');
+		assert.ok(scrollbarPosition?.valueType === 'select');
+		assert.deepEqual(scrollbarPosition.options.map(option => option.label), ['跟随布局', '顶部', '底部']);
 		assert.equal(control.domNode.querySelector('.ash-breadcrumbs-widget') !== null, true);
 	} finally {
 		resetNlsResolver();
@@ -473,6 +477,34 @@ test('editor tab width changes reach both rows and preserve focused actions', as
 			assert.equal(control.domNode.querySelector('.ash-tab-primary-action button'), action);
 			assert.equal(dom.window.document.activeElement, action);
 			assert.deepEqual(lists.map(list => ({ mode: list.classList.contains(`ash-tab-list-sizing-${mode}`), min: list.style.getPropertyValue('--ash-tab-list-fixed-min-width'), max: list.style.getPropertyValue('--ash-tab-list-fixed-max-width') })), lists.map(() => ({ mode: true, min: mode === 'fixed' ? '90px' : '', max: mode === 'fixed' ? '220px' : '' })));
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('editor tab scrollbar position updates both rows without recreating the tracks', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = new InMemoryConfigurationService();
+		using services = createTestEditorServices(configuration);
+		const group = new EditorGroupModel();
+		const pinned = input('pinned.ts');
+		const active = input('active.ts');
+		group.openEditor(pinned);
+		group.openEditor(active);
+		group.stick(pinned);
+		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined, {});
+		control.setEditors([{ ...descriptor(pinned), sticky: true }, descriptor(active)], active);
+		const rows = [...control.domNode.querySelectorAll<HTMLElement>('.ash-multi-editor-tabs-control')];
+		const tracks = () => [...control.domNode.querySelectorAll('.ash-tab-list > .ash-scrollbar-track-horizontal')];
+		const initialTracks = tracks();
+		assert.equal(initialTracks.length, 2);
+		assert.deepEqual(rows.map(row => row.dataset.scrollbarPosition), ['auto', 'auto']);
+		for (const position of ['top', 'bottom', 'auto'] as const) {
+			await configuration.updateValue(EditorTitleScrollbarPositionConfiguration, position);
+			assert.deepEqual(rows.map(row => row.dataset.scrollbarPosition), [position, position]);
+			assert.deepEqual(tracks().map((track, index) => track === initialTracks[index]), [true, true]);
 		}
 	} finally {
 		dom.window.close();
