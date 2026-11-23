@@ -387,7 +387,7 @@ function fixture() {
 			return info;
 		},
 		getState: async id => f.pages.get(id)!.state,
-		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
+		getSharing: async () => [], setSharing: async () => { }, respondToUserControl: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { }, layout: async () => { }, setVisible: async () => { },
 		destroyBrowserView: async id => { f.destroyed.push(id); f.pages.delete(id); events.fire({ type: 'closed', targetId: id }); },
 		onDidEvent: events.event,

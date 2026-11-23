@@ -1,4 +1,6 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Action } from '../../../../base/common/actions.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { getWindowId } from '../../../../base/browser/window.js';
@@ -14,6 +16,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../services/editor/common/editorService.js';
+import { BrowserEditor } from './browserEditor.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
 import { BrowserNewTabPlacementSettingId, BrowserViewModel, type BrowserNewTabPlacement, type IBrowserViewNetworkResolver, type IBrowserViewNetworkStatus, type IBrowserViewOpenOptions, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
 import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
@@ -46,6 +49,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private readonly initialEvents: BrowserViewEvent[] = [];
 	private initialized = false;
 	private initialization: Promise<void> | undefined;
+	private readonly userControlPrompts = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly permissionDialogs = new Map<string, IDialogHandle>();
 	private readonly authenticationDialogs = new Map<string, IDialogHandle>();
 	private readonly sideGroupIds = new WeakMap<IEditorPart, number>();
@@ -63,6 +67,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IContextKeyService private readonly contexts: IContextKeyService,
 		@IAgentHostConnectionsService private readonly hosts: IAgentHostConnectionsService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
+		@INotificationService private readonly notifications: INotificationService,
 		@ITelemetryService private readonly telemetry: ITelemetryService,
 	) {
 		super();
@@ -331,7 +336,63 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 	}
 
+	private promptForUserControl(event: Extract<BrowserViewEvent, { type: 'userControlRequested'; }>): void {
+		const { targetId, requestId } = event;
+		const input = this.inputs.get(targetId);
+		if (!input) {
+			void this.service.respondToUserControl(targetId, requestId, false).catch(error => this.notifications.error(error));
+			return;
+		}
+		const resources = new DisposableStore();
+		this.userControlPrompts.set(requestId, resources);
+		const respond = (continueWithAgent: boolean) => this.service.respondToUserControl(targetId, requestId, continueWithAgent).catch(error => this.notifications.error(error));
+		let opening = false;
+		const open = resources.add(new Action('browser.userControl.open',
+			localize({ bundle: 'ash.workbench', key: 'browser.userControl.open' }, 'Open verification page'), '', true, async () => {
+				opening = true;
+				prompt.close();
+				const group = this.editorPart.groups.find(group => group.inputs.includes(input));
+				try {
+					await this.openEditor(input, {}, group ? { groupId: group.id } : undefined);
+					const pane = this.editors.activeEditorPane;
+					const model = input.model;
+					if (!(pane instanceof BrowserEditor) || pane.input !== input || !model) { await respond(false); return; }
+					const focus = () => {
+						if (this.editors.activeEditorPane === pane && pane.input === input) {
+							pane.ensureBrowserFocus();
+						}
+					};
+					// The toast can keep the native view hidden until the compositor removes it.
+					if (model.state.visible) { focus(); }
+					else {
+						const visible = model.onDidChangeState(state => {
+							if (!state.visible) { return; }
+							visible.dispose();
+							focus();
+						});
+						resources.add(visible);
+					}
+				} catch (error) { await respond(false); this.notifications.error(error instanceof Error ? error : String(error)); }
+			}));
+		const prompt = this.notifications.notify({
+			severity: Severity.Info,
+			message: localize({ bundle: 'ash.workbench', key: 'browser.userControl.message' }, 'The Agent is waiting for you to continue on {0}.', event.origin),
+			sticky: true,
+			actions: { primary: [Object.assign(open, { keepOpen: true })] },
+		});
+		resources.add(prompt.onDidClose(() => { if (!opening) { void respond(false); } }));
+		resources.add(toDisposable(() => prompt.close()));
+	}
+
 	private acceptEvent(event: BrowserViewEvent): void {
+		if (event.type === 'userControlRequested') {
+			this.promptForUserControl(event);
+			return;
+		}
+		if (event.type === 'userControlClosed') {
+			this.userControlPrompts.deleteAndDispose(event.requestId);
+			return;
+		}
 		if (event.type === 'passwordSaveRequested' || event.type === 'passwordFillRequested') {
 			const handle = event.type === 'passwordSaveRequested' ? this.dialogs.show({
 				kind: 'confirmation',

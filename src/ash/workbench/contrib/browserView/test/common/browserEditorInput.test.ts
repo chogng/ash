@@ -237,7 +237,7 @@ function fixture() {
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getWebsiteFavicon: async () => undefined,
 		getSharing: async () => [], setSharing: async () => { },
-		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
+		respondToUserControl: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		getBrowserViews: async () => [f.info], getOrCreateBrowserView: async () => { f.creations++; return f.info; }, getState: async () => f.info.state,
 		layout: async () => { }, setVisible: async () => { }, loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { },
 		destroyBrowserView: async () => { f.closed++; }, onDidEvent: events.event,

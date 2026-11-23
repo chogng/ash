@@ -130,6 +130,16 @@ impl BrowserToolService {
                     NAVIGATE_SCHEMA,
                 ),
                 definition(
+                    "browser_request_user_control",
+                    "When an isolated browser tab needs human verification or sign-in, present that tab and pause browser automation while the user acts. Use the same target ID and observe it again after a continued result. If cancelled, stop waiting.",
+                    TARGET_SCHEMA,
+                ),
+                definition(
+                    "browser_download",
+                    "Click an observed download element and wait for the browser's download result. Returns the actual saved path after completion. Provide the backend DOM node ID from the latest observation.",
+                    ELEMENT_SCHEMA,
+                ),
+                definition(
                     "browser_click",
                     "Click an element by backend DOM node ID from the latest observation.",
                     ELEMENT_SCHEMA,
@@ -311,6 +321,21 @@ impl BrowserToolService {
                     target_id: target_id(arguments.target_id)?,
                     url: normalize_browser_url(&arguments.url)?,
                 })
+            }
+            "browser_request_user_control" => {
+                let arguments: TargetArguments = decode(call)?;
+                Ok(BrowserToolRequest::Interaction(
+                    BrowserAction::RequestUserControl {
+                        target_id: target_id(arguments.target_id)?,
+                    },
+                ))
+            }
+            "browser_download" => {
+                let arguments: ElementArguments = decode(call)?;
+                Ok(BrowserToolRequest::Interaction(BrowserAction::Download {
+                    target_id: target_id(arguments.target_id)?,
+                    target: element_target(arguments.node_id)?,
+                }))
             }
             "browser_click" => {
                 let arguments: ElementArguments = decode(call)?;
@@ -781,6 +806,8 @@ impl BrowserToolRequest {
                 BrowserAction::Cdp { target_id, .. }
                 | BrowserAction::Navigate { target_id, .. }
                 | BrowserAction::Click { target_id, .. }
+                | BrowserAction::RequestUserControl { target_id }
+                | BrowserAction::Download { target_id, .. }
                 | BrowserAction::Hover { target_id, .. }
                 | BrowserAction::Drag { target_id, .. }
                 | BrowserAction::HandleDialog { target_id, .. }
@@ -825,6 +852,12 @@ impl BrowserToolRequest {
                 target_id,
                 operation: BrowserCdpOperation::Command { method, .. },
             }) => format!("send CDP {method} for browser target {}", target_id.0),
+            Self::Interaction(BrowserAction::RequestUserControl { target_id }) => {
+                format!("request user control of browser target {}", target_id.0)
+            }
+            Self::Interaction(BrowserAction::Download { target_id, .. }) => {
+                format!("download a file from browser target {}", target_id.0)
+            }
             Self::Interaction(_) => format!(
                 "operate browser target {}",
                 self.target_id().expect("interaction has a target").0

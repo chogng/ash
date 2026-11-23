@@ -611,6 +611,101 @@ test('desktop browser only loads restored tabs when shown', { tag: ['@electron-u
 	}
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test.describe(`Browser user control ${locale}`, () => {
+		test.use({ openWorkspace: false, electronUserSettings: { 'workbench.locale': locale } });
+		test(`agent browser reveals the original verification tab and downloads after handoff in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+			const pdf = '%PDF-1.4\n%%EOF\n';
+			const server = createServer((request, response) => {
+				if (request.url === '/article.pdf' && request.headers.cookie?.includes('verified=1')) {
+					response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="article.pdf"' });
+					response.end(pdf);
+				} else if (request.url === '/article') {
+					response.writeHead(200, { 'Content-Type': 'text/html', 'Set-Cookie': 'verified=1; Path=/; HttpOnly' });
+					response.end('<title>Article ready</title><a href="/article.pdf">Download article</a>');
+				} else {
+					response.writeHead(200, { 'Content-Type': 'text/html' });
+					response.end('<title>Verification fixture</title><a href="/article">Verify on this tab</a>');
+				}
+			});
+			await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+			const endpoint = server.address();
+			if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing verification fixture'); }
+			const url = `http://127.0.0.1:${endpoint.port}/`;
+			const electron = application as ElectronApplication;
+			const page = workbench.page;
+			const labels = locale === 'en'
+				? { open: 'Open verification page', resume: 'Continue with Agent', cancel: 'Cancel handoff' }
+				: { open: '打开验证页', resume: '继续交给 Agent', cancel: '取消接管' };
+			const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) =>
+				globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params }), {
+				method, params: { threadId: 'browser-handoff-smoke', networkToken: browserNetworkToken, ...params },
+			});
+			try {
+				await installBrowserNetworkPolicy(electron, url);
+				const { targetId } = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
+				await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+				const perform = (action: Record<string, unknown>) => hostCall('perform', { action: { targetId, ...action } })
+					.then(result => decodeAppServerServerRequestResult('browser/perform', result));
+				const pending = perform({ type: 'requestUserControl' });
+				void pending.catch(() => { });
+				const open = page.getByRole('button', { name: labels.open, exact: true });
+				await expect(open).toBeVisible();
+				const started = performance.now();
+				await open.click();
+				await expect.poll(() => electron.context().pages().some(candidate => candidate.url() === url)).toBe(true);
+				const nativePage = electron.context().pages().find(candidate => candidate.url() === url)!;
+				await expect.poll(async () => {
+					const presentation = await electron.evaluate(({ BrowserWindow }, url) => {
+						for (const window of BrowserWindow.getAllWindows()) {
+							const view = window.contentView.children.find(view => 'webContents' in view
+								&& (view as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView | undefined;
+							if (view) { return { pageFocused: view.webContents.isFocused(), viewVisible: view.getVisible(), windowFocused: window.isFocused() }; }
+						}
+					}, url);
+					const viewportFocused = await page.evaluate(() => document.activeElement?.classList.contains('ash-browser-viewport') === true);
+					return { visible: presentation?.viewVisible, inputReady: presentation?.windowFocused ? presentation.pageFocused : viewportFocused };
+				}).toEqual({ visible: true, inputReady: true });
+				await testInfo.attach('verification-tab-focus', {
+					body: JSON.stringify({ clickToInputReadyMs: Math.round(performance.now() - started) }),
+					contentType: 'application/json',
+				});
+				await expect(perform({ type: 'scroll', deltaX: 0, deltaY: 32 })).rejects.toThrow(/BrowserUserControlActive/);
+				await nativePage.getByRole('link', { name: 'Verify on this tab' }).press('Enter');
+				await expect(nativePage.getByRole('link', { name: 'Download article' })).toBeVisible();
+				await page.getByRole('button', { name: labels.resume, exact: true }).click();
+				expect(await pending).toMatchObject({ targetId, output: '{"state":"continued"}' });
+				const observation = decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', {
+					targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false,
+				}));
+				expect(observation.url).toBe(`${url}article`);
+				const nodes = JSON.parse(observation.accessibilityTree!).nodes as { name?: { value: string; }; backendDOMNodeId?: number; }[];
+				const nodeId = nodes.find(node => node.name?.value === 'Download article')?.backendDOMNodeId;
+				expect(nodeId).toBeGreaterThan(0);
+				const destination = join(testWorkspace.directory, 'handoff-article.pdf');
+				await electron.evaluate(({ BrowserWindow }, { article, destination }) => {
+					const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children)
+						.find(view => 'webContents' in view && (view as Electron.WebContentsView).webContents.getURL() === article) as Electron.WebContentsView;
+					view.webContents.session.once('will-download', (_event, item) => item.setSavePath(destination));
+				}, { article: observation.url, destination });
+				const download = await perform({ type: 'download', target: { nodeId: String(nodeId) } });
+				expect(JSON.parse(download.output!)).toMatchObject({ state: 'completed', path: destination, mimeType: 'application/pdf', isPdf: true });
+				expect(await readFile(destination, 'utf8')).toBe(pdf);
+				const cancelled = perform({ type: 'requestUserControl' });
+				void cancelled.catch(() => { });
+				await page.getByRole('button', { name: labels.open, exact: true }).click();
+				await page.getByRole('button', { name: labels.cancel, exact: true }).click();
+				expect(await cancelled).toMatchObject({ targetId, output: '{"state":"cancelled"}' });
+				await expect(page.getByRole('button', { name: labels.resume, exact: true })).toBeHidden();
+				expect(await nativePage.evaluate(() => fetch('/after-handoff').then(() => 'allowed', () => 'denied'))).toBe('denied');
+			} finally {
+				server.closeAllConnections();
+				await new Promise<void>(resolve => server.close(() => resolve()));
+			}
+		});
+	});
+}
+
 test('desktop browser agent observes loaded pages, edits fields and follows navigation', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const server = createServer((request, response) => {
 		response.setHeader('Content-Type', 'text/html');

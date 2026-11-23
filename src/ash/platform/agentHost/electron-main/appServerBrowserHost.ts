@@ -121,6 +121,7 @@ export class AppServerBrowserHost extends Disposable {
 			this.assertEnabled();
 			if (!this.cdpEnabled) { throw new Error('BrowserCDPDisabled'); }
 			const view = this.views.validateAgentAccess(params.action.targetId, params.threadId);
+			if (view.isUnderUserControl) { throw new Error('BrowserUserControlActive'); }
 			if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
 			this.sessions.add(params.threadId);
 			const targets = (await this.views.getBrowserViews()).filter(info => info.owner.type === 'agent' && info.owner.sessionId === params.threadId);
@@ -141,12 +142,21 @@ export class AppServerBrowserHost extends Disposable {
 			signal.throwIfAborted();
 			return { targetId: view.id };
 		}
+		const action = params.action;
 		let output: string | undefined;
-		if (params.action.type === 'navigate') { await view.loadURL(params.action.url, signal, params.networkToken ?? null); }
-		else { output = await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action), params.networkToken ?? null); }
+		if (action.type === 'requestUserControl') {
+			const state = await view.runOperation(signal, handoffSignal => view.requestUserControl(handoffSignal), params.networkToken ?? null);
+			output = JSON.stringify({ state });
+		} else if (action.type === 'download') {
+			const download = await this.automate(view, params.threadId, signal,
+				(id, operationSignal) => view.download(() => this.playwright.performAction(id, params.threadId, view.id, { type: 'click', target: action.target }), operationSignal),
+				params.networkToken ?? null);
+			output = JSON.stringify(download);
+		} else if (action.type === 'navigate') { await view.loadURL(action.url, signal, params.networkToken ?? null); }
+		else { output = await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, action), params.networkToken ?? null); }
 		return { targetId: view.id, ...(output === undefined ? {} : { output }) };
 	}
-	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string) => Promise<T>, networkToken?: string | null): Promise<T> {
+	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string, signal: AbortSignal) => Promise<T>, networkToken?: string | null): Promise<T> {
 		return view.runOperation(signal, async operationSignal => {
 			await view.waitForLoad(operationSignal);
 			const id = randomUUID();
@@ -155,7 +165,7 @@ export class AppServerBrowserHost extends Disposable {
 				void this.playwright.cancelOperation(id).catch(() => { });
 			});
 			operationSignal.throwIfAborted();
-			const result = await execute(id);
+			const result = await execute(id, operationSignal);
 			operationSignal.throwIfAborted();
 			await view.waitForLoad(operationSignal);
 			return result;
@@ -170,6 +180,7 @@ export class AppServerBrowserHost extends Disposable {
 	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal; } {
 		this.assertEnabled();
 		const view = this.views.validateAgentAccess(id, sessionId);
+		if (view.isUnderUserControl) { throw new Error('BrowserUserControlActive'); }
 		return { view, signal: AbortSignal.any([requestSignal, this.cancellation.signal, this.views.agentAccessSignal(id, sessionId)]) };
 	}
 	/** Retiring a connection closes its pages without disturbing pages opened by the user. */
@@ -210,14 +221,14 @@ export class AppServerBrowserHost extends Disposable {
 			if (value.providerId !== undefined && (typeof value.providerId !== 'string' || !value.providerId || value.providerId.length > 1024)) { throw new TypeError('Invalid Canvas host'); }
 			return { id: value.id, params: value.params, ...(typeof value.providerId === 'string' ? { providerId: value.providerId } : {}), ...(value.network !== undefined ? { network: value.network === null ? null : validateBrowserViewNetwork(value.network) } : {}) };
 		};
-		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; providerId?: string; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
+		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; providerId?: string; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>, timeout = 30_000): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
 			if (this.operations.has(request.id) || this.operations.size >= 128) { throw new Error('Browser operation capacity exceeded'); }
 			const controller = new AbortController();
 			const signal = AbortSignal.any([controller.signal, this.cancellation.signal]);
 			this.operations.set(request.id, controller);
-			const timer = setTimeout(() => controller.abort(), 30_000);
+			const timer = setTimeout(() => controller.abort(), timeout);
 			try {
 				// Most windows never run a browser tool. Keep its schema out of Main's
 				// idle heap, but validate every request before touching browser state.
@@ -285,7 +296,13 @@ export class AppServerBrowserHost extends Disposable {
 			},
 			{ channel: 'create', validate: operation, invoke: value => run(value, (params, context, decode) => this.create(decode('browser/create', params), context)) },
 			{ channel: 'observe', validate: operation, invoke: value => run(value, (params, context, decode) => this.observe(decode('browser/observe', params), context)) },
-			{ channel: 'perform', validate: operation, invoke: value => run(value, (params, context, decode) => this.perform(decode('browser/perform', params), context)) },
+			{
+				channel: 'perform', validate: operation, invoke: value => run(value, (params, context, decode) => {
+					const request = decode('browser/perform', params);
+					const signal = request.action.type === 'requestUserControl' ? context.signal : AbortSignal.any([context.signal, AbortSignal.timeout(30_000)]);
+					return this.perform(request, { signal });
+				}, 180_000)
+			},
 			{ channel: 'close', validate: operation, invoke: value => run(value, (params, _context, decode) => this.close(decode('browser/close', params))) },
 			{ channel: 'cancel', validate: operation, invoke: value => { this.operations.get(operation(value).id)?.abort(); } },
 		];

@@ -153,6 +153,7 @@ export interface IBrowserViewNavigateRequest
 /** Serializable host-authoritative state for one embedded browser. */
 export interface IBrowserViewState {
 	readonly isDevToolsOpen: boolean;
+	readonly userControlRequestId?: string;
 	/** Main owns picker state; omitted snapshots represent an inactive picker. */
 	readonly elementSelectionState?: { readonly active: boolean; readonly options: IBrowserElementSelectionOptions; };
 	readonly permissions?: ISerializedBrowserPermissionsSnapshot;
@@ -191,6 +192,8 @@ export type BrowserViewEvent =
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'canvasOpened'; readonly targetId: string; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
+	| { readonly type: 'userControlRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; }
+	| { readonly type: 'userControlClosed'; readonly targetId: string; readonly requestId: string; }
 	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string; }
 	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string; }
 	| { readonly type: 'downloadProgress'; readonly targetId: string; readonly filename: string; readonly receivedBytes: number; readonly totalBytes: number; readonly state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'; }
@@ -325,6 +328,7 @@ export interface IBrowserViewService {
 	deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void>;
 	getSharing(id: string): Promise<readonly string[]>;
 	setSharing(id: string, threadIds: readonly string[]): Promise<void>;
+	respondToUserControl(id: string, requestId: string, continueWithAgent: boolean): Promise<void>;
 	respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void>;
 	clearPermissions(id: string): Promise<void>;
 	cancelDownloads(id: string): Promise<void>;
@@ -370,6 +374,8 @@ export type BrowserViewAction =
 	| { readonly type: 'handleDialog'; readonly accept: boolean; readonly promptText?: string | null; }
 	| { readonly type: 'runPlaywright'; readonly code: string; }
 	| { readonly type: 'navigate'; readonly url: string; }
+	| { readonly type: 'requestUserControl'; }
+	| { readonly type: 'download'; readonly target: { readonly nodeId: string; }; }
 	| { readonly type: 'click'; readonly target: { readonly nodeId: string; }; }
 	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement'; } | { readonly type: 'element'; readonly target: { readonly nodeId: string; }; }; }
 	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number; }

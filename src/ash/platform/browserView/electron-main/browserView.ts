@@ -1,6 +1,6 @@
 import { IBrowserDownloadService } from '../common/browserDownloads.js';
 import type { BrowserDownloadMainService } from './browserDownloadMainService.js';
-import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, Event as ElectronEvent } from 'electron/main';
+import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, DownloadItem, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
@@ -15,6 +15,7 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { isRecord } from '../../../base/common/types.js';
 import { browserZoomFactors, browserZoomDefaultIndex, type IBrowserDeviceProfile } from '../common/browserView.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { open as openFile } from 'node:fs/promises';
 import { IEncryptionMainService, KnownStorageProvider } from '../../encryption/common/encryptionService.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
@@ -49,6 +50,8 @@ export class BrowserView extends Disposable {
 	private passwordChoiceTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordFillVersion = 0;
 	private canvas: IBrowserViewInfo['canvas'];
+	private userControl: { readonly id: string; readonly resolve: (continueWithAgent: boolean) => void; } | undefined;
+	private acceptDownload: ((item: DownloadItem) => void) | undefined;
 
 	private cancelPasswordChoice(): void {
 		this.passwordFillVersion++;
@@ -685,7 +688,11 @@ export class BrowserView extends Disposable {
 		this.window.contentView.addChildView(this.view);
 		this.configureSecurity();
 		if (this.creation.owner.type === 'user') { this._register(this.session.attachFileReader(this.id, url => this.readFile(url))); }
-		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event), () => this.emitState(), item => this.downloads.track(item)));
+		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event), () => this.emitState(), item => {
+			if (!this.downloads.track(item)) { return false; }
+			this.acceptDownload?.(item);
+			return true;
+		}));
 		this._register(this.session.attachNetwork(this.id, this.webContents, this.creation.owner, () => this.networkToken, event => this.emit(event)));
 		this.listen();
 		this.emit({ type: 'created', info: this.getInfo() });
@@ -744,6 +751,73 @@ export class BrowserView extends Disposable {
 	reload(hard = false): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; if (hard) { this.webContents.reloadIgnoringCache(); } else { this.webContents.reload(); } }); }
 	stop(): void { this.cancelAuthentication(); this.webContents.stop(); }
 	focus(): void { if (this.visible) this.webContents.focus(); }
+
+	public get isUnderUserControl(): boolean { return this.userControl !== undefined; }
+
+	/** Keeps the page's operation and network authority alive while input belongs to the user. */
+	public async requestUserControl(signal: AbortSignal): Promise<'continued' | 'cancelled'> {
+		if (this.canvas) { throw new Error('BrowserUserControlRequiresTab'); }
+		throwIfAborted(signal);
+		const id = randomUUID();
+		const response = promiseWithResolvers<boolean>();
+		this.userControl = { id, resolve: response.resolve };
+		try {
+			this.emitState();
+			this.emit({ type: 'userControlRequested', targetId: this.id, requestId: id, origin: new URL(this.url).origin });
+			return await raceCancellationError(response.promise, signal, 'BrowserRequestCancelled') ? 'continued' : 'cancelled';
+		} finally {
+			this.userControl = undefined;
+			this.emitState();
+			this.emit({ type: 'userControlClosed', targetId: this.id, requestId: id });
+		}
+	}
+
+	public respondToUserControl(requestId: string, continueWithAgent: boolean): void {
+		if (this.userControl?.id === requestId) { this.userControl.resolve(continueWithAgent); }
+	}
+
+	/** Arm the tab's next download before triggering the browser action. */
+	public async download(trigger: () => Promise<unknown>, signal: AbortSignal): Promise<{
+		readonly state: 'completed' | 'cancelled' | 'interrupted';
+		readonly filename: string;
+		readonly mimeType: string;
+		readonly path?: string;
+		readonly isPdf?: boolean;
+	}> {
+		throwIfAborted(signal);
+		const result = promiseWithResolvers<{ state: 'completed' | 'cancelled' | 'interrupted'; item: DownloadItem; }>();
+		let cancel: (() => void) | undefined;
+		this.acceptDownload = item => {
+			this.acceptDownload = undefined;
+			const done = (_event: ElectronEvent, state: 'completed' | 'cancelled' | 'interrupted'): void => {
+				cancel = undefined;
+				result.resolve({ state, item });
+			};
+			item.once('done', done);
+			cancel = () => {
+				item.removeListener('done', done);
+				item.cancel();
+			};
+		};
+		try {
+			const [{ state, item }] = await raceCancellationError(Promise.all([result.promise, trigger()]), signal, 'BrowserDownloadCancelled');
+			const file = { state, filename: item.getFilename(), mimeType: item.getMimeType() };
+			if (state !== 'completed') { return file; }
+			const path = item.getSavePath();
+			const handle = await openFile(path, 'r');
+			try {
+				const header = Buffer.alloc(1024);
+				const { bytesRead } = await handle.read(header, 0, header.length, 0);
+				throwIfAborted(signal);
+				return { ...file, path, isPdf: header.subarray(0, bytesRead).includes('%PDF-') };
+			} finally {
+				await handle.close();
+			}
+		} finally {
+			this.acceptDownload = undefined;
+			cancel?.();
+		}
+	}
 
 	public runOperation<R>(requestSignal: AbortSignal, execute: (signal: AbortSignal) => Promise<R>, networkToken?: string | null): Promise<R> {
 		const signal = AbortSignal.any([requestSignal, this.signal]);
@@ -1005,6 +1079,7 @@ export class BrowserView extends Disposable {
 		return {
 			targetId: this.id,
 			isDevToolsOpen: contents.isDevToolsOpened(),
+			userControlRequestId: this.userControl?.id,
 			elementSelectionState: { active: this.selectionMode === 'element', options: this.selectionOptions },
 			permissions: this.session.permissions.snapshot(contents),
 			browserZoomIndex: browserZoomFactors.reduce<number>((best, factor, index) => Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best, browserZoomDefaultIndex),

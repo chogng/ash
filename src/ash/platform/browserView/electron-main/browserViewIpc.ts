@@ -36,6 +36,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 		['getWebsiteFavicon', ['origin']],
 		['deleteBrowserHistory', ['targetId', 'entryIds']],
 		['getSharing', ['targetId']],
+		['respondToUserControl', ['targetId', 'requestId', 'continueWithAgent']],
 		['respondToPermission', ['targetId', 'requestId', 'allowed']],
 		...['goBack', 'goForward', 'reload', 'stop', 'focus', 'destroyBrowserView', 'clearPermissions', 'cancelDownloads'].map(command => [command, ['targetId']] as const),
 	]);
@@ -316,6 +317,17 @@ function browserViewIpcRoutes(
 				return { ...validateBrowserViewTargetRequest({ targetId: value.targetId }), entryIds: value.entryIds };
 			},
 			invoke: value => { const request = value as IBrowserViewTargetRequest & { entryIds?: number[]; }; return service.deleteBrowserHistory(request.targetId, request.entryIds); },
+		},
+		{
+			channel: 'respondToUserControl', validate: value => {
+				if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(value.requestId) || typeof value.continueWithAgent !== 'boolean') {
+					throw new TypeError('Invalid browser user control response');
+				}
+				return { ...validateBrowserViewTargetRequest({ targetId: value.targetId }), requestId: value.requestId, continueWithAgent: value.continueWithAgent };
+			}, invoke: value => {
+				const request = value as IBrowserViewTargetRequest & { requestId: string; continueWithAgent: boolean; };
+				return service.respondToUserControl(request.targetId, request.requestId, request.continueWithAgent);
+			}
 		},
 		{
 			channel: 'respondToPermission', validate: value => {

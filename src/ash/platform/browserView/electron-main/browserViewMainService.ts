@@ -423,6 +423,9 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	public async deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void> {
 		await this.histories.get(this.target(id).session)!.delete(entryIds);
 	}
+	public async respondToUserControl(id: string, requestId: string, continueWithAgent: boolean): Promise<void> {
+		this.tryGetBrowserView(id)?.respondToUserControl(requestId, continueWithAgent);
+	}
 	public async respondToPermission(id: string, requestId: string, allowed: boolean): Promise<void> { this.target(id).session.permissions.respond(id, requestId, allowed); }
 	public async clearPermissions(id: string): Promise<void> { this.target(id).session.permissions.clear(); }
 	public async cancelDownloads(id: string): Promise<void> { this.target(id).session.permissions.cancelDownloads(id); }

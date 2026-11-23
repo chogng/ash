@@ -118,7 +118,7 @@ test('browser view proxies preserve validated commands, subscriptions and backen
 		getWebsiteFavicon: async () => undefined,
 		getSharing: async () => [], setSharing: async () => { throw new Error('Sharing must pass through the backend'); },
 		onDidEvent: events.event,
-		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
+		respondToUserControl: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		getBrowserViews: async () => [],
 		getOrCreateBrowserView: async () => {
 			calls.push('create');

@@ -625,7 +625,11 @@ impl ClientHost {
                 .map_err(|error| ClientHostError::Failed(error.to_string()))?,
         );
 
-        let deadline = Instant::now() + timeout.min(REQUEST_TIMEOUT);
+        let max_timeout = match method {
+            HostMethod::BrowserPerform => Duration::from_secs(185),
+            _ => REQUEST_TIMEOUT,
+        };
+        let deadline = Instant::now() + timeout.min(max_timeout);
         let value = loop {
             match receiver.recv_timeout(
                 CANCELLATION_POLL.min(deadline.saturating_duration_since(Instant::now())),

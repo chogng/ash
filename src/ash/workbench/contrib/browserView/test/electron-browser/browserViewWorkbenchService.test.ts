@@ -7,6 +7,7 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IBrowserViewService, BrowserElementSelectionMode, BrowserViewCommandId, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -490,7 +491,7 @@ function fixture() {
 		getBrowserViews: async () => [f.info],
 		getOrCreateBrowserView: async (targetId, options) => ({ ...f.info, id: targetId, owner: options.owner, session: options.session, state: { ...f.info.state, targetId, url: options.initialUrl } }),
 		getState: async targetId => ({ ...f.info.state, targetId }),
-		getSharing: async () => [], setSharing: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
+		getSharing: async () => [], setSharing: async () => { }, respondToUserControl: async () => { }, respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		loadURL: async () => { }, goBack: async () => { }, goForward: async () => { }, reload: async () => { }, stop: async () => { }, focus: async () => { }, layout: async () => { }, setVisible: async () => { },
 		destroyBrowserView: async targetId => { f.destroyed.push(targetId); }, onDidEvent: events.event,
 	};
@@ -521,7 +522,7 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], ...(f.remote ? { remoteAuthority: f.remote } : {}) }), getWorkbenchState: () => f.state, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, resources.add(new ContextKeyService())], [IAgentHostConnectionsService, {
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [INotificationService, {} as INotificationService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IEditorPartsService, editorPart as IEditorPartsService], [IContextKeyService, resources.add(new ContextKeyService())], [IAgentHostConnectionsService, {
 			_serviceBrand: undefined,
 			get ambientConnection(): never { throw new Error('Unexpected connection acquisition'); },
 			onDidChangeConnections: Event.None, get connections() { return f.hosts; },

@@ -739,17 +739,26 @@ impl BrowserCapability for BrowserHost {
         } else {
             None
         };
-        let result: BrowserPerformResult = self.request(
-            owner,
-            HostMethod::BrowserPerform,
-            &BrowserPerformParams {
-                thread_id: self.thread_id()?.to_string(),
-                network_token: self.network_token.clone(),
-                uploads,
-                action: browser_action_dto(action),
-            },
-            cancellation,
-        )?;
+        let timeout = if matches!(&action, BrowserAction::RequestUserControl { .. }) {
+            Duration::from_secs(185)
+        } else {
+            Duration::from_secs(30)
+        };
+        let result: BrowserPerformResult = self
+            .clients
+            .request_with_timeout(
+                owner,
+                HostMethod::BrowserPerform,
+                &BrowserPerformParams {
+                    thread_id: self.thread_id()?.to_string(),
+                    network_token: self.network_token.clone(),
+                    uploads,
+                    action: browser_action_dto(action),
+                },
+                cancellation,
+                timeout,
+            )
+            .map_err(browser_host_error)?;
         if result.target_id != target_id.0 {
             return Err(BrowserError::Failed(
                 "browser host changed target identity".into(),
@@ -940,6 +949,8 @@ fn action_target_id(action: &BrowserAction) -> &BrowserTargetId {
         BrowserAction::Cdp { target_id, .. }
         | BrowserAction::Navigate { target_id, .. }
         | BrowserAction::Click { target_id, .. }
+        | BrowserAction::RequestUserControl { target_id }
+        | BrowserAction::Download { target_id, .. }
         | BrowserAction::Hover { target_id, .. }
         | BrowserAction::Drag { target_id, .. }
         | BrowserAction::HandleDialog { target_id, .. }
@@ -981,6 +992,17 @@ fn browser_action_dto(action: BrowserAction) -> BrowserPerformActionDto {
             url,
         },
         BrowserAction::Click { target_id, target } => BrowserPerformActionDto::Click {
+            target_id: target_id.0,
+            target: BrowserElementTargetDto {
+                node_id: target.node_id,
+            },
+        },
+        BrowserAction::RequestUserControl { target_id } => {
+            BrowserPerformActionDto::RequestUserControl {
+                target_id: target_id.0,
+            }
+        }
+        BrowserAction::Download { target_id, target } => BrowserPerformActionDto::Download {
             target_id: target_id.0,
             target: BrowserElementTargetDto {
                 node_id: target.node_id,

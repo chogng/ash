@@ -218,6 +218,13 @@ pub enum BrowserPerformActionDto {
         target_id: String,
         target: BrowserElementTargetDto,
     },
+    RequestUserControl {
+        target_id: String,
+    },
+    Download {
+        target_id: String,
+        target: BrowserElementTargetDto,
+    },
     Hover {
         target_id: String,
         target: BrowserElementTargetDto,
@@ -261,6 +268,8 @@ impl BrowserPerformActionDto {
             Self::Cdp { target_id, .. }
             | Self::Navigate { target_id, .. }
             | Self::Click { target_id, .. }
+            | Self::RequestUserControl { target_id }
+            | Self::Download { target_id, .. }
             | Self::Hover { target_id, .. }
             | Self::Drag { target_id, .. }
             | Self::HandleDialog { target_id, .. }

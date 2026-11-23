@@ -85,6 +85,13 @@ pub enum BrowserAction {
         target_id: BrowserTargetId,
         target: BrowserElementTarget,
     },
+    RequestUserControl {
+        target_id: BrowserTargetId,
+    },
+    Download {
+        target_id: BrowserTargetId,
+        target: BrowserElementTarget,
+    },
     Hover {
         target_id: BrowserTargetId,
         target: BrowserElementTarget,

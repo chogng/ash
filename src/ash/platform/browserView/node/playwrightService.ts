@@ -132,7 +132,9 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		});
 	}
 	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction): Promise<string | undefined> {
-		if (action.type === 'cdp') { throw new Error('CDP connections belong to Main'); }
+		if (action.type === 'cdp' || action.type === 'download' || action.type === 'requestUserControl') {
+			throw new Error('Browser action belongs to Main');
+		}
 		return this.run(operationId, sessionId, pageId, async (connected, signal) => {
 			const { page, cdp } = connected;
 			if (action.type === 'handleDialog') {

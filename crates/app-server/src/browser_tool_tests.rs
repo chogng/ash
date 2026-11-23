@@ -12,7 +12,7 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
         ResourceStore::default(),
     )))));
     let definitions = service.definitions();
-    assert_eq!(definitions.len(), 20);
+    assert_eq!(definitions.len(), 22);
     assert!(definitions.iter().all(|definition| definition.strict));
     assert!(
         definitions
@@ -37,6 +37,40 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
         BrowserToolPolicy.decide(&review, &CancellationSource::new().token()),
         Ok(ExecutionDecision::AskUser(_))
     ));
+}
+
+#[test]
+fn browser_user_control_and_download_use_the_existing_target_review() {
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
+    for (tool, arguments) in [
+        (
+            "browser_request_user_control",
+            json!({"target_id": "browser_target_1"}),
+        ),
+        (
+            "browser_download",
+            json!({"target_id": "browser_target_1", "node_id": "5"}),
+        ),
+    ] {
+        let tool = call(tool, arguments);
+        let request = service.materialize(&tool).unwrap();
+        assert_eq!(
+            request.target_id(),
+            Some(&BrowserTargetId("browser_target_1".into()))
+        );
+        let review = service.prepare(&tool).unwrap();
+        assert_eq!(review.action().kind(), &ActionKind::BrowserInteraction);
+    }
+    assert!(
+        service
+            .materialize(&call(
+                "browser_download",
+                json!({"target_id": "browser_target_1", "node_id": "0"}),
+            ))
+            .is_err()
+    );
 }
 
 #[test]
