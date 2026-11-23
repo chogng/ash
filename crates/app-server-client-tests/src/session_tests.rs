@@ -171,7 +171,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
                 ide_window_id: None,
                 thread_id: created_thread.thread_id,
                 expected_sequence: 1,
-                mode: ash_protocol::CollaborationMode::Agent,
+                mode: ash_protocol::AgentMode::Agent,
                 approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: Some(ModelRef::new(
                     ProviderId::new("ollama").unwrap(),

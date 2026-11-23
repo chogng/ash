@@ -953,10 +953,10 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
                 };
                 assert_eq!(body.matches(selected_role.body.trim()).count(), 1);
                 assert!(!body.contains(other_role.body.trim()));
-                for (mode, asset) in &messages.collaboration_modes {
+                for (mode, asset) in &messages.agent_modes {
                     assert_eq!(
                         body.matches(asset.body.trim()).count(),
-                        usize::from(*mode == ash_protocol::CollaborationMode::Agent)
+                        usize::from(*mode == ash_protocol::AgentMode::Agent)
                     );
                 }
                 for tool in &request.tools {

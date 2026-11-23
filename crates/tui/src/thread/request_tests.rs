@@ -43,7 +43,7 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
-fn submit_prompt_carries_every_collaboration_mode_to_the_app_server() {
+fn submit_prompt_carries_every_agent_mode_to_the_app_server() {
     use ash_app_server_protocol::protocol::session::SessionRequest;
     use ash_app_server_protocol::protocol::session::SessionRequestParams;
     use ash_app_server_protocol::protocol::turn::TurnStartResult;

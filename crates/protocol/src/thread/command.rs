@@ -56,8 +56,8 @@ pub enum ThreadCommand {
         context_policy: crate::ContextCompactionPolicy,
         #[serde(default)]
         kind: TurnKind,
-        #[serde(default, skip_serializing_if = "crate::CollaborationMode::is_agent")]
-        mode: crate::CollaborationMode,
+        #[serde(default, skip_serializing_if = "crate::AgentMode::is_agent")]
+        mode: crate::AgentMode,
         /// Exact instructions selected by the host before durable Turn acceptance.
         ///
         /// `None` exists only so journals written before instruction snapshots remain readable.

@@ -25,7 +25,7 @@ fn catalog_levels(levels: &[ReasoningEffort]) -> Vec<ash_protocol::ModelReasonin
 fn selector(
     levels: &[ReasoningEffort],
     current: Option<ReasoningEffort>,
-    mode: CollaborationMode,
+    mode: AgentMode,
 ) -> EffortSelector {
     EffortSelector::new(&catalog_levels(levels), current, mode)
 }
@@ -62,11 +62,11 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
         ReasoningEffort::Max,
     ];
     for mode in [
-        CollaborationMode::Agent,
-        CollaborationMode::Plan,
-        CollaborationMode::Debug,
-        CollaborationMode::Ask,
-        CollaborationMode::Multitask,
+        AgentMode::Agent,
+        AgentMode::Plan,
+        AgentMode::Debug,
+        AgentMode::Ask,
+        AgentMode::Multitask,
     ] {
         let mut selector = selector(&levels, Some(ReasoningEffort::High), mode);
         key(&mut selector, KeyCode::Left);
@@ -77,12 +77,12 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
             Outcome::Apply { effort: ReasoningEffort::Low, mode: result } if result == mode));
         assert!(matches!(key(&mut selector, KeyCode::Esc), Outcome::Dismiss));
     }
-    let mut selector = selector(&levels, None, CollaborationMode::Multitask);
+    let mut selector = selector(&levels, None, AgentMode::Multitask);
     key(&mut selector, KeyCode::Tab);
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
         Outcome::Apply {
-            mode: CollaborationMode::Agent,
+            mode: AgentMode::Agent,
             ..
         }
     ));
@@ -97,7 +97,7 @@ fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle()
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Low),
-        CollaborationMode::Agent,
+        AgentMode::Agent,
     );
     key(&mut selector, KeyCode::Right);
     let repeat = |code| KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Repeat);
@@ -113,7 +113,7 @@ fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle()
         key(&mut selector, KeyCode::Enter),
         Outcome::Apply {
             effort: ReasoningEffort::Max,
-            mode: CollaborationMode::Agent
+            mode: AgentMode::Agent
         }
     ));
 }
@@ -143,11 +143,7 @@ fn effort_selector_keyboard_selection_colors_every_level_without_filling_the_bac
                 context.danger(),
             ];
             for width in [24, 120] {
-                let mut selector = selector(
-                    &levels,
-                    Some(ReasoningEffort::None),
-                    CollaborationMode::Agent,
-                );
+                let mut selector = selector(&levels, Some(ReasoningEffort::None), AgentMode::Agent);
                 for (selected, effort) in levels.iter().enumerate() {
                     let buffer = render(&selector, width, context);
                     let layout = selector.layout(buffer.area, context);
@@ -199,11 +195,7 @@ fn effort_selector_centers_each_description_line_in_both_languages() {
     for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
         let context = RenderContext::new(&theme, 0).with_language(language);
         for width in [24, 60, 120] {
-            let mut selector = selector(
-                &levels,
-                Some(ReasoningEffort::None),
-                CollaborationMode::Agent,
-            );
+            let mut selector = selector(&levels, Some(ReasoningEffort::None), AgentMode::Agent);
             for effort in levels {
                 let buffer = render(&selector, width, context);
                 let description = selector.layout(buffer.area, context).description;
@@ -246,7 +238,7 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
         let mut selector = selector(
             &[ReasoningEffort::Low, ReasoningEffort::Max],
             Some(ReasoningEffort::Max),
-            CollaborationMode::Agent,
+            AgentMode::Agent,
         );
         let first = render(&selector, 80, context);
         let layout = selector.layout(first.area, context);
@@ -284,7 +276,7 @@ fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::High),
-        CollaborationMode::Agent,
+        AgentMode::Agent,
     );
     for width in [120, 200] {
         let buffer = render(&selector, width, context);
@@ -373,7 +365,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
             model: "test-model".into(),
         });
         let data = crate::models::ModelPickerData::new(catalog, config);
-        let mut selector = data.effort_selector(CollaborationMode::Agent).unwrap();
+        let mut selector = data.effort_selector(AgentMode::Agent).unwrap();
         assert_eq!(
             selector
                 .levels
@@ -434,7 +426,7 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
     ];
     let context = crate::render::test_context();
     for width in [1, 8, 12, 24, 40, 64, 80, 120] {
-        let mut selector = selector(&levels, Some(levels[0]), CollaborationMode::Agent);
+        let mut selector = selector(&levels, Some(levels[0]), AgentMode::Agent);
         for selected in 0..levels.len() {
             let buffer = render(&selector, width, context);
             let layout = selector.layout(buffer.area, context);
@@ -498,16 +490,13 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
             let mut selector = selector(
                 &[ReasoningEffort::Low, ReasoningEffort::High],
                 Some(ReasoningEffort::High),
-                CollaborationMode::Multitask,
+                AgentMode::Multitask,
             );
             let first = render(&selector, 120, context);
             let toggle = selector.layout(first.area, context).toggle;
             let head = (toggle.x, toggle.y);
             let middle = (toggle.x + 4, toggle.y);
-            assert_eq!(
-                first[head].fg,
-                context.mode_color(CollaborationMode::Multitask)
-            );
+            assert_eq!(first[head].fg, context.mode_color(AgentMode::Multitask));
             assert_ne!(first[head].fg, first[middle].fg);
             assert!(first[head].modifier.contains(Modifier::BOLD));
             let halfway = selector.opened + Duration::from_millis(1920);
@@ -529,7 +518,7 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
                 key(&mut selector, KeyCode::Enter),
                 Outcome::Apply {
                     effort: ReasoningEffort::High,
-                    mode: CollaborationMode::Agent
+                    mode: AgentMode::Agent
                 }
             ));
         }
@@ -542,7 +531,7 @@ fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
     let mut selector = selector(
         &[ReasoningEffort::High],
         Some(ReasoningEffort::High),
-        CollaborationMode::Multitask,
+        AgentMode::Multitask,
     );
     selector.tick(selector.opened + Duration::from_millis(1920));
     let mut terminal =
@@ -584,7 +573,7 @@ fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
             key(&mut selector, KeyCode::Enter),
             Outcome::Apply {
                 effort: ReasoningEffort::High,
-                mode: CollaborationMode::Multitask
+                mode: AgentMode::Multitask
             }
         ));
     }
@@ -602,11 +591,7 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
         ReasoningEffort::ExtraHigh,
         ReasoningEffort::Max,
     ];
-    let mut selector = selector(
-        &levels,
-        Some(ReasoningEffort::Max),
-        CollaborationMode::Agent,
-    );
+    let mut selector = selector(&levels, Some(ReasoningEffort::Max), AgentMode::Agent);
     for width in [24, 40, 80] {
         let buffer = render(&selector, width, context);
         assert!(text(&buffer).contains("max"));
@@ -633,7 +618,7 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
         key(&mut selector, KeyCode::Enter),
         Outcome::Apply {
             effort: ReasoningEffort::None,
-            mode: CollaborationMode::Multitask
+            mode: AgentMode::Multitask
         }
     ));
 }
@@ -649,7 +634,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Max),
-        CollaborationMode::Multitask,
+        AgentMode::Multitask,
     );
     let buffer = render(&selector, 60, context);
     let content = text(&buffer);
@@ -672,7 +657,7 @@ fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Low),
-        CollaborationMode::Agent,
+        AgentMode::Agent,
     );
     let mut terminal =
         Terminal::new(TestBackend::new(80, selector.body_rows(80, context))).unwrap();
@@ -718,11 +703,8 @@ fn effort_selector_uses_catalog_copy_and_leaves_unknown_descriptions_empty() {
     let mut screens = Vec::new();
     for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
         let context = RenderContext::new(&theme, 0).with_language(language);
-        let mut selector = EffortSelector::new(
-            &levels,
-            Some(ReasoningEffort::Low),
-            CollaborationMode::Agent,
-        );
+        let mut selector =
+            EffortSelector::new(&levels, Some(ReasoningEffort::Low), AgentMode::Agent);
         assert_eq!(
             selector.description(),
             "Fast responses with lighter reasoning"

@@ -442,7 +442,7 @@ fn init_does_not_import_external_instructions_into_agent_input() {
         .agent_processor()
         .turn_instruction_selection(
             &mut input,
-            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::AgentMode::Agent,
             ash_protocol::CommandInterpretation::Product,
         )
         .unwrap();
@@ -5916,10 +5916,7 @@ fn web_session_exact_watcher_observed_withdrawal_cannot_revive_after_forget() {
 #[test]
 fn literal_messages_bypass_all_product_command_selection() {
     let server = server();
-    for mode in [
-        ash_protocol::CollaborationMode::Agent,
-        ash_protocol::CollaborationMode::Ask,
-    ] {
+    for mode in [ash_protocol::AgentMode::Agent, ash_protocol::AgentMode::Ask] {
         for text in [
             "/init",
             "/init workspace",
@@ -5952,7 +5949,7 @@ fn literal_messages_bypass_all_product_command_selection() {
         .agent_processor()
         .turn_instruction_selection(
             &mut input,
-            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::AgentMode::Agent,
             ash_protocol::CommandInterpretation::Product,
         )
         .unwrap();

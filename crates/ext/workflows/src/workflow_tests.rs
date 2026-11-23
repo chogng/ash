@@ -582,16 +582,16 @@ fn parallel_develop_command_is_not_reinterpreted_as_generic_team_work() {
 #[test]
 fn workflow_delegation_preserves_debug_and_replaces_multitask_with_agent() {
     for mode in [
-        protocol::CollaborationMode::Agent,
-        protocol::CollaborationMode::Debug,
-        protocol::CollaborationMode::Multitask,
+        protocol::AgentMode::Agent,
+        protocol::AgentMode::Debug,
+        protocol::AgentMode::Multitask,
     ] {
         let fixture = Fixture::new(Store::in_memory().unwrap());
         let mut request = fixture.request("begin", "/team improve search");
         request.mode = mode;
         request.instructions = request
             .instructions
-            .with_mode(&collaboration_mode_templates::instructions(mode));
+            .with_mode(&agent_mode_templates::instructions(mode));
         let receipt = fixture
             .runtime()
             .execute(
@@ -616,10 +616,10 @@ fn workflow_delegation_preserves_debug_and_replaces_multitask_with_agent() {
                 .as_ref()
                 .unwrap()
                 .mode_instructions(),
-            Some(&collaboration_mode_templates::instructions(mode.delegated()).as_text()),
+            Some(&agent_mode_templates::instructions(mode.delegated()).as_text()),
         );
         let mut request = fixture.request("begin", "/team improve search");
-        request.mode = protocol::CollaborationMode::Ask;
+        request.mode = protocol::AgentMode::Ask;
         assert!(matches!(
             fixture.runtime().execute(
                 &fixture.root,
@@ -663,11 +663,11 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             root,
         };
         let mut request = fixture.request("start", "/develop durable feature");
-        request.mode = protocol::CollaborationMode::Multitask;
+        request.mode = protocol::AgentMode::Multitask;
         request.reasoning_effort = Some(protocol::ReasoningEffort::High);
         request.instructions = request
             .instructions
-            .with_mode(&collaboration_mode_templates::instructions(request.mode));
+            .with_mode(&agent_mode_templates::instructions(request.mode));
         let plan = fixture
             .runtime()
             .prepare(
@@ -695,10 +695,7 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.recover().unwrap(), 0);
         let snapshot = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(snapshot.turns.len(), 1);
-        assert_eq!(
-            snapshot.turns[0].mode,
-            protocol::CollaborationMode::Multitask
-        );
+        assert_eq!(snapshot.turns[0].mode, protocol::AgentMode::Multitask);
         assert_eq!(
             snapshot.turns[0].reasoning_effort,
             Some(protocol::ReasoningEffort::High)
@@ -727,17 +724,14 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.backend.0.lock().unwrap().len(), 1);
         let child_snapshot = fixture.threads.read_thread(child).unwrap();
         let child_turn = child_snapshot.turns.last().unwrap();
-        assert_eq!(child_turn.mode, protocol::CollaborationMode::Agent);
+        assert_eq!(child_turn.mode, protocol::AgentMode::Agent);
         assert_eq!(
             child_turn
                 .instructions
                 .as_ref()
                 .unwrap()
                 .mode_instructions(),
-            Some(
-                &collaboration_mode_templates::instructions(protocol::CollaborationMode::Agent)
-                    .as_text()
-            ),
+            Some(&agent_mode_templates::instructions(protocol::AgentMode::Agent).as_text()),
         );
         fixture.complete(child, "ready", "durable intent");
         fixture.command("accept", "/develop accept 1").unwrap();

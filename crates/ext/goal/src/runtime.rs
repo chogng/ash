@@ -58,7 +58,7 @@ impl GoalExtension {
         if completed_turn.kind != protocol::TurnKind::Coding
             || matches!(
                 completed_turn.mode,
-                protocol::CollaborationMode::Plan | protocol::CollaborationMode::Ask
+                protocol::AgentMode::Plan | protocol::AgentMode::Ask
             )
         {
             return Ok(None);

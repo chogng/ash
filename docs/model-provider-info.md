@@ -233,7 +233,7 @@ definition/runtime 显式声明。
 
 产品内置文本模型的唯一声明来源是 [`crates/model-provider-info/models/`](../crates/model-provider-info/models/) 下按 `provider_id` 分开的 JSON 文件；API 和订阅共享厂商条目。`STATIC_MODEL_CATALOG` 按显式登记的文件顺序一次聚合、校验并提供共享数据。每个条目包含厂商、模型 ID、显示名和可独立修改的完整基础提示词；冻结资产 revision 由 `models-manager` 根据正文摘要生成，不填写在目录中。`context_window` 是默认上下文预算，`max_context_window` 声明可启用的最大预算。省略容量或能力表示未知，不代表不支持。`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
-模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
+模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和Agent 模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
 `builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 将保存的内置接入、已注册供应商和完整自定义声明组装为 registry；未知供应商返回 `UnknownProvider`。端点和默认参数由 `normalize` / `normalize_for` 规范化；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
 

@@ -131,13 +131,13 @@ fn initial_turn_failure_enters_error_state() {
 }
 
 #[test]
-fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
+fn effort_completion_preserves_the_running_turn_and_draft() {
     let mut app = App::new();
     app.set_active_turn(TurnId::new("running").unwrap());
     app.update(crate::thread::Event::TurnActivityChanged(
         crate::thread::TurnActivity::Working,
     ));
-    app.set_collaboration_mode(ash_protocol::CollaborationMode::Plan);
+    app.set_agent_mode(ash_protocol::AgentMode::Plan);
     app.insert_text("next task draft");
     let rows = app.messages().len();
     let config = crate::test_support::empty_config_snapshot();
@@ -169,10 +169,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
     );
     assert_eq!(app.status(), &Status::Working);
     assert!(app.steers_active_turn());
-    assert_eq!(
-        app.collaboration_mode(),
-        ash_protocol::CollaborationMode::Plan
-    );
+    assert_eq!(app.agent_mode(), ash_protocol::AgentMode::Plan);
     assert_eq!(app.input(), "next task draft");
     assert_eq!(app.messages().len(), rows);
     assert_eq!(app.status_line().model_label(), "test-model (high)");

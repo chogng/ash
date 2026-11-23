@@ -17,7 +17,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    fn new(mode: CollaborationMode) -> Self {
+    fn new(mode: AgentMode) -> Self {
         let store = Arc::new(InMemoryThreadStore::default());
         let threads = ThreadController::with_store(store.clone());
         let thread = ThreadId::new("mode-thread").unwrap();
@@ -81,8 +81,8 @@ impl Fixture {
 
     fn change(
         &self,
-        from: CollaborationMode,
-        to: CollaborationMode,
+        from: AgentMode,
+        to: AgentMode,
         authority: ModeChangeAuthority,
     ) -> Result<ChangeTurnModeResult, CoreError> {
         self.threads.change_turn_mode(
@@ -98,30 +98,30 @@ impl Fixture {
     }
 }
 
-fn mode_instructions(mode: CollaborationMode) -> TurnInstructions {
+fn mode_instructions(mode: AgentMode) -> TurnInstructions {
     TurnInstructions::new("test", "approach", "1", format!("Approach: {mode:?}")).unwrap()
 }
 
 #[test]
 fn mode_switch_preserves_rules_and_permissions_across_replay() {
-    let fixture = Fixture::new(CollaborationMode::Agent);
+    let fixture = Fixture::new(AgentMode::Agent);
     let before = fixture.threads.read_thread(&fixture.thread).unwrap();
     let result = fixture
         .change(
-            CollaborationMode::Agent,
-            CollaborationMode::Plan,
+            AgentMode::Agent,
+            AgentMode::Plan,
             ModeChangeAuthority::Agent,
         )
         .unwrap();
     assert!(result.changed);
     let after = fixture.threads.read_thread(&fixture.thread).unwrap();
     let mut expected = before.turns[0].clone();
-    expected.mode = CollaborationMode::Plan;
+    expected.mode = AgentMode::Plan;
     expected.instructions = Some(
         expected
             .instructions
             .unwrap()
-            .with_mode(&mode_instructions(CollaborationMode::Plan)),
+            .with_mode(&mode_instructions(AgentMode::Plan)),
     );
     assert_eq!(after.turns[0], expected);
     assert_eq!(
@@ -131,7 +131,7 @@ fn mode_switch_preserves_rules_and_permissions_across_replay() {
             .unwrap()
             .turns[0]
             .mode,
-        CollaborationMode::Agent
+        AgentMode::Agent
     );
     let reopened = ThreadController::with_store(fixture.store);
     assert_eq!(reopened.read_thread(&fixture.thread).unwrap(), after);
@@ -139,18 +139,14 @@ fn mode_switch_preserves_rules_and_permissions_across_replay() {
 
 #[test]
 fn analysis_mode_requires_user_authority_to_start_execution() {
-    for from in [CollaborationMode::Plan, CollaborationMode::Ask] {
+    for from in [AgentMode::Plan, AgentMode::Ask] {
         let fixture = Fixture::new(from);
         let sequence = fixture
             .threads
             .read_thread(&fixture.thread)
             .unwrap()
             .sequence;
-        for to in [
-            CollaborationMode::Agent,
-            CollaborationMode::Debug,
-            CollaborationMode::Multitask,
-        ] {
+        for to in [AgentMode::Agent, AgentMode::Debug, AgentMode::Multitask] {
             assert!(matches!(
                 fixture.change(from, to, ModeChangeAuthority::Agent),
                 Err(CoreError::Policy(_))
@@ -165,61 +161,49 @@ fn analysis_mode_requires_user_authority_to_start_execution() {
             sequence
         );
         let result = fixture
-            .change(from, CollaborationMode::Agent, ModeChangeAuthority::User)
+            .change(from, AgentMode::Agent, ModeChangeAuthority::User)
             .unwrap();
-        assert_eq!(result.mode, CollaborationMode::Agent);
+        assert_eq!(result.mode, AgentMode::Agent);
     }
 }
 
 #[test]
 fn same_mode_is_idempotent_and_stale_decisions_are_rejected() {
-    let fixture = Fixture::new(CollaborationMode::Plan);
+    let fixture = Fixture::new(AgentMode::Plan);
     let sequence = fixture
         .threads
         .read_thread(&fixture.thread)
         .unwrap()
         .sequence;
     let unchanged = fixture
-        .change(
-            CollaborationMode::Plan,
-            CollaborationMode::Plan,
-            ModeChangeAuthority::Agent,
-        )
+        .change(AgentMode::Plan, AgentMode::Plan, ModeChangeAuthority::Agent)
         .unwrap();
     assert!(!unchanged.changed);
     assert_eq!(unchanged.sequence, sequence);
     fixture
-        .change(
-            CollaborationMode::Plan,
-            CollaborationMode::Ask,
-            ModeChangeAuthority::Agent,
-        )
+        .change(AgentMode::Plan, AgentMode::Ask, ModeChangeAuthority::Agent)
         .unwrap();
     assert!(matches!(
-        fixture.change(
-            CollaborationMode::Plan,
-            CollaborationMode::Agent,
-            ModeChangeAuthority::User
-        ),
+        fixture.change(AgentMode::Plan, AgentMode::Agent, ModeChangeAuthority::User),
         Err(CoreError::Policy(_))
     ));
     assert_eq!(
         fixture.threads.read_thread(&fixture.thread).unwrap().turns[0].mode,
-        CollaborationMode::Ask
+        AgentMode::Ask
     );
 }
 
 #[test]
 fn mode_switch_rejects_terminal_turns() {
-    let fixture = Fixture::new(CollaborationMode::Agent);
+    let fixture = Fixture::new(AgentMode::Agent);
     fixture
         .threads
         .complete_turn(&fixture.thread, &fixture.turn, "done".into())
         .unwrap();
     assert!(matches!(
         fixture.change(
-            CollaborationMode::Agent,
-            CollaborationMode::Debug,
+            AgentMode::Agent,
+            AgentMode::Debug,
             ModeChangeAuthority::User
         ),
         Err(CoreError::Policy(_))

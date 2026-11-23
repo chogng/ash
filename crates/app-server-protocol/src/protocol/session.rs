@@ -9,9 +9,9 @@ use crate::protocol::turn::InputItem;
 use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
+use ash_protocol::AgentMode;
 use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
-use ash_protocol::CollaborationMode;
 use ash_protocol::CommandInterpretation;
 use ash_protocol::ItemId;
 use ash_protocol::ReviewTarget;
@@ -348,7 +348,7 @@ pub enum SessionRequest {
         #[ts(type = "number")]
         expected_sequence: u64,
         #[serde(default)]
-        mode: CollaborationMode,
+        mode: AgentMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         approval_mode: Option<ash_protocol::ApprovalMode>,

@@ -419,7 +419,7 @@ impl AppDriver {
             ) {
                 let panel = if self.app.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
                     self.model_picker
-                        .effort_selector(self.app.collaboration_mode())
+                        .effort_selector(self.app.agent_mode())
                         .map(super::command_panel::CommandPanel::Effort)
                 } else {
                     self.model_picker
@@ -992,9 +992,9 @@ fn refresh_server_event(
                             },
                     } = &update.update
                         && app.active_turn() == Some(turn_id)
-                        && app.collaboration_mode() == *from_mode
+                        && app.agent_mode() == *from_mode
                     {
-                        app.set_collaboration_mode(*mode);
+                        app.set_agent_mode(*mode);
                     }
                     ServerRefresh {
                         thread: true,

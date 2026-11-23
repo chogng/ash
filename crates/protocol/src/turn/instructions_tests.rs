@@ -18,7 +18,7 @@ fn frozen_model_messages_restore_all_assets_and_reject_changed_text() {
         digest: crate::ContentDigest::sha256(base.body().as_bytes()),
         messages: Some(ModelInstructionMessages {
             tools: [(crate::ToolName::new("spawn_agent").unwrap(), asset("TOOL"))].into(),
-            collaboration_modes: [(crate::CollaborationMode::Plan, asset("PLAN"))].into(),
+            agent_modes: [(crate::AgentMode::Plan, asset("PLAN"))].into(),
             root: Some(asset("ROOT")),
             subagent: Some(asset("WORKER")),
         }),

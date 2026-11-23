@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "agent-mode-templates",
+    crate_name = "agent_mode_templates",
+    data = glob(["templates/**"]),
+)

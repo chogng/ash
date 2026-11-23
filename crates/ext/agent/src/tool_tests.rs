@@ -172,11 +172,11 @@ fn refuses_execution_without_durable_turn_identity() {
 #[test]
 fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
     for mode in [
-        protocol::CollaborationMode::Agent,
-        protocol::CollaborationMode::Plan,
-        protocol::CollaborationMode::Debug,
-        protocol::CollaborationMode::Multitask,
-        protocol::CollaborationMode::Ask,
+        protocol::AgentMode::Agent,
+        protocol::AgentMode::Plan,
+        protocol::AgentMode::Debug,
+        protocol::AgentMode::Multitask,
+        protocol::AgentMode::Ask,
     ] {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
@@ -245,7 +245,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                     kind: protocol::TurnKind::Coding,
                     instructions: prompts::AGENT_INSTRUCTIONS
                         .freeze()
-                        .with_mode(&collaboration_mode_templates::instructions(mode)),
+                        .with_mode(&agent_mode_templates::instructions(mode)),
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: protocol::ApprovalMode::Manual,
                     tool_mode: protocol::ToolMode::Direct,
@@ -347,7 +347,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                 .as_ref()
                 .unwrap()
                 .mode_instructions(),
-            Some(&collaboration_mode_templates::instructions(mode.delegated()).as_text())
+            Some(&agent_mode_templates::instructions(mode.delegated()).as_text())
         );
     }
 }

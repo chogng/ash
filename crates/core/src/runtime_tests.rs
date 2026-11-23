@@ -255,17 +255,17 @@ fn submitted_turn_replays_one_receipt_and_rejects_changed_input() {
 }
 
 #[test]
-fn submitted_turn_rejects_replay_with_a_different_collaboration_mode() {
+fn submitted_turn_rejects_replay_with_a_different_agent_mode() {
     let fixture = Fixture::new(Failure::None);
     let runtime = fixture.runtime();
     let mut first_request = fixture.submit("hello");
-    first_request.mode = ash_protocol::CollaborationMode::Plan;
+    first_request.mode = ash_protocol::AgentMode::Plan;
     runtime
         .submit_turn(&fixture.thread_id, first_request)
         .unwrap();
 
     let mut retry = fixture.submit("hello");
-    retry.mode = ash_protocol::CollaborationMode::Debug;
+    retry.mode = ash_protocol::AgentMode::Debug;
     assert!(matches!(
         runtime.submit_turn(&fixture.thread_id, retry),
         Err(CoreError::CommandConflict)
@@ -273,7 +273,7 @@ fn submitted_turn_rejects_replay_with_a_different_collaboration_mode() {
     assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 1);
     assert_eq!(
         runtime.read_thread(&fixture.thread_id).unwrap().turns[0].mode,
-        ash_protocol::CollaborationMode::Plan
+        ash_protocol::AgentMode::Plan
     );
 }
 

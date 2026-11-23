@@ -673,7 +673,7 @@ impl App {
         match outcome {
             CommandPanelOutcome::ExtensionTab(tab) => Some(
                 ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
-                    mode: self.collaboration_mode(),
+                    mode: self.agent_mode(),
                     command: tab.command().definition(),
                     origin: ash_slash_commands::SlashCommandOrigin::Local,
                     display_arguments: String::new(),
@@ -764,7 +764,7 @@ impl App {
             CommandPanelOutcome::Effort(outcome) => match outcome {
                 crate::models::EffortSelectorOutcome::Apply { effort, mode } => {
                     self.close_command_panel();
-                    self.set_collaboration_mode(mode);
+                    self.set_agent_mode(mode);
                     Some(ModelCommand::SetEffort { effort }.into())
                 }
                 crate::models::EffortSelectorOutcome::Dismiss => {
@@ -777,7 +777,7 @@ impl App {
                 self.close_command_panel();
                 match option {
                     crate::thread::composer::options::ComposerOption::Mode(mode) => {
-                        self.set_collaboration_mode(mode);
+                        self.set_agent_mode(mode);
                         None
                     }
                     crate::thread::composer::options::ComposerOption::Policy(policy) => {
@@ -2436,17 +2436,17 @@ impl App {
         Some(ThreadCommand::RefreshQueue.into())
     }
 
-    pub(crate) fn collaboration_mode(&self) -> ash_protocol::CollaborationMode {
+    pub(crate) fn agent_mode(&self) -> ash_protocol::AgentMode {
         self.input_state().mode()
     }
 
     pub(super) fn open_mode_picker(&mut self) {
         self.open_command_panel(CommandPanel::composer_options(
-            crate::thread::composer::options::mode_choices(self.collaboration_mode()),
+            crate::thread::composer::options::mode_choices(self.agent_mode()),
         ));
     }
 
-    pub(super) fn set_collaboration_mode(&mut self, mode: ash_protocol::CollaborationMode) {
+    pub(super) fn set_agent_mode(&mut self, mode: ash_protocol::AgentMode) {
         self.input_state_mut().set_mode(mode);
     }
 
@@ -2531,7 +2531,7 @@ impl App {
             })
             .unwrap_or(0);
         StatusLineRuntime {
-            mode: self.collaboration_mode(),
+            mode: self.agent_mode(),
             language: self.language(),
             plan,
             subagents,
@@ -3679,9 +3679,9 @@ impl App {
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(ThreadCommand::CycleNextApprovalMode.into()),
-            AppKeymapAction::CycleCollaborationMode => {
-                self.set_collaboration_mode(crate::thread::composer::options::next_mode(
-                    self.collaboration_mode(),
+            AppKeymapAction::CycleAgentMode => {
+                self.set_agent_mode(crate::thread::composer::options::next_mode(
+                    self.agent_mode(),
                 ));
                 None
             }
@@ -3807,15 +3807,14 @@ impl App {
                 };
                 if arguments.is_empty() {
                     let choices = if local == Some(TuiSlashCommandAction::Mode) {
-                        options::mode_choices(self.collaboration_mode())
+                        options::mode_choices(self.agent_mode())
                     } else {
                         options::policy_choices(self.approval_mode())
                     };
                     self.open_command_panel(CommandPanel::composer_options(choices));
                 } else {
                     let result = if local == Some(TuiSlashCommandAction::Mode) {
-                        options::parse_mode(&arguments)
-                            .map(|mode| self.set_collaboration_mode(mode))
+                        options::parse_mode(&arguments).map(|mode| self.set_agent_mode(mode))
                     } else {
                         options::parse_policy(&arguments)
                             .map(|policy| self.set_next_approval_mode(policy))
@@ -3832,14 +3831,14 @@ impl App {
                 }
                 let option = invocation
                     .text_arguments()
-                    .and_then(|value| options::parse_effort(&value, self.collaboration_mode()));
+                    .and_then(|value| options::parse_effort(&value, self.agent_mode()));
                 return match option {
                     Ok(options::EffortSelection::Effort(effort)) => {
                         Some(ModelCommand::SetEffort { effort }.into())
                     }
                     Ok(options::EffortSelection::Mode(mode)) => {
-                        self.set_collaboration_mode(mode);
-                        let notice = if mode == ash_protocol::CollaborationMode::Multitask {
+                        self.set_agent_mode(mode);
+                        let notice = if mode == ash_protocol::AgentMode::Multitask {
                             "Multitask enabled. Thinking effort is unchanged."
                         } else {
                             "Multitask disabled. Thinking effort is unchanged."
@@ -3867,7 +3866,7 @@ impl App {
                     self.close_transient_surfaces();
                     let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
                     let submission = crate::thread::composer::ChatSubmission {
-                        mode: self.collaboration_mode(),
+                        mode: self.agent_mode(),
                         command_id: crate::client::new_command_id("input"),
                         display_text: text.clone(),
                         input: vec![crate::thread::composer::ChatInputItem::Text(text)],

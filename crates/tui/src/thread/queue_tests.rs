@@ -45,12 +45,12 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     let mut queue = Queue::default();
     let (id, mut message) = pending(&mut queue, "first");
     message.status = ::queue::QueueStatus::Paused;
-    message.request.mode = ash_protocol::CollaborationMode::Debug;
+    message.request.mode = ash_protocol::AgentMode::Debug;
     queue.apply(vec![message.clone()]).unwrap();
     let mut input = ChatInput::new();
     queue.restore(id, &mut input).unwrap();
     assert_eq!(input.text(), "first");
-    assert_eq!(input.mode(), ash_protocol::CollaborationMode::Debug);
+    assert_eq!(input.mode(), ash_protocol::AgentMode::Debug);
     input.insert_text(" updated");
     let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
     else {
@@ -66,7 +66,7 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     };
     assert_eq!(target.command_id, message.request.command_id);
     assert_eq!(submission.display_text, "first updated");
-    assert_eq!(submission.mode, ash_protocol::CollaborationMode::Debug);
+    assert_eq!(submission.mode, ash_protocol::AgentMode::Debug);
 }
 
 #[test]

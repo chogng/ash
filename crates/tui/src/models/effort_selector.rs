@@ -4,7 +4,7 @@ use crate::keymap::KeyEvent;
 use crate::render::InteractionState;
 use crate::render::RenderContext;
 use crate::widgets::key_hint::KeyHints;
-use ash_protocol::CollaborationMode;
+use ash_protocol::AgentMode;
 use ash_protocol::ReasoningEffort;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
@@ -31,7 +31,7 @@ pub(crate) enum Target {
 pub(crate) enum Outcome {
     Apply {
         effort: ReasoningEffort,
-        mode: CollaborationMode,
+        mode: AgentMode,
     },
     Consumed,
     Dismiss,
@@ -41,7 +41,7 @@ pub(crate) enum Outcome {
 pub(crate) struct EffortSelector {
     levels: Vec<ash_protocol::ModelReasoningEffortOption>,
     selected: usize,
-    original_mode: CollaborationMode,
+    original_mode: AgentMode,
     multitask: bool,
     opened: Instant,
     phase: usize,
@@ -52,7 +52,7 @@ impl EffortSelector {
     pub(super) fn new(
         levels: &[ash_protocol::ModelReasoningEffortOption],
         current: Option<ReasoningEffort>,
-        mode: CollaborationMode,
+        mode: AgentMode,
     ) -> Self {
         // The validated catalog entry supplies at least one level, in provider order.
         assert!(!levels.is_empty());
@@ -62,7 +62,7 @@ impl EffortSelector {
                 .and_then(|value| levels.iter().position(|option| option.effort == value))
                 .unwrap_or(0),
             original_mode: mode,
-            multitask: mode == CollaborationMode::Multitask,
+            multitask: mode == AgentMode::Multitask,
             opened: Instant::now(),
             phase: 0,
             hints: KeyHints::new()
@@ -97,9 +97,9 @@ impl EffortSelector {
                 // Turning cooperation off restores the mode that was edited, rather than
                 // silently replacing Plan, Ask or Debug with an execution mode.
                 let mode = if self.multitask {
-                    CollaborationMode::Multitask
-                } else if self.original_mode == CollaborationMode::Multitask {
-                    CollaborationMode::Agent
+                    AgentMode::Multitask
+                } else if self.original_mode == AgentMode::Multitask {
+                    AgentMode::Agent
                 } else {
                     self.original_mode
                 };
@@ -295,7 +295,7 @@ impl EffortSelector {
             context.success(),
             context.accent(),
             context.function(),
-            context.mode_color(CollaborationMode::Multitask),
+            context.mode_color(AgentMode::Multitask),
         ];
         for LevelLayout {
             index,
@@ -374,7 +374,7 @@ impl EffortSelector {
             context.localize(if self.multitask { "on" } else { "off" })
         );
         let style = Style::default().fg(if self.multitask {
-            context.mode_color(CollaborationMode::Multitask)
+            context.mode_color(AgentMode::Multitask)
         } else {
             context.foreground()
         });

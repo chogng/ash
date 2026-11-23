@@ -974,7 +974,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
 }
 
 #[test]
-fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
+fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
     let selected_model = ModelRef::new(
         ProviderId::new("openai").unwrap(),
         ModelId::new("gpt-6-astra").unwrap(),
@@ -989,11 +989,11 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
         panic!("missing model base");
     };
     for mode in [
-        ash_protocol::CollaborationMode::Agent,
-        ash_protocol::CollaborationMode::Plan,
-        ash_protocol::CollaborationMode::Debug,
-        ash_protocol::CollaborationMode::Multitask,
-        ash_protocol::CollaborationMode::Ask,
+        ash_protocol::AgentMode::Agent,
+        ash_protocol::AgentMode::Plan,
+        ash_protocol::AgentMode::Debug,
+        ash_protocol::AgentMode::Multitask,
+        ash_protocol::AgentMode::Ask,
     ] {
         for text in ["Inspect the module", "/init"] {
             let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -1036,7 +1036,7 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
             assert_eq!(frozen.model_guidance(), Some(&expected));
             let messages = expected.messages().unwrap();
             let body = request.instructions.as_deref().unwrap();
-            for (candidate, asset) in &messages.collaboration_modes {
+            for (candidate, asset) in &messages.agent_modes {
                 assert_eq!(
                     body.matches(asset.body.trim()).count(),
                     usize::from(*candidate == mode)
@@ -1057,7 +1057,7 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                     .count(),
                 1
             );
-            let approach = collaboration_mode_templates::instructions(mode);
+            let approach = agent_mode_templates::instructions(mode);
             assert_eq!(frozen.mode_instructions(), Some(&approach.as_text()));
             assert_eq!(
                 request
@@ -1085,10 +1085,7 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
 
 #[test]
 fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() {
-    for mode in [
-        ash_protocol::CollaborationMode::Plan,
-        ash_protocol::CollaborationMode::Ask,
-    ] {
+    for mode in [ash_protocol::AgentMode::Plan, ash_protocol::AgentMode::Ask] {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
         )));

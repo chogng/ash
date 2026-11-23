@@ -395,13 +395,13 @@ impl RenderTheme {
     pub(super) const fn cursor_color(self) -> Option<[u8; 3]> {
         self.cursor_color
     }
-    pub(super) const fn mode_color(self, mode: ash_protocol::CollaborationMode) -> Color {
+    pub(super) const fn mode_color(self, mode: ash_protocol::AgentMode) -> Color {
         match mode {
-            ash_protocol::CollaborationMode::Agent => self.foreground,
-            ash_protocol::CollaborationMode::Plan => self.mode_plan,
-            ash_protocol::CollaborationMode::Debug => self.mode_debug,
-            ash_protocol::CollaborationMode::Multitask => self.mode_multitask,
-            ash_protocol::CollaborationMode::Ask => self.mode_ask,
+            ash_protocol::AgentMode::Agent => self.foreground,
+            ash_protocol::AgentMode::Plan => self.mode_plan,
+            ash_protocol::AgentMode::Debug => self.mode_debug,
+            ash_protocol::AgentMode::Multitask => self.mode_multitask,
+            ash_protocol::AgentMode::Ask => self.mode_ask,
         }
     }
     pub(crate) const fn accent(self) -> Color {

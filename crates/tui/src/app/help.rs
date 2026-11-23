@@ -153,7 +153,7 @@ impl Shortcuts {
                 .push((key, AppKeymapAction::Interrupt.label()));
         }
         for action in [
-            AppKeymapAction::CycleCollaborationMode,
+            AppKeymapAction::CycleAgentMode,
             AppKeymapAction::DecreaseReasoningEffort,
             AppKeymapAction::IncreaseReasoningEffort,
             AppKeymapAction::CycleApprovalMode,

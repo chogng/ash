@@ -1,6 +1,6 @@
 # Agent 指令组合、模型专化与评测
 
-本文维护 Agent 共同规则、协作模式、Role 指令和模型适配的组合设计，以及性能评测、外部参考和后续修改的证据要求。五种模式、Multitask 边界、切换、队列和自定义模式候选集中维护在 [模式 crate](../collaboration-mode-templates/README.md)。共同规则描述每个 Agent 都遵循的工作约束；协作模式指导当前 Turn 如何处理任务；Role 决定职责与工具上限。尚不能据此声称模式提示运行更快、成本更低或任务完成率更高。
+本文维护 Agent 共同规则、Agent 模式、Role 指令和模型适配的组合设计，以及性能评测、外部参考和后续修改的证据要求。五种模式、Multitask 边界、切换、队列和自定义模式候选集中维护在 [模式 crate](../agent-mode-templates/README.md)。共同规则描述每个 Agent 都遵循的工作约束；Agent 模式指导当前 Turn 如何处理任务；Role 决定职责与工具上限。尚不能据此声称模式提示运行更快、成本更低或任务完成率更高。
 
 > 状态：通用启动、指令组合和准确模型专化入口已实现；已加入离线 benchmark 与行为回归测试。复核日期：2026-09-09。
 > 本地测量使用仓库的优化测试构建，不是 release 或真实模型质量成绩；没有调用收费模型进行任务集评测。
@@ -8,25 +8,25 @@
 
 ## 已确定的方向与待验证的问题
 
-| 项目        | 设计决定                                    | 证据状态                                                                                         |
-| ----------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 指令组合    | 共同规则、当前协作模式与当前 Role 分开组合  | 五种协作模式按 Turn 冻结；Role 已接入根、子 Thread 和审查 Turn                                   |
-| 默认 Agent  | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除                                                                            |
-| Issue 入口  | 页面通过通用 Session 创建契约选择 `issue`   | TUI 已接入，旧执行工作流已移除                                                                   |
-| 默认 worker | 选择 `Default`，不继承父 Role 的协调职责    | 关键词匹配已删除，完整历史继承也保留角色隔离                                                     |
-| 模型专化    | Generic 或准确模型指导，收益经评测后确认    | 内置模型的规格与完整基础正文在 `models/<provider>.json` 同一条目维护；效果未评测，见下文         |
-| 本地性能    | 分别测选择、组装、持久化和并发              | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
-| 模型行为    | 同模型、同 Role、同工具下比较模板           | 尚无任务成功率和成本实测                                                                         |
-| 文档维护    | 设计、当前实现、实验结果分别标注            | 本文建立初始记录                                                                                 |
+| 项目        | 设计决定                                     | 证据状态                                                                                         |
+| ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 指令组合    | 共同规则、当前Agent 模式与当前 Role 分开组合 | 五种Agent 模式按 Turn 冻结；Role 已接入根、子 Thread 和审查 Turn                                 |
+| 默认 Agent  | `Default` 使用正常执行配置，不读取专用 Role  | `general.toml` 已删除                                                                            |
+| Issue 入口  | 页面通过通用 Session 创建契约选择 `issue`    | TUI 已接入，旧执行工作流已移除                                                                   |
+| 默认 worker | 选择 `Default`，不继承父 Role 的协调职责     | 关键词匹配已删除，完整历史继承也保留角色隔离                                                     |
+| 模型专化    | Generic 或准确模型指导，收益经评测后确认     | 内置模型的规格与完整基础正文在 `models/<provider>.json` 同一条目维护；效果未评测，见下文         |
+| 本地性能    | 分别测选择、组装、持久化和并发               | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
+| 模型行为    | 同模型、同 Role、同工具下比较模板            | 尚无任务成功率和成本实测                                                                         |
+| 文档维护    | 设计、当前实现、实验结果分别标注             | 本文建立初始记录                                                                                 |
 
 ## 组合契约
 
-组合发生在共同规则、协作模式、模型指导与角色职责之间；模式决定当前 Turn 的处理方式，Role 决定 Agent 的职责和执行能力。更换模式不更换 Role，也不改变工具授权。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
+组合发生在共同规则、Agent 模式、模型指导与角色职责之间；模式决定当前 Turn 的处理方式，Role 决定 Agent 的职责和执行能力。更换模式不更换 Role，也不改变工具授权。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
 
 | 内容                      | 表达什么                                                         | 目标 owner                                                                      |
 | ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | `models/<provider>.json` 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
-| 协作模式                  | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式        | Collaboration Mode Templates；模式标识由 Protocol 定义                          |
+| Agent 模式                | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式        | Agent Mode Templates；模式标识由 Protocol 定义                                  |
 | 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | `models/<provider>.json`；Models Manager 选择并冻结                             |
 | Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                                     |
 | 工具与运行信息            | 实际可调用工具、环境、父子关系和取消状态                         | 各执行领域；Core 组装                                                           |
@@ -34,7 +34,7 @@
 
 - 共同规则不写“必须亲自编码”或“必须委托”。这些是职责选择，会与 `issue` 等角色冲突。
 - `Default` 不加载专用 Role 正文。正常执行能力来自共同规则、任务和实际工具，不依赖额外的通用 worker 文件。
-- 协作模式模板只指导如何处理当前 Turn，不声明或增加 Tool、Skill、目录、网络、委托等能力；模式和 Role 可独立选择。
+- Agent 模式模板只指导如何处理当前 Turn，不声明或增加 Tool、Skill、目录、网络、委托等能力；模式和 Role 可独立选择。
 - 新 Turn 冻结所选模式模板与当前 Agent 指令。旧 Turn 保留已冻结的指令，切换模式只影响后续新 Turn。
 - 创建 worker 时重新组装指令，只传递允许的任务上下文。父 Role 不因完整历史复制而成为子 Agent 的有效角色指令。
 - Issue 内容作为任务材料输入。Issue Manager 不拥有计划执行、assignment 或调度状态机；GitHub 操作由 Plugin 提供，委托由通用多 Agent 能力执行。
@@ -47,17 +47,17 @@
 
 本次按本地 Codex 提交 `73a1148c9c775c2a4616ce5096291740a00ed68a` 的 `codex-rs/prompts` 逐项核对，并按 Ash 已有执行入口补齐。下表维护采用范围，不以目录或文件数相同作为完成标准。
 
-| Codex 资产/模块                                               | Ash 对应入口                                                                                                        | 当前差异与接线                                                                                          |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-collaboration-mode-templates`](../collaboration-mode-templates/README.md)、`CollaborationMode`、Turn 指令组合 | 五种模式各有独立文本；App Server 把选中的模板与当前 Agent 指令冻结进新 Turn，不替换共同规则或 Role      |
-| `permissions_instructions` 与 `templates/permissions`         | [`permissions_instructions`](../prompts/src/permissions.rs)                                                         | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
-| 沙箱 read-only/workspace-write/full-access                    | `templates/permissions/actions.md`                                                                                  | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
-| approval never/on-request/unless-trusted、扩展权限工具        | `templates/permissions/approval/*`                                                                                  | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
-| compact prompt / summary prefix                               | [`compact.rs`](../prompts/src/compact.rs)                                                                           | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
-| review rubric / review request                                | [角色正文](../agent-roles/assets/reviewer.md)、[目标渲染](../prompts/src/review.rs)                                 | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
-| review exit success / interrupted                             | `review_exit_prompt`                                                                                                | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
-| 普通 Turn 中断说明                                            | `TURN_INTERRUPTED_PROMPT`                                                                                           | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
-| realtime start / end / backend                                | 尚未接入                                                                                                            | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
+| Codex 资产/模块                                               | Ash 对应入口                                                                                | 当前差异与接线                                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-agent-mode-templates`](../agent-mode-templates/README.md)、`AgentMode`、Turn 指令组合 | 五种模式各有独立文本；App Server 把选中的模板与当前 Agent 指令冻结进新 Turn，不替换共同规则或 Role      |
+| `permissions_instructions` 与 `templates/permissions`         | [`permissions_instructions`](../prompts/src/permissions.rs)                                 | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
+| 沙箱 read-only/workspace-write/full-access                    | `templates/permissions/actions.md`                                                          | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
+| approval never/on-request/unless-trusted、扩展权限工具        | `templates/permissions/approval/*`                                                          | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
+| compact prompt / summary prefix                               | [`compact.rs`](../prompts/src/compact.rs)                                                   | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
+| review rubric / review request                                | [角色正文](../agent-roles/assets/reviewer.md)、[目标渲染](../prompts/src/review.rs)         | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
+| review exit success / interrupted                             | `review_exit_prompt`                                                                        | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
+| 普通 Turn 中断说明                                            | `TURN_INTERRUPTED_PROMPT`                                                                   | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
+| realtime start / end / backend                                | 尚未接入                                                                                    | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
 
 参考源码：[模块与导出](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/lib.rs)、[权限组装](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/permissions_instructions.rs)、[审查结束](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/review_exit.rs)、[实时语音资产入口](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/realtime.rs)。
 
@@ -124,7 +124,7 @@ Core 接收：冻结基础正文 + 按实际模式和根／子身份选择的模
 
 ## 内置模型指导初版
 
-当前内置模型的完整基础提示词与规格统一登记在 [模型目录](../model-provider-info/models/)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
+当前内置模型的完整基础提示词与规格统一登记在 [模型目录](../model-provider-info/models/)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和Agent 模式继续由运行时组合。
 
 目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`collaboration_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
@@ -325,14 +325,14 @@ general.toml sha256:98bed24189700a9d836b2217f32e85f9d3cb3d5da234782d549cdcc00e91
 
 ### 资料分工
 
-| 资料                                                    | 维护内容                                                                   |
-| ------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 本文                                                    | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口                   |
-| [模式 crate](../collaboration-mode-templates/README.md) | 五种模式的统一行为、Multitask 边界、队列、子任务、参考资料与自定义模式候选 |
-| `docs/agents.md`                                        | Role 选择、定义及启动契约；当前实现单独标注                                |
-| 所属 crate README                                       | 当前职责、真实入口和已实现状态；不提前写成已迁移                           |
-| 模板源码                                                | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文                    |
-| 实验记录                                                | 固定输入、运行配置、原始结果、评分规则、统计和接受决定                     |
+| 资料                                            | 维护内容                                                                   |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| 本文                                            | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口                   |
+| [模式 crate](../agent-mode-templates/README.md) | 五种模式的统一行为、Multitask 边界、队列、子任务、参考资料与自定义模式候选 |
+| `docs/agents.md`                                | Role 选择、定义及启动契约；当前实现单独标注                                |
+| 所属 crate README                               | 当前职责、真实入口和已实现状态；不提前写成已迁移                           |
+| 模板源码                                        | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文                    |
+| 实验记录                                        | 固定输入、运行配置、原始结果、评分规则、统计和接受决定                     |
 
 评测的可审阅摘要放在 `crates/docs/benchmarks/`，仅在产生结果时创建。大体积 trace 与原始数据放在仓库既有或明确配置的实验产物位置，摘要必须记录可访问地址、内容摘要和保存期限；临时目录不能成为长期证据入口。
 

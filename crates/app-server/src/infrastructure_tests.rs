@@ -883,10 +883,7 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
         .threads()
         .read_thread(&message.request.thread_id)
         .unwrap();
-    assert_eq!(
-        restored.turns[0].mode,
-        ash_protocol::CollaborationMode::Debug
-    );
+    assert_eq!(restored.turns[0].mode, ash_protocol::AgentMode::Debug);
     assert_eq!(
         restored.turns[0].reasoning_effort,
         Some(ash_protocol::ReasoningEffort::High)
@@ -897,10 +894,7 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
             .as_ref()
             .unwrap()
             .mode_instructions(),
-        Some(
-            &collaboration_mode_templates::instructions(ash_protocol::CollaborationMode::Debug)
-                .as_text()
-        )
+        Some(&agent_mode_templates::instructions(ash_protocol::AgentMode::Debug).as_text())
     );
 }
 
@@ -1908,7 +1902,7 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: ash_protocol::CollaborationMode::Plan,
+                mode: ash_protocol::AgentMode::Plan,
                 command_id: ash_protocol::CommandId::new("active-plan").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,
                 model: None,
@@ -1916,9 +1910,7 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze().with_mode(
-                    &collaboration_mode_templates::instructions(
-                        ash_protocol::CollaborationMode::Plan,
-                    ),
+                    &agent_mode_templates::instructions(ash_protocol::AgentMode::Plan),
                 ),
                 policy_revision: "queue-test".into(),
                 activated_skills: Vec::new(),
@@ -1948,10 +1940,7 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
         queue::Delivery::Rejected(reason) if reason == "steerModeMismatch"));
     let snapshot = server.threads().read_thread(&thread_id).unwrap();
     assert_eq!(snapshot.turns.len(), 1);
-    assert_eq!(
-        snapshot.turns[0].mode,
-        ash_protocol::CollaborationMode::Plan
-    );
+    assert_eq!(snapshot.turns[0].mode, ash_protocol::AgentMode::Plan);
     assert!(
         !snapshot
             .commands
@@ -1980,9 +1969,9 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
 #[test]
 fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
     for mode in [
-        ash_protocol::CollaborationMode::Plan,
-        ash_protocol::CollaborationMode::Ask,
-        ash_protocol::CollaborationMode::Multitask,
+        ash_protocol::AgentMode::Plan,
+        ash_protocol::AgentMode::Ask,
+        ash_protocol::AgentMode::Multitask,
     ] {
         let root = tempfile::tempdir().unwrap();
         let (server, _) = queued_server(root.path());
@@ -2034,7 +2023,7 @@ fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
         );
         assert_eq!(
             turn.instructions.as_ref().unwrap().mode_instructions(),
-            Some(&collaboration_mode_templates::instructions(mode).as_text())
+            Some(&agent_mode_templates::instructions(mode).as_text())
         );
         assert!(
             matches!(server.deliver_queued_message(&message).unwrap(), queue::Delivery::Started(id) if id == turn_id)

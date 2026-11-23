@@ -304,7 +304,7 @@ impl ExecConnection for ServerConnection {
                     ide_window_id: None,
                     thread_id,
                     expected_sequence,
-                    mode: ash_protocol::CollaborationMode::Agent,
+                    mode: ash_protocol::AgentMode::Agent,
                     approval_mode: Some(approval_mode),
                     model,
                     model_routing: None,

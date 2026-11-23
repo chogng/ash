@@ -459,7 +459,7 @@ fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
 }
 
 #[test]
-fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
+fn agent_mode_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
     let fixture = Fixture::new();
     fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
@@ -473,7 +473,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.wait_for_stable_screen("Automatic model · Debug");
     assert!(!process.screen().contains("Next mode:"));
     process.wait_for_stable_screen("⏸ Manual");
-    process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
+    process.assert_snapshot("real/02-terminal/agent-mode-shortcuts");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
     assert!(process.screen().contains("> BOUND-DRAFT≤≥"));

@@ -74,7 +74,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 | 等待批准或回答   | 对应面板处理输入；仍可明确中断          |
 | 取消中           | 抑制重复中断                            |
 
-任务模式通过 `/mode` 或输入框中的 Shift+Tab 选择。按键、颜色和两种屏幕模式的显示见 [LAYOUT.md](LAYOUT.md#任务模式选择与显示)；五种任务模式、队列与 Multitask 的共享行为见 [模式 crate](../collaboration-mode-templates/README.md)。
+任务模式通过 `/mode` 或输入框中的 Shift+Tab 选择。按键、颜色和两种屏幕模式的显示见 [LAYOUT.md](LAYOUT.md#任务模式选择与显示)；五种任务模式、队列与 Multitask 的共享行为见 [模式 crate](../agent-mode-templates/README.md)。
 
 `/permission` 选择下一轮的权限策略，也支持 `manual`、`auto`、`bypassPermissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
 
@@ -132,7 +132,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 
 推理档位按当前 `provider + model` 对应的目录项读取可选值、顺序和默认值。选择、升降与边界判断及配置更新由 [reasoning_effort.rs](src/models/reasoning_effort.rs) 统一处理，快捷键与 `/effort` 共用这条路径。按键重绑由 `keymap` 管理，输入优先级由 App 管理。
 
-`/effort multitask [on|off]` 设置下一次提交的协作模式。省略参数时开启，关闭将 Multitask 改回 Agent。可直接使用 `/mode multitask`。Ultra 通过桌面 Chat 的独立开关按型号和连接保存。执行范围见 [Multitask、Ultra 与 Ultracode](../collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+`/effort multitask [on|off]` 设置下一次提交的Agent 模式。省略参数时开启，关闭将 Multitask 改回 Agent。可直接使用 `/mode multitask`。Ultra 通过桌面 Chat 的独立开关按型号和连接保存。执行范围见 [Multitask、Ultra 与 Ultracode](../agent-mode-templates/agent-modes.md#multitaskultra-与-ultracode)。
 
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`，最多展示 50 项。请求校验查询文本和版本，关闭补全释放句柄；扫描、忽略与排序规则见 [file-search](../file-search/README.md)。
 

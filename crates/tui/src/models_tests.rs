@@ -184,7 +184,7 @@ impl ash_app_server_client::JsonRpcTransport for ConfigTransport {
 }
 
 #[test]
-fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
+fn effort_steps_use_supported_values_and_stop_at_boundaries() {
     let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
     selected.supported_reasoning_efforts = [
         ReasoningEffort::Low,
@@ -264,7 +264,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
 }
 
 #[test]
-fn collaboration_effort_without_a_default_initializes_the_first_supported_level() {
+fn effort_without_a_default_initializes_the_first_supported_level() {
     for command in [
         super::Command::DecreaseEffort,
         super::Command::IncreaseEffort,
@@ -303,7 +303,7 @@ fn collaboration_effort_without_a_default_initializes_the_first_supported_level(
 }
 
 #[test]
-fn collaboration_effort_unsupported_models_do_not_write_config() {
+fn effort_unsupported_models_do_not_write_config() {
     for has_model in [false, true] {
         let mut config = crate::test_support::empty_config_snapshot();
         config.model = has_model.then(|| ModelRefDto {

@@ -130,7 +130,7 @@ fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile
     assert!(matches!(
         &parsed,
         SessionRequest::StartTurn {
-            mode: ash_protocol::CollaborationMode::Plan,
+            mode: ash_protocol::AgentMode::Plan,
             approval_mode: None,
             reasoning_effort: Some(ReasoningEffort::High),
             ..
@@ -165,7 +165,7 @@ fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile
     assert!(matches!(
         parsed,
         SessionRequest::StartTurn {
-            mode: ash_protocol::CollaborationMode::Agent,
+            mode: ash_protocol::AgentMode::Agent,
             reasoning_effort: None,
             ..
         }
@@ -1248,7 +1248,7 @@ fn queued_mode_model_and_effort_round_trip_and_omitted_tool_mode_is_explicitly_u
         "model":{"provider":"test", "model":"model"}, "reasoningEffort":"high", "approvalMode":"manual"});
     let request: crate::protocol::queue::QueueEnqueueParams =
         serde_json::from_value(value.clone()).unwrap();
-    assert_eq!(request.mode, ash_protocol::CollaborationMode::Ask);
+    assert_eq!(request.mode, ash_protocol::AgentMode::Ask);
     assert_eq!(request.tool_mode, None);
     assert_eq!(serde_json::to_value(request).unwrap(), value);
 }

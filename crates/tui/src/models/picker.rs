@@ -224,7 +224,7 @@ impl ModelPickerData {
 
     pub(crate) fn effort_selector(
         &self,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
     ) -> Result<super::EffortSelector, String> {
         let (levels, current) =
             super::reasoning_effort::selected_efforts(&self.config, &self.catalog)

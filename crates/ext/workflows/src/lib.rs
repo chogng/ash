@@ -258,7 +258,7 @@ impl Runtime<'_> {
                 role: selected.role,
                 capability_scope: selected.capability_scope,
                 base_instructions: Some(request.instructions.clone().with_mode(
-                    &collaboration_mode_templates::instructions(request.mode.delegated()),
+                    &agent_mode_templates::instructions(request.mode.delegated()),
                 )),
             })
         } else {

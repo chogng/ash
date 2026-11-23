@@ -46,7 +46,7 @@ fn executor(threads: Arc<ThreadController>, model: Arc<ScriptedModel>) -> TurnEx
 #[test]
 fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
     let (threads, thread_id, turn_id) = started_turn_with_options(
-        protocol::CollaborationMode::Agent,
+        protocol::AgentMode::Agent,
         protocol::ToolMode::Direct,
         Some(protocol::ReasoningEffort::High),
     );
@@ -393,14 +393,14 @@ fn start_session_turn(
 #[test]
 fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() {
     use extension_api::ContinuationContributor;
-    use protocol::CollaborationMode;
+    use protocol::AgentMode;
 
     for mode in [
-        CollaborationMode::Agent,
-        CollaborationMode::Plan,
-        CollaborationMode::Debug,
-        CollaborationMode::Multitask,
-        CollaborationMode::Ask,
+        AgentMode::Agent,
+        AgentMode::Plan,
+        AgentMode::Debug,
+        AgentMode::Multitask,
+        AgentMode::Ask,
     ] {
         let (threads, thread_id, turn_id) =
             started_turn_with_options(mode, protocol::ToolMode::Direct, None);
@@ -413,7 +413,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
         let extension = crate::runtime::GoalExtension::new(&threads);
         let next = extension.next_turn(&thread_id, &turn_id).unwrap();
 
-        if matches!(mode, CollaborationMode::Plan | CollaborationMode::Ask) {
+        if matches!(mode, AgentMode::Plan | AgentMode::Ask) {
             assert!(next.is_none(), "{mode:?} must wait for the user");
             assert!(
                 ContinuationContributor::recover(
@@ -446,10 +446,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
 
 #[test]
 fn analysis_modes_do_not_receive_active_goal_execution_instructions() {
-    for mode in [
-        protocol::CollaborationMode::Plan,
-        protocol::CollaborationMode::Ask,
-    ] {
+    for mode in [protocol::AgentMode::Plan, protocol::AgentMode::Ask] {
         let (threads, thread_id, turn_id) =
             started_turn_with_options(mode, protocol::ToolMode::Direct, None);
         threads
@@ -598,11 +595,7 @@ impl ModelService for ScriptedModel {
 }
 
 fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
-    started_turn_with_options(
-        protocol::CollaborationMode::Agent,
-        protocol::ToolMode::Direct,
-        None,
-    )
+    started_turn_with_options(protocol::AgentMode::Agent, protocol::ToolMode::Direct, None)
 }
 
 fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -650,7 +643,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
 }
 
 fn started_turn_with_options(
-    mode: protocol::CollaborationMode,
+    mode: protocol::AgentMode,
     tool_mode: protocol::ToolMode,
     reasoning_effort: Option<protocol::ReasoningEffort>,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {

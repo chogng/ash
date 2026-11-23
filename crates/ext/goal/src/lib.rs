@@ -54,7 +54,7 @@ impl TurnInputContributor for runtime::GoalExtension {
                 && turn.kind != protocol::TurnKind::Review
                 && !matches!(
                     turn.mode,
-                    protocol::CollaborationMode::Plan | protocol::CollaborationMode::Ask
+                    protocol::AgentMode::Plan | protocol::AgentMode::Ask
                 )
         }) else {
             return Ok(Vec::new());

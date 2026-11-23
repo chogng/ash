@@ -122,7 +122,7 @@ fn validate_model(spec: &StaticModelSpec) -> Result<(), serde_json::Error> {
     let messages = &spec.model_messages;
     let texts = std::iter::once(&messages.system_instructions)
         .chain(messages.tools.values().map(|tool| &tool.description))
-        .chain(messages.collaboration_modes.values())
+        .chain(messages.agent_modes.values())
         .chain(messages.multi_agent.root.iter())
         .chain(messages.multi_agent.subagent.iter());
     let mut bytes = 0;

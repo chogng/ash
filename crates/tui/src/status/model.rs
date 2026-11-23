@@ -26,7 +26,7 @@ const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineRuntime {
-    pub(crate) mode: ash_protocol::CollaborationMode,
+    pub(crate) mode: ash_protocol::AgentMode,
     pub(crate) language: crate::nls::Language,
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) subagents: usize,
@@ -99,7 +99,7 @@ pub(super) enum StatusLineSegmentKind {
     Inserted,
     Removed,
     Progress,
-    Mode(ash_protocol::CollaborationMode),
+    Mode(ash_protocol::AgentMode),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -196,8 +196,8 @@ impl StatusLineModel {
             .then(|| self.model_label())
     }
 
-    pub(crate) fn mode_label(&self, mode: ash_protocol::CollaborationMode) -> Option<&'static str> {
-        (self.item_enabled(StatusLineItem::Mode) && mode != ash_protocol::CollaborationMode::Agent)
+    pub(crate) fn mode_label(&self, mode: ash_protocol::AgentMode) -> Option<&'static str> {
+        (self.item_enabled(StatusLineItem::Mode) && mode != ash_protocol::AgentMode::Agent)
             .then(|| crate::thread::composer::options::mode_label(mode))
     }
 

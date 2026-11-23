@@ -35,8 +35,8 @@ use crossterm::event::MouseEventKind;
 use ratatui::layout::Rect;
 
 #[test]
-fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
-    use ash_protocol::CollaborationMode;
+fn agent_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
+    use ash_protocol::AgentMode;
     use ratatui::layout::Position;
     for (width, language) in [
         (80, crate::nls::Language::English),
@@ -46,7 +46,7 @@ fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_m
         let mut settings = crate::config::TerminalSettings::default();
         settings.set_language(language);
         app.update(crate::config::Event::SettingsReceived(settings));
-        app.set_collaboration_mode(CollaborationMode::Multitask);
+        app.set_agent_mode(AgentMode::Multitask);
         let mut status = crate::status::StatusLineSettings::default();
         status.set(crate::status::StatusLineItem::Mode, true);
         app.update(crate::status::Event::LineSettingsReceived(status));
@@ -60,7 +60,7 @@ fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_m
             ))
         );
         update_pointer_hover(&mut app, area, position.x, position.y);
-        assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+        assert_eq!(app.agent_mode(), AgentMode::Multitask);
         assert!(app.command_panel().is_none());
         activate_pointer_item(&mut app, area, position.x, position.y);
         assert_eq!(
@@ -69,7 +69,7 @@ fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_m
         );
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
+        assert_eq!(app.agent_mode(), AgentMode::Ask);
         assert!(app.chat_input_focused());
     }
 }

@@ -205,7 +205,7 @@ pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SlashCommandInvocation {
-    pub(crate) mode: ash_protocol::CollaborationMode,
+    pub(crate) mode: ash_protocol::AgentMode,
     pub(crate) command: SlashCommandDefinition,
     pub(crate) origin: SlashCommandOrigin,
     pub(crate) display_arguments: String,

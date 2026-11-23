@@ -177,7 +177,7 @@ fn configured_app(mode: ScreenMode) -> App {
     settings.set(StatusLineItem::Context, true);
     settings.set(StatusLineItem::Mode, true);
     app.update(crate::status::Event::LineSettingsReceived(settings));
-    app.set_collaboration_mode(ash_protocol::CollaborationMode::Plan);
+    app.set_agent_mode(ash_protocol::AgentMode::Plan);
     app.chat_panel
         .status_line_mut()
         .apply_model_label("Shared model (high)");

@@ -310,7 +310,7 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
                 context_policy: Default::default(),
                 command_id: CommandId::new("ask-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
-                mode: ash_protocol::CollaborationMode::Ask,
+                mode: ash_protocol::AgentMode::Ask,
                 kind: TurnKind::Coding,
                 model: None,
                 reasoning_effort: None,
@@ -350,6 +350,6 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
             .public_thread()
             .turns[0]
             .mode,
-        ash_protocol::CollaborationMode::Ask
+        ash_protocol::AgentMode::Ask
     );
 }

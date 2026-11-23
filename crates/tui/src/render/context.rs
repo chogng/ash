@@ -159,7 +159,7 @@ impl<'a> RenderContext<'a> {
         self.theme.chat_input_chrome()
     }
 
-    pub(crate) const fn mode_color(self, mode: ash_protocol::CollaborationMode) -> Color {
+    pub(crate) const fn mode_color(self, mode: ash_protocol::AgentMode) -> Color {
         self.theme.mode_color(mode)
     }
     pub(crate) const fn danger(self) -> Color {

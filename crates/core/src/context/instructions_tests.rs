@@ -18,12 +18,9 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
             ),
         ]
         .into(),
-        collaboration_modes: [
-            (ash_protocol::CollaborationMode::Plan, asset("MODEL_PLAN")),
-            (
-                ash_protocol::CollaborationMode::Multitask,
-                asset("MODEL_MULTITASK"),
-            ),
+        agent_modes: [
+            (ash_protocol::AgentMode::Plan, asset("MODEL_PLAN")),
+            (ash_protocol::AgentMode::Multitask, asset("MODEL_MULTITASK")),
         ]
         .into(),
         root: Some(asset("MODEL_ROOT")),
@@ -47,7 +44,7 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
         serde_json::from_value(serde_json::to_value(&base).unwrap()).unwrap();
     for (mode, role, selected_mode, selected_role, absent_mode, absent_role) in [
         (
-            ash_protocol::CollaborationMode::Plan,
+            ash_protocol::AgentMode::Plan,
             AgentInstructionRole::Root,
             "MODEL_PLAN",
             "MODEL_ROOT",
@@ -55,7 +52,7 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
             "MODEL_WORKER",
         ),
         (
-            ash_protocol::CollaborationMode::Multitask,
+            ash_protocol::AgentMode::Multitask,
             AgentInstructionRole::Subagent,
             "MODEL_MULTITASK",
             "MODEL_WORKER",
@@ -245,7 +242,7 @@ fn frozen_bases_and_distinct_guidance_render_once_with_runtime_instructions() {
         let fragments = turn_instruction_fragments(
             &base.with_mode(&mode),
             ash_protocol::ApprovalMode::Manual,
-            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::AgentMode::Agent,
             AgentInstructionRole::Root,
             Vec::new(),
         );

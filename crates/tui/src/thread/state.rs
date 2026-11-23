@@ -43,7 +43,7 @@ impl From<ApprovalMode> for TurnApprovalModes {
 #[derive(Debug, Default)]
 pub(crate) struct ThreadState {
     active_turn: Option<TurnId>,
-    current_mode: Option<ash_protocol::CollaborationMode>,
+    current_mode: Option<ash_protocol::AgentMode>,
     approval_modes: TurnApprovalModes,
     transcript: TranscriptModel,
     stream: StreamDisplay,
@@ -107,7 +107,7 @@ impl ThreadState {
         updates
     }
 
-    pub(crate) fn current_mode(&self) -> Option<ash_protocol::CollaborationMode> {
+    pub(crate) fn current_mode(&self) -> Option<ash_protocol::AgentMode> {
         self.current_mode
     }
 

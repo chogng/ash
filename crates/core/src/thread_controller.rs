@@ -122,7 +122,7 @@ pub struct StartTurnRequest {
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
-    pub mode: ash_protocol::CollaborationMode,
+    pub mode: ash_protocol::AgentMode,
     pub instructions: TurnInstructions,
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
@@ -140,7 +140,7 @@ pub struct StartTurnRequest {
 /// message that was never sent.
 pub struct StartGoalTurnRequest {
     pub context_policy: ash_protocol::ContextCompactionPolicy,
-    pub mode: ash_protocol::CollaborationMode,
+    pub mode: ash_protocol::AgentMode,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
@@ -2097,7 +2097,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind: TurnKind::ContextCompaction,
-                    mode: ash_protocol::CollaborationMode::Agent,
+                    mode: ash_protocol::AgentMode::Agent,
                     instructions: None,
                     directory: None,
                     policy_revision: request.policy_revision.clone(),
@@ -2252,7 +2252,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind,
-                    mode: ash_protocol::CollaborationMode::Agent,
+                    mode: ash_protocol::AgentMode::Agent,
                     instructions: None,
                     directory: None,
                     policy_revision: request.policy_revision.clone(),

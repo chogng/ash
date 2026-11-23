@@ -172,7 +172,7 @@
       "type": "object",
       "properties": {
         "collaboration_modes": {
-          "description": "Additional guidance selected by the active collaboration mode, without changing its permissions.",
+          "description": "Additional guidance selected by the active agent mode, without changing its permissions.",
           "type": "object",
           "properties": {
             "agent": {

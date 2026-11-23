@@ -244,7 +244,7 @@ Core 在现有工具说明之后加入模型专用 `description`，保留工具�
 
 `model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将基础、当前模式和身份指导与运行时指令组装成 `ModelRequest.instructions`，工具指导进入对应的工具说明；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
 
-`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，Bazel 从 `models/*.json` 收集编译资源，行尾规则在根 `.gitattributes`。修改后需重编译并重启；不存在运行时文件扫描或额外生成的合并 JSON。新增厂商目录时创建 `models/<provider>.json`，并在 `src/model_catalog.rs` 的 `BUNDLED_CATALOGS` 登记厂商与文件入口；新增同厂商模型只编辑对应文件。
+`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、Agent 模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，Bazel 从 `models/*.json` 收集编译资源，行尾规则在根 `.gitattributes`。修改后需重编译并重启；不存在运行时文件扫描或额外生成的合并 JSON。新增厂商目录时创建 `models/<provider>.json`，并在 `src/model_catalog.rs` 的 `BUNDLED_CATALOGS` 登记厂商与文件入口；新增同厂商模型只编辑对应文件。
 
 `connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `glm` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 

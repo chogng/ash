@@ -17,8 +17,8 @@ use ash_protocol::ActionKind;
 use ash_protocol::ActionPolicyRevision;
 use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
+use ash_protocol::AgentMode;
 use ash_protocol::CapabilitySet;
-use ash_protocol::CollaborationMode;
 use ash_protocol::PlanReview;
 use ash_protocol::RequestUserInput;
 use ash_protocol::ToolCall;
@@ -91,7 +91,7 @@ impl SwitchModeToolService {
             // user-input surface owns localized controls and accessibility; no extra dialog is used.
             let approve_value = mode_id(args.mode);
             let revise_value = mode_id(from);
-            let plan_review = (from == CollaborationMode::Plan)
+            let plan_review = (from == AgentMode::Plan)
                 .then_some(args.plan)
                 .flatten()
                 .map(|markdown| PlanReview {
@@ -165,7 +165,7 @@ impl SwitchModeToolService {
             ChangeTurnModeRequest {
                 expected_mode: from,
                 mode: args.mode,
-                mode_instructions: collaboration_mode_templates::instructions(args.mode),
+                mode_instructions: agent_mode_templates::instructions(args.mode),
                 authority,
             },
         )?;
@@ -266,7 +266,7 @@ impl ToolService for SwitchModeToolService {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SwitchModeArguments {
-    mode: CollaborationMode,
+    mode: AgentMode,
     reason: String,
     plan: Option<String>,
 }
@@ -292,7 +292,7 @@ fn arguments(call: &ToolCall) -> Result<SwitchModeArguments, CoreError> {
     Ok(args)
 }
 
-fn mode_id(mode: CollaborationMode) -> String {
+fn mode_id(mode: AgentMode) -> String {
     serde_json::to_value(mode)
         .expect("mode serialization is infallible")
         .as_str()
@@ -307,7 +307,7 @@ fn definition() -> ToolDefinition {
         parameters: json!({
             "type": "object",
             "properties": {
-                "mode": {"type": "string", "enum": CollaborationMode::ALL},
+                "mode": {"type": "string", "enum": AgentMode::ALL},
                 "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
                 "plan": {"type": ["string", "null"], "description": "Proposed plan in Markdown when requesting approval to leave Plan mode for implementation. Otherwise null.", "minLength": 1, "maxLength": 16000}
             },

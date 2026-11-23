@@ -2,10 +2,10 @@
 
 mod advisor;
 mod agent;
+mod agent_mode;
 mod approval_mode;
 mod attachment;
 mod automation;
-mod collaboration_mode;
 mod config;
 mod context_policy;
 mod error;
@@ -39,6 +39,7 @@ pub use agent::AgentRoleSelection;
 pub use agent::AgentRoleSnapshot;
 pub use agent::AgentRoleSource;
 pub use agent::FrozenAgentDefinitionRef;
+pub use agent_mode::AgentMode;
 pub use approval_mode::ApprovalModeDefinition;
 pub use approval_mode::ApprovalModeMessage;
 pub use attachment::AttachmentRef;
@@ -56,7 +57,6 @@ pub use automation::AutomationSchedule;
 pub use automation::AutomationSession;
 pub use automation::AutomationStatus;
 pub use automation::UnixMillis;
-pub use collaboration_mode::CollaborationMode;
 pub use config::ApprovalMode;
 pub use config::Patch;
 pub use config::Personality;

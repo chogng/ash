@@ -39,7 +39,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    fn new(from: CollaborationMode, to: CollaborationMode) -> Self {
+    fn new(from: AgentMode, to: AgentMode) -> Self {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
         )));
@@ -75,7 +75,7 @@ impl Fixture {
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS
                         .freeze()
-                        .with_mode(&collaboration_mode_templates::instructions(from)),
+                        .with_mode(&agent_mode_templates::instructions(from)),
                     command_id: CommandId::new("switch-start").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
@@ -121,11 +121,11 @@ impl Fixture {
         }
     }
 
-    fn respond(&self, mode: CollaborationMode) {
+    fn respond(&self, mode: AgentMode) {
         self.respond_with_feedback(mode, None);
     }
 
-    fn respond_with_feedback(&self, mode: CollaborationMode, feedback: Option<&str>) {
+    fn respond_with_feedback(&self, mode: AgentMode, feedback: Option<&str>) {
         let snapshot = self.wait(TurnStatus::WaitingForUserInput);
         assert!(snapshot.turns[0].mode.is_analysis());
         let interaction = snapshot.turns[0].pending_interaction.as_ref().unwrap();
@@ -169,10 +169,10 @@ impl Fixture {
 
 #[test]
 fn switch_mode_reaches_the_next_model_request_and_committed_updates() {
-    let fixture = Fixture::new(CollaborationMode::Agent, CollaborationMode::Plan);
+    let fixture = Fixture::new(AgentMode::Agent, AgentMode::Plan);
     fixture.start();
     let snapshot = fixture.wait(TurnStatus::Completed);
-    assert_eq!(snapshot.turns[0].mode, CollaborationMode::Plan);
+    assert_eq!(snapshot.turns[0].mode, AgentMode::Plan);
     let requests = fixture.model.requests.lock().unwrap();
     assert_eq!(requests.len(), 2);
     assert!(
@@ -195,7 +195,7 @@ fn switch_mode_reaches_the_next_model_request_and_committed_updates() {
         &update.update,
         ash_protocol::ThreadUpdate::Committed {
             event: ash_protocol::ThreadEvent::TurnModeChanged {
-                mode: CollaborationMode::Plan,
+                mode: AgentMode::Plan,
                 ..
             }
         }
@@ -204,23 +204,15 @@ fn switch_mode_reaches_the_next_model_request_and_committed_updates() {
 
 #[test]
 fn leaving_analysis_requires_explicit_input_even_with_permission_bypass() {
-    for from in [CollaborationMode::Plan, CollaborationMode::Ask] {
+    for from in [AgentMode::Plan, AgentMode::Ask] {
         for approved in [true, false] {
-            let fixture = Fixture::new(from, CollaborationMode::Agent);
+            let fixture = Fixture::new(from, AgentMode::Agent);
             fixture.start();
-            fixture.respond(if approved {
-                CollaborationMode::Agent
-            } else {
-                from
-            });
+            fixture.respond(if approved { AgentMode::Agent } else { from });
             let snapshot = fixture.wait(TurnStatus::Completed);
             assert_eq!(
                 snapshot.turns[0].mode,
-                if approved {
-                    CollaborationMode::Agent
-                } else {
-                    from
-                }
+                if approved { AgentMode::Agent } else { from }
             );
             assert!(snapshot.items.iter().any(|item| matches!(item, ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. }
                 if serde_json::from_str::<serde_json::Value>(text).unwrap()["changed"] == approved)));
@@ -230,8 +222,8 @@ fn leaving_analysis_requires_explicit_input_even_with_permission_bypass() {
 
 #[test]
 fn plan_review_sends_feedback_to_the_model_with_the_user_decision() {
-    for mode in [CollaborationMode::Plan, CollaborationMode::Agent] {
-        let fixture = Fixture::new(CollaborationMode::Plan, CollaborationMode::Agent);
+    for mode in [AgentMode::Plan, AgentMode::Agent] {
+        let fixture = Fixture::new(AgentMode::Plan, AgentMode::Agent);
         fixture.start();
         fixture.respond_with_feedback(mode, Some("Cover the reconnect case."));
         let snapshot = fixture.wait(TurnStatus::Completed);
@@ -265,12 +257,12 @@ fn invalid_modes_and_empty_reasons_fail_before_execution() {
     }
     assert_eq!(
         tools.definitions()[0].parameters["properties"]["mode"]["enum"],
-        json!(CollaborationMode::ALL)
+        json!(AgentMode::ALL)
     );
 }
 
 struct SwitchModel {
-    mode: CollaborationMode,
+    mode: AgentMode,
     requests: Mutex<Vec<ModelRequest>>,
 }
 

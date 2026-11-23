@@ -48,8 +48,8 @@ impl ModelInstructionProfile {
                         )
                     })
                     .collect(),
-                collaboration_modes: messages
-                    .collaboration_modes
+                agent_modes: messages
+                    .agent_modes
                     .iter()
                     .map(|(mode, text)| {
                         let name = serde_json::to_value(mode).expect("mode serializes");

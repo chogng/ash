@@ -1953,7 +1953,7 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
             ..Default::default()
         }),
         policy.clone(),
-        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::AgentMode::Plan,
         ash_protocol::ApprovalMode::BypassPermissions,
     );
     assert_eq!(
@@ -1977,10 +1977,7 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
 
 #[test]
 fn analysis_modes_block_mutation_before_review_or_execution_in_every_permission_mode() {
-    for mode in [
-        ash_protocol::CollaborationMode::Plan,
-        ash_protocol::CollaborationMode::Ask,
-    ] {
+    for mode in [ash_protocol::AgentMode::Plan, ash_protocol::AgentMode::Ask] {
         for approval in [
             ash_protocol::ApprovalMode::Manual,
             ash_protocol::ApprovalMode::Auto,
@@ -2033,7 +2030,7 @@ fn analysis_investigation_process_keeps_read_only_sandbox_after_permission_bypas
             ..Default::default()
         }),
         Arc::new(AskPolicy),
-        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::AgentMode::Plan,
         ash_protocol::ApprovalMode::BypassPermissions,
     );
     assert_eq!(
@@ -2075,18 +2072,13 @@ fn fixture_with_approval_mode(
     policy: Arc<dyn ActionPolicyService>,
     approval_mode: ash_protocol::ApprovalMode,
 ) -> Fixture {
-    fixture_with_modes(
-        tools,
-        policy,
-        ash_protocol::CollaborationMode::Agent,
-        approval_mode,
-    )
+    fixture_with_modes(tools, policy, ash_protocol::AgentMode::Agent, approval_mode)
 }
 
 fn fixture_with_modes(
     tools: Arc<ReviewTool>,
     policy: Arc<dyn ActionPolicyService>,
-    mode: ash_protocol::CollaborationMode,
+    mode: ash_protocol::AgentMode,
     approval_mode: ash_protocol::ApprovalMode,
 ) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());

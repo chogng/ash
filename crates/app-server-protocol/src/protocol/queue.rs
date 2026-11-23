@@ -21,7 +21,7 @@ pub struct QueueEnqueueParams {
     pub command_interpretation: Option<CommandInterpretation>,
     pub input: Vec<InputItem>,
     #[serde(default)]
-    pub mode: ash_protocol::CollaborationMode,
+    pub mode: ash_protocol::AgentMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ash_protocol::ModelRef>,

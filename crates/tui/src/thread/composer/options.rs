@@ -3,50 +3,50 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
+use ash_protocol::AgentMode;
 use ash_protocol::ApprovalMode;
-use ash_protocol::CollaborationMode;
 use ash_protocol::ReasoningEffort;
 use std::collections::BTreeMap;
 
-pub(crate) const MODES: [CollaborationMode; 5] = [
-    CollaborationMode::Agent,
-    CollaborationMode::Plan,
-    CollaborationMode::Debug,
-    CollaborationMode::Multitask,
-    CollaborationMode::Ask,
+pub(crate) const MODES: [AgentMode; 5] = [
+    AgentMode::Agent,
+    AgentMode::Plan,
+    AgentMode::Debug,
+    AgentMode::Multitask,
+    AgentMode::Ask,
 ];
 
 /// Composer selectors change the next submission; they never mutate an accepted Turn.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ComposerOption {
-    Mode(CollaborationMode),
+    Mode(AgentMode),
     Policy(ApprovalMode),
     Effort(ReasoningEffort),
 }
 
 pub(crate) type ComposerOptions = ListSelectionSpec<ComposerOption>;
 
-pub(crate) const fn mode_label(mode: CollaborationMode) -> &'static str {
+pub(crate) const fn mode_label(mode: AgentMode) -> &'static str {
     match mode {
-        CollaborationMode::Agent => "Agent",
-        CollaborationMode::Plan => "Plan",
-        CollaborationMode::Debug => "Debug",
-        CollaborationMode::Multitask => "Multitask",
-        CollaborationMode::Ask => "Ask",
+        AgentMode::Agent => "Agent",
+        AgentMode::Plan => "Plan",
+        AgentMode::Debug => "Debug",
+        AgentMode::Multitask => "Multitask",
+        AgentMode::Ask => "Ask",
     }
 }
 
-pub(crate) fn next_mode(mode: CollaborationMode) -> CollaborationMode {
+pub(crate) fn next_mode(mode: AgentMode) -> AgentMode {
     match mode {
-        CollaborationMode::Agent => CollaborationMode::Plan,
-        CollaborationMode::Plan => CollaborationMode::Debug,
-        CollaborationMode::Debug => CollaborationMode::Multitask,
-        CollaborationMode::Multitask => CollaborationMode::Ask,
-        CollaborationMode::Ask => CollaborationMode::Agent,
+        AgentMode::Agent => AgentMode::Plan,
+        AgentMode::Plan => AgentMode::Debug,
+        AgentMode::Debug => AgentMode::Multitask,
+        AgentMode::Multitask => AgentMode::Ask,
+        AgentMode::Ask => AgentMode::Agent,
     }
 }
 
-pub(crate) fn parse_mode(value: &str) -> Result<CollaborationMode, String> {
+pub(crate) fn parse_mode(value: &str) -> Result<AgentMode, String> {
     // The protocol owns stable IDs; display labels and translations may change independently.
     serde_json::from_value(serde_json::Value::String(value.to_ascii_lowercase()))
         .map_err(|_| "Use /mode agent|plan|debug|multitask|ask".into())
@@ -54,19 +54,19 @@ pub(crate) fn parse_mode(value: &str) -> Result<CollaborationMode, String> {
 
 pub(crate) enum EffortSelection {
     Effort(ReasoningEffort),
-    Mode(CollaborationMode),
+    Mode(AgentMode),
 }
 
 pub(crate) fn parse_effort(
     value: &str,
-    current_mode: CollaborationMode,
+    current_mode: AgentMode,
 ) -> Result<EffortSelection, String> {
     let mut arguments = value.split_whitespace();
     let selection = arguments.next().unwrap_or_default().to_ascii_lowercase();
     if selection == "multitask" {
         let mode = match arguments.next().map(str::to_ascii_lowercase).as_deref() {
-            None | Some("on") => CollaborationMode::Multitask,
-            Some("off") if current_mode == CollaborationMode::Multitask => CollaborationMode::Agent,
+            None | Some("on") => AgentMode::Multitask,
+            Some("off") if current_mode == AgentMode::Multitask => AgentMode::Agent,
             Some("off") => current_mode,
             Some(_) => return Err(effort_usage().into()),
         };
@@ -88,16 +88,16 @@ fn effort_usage() -> &'static str {
     "Use /effort <level> or /effort multitask [on|off]"
 }
 
-pub(crate) fn mode_choices(current: CollaborationMode) -> ComposerOptions {
+pub(crate) fn mode_choices(current: AgentMode) -> ComposerOptions {
     choices(
         "Mode",
         MODES.into_iter().map(|mode| {
             let description = match mode {
-                CollaborationMode::Agent => "Complete the task",
-                CollaborationMode::Plan => "Analyze and plan without editing",
-                CollaborationMode::Debug => "Investigate and fix a problem",
-                CollaborationMode::Multitask => "Ash delegates and combines results",
-                CollaborationMode::Ask => "Answer questions without editing",
+                AgentMode::Agent => "Complete the task",
+                AgentMode::Plan => "Analyze and plan without editing",
+                AgentMode::Debug => "Investigate and fix a problem",
+                AgentMode::Multitask => "Ash delegates and combines results",
+                AgentMode::Ask => "Answer questions without editing",
             };
             (
                 mode_label(mode).into(),

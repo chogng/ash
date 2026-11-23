@@ -49,7 +49,7 @@ impl Store {
         root: &ThreadId,
         command: &CommandId,
         input: &[protocol::UserInput],
-        mode: protocol::CollaborationMode,
+        mode: protocol::AgentMode,
         tool_mode: protocol::ToolMode,
         approval_mode: protocol::ApprovalMode,
         automatic_model: bool,
@@ -567,7 +567,7 @@ impl Store {
 
 pub(crate) fn command_request_key(
     input: &[protocol::UserInput],
-    mode: protocol::CollaborationMode,
+    mode: protocol::AgentMode,
     tool_mode: protocol::ToolMode,
     approval_mode: protocol::ApprovalMode,
     automatic_model: bool,

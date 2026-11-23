@@ -159,8 +159,8 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
         .get_mut(&name)
         .unwrap()
         .description = "UPDATED TOOL GUIDANCE".into();
-    spec.model_messages.collaboration_modes.insert(
-        ash_protocol::CollaborationMode::Plan,
+    spec.model_messages.agent_modes.insert(
+        ash_protocol::AgentMode::Plan,
         "UPDATED PLAN GUIDANCE".into(),
     );
     spec.model_messages.multi_agent.root = Some("UPDATED ROOT GUIDANCE".into());
@@ -187,7 +187,7 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
     );
     assert_eq!(new_messages.tools[&name].body, "UPDATED TOOL GUIDANCE");
     assert_eq!(
-        new_messages.collaboration_modes[&ash_protocol::CollaborationMode::Plan].body,
+        new_messages.agent_modes[&ash_protocol::AgentMode::Plan].body,
         "UPDATED PLAN GUIDANCE"
     );
     assert_eq!(

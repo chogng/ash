@@ -1,6 +1,6 @@
 use super::ThreadController;
 use crate::CoreError;
-use ash_protocol::CollaborationMode;
+use ash_protocol::AgentMode;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
@@ -17,15 +17,15 @@ pub enum ModeChangeAuthority {
 
 /// The expected mode binds a user decision to the state in which it was requested.
 pub struct ChangeTurnModeRequest {
-    pub expected_mode: CollaborationMode,
-    pub mode: CollaborationMode,
+    pub expected_mode: AgentMode,
+    pub mode: AgentMode,
     pub mode_instructions: TurnInstructions,
     pub authority: ModeChangeAuthority,
 }
 
 pub struct ChangeTurnModeResult {
     pub sequence: u64,
-    pub mode: CollaborationMode,
+    pub mode: AgentMode,
     pub changed: bool,
 }
 

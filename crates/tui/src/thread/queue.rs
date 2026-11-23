@@ -363,7 +363,7 @@ impl QueueNavigation {
 
 fn submission(
     input: &[ash_protocol::UserInput],
-    mode: ash_protocol::CollaborationMode,
+    mode: ash_protocol::AgentMode,
 ) -> Result<ChatSubmission, String> {
     let mut values = Vec::new();
     let mut display = Vec::new();

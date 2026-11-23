@@ -55,7 +55,7 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
         mutation: super::operations::ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         tool_mode_selection: super::operations::TurnToolModeSelection,
         input: Vec<ash_protocol::UserInput>,
         kind: ash_protocol::TurnKind,
@@ -66,7 +66,7 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
     fn turn_instruction_selection(
         &self,
         input: &mut Vec<ash_protocol::UserInput>,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<super::operations::TurnInstructionSelection, super::RpcError>;
 }

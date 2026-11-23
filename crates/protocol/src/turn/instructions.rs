@@ -242,7 +242,9 @@ impl ModelInstructionSelection {
 #[serde(rename_all = "camelCase")]
 pub struct ModelInstructionMessages {
     pub tools: BTreeMap<crate::ToolName, InstructionText>,
-    pub collaboration_modes: BTreeMap<crate::CollaborationMode, InstructionText>,
+    // Preserve this key in frozen model guidance and history records.
+    #[serde(rename = "collaborationModes")]
+    pub agent_modes: BTreeMap<crate::AgentMode, InstructionText>,
     pub root: Option<InstructionText>,
     pub subagent: Option<InstructionText>,
 }
@@ -252,7 +254,7 @@ impl ModelInstructionMessages {
     pub fn assets(&self) -> impl Iterator<Item = &InstructionText> {
         self.tools
             .values()
-            .chain(self.collaboration_modes.values())
+            .chain(self.agent_modes.values())
             .chain(self.root.iter())
             .chain(self.subagent.iter())
     }

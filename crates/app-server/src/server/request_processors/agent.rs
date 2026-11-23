@@ -363,7 +363,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     self.model_instructions.for_turn(base, model.as_ref())
                 };
                 let mode = latest.map(|turn| turn.mode).unwrap_or_default();
-                base.with_mode(&collaboration_mode_templates::instructions(mode))
+                base.with_mode(&agent_mode_templates::instructions(mode))
             }
         };
         let scope = match &params.scope {
@@ -1058,7 +1058,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     ash_protocol::ApprovalMode::default(),
-                    ash_protocol::CollaborationMode::Ask,
+                    ash_protocol::AgentMode::Ask,
                     TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
                     vec![UserInput::Text { text: question }],
                     ash_protocol::TurnKind::Advisor,
@@ -1283,7 +1283,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         target: &ThreadView,
         command_id: &ash_protocol::CommandId,
         input: &[UserInput],
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         tool_mode: ash_protocol::ToolMode,
         approval_mode: ash_protocol::ApprovalMode,
         selection: &TurnInstructionSelection,
@@ -2012,7 +2012,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: Option<ash_protocol::ApprovalMode>,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         model_selection: TurnModelSelection,
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
         requested_tool_mode: Option<ash_protocol::ToolMode>,
@@ -2047,7 +2047,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
     pub(super) fn turn_instruction_selection(
         &self,
         input: &mut Vec<UserInput>,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<TurnInstructionSelection, RpcError> {
         if command_interpretation == ash_protocol::CommandInterpretation::Literal {
@@ -2058,7 +2058,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             // orchestration. The selected approach still reaches the ordinary model Turn.
             if matches!(
                 mode,
-                ash_protocol::CollaborationMode::Plan | ash_protocol::CollaborationMode::Ask
+                ash_protocol::AgentMode::Plan | ash_protocol::AgentMode::Ask
             ) {
                 return Ok(TurnInstructionSelection::Agent);
             }
@@ -2124,7 +2124,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             mutation,
             thread_id,
             ash_protocol::ApprovalMode::default(),
-            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::AgentMode::Agent,
             TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
@@ -2192,7 +2192,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
-        mode: ash_protocol::CollaborationMode,
+        mode: ash_protocol::AgentMode,
         tool_mode_selection: TurnToolModeSelection,
         input: Vec<UserInput>,
         kind: ash_protocol::TurnKind,
@@ -2268,7 +2268,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         }
         if !matches!(
             mode,
-            ash_protocol::CollaborationMode::Plan | ash_protocol::CollaborationMode::Ask
+            ash_protocol::AgentMode::Plan | ash_protocol::AgentMode::Ask
         ) && matches!(&selection, TurnInstructionSelection::Setup(_))
             && let HookEventDecision::Deny { reason } =
                 self.context.emit_hook_event(&HookEventRequest {
@@ -2338,7 +2338,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             TurnInstructionSelection::Workflow(command) => (Some(command), base),
         };
         let instructions = instructions
-            .with_mode(&collaboration_mode_templates::instructions(mode))
+            .with_mode(&agent_mode_templates::instructions(mode))
             .with_model_guidance(guidance);
         let advisor_default = self
             .config

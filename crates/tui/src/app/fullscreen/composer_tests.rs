@@ -56,7 +56,7 @@ fn composer_focus_keeps_mode_color_and_changes_placeholder_without_moving_the_in
     assert_eq!(cursor, Position::new(4, input.y + 1));
     assert_eq!(
         focused[(2, input.y)].fg,
-        app.render_context().mode_color(app.collaboration_mode())
+        app.render_context().mode_color(app.agent_mode())
     );
     assert!(!text(&focused).contains("Build anything"));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -65,7 +65,7 @@ fn composer_focus_keeps_mode_color_and_changes_placeholder_without_moving_the_in
     assert_eq!(super::super::layout(&app, area).input, input);
     assert_eq!(
         blurred[(2, input.y)].fg,
-        app.render_context().mode_color(app.collaboration_mode())
+        app.render_context().mode_color(app.agent_mode())
     );
     assert_eq!(blurred[(2, input.y + 1)].symbol(), ">");
     assert_eq!(blurred[(4, input.y + 1)].symbol(), "B");
@@ -93,21 +93,21 @@ fn composer_model_label_preserves_the_bottom_rule_and_right_margin() {
 }
 
 #[test]
-fn composer_collaboration_modes_color_both_rules_prompt_and_selector() {
-    use ash_protocol::CollaborationMode;
+fn composer_agent_modes_color_both_rules_prompt_and_selector() {
+    use ash_protocol::AgentMode;
     use ratatui::style::Color;
     for (mode, expected) in [
         (
-            CollaborationMode::Agent,
-            crate::render::test_context().mode_color(CollaborationMode::Agent),
+            AgentMode::Agent,
+            crate::render::test_context().mode_color(AgentMode::Agent),
         ),
-        (CollaborationMode::Plan, Color::Rgb(209, 134, 22)),
-        (CollaborationMode::Debug, Color::Rgb(244, 135, 113)),
-        (CollaborationMode::Multitask, Color::Rgb(177, 128, 215)),
-        (CollaborationMode::Ask, Color::Rgb(137, 209, 133)),
+        (AgentMode::Plan, Color::Rgb(209, 134, 22)),
+        (AgentMode::Debug, Color::Rgb(244, 135, 113)),
+        (AgentMode::Multitask, Color::Rgb(177, 128, 215)),
+        (AgentMode::Ask, Color::Rgb(137, 209, 133)),
     ] {
         let mut app = App::new();
-        app.set_collaboration_mode(mode);
+        app.set_agent_mode(mode);
         let mut status = crate::status::StatusLineSettings::default();
         status.set(crate::status::StatusLineItem::Mode, true);
         app.update(crate::status::Event::LineSettingsReceived(status));
@@ -118,7 +118,7 @@ fn composer_collaboration_modes_color_both_rules_prompt_and_selector() {
         assert_eq!(buffer[(2, input.y + 1)].fg, expected);
         let labels = super::labels(&app, input, app.render_context()).unwrap();
         assert!(labels.model_area.right() <= labels.mode_area.x);
-        if mode == CollaborationMode::Agent {
+        if mode == AgentMode::Agent {
             let row = text(&buffer)
                 .lines()
                 .nth(usize::from(input.bottom() - 1))
@@ -162,7 +162,7 @@ fn composer_collaboration_modes_color_both_rules_prompt_and_selector() {
             )
         );
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert_eq!(app.collaboration_mode(), mode);
+        assert_eq!(app.agent_mode(), mode);
         assert!(app.chat_input_focused());
     }
 }

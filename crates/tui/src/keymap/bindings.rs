@@ -26,7 +26,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AppKeymapAction {
     CycleApprovalMode,
-    CycleCollaborationMode,
+    CycleAgentMode,
     DecreaseReasoningEffort,
     IncreaseReasoningEffort,
     ScreenEscape,
@@ -42,7 +42,8 @@ impl AppKeymapAction {
     pub(crate) const fn command_id(self) -> Option<&'static str> {
         match self {
             Self::CycleApprovalMode => Some("ashCode.action.cycleApprovalMode"),
-            Self::CycleCollaborationMode => Some("ashCode.action.cycleCollaborationMode"),
+            // Keybinding files use this published action ID.
+            Self::CycleAgentMode => Some("ashCode.action.cycleCollaborationMode"),
             Self::DecreaseReasoningEffort => Some("ashCode.action.decreaseReasoningEffort"),
             Self::IncreaseReasoningEffort => Some("ashCode.action.increaseReasoningEffort"),
             Self::ScreenEscape => None,
@@ -63,7 +64,7 @@ impl AppKeymapAction {
 
     const USER_BINDABLE: [Self; 10] = [
         Self::CycleApprovalMode,
-        Self::CycleCollaborationMode,
+        Self::CycleAgentMode,
         Self::DecreaseReasoningEffort,
         Self::IncreaseReasoningEffort,
         Self::OpenRewind,
@@ -77,7 +78,7 @@ impl AppKeymapAction {
     pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
-            Self::CycleCollaborationMode => "Cycle task mode",
+            Self::CycleAgentMode => "Cycle task mode",
             Self::DecreaseReasoningEffort => "Decrease thinking effort",
             Self::IncreaseReasoningEffort => "Increase thinking effort",
             Self::ScreenEscape => "Rewind escape gesture",
@@ -166,7 +167,7 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     },
     AppKeybindingSpec {
         keybinding: "shift+tab",
-        action: AppKeymapAction::CycleCollaborationMode,
+        action: AppKeymapAction::CycleAgentMode,
         condition: AppKeymapCondition::PressWithComposerWithoutSelection,
     },
     AppKeybindingSpec {

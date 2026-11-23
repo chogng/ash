@@ -36,7 +36,7 @@ fn configured_order_controls_status_line_order() {
 }
 
 #[test]
-fn collaboration_mode_is_optional_and_round_trips_after_the_model() {
+fn agent_mode_is_optional_and_round_trips_after_the_model() {
     let defaults = StatusLineSettings::default();
     assert!(!defaults.items().any(|item| item == StatusLineItem::Mode));
     let mut settings = StatusLineSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(

@@ -137,7 +137,7 @@ ash-model-provider = { workspace = true }
 model-provider-info = { workspace = true }
 ash-models-manager = { workspace = true }
 ash-prompts = { workspace = true }
-ash-collaboration-mode-templates = { workspace = true }
+ash-agent-mode-templates = { workspace = true }
 ash-action-policy = { workspace = true }
 ash-execpolicy = { workspace = true }
 ash-plugin = { workspace = true }

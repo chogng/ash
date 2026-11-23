@@ -325,9 +325,9 @@ name = "ash-agent"
 version = "0.1.0"
 dependencies = [
  "ash-action-policy",
+ "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-async-utils",
- "ash-collaboration-mode-templates",
  "ash-core",
  "ash-core-api",
  "ash-instructions",
@@ -400,6 +400,13 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "ash-agent-mode-templates"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
 ]
 
 [[package]]
@@ -622,6 +629,7 @@ dependencies = [
  "ash-agent-environment",
  "ash-agent-message-board",
  "ash-agent-message-board-client",
+ "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-analytics",
  "ash-app-server-daemon",
@@ -645,7 +653,6 @@ dependencies = [
  "ash-codebase",
  "ash-codebase-store",
  "ash-collab",
- "ash-collaboration-mode-templates",
  "ash-config",
  "ash-connectors-extension",
  "ash-context-engine",
@@ -1254,13 +1261,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
-]
-
-[[package]]
-name = "ash-collaboration-mode-templates"
-version = "0.1.0"
-dependencies = [
- "ash-protocol",
 ]
 
 [[package]]
@@ -3994,8 +3994,8 @@ name = "ash-workflows"
 version = "0.1.0"
 dependencies = [
  "ash-agent",
+ "ash-agent-mode-templates",
  "ash-agent-roles",
- "ash-collaboration-mode-templates",
  "ash-core",
  "ash-core-api",
  "ash-prompts",

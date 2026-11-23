@@ -344,7 +344,7 @@ pub struct TurnSnapshot {
     pub started_at_unix_ms: Option<u64>,
     pub duration_ms: Option<u64>,
     pub kind: TurnKind,
-    pub mode: ash_protocol::CollaborationMode,
+    pub mode: ash_protocol::AgentMode,
     pub instructions: Option<TurnInstructions>,
     pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub model: Option<ModelRef>,

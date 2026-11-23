@@ -184,7 +184,7 @@ members = [
     "crates/ollama",
     "crates/ash-mcp",
     "crates/action-policy",
-    "crates/collaboration-mode-templates",
+    "crates/agent-mode-templates",
     "crates/plugin",
     "crates/prompts",
     "crates/protocol",
@@ -602,7 +602,7 @@ ash-ollama = { path = "crates/ollama" }
 ash-action-policy = { path = "crates/action-policy" }
 ash-plugin = { path = "crates/plugin" }
 ash-prompts = { path = "crates/prompts" }
-ash-collaboration-mode-templates = { path = "crates/collaboration-mode-templates" }
+ash-agent-mode-templates = { path = "crates/agent-mode-templates" }
 ash-protocol = { path = "crates/protocol" }
 ash-projects = { path = "crates/projects" }
 ash-product-update = { path = "crates/product-update" }

@@ -27,7 +27,7 @@ pub struct QueueInput {
     pub command_interpretation: CommandInterpretation,
     pub input: Vec<UserInput>,
     #[serde(default)]
-    pub mode: protocol::CollaborationMode,
+    pub mode: protocol::AgentMode,
     #[serde(default)]
     pub model: Option<protocol::ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

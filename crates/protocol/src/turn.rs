@@ -111,7 +111,7 @@ pub struct Turn {
     pub kind: TurnKind,
     /// Approach accepted for this Turn, independent of prompt asset identity.
     #[serde(default)]
-    pub mode: crate::CollaborationMode,
+    pub mode: crate::AgentMode,
     /// Exact instructions frozen when this Turn was accepted.
     ///
     /// Historical Turns written before instruction snapshots were introduced omit this field.

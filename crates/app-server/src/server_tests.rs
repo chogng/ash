@@ -3508,7 +3508,7 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
         .unwrap();
     assert_eq!(
         first_snapshot.turns.last().unwrap().mode,
-        ash_protocol::CollaborationMode::Plan
+        ash_protocol::AgentMode::Plan
     );
     assert_eq!(first_instructions.owner(), "prompts");
     assert_eq!(
@@ -3844,7 +3844,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         first["result"]["value"]["turnId"]
     );
     assert_eq!(child.turns[1].turn_id.as_str(), replacement_turn_id);
-    assert_eq!(child.turns[1].mode, ash_protocol::CollaborationMode::Plan);
+    assert_eq!(child.turns[1].mode, ash_protocol::AgentMode::Plan);
     assert_eq!(
         child
             .commands

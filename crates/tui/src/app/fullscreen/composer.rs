@@ -36,7 +36,7 @@ pub(super) fn draw(
         app,
         &areas.session,
         areas.input,
-        chat_input::ChatInputChrome::Mode(app.collaboration_mode()),
+        chat_input::ChatInputChrome::Mode(app.agent_mode()),
         Some("Build anything"),
         crate::app::chat_view::Pointer {
             hovered: pointer_target(app.fullscreen.pointer.hovered()),
@@ -55,7 +55,7 @@ pub(super) fn draw(
             &super::pointer::PointerTarget::ComposerSetting(Target::Mode),
         );
         let style = Style::default()
-            .fg(context.mode_color(app.collaboration_mode()))
+            .fg(context.mode_color(app.agent_mode()))
             .patch(crate::render::interaction_style(context, interaction));
         frame.render_widget(Paragraph::new(labels.mode).style(style), labels.mode_area);
     }
@@ -80,7 +80,7 @@ fn labels(app: &App, input: Rect, context: crate::render::RenderContext<'_>) -> 
     }
     let mode = app
         .status_line()
-        .mode_label(app.collaboration_mode())
+        .mode_label(app.agent_mode())
         .map(|label| format!(" {} ", context.localize(label)))
         .unwrap_or_default();
     let mode_width = crate::render::display_width(&mode) as u16;

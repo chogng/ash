@@ -435,7 +435,7 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 ### 任务模式选择与显示
 
-任务模式和 fullscreen / inline 是两项独立选择：前者决定下一条任务的工作方式，后者决定终端怎样显示页面。五种任务模式使用 `/mode` 选择，也支持 `/mode agent|plan|debug|multitask|ask`。参数直接按协议中的稳定 ID 解析，不随界面语言或显示名称变化；命令输入不区分 ASCII 大小写。请求、队列和历史继续使用 `CollaborationMode` 强类型保存。共享行为见[五种任务模式](../collaboration-mode-templates/collaboration-modes.md)。
+任务模式和 fullscreen / inline 是两项独立选择：前者决定下一条任务的工作方式，后者决定终端怎样显示页面。五种任务模式使用 `/mode` 选择，也支持 `/mode agent|plan|debug|multitask|ask`。参数直接按协议中的稳定 ID 解析，不随界面语言或显示名称变化；命令输入不区分 ASCII 大小写。请求、队列和历史继续使用 `AgentMode` 强类型保存。共享行为见[五种任务模式](../agent-mode-templates/agent-modes.md)。
 
 输入框聚焦时，Shift+Tab 按 Agent、Plan、Debug、Multitask、Ask 的顺序循环。切换只影响下一条消息；运行中选择其他模式后，Ctrl+Enter 也会排队。弹层继续使用所属组件自己的按键处理。
 

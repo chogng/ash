@@ -1,12 +1,12 @@
+#[cfg(test)]
+#[path = "app/agent_modes_tests.rs"]
+mod agent_modes_tests;
 mod announcement;
 mod chat_panel;
 #[cfg(test)]
 #[path = "app/chat_panel_tests.rs"]
 mod chat_panel_tests;
 mod chat_view;
-#[cfg(test)]
-#[path = "app/collaboration_modes_tests.rs"]
-mod collaboration_modes_tests;
 mod command;
 pub(crate) mod command_panel;
 mod completion;

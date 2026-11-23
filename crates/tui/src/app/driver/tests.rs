@@ -820,7 +820,7 @@ fn queued_work_and_completion_keep_the_origin_recorded_before_a_mode_switch() {
 #[test]
 #[cfg(feature = "in-process-tests")]
 fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice() {
-    use ash_protocol::CollaborationMode;
+    use ash_protocol::AgentMode;
     use ash_protocol::ThreadEvent;
     use ash_protocol::ThreadUpdate;
     use ash_protocol::ThreadUpdateEnvelope;
@@ -858,8 +858,8 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
             event: ThreadEvent::TurnModeChanged {
                 thread_id: snapshot.thread_id,
                 turn_id: ash_protocol::TurnId::new("switch-turn").unwrap(),
-                from_mode: CollaborationMode::Agent,
-                mode: CollaborationMode::Plan,
+                from_mode: AgentMode::Agent,
+                mode: AgentMode::Plan,
                 instructions: ash_protocol::TurnInstructions::new(
                     "test",
                     "mode",
@@ -870,10 +870,10 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
             },
         },
     };
-    for selected in [CollaborationMode::Agent, CollaborationMode::Ask] {
+    for selected in [AgentMode::Agent, AgentMode::Ask] {
         let mut app = App::new();
         app.set_active_turn(ash_protocol::TurnId::new("switch-turn").unwrap());
-        app.set_collaboration_mode(selected);
+        app.set_agent_mode(selected);
         let refresh = super::refresh_server_event(
             crate::client::ClientEvent::ThreadUpdated(Box::new(update.clone())),
             Some(&mut current),
@@ -881,9 +881,9 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
         );
         assert!(refresh.thread);
         assert_eq!(
-            app.collaboration_mode(),
-            if selected == CollaborationMode::Agent {
-                CollaborationMode::Plan
+            app.agent_mode(),
+            if selected == AgentMode::Agent {
+                AgentMode::Plan
             } else {
                 selected
             }
