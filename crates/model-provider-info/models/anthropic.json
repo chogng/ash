@@ -66,7 +66,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -138,7 +138,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -226,7 +226,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -298,7 +298,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -370,7 +370,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -458,7 +458,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -546,7 +546,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -632,7 +632,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -718,7 +718,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -784,7 +784,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
@@ -850,7 +850,7 @@
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
-          "multitask": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
+          "swarm": "When delegation is authorized, divide independent work into bounded tasks with explicit ownership and evidence requirements. Keep dependent or overlapping changes coordinated. Integrate results into one verified outcome; delegation does not transfer responsibility for completion.",
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {

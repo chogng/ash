@@ -432,7 +432,7 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
     let mut request = input("mode-choice");
-    request.mode = protocol::AgentMode::Multitask;
+    request.mode = protocol::AgentMode::Swarm;
     request.model = Some(protocol::ModelRef::new(
         protocol::ProviderId::new("test").unwrap(),
         protocol::ModelId::new("model").unwrap(),

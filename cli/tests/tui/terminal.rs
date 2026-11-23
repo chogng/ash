@@ -474,6 +474,8 @@ fn agent_mode_shortcuts_decode_shift_tab_and_directional_effort_without_changing
     assert!(!process.screen().contains("Next mode:"));
     process.wait_for_stable_screen("⏸ Manual");
     process.assert_snapshot("real/02-terminal/agent-mode-shortcuts");
+    process.back_tab();
+    process.wait_for_stable_screen("Automatic model · Swarm");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
     assert!(process.screen().contains("> BOUND-DRAFT≤≥"));

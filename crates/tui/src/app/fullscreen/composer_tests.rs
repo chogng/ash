@@ -103,7 +103,7 @@ fn composer_agent_modes_color_both_rules_prompt_and_selector() {
         ),
         (AgentMode::Plan, Color::Rgb(209, 134, 22)),
         (AgentMode::Debug, Color::Rgb(244, 135, 113)),
-        (AgentMode::Multitask, Color::Rgb(177, 128, 215)),
+        (AgentMode::Swarm, Color::Rgb(177, 128, 215)),
         (AgentMode::Ask, Color::Rgb(137, 209, 133)),
     ] {
         let mut app = App::new();

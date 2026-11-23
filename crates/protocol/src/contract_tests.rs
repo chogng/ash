@@ -1322,7 +1322,7 @@ fn agent_modes_round_trip_and_delegated_workers_keep_their_approach() {
         (AgentMode::Agent, "agent", AgentMode::Agent),
         (AgentMode::Plan, "plan", AgentMode::Plan),
         (AgentMode::Debug, "debug", AgentMode::Debug),
-        (AgentMode::Multitask, "multitask", AgentMode::Agent),
+        (AgentMode::Swarm, "swarm", AgentMode::Agent),
         (AgentMode::Ask, "ask", AgentMode::Ask),
     ] {
         assert_eq!(serde_json::to_value(mode).unwrap(), json!(name));
@@ -1332,7 +1332,9 @@ fn agent_modes_round_trip_and_delegated_workers_keep_their_approach() {
         );
         assert_eq!(mode.delegated(), child);
     }
-    assert!(serde_json::from_value::<AgentMode>(json!("unknown")).is_err());
+    for invalid in ["multitask", "unknown"] {
+        assert!(serde_json::from_value::<AgentMode>(json!(invalid)).is_err());
+    }
 }
 
 #[test]

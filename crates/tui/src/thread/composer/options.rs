@@ -12,7 +12,7 @@ pub(crate) const MODES: [AgentMode; 5] = [
     AgentMode::Agent,
     AgentMode::Plan,
     AgentMode::Debug,
-    AgentMode::Multitask,
+    AgentMode::Swarm,
     AgentMode::Ask,
 ];
 
@@ -31,7 +31,7 @@ pub(crate) const fn mode_label(mode: AgentMode) -> &'static str {
         AgentMode::Agent => "Agent",
         AgentMode::Plan => "Plan",
         AgentMode::Debug => "Debug",
-        AgentMode::Multitask => "Multitask",
+        AgentMode::Swarm => "Swarm",
         AgentMode::Ask => "Ask",
     }
 }
@@ -40,8 +40,8 @@ pub(crate) fn next_mode(mode: AgentMode) -> AgentMode {
     match mode {
         AgentMode::Agent => AgentMode::Plan,
         AgentMode::Plan => AgentMode::Debug,
-        AgentMode::Debug => AgentMode::Multitask,
-        AgentMode::Multitask => AgentMode::Ask,
+        AgentMode::Debug => AgentMode::Swarm,
+        AgentMode::Swarm => AgentMode::Ask,
         AgentMode::Ask => AgentMode::Agent,
     }
 }
@@ -49,7 +49,7 @@ pub(crate) fn next_mode(mode: AgentMode) -> AgentMode {
 pub(crate) fn parse_mode(value: &str) -> Result<AgentMode, String> {
     // The protocol owns stable IDs; display labels and translations may change independently.
     serde_json::from_value(serde_json::Value::String(value.to_ascii_lowercase()))
-        .map_err(|_| "Use /mode agent|plan|debug|multitask|ask".into())
+        .map_err(|_| "Use /mode agent|plan|debug|swarm|ask".into())
 }
 
 pub(crate) enum EffortSelection {
@@ -63,10 +63,10 @@ pub(crate) fn parse_effort(
 ) -> Result<EffortSelection, String> {
     let mut arguments = value.split_whitespace();
     let selection = arguments.next().unwrap_or_default().to_ascii_lowercase();
-    if selection == "multitask" {
+    if selection == "swarm" {
         let mode = match arguments.next().map(str::to_ascii_lowercase).as_deref() {
-            None | Some("on") => AgentMode::Multitask,
-            Some("off") if current_mode == AgentMode::Multitask => AgentMode::Agent,
+            None | Some("on") => AgentMode::Swarm,
+            Some("off") if current_mode == AgentMode::Swarm => AgentMode::Agent,
             Some("off") => current_mode,
             Some(_) => return Err(effort_usage().into()),
         };
@@ -85,7 +85,7 @@ pub(crate) fn parse_effort(
 }
 
 fn effort_usage() -> &'static str {
-    "Use /effort <level> or /effort multitask [on|off]"
+    "Use /effort <level> or /effort swarm [on|off]"
 }
 
 pub(crate) fn mode_choices(current: AgentMode) -> ComposerOptions {
@@ -96,7 +96,7 @@ pub(crate) fn mode_choices(current: AgentMode) -> ComposerOptions {
                 AgentMode::Agent => "Complete the task",
                 AgentMode::Plan => "Analyze and plan without editing",
                 AgentMode::Debug => "Investigate and fix a problem",
-                AgentMode::Multitask => "Ash delegates and combines results",
+                AgentMode::Swarm => "Ash delegates and combines results",
                 AgentMode::Ask => "Answer questions without editing",
             };
             (

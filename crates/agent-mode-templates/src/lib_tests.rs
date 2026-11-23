@@ -4,7 +4,7 @@ fn every_mode_has_distinct_instructions() {
         super::AGENT,
         super::PLAN,
         super::DEBUG,
-        super::MULTITASK,
+        super::SWARM,
         super::ASK,
     ];
     for template in templates {
@@ -20,14 +20,9 @@ fn every_mode_freezes_its_authored_asset() {
     use protocol::AgentMode;
     for (mode, id, revision, body) in [
         (AgentMode::Agent, "agent", "agent-v3", super::AGENT),
-        (AgentMode::Plan, "plan", "plan-v4", super::PLAN),
+        (AgentMode::Plan, "plan", "plan-v5", super::PLAN),
         (AgentMode::Debug, "debug", "debug-v3", super::DEBUG),
-        (
-            AgentMode::Multitask,
-            "multitask",
-            "multitask-v3",
-            super::MULTITASK,
-        ),
+        (AgentMode::Swarm, "swarm", "swarm-v1", super::SWARM),
         (AgentMode::Ask, "ask", "ask-v4", super::ASK),
     ] {
         let frozen = super::instructions(mode);

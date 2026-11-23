@@ -11,8 +11,9 @@
 /third_party/v8/patches/*.patch whitespace=-blank-at-eol
 /third_party/rules_rs/rust_unwind_link_flags.patch whitespace=-blank-at-eol
 
-# Inline output baselines retain blank cells in fixed-width terminal buffers.
+# Terminal baselines retain blank cells in fixed-width buffers.
 /crates/tui/snapshots/inline/output/*.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/*/agent_modes/*.snap whitespace=-blank-at-eol
 
 # Embed identical shared prompt assets on every platform.
 /crates/prompts/templates/** text eol=lf

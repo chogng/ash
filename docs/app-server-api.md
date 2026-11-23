@@ -165,7 +165,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 10 },
+  "protocolVersion": { "major": 11 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,

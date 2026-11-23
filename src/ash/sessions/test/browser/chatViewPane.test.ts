@@ -1161,7 +1161,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(modeMenu?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.textContent),
-		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
+		['Agent', 'Plan', 'Debug', 'Swarm', 'Ask'],
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot [data-ash-icon-id]')?.getAttribute('data-ash-icon-id') ?? null),
@@ -4262,14 +4262,14 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	await model.selectAutomaticModel();
-	model.selectMode('multitask');
+	model.selectMode('swarm');
 	model.selectApprovalMode('auto');
-	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
+	await model.send('Implement independent steps', 'swarm', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
 		commandId: fake.queuedRequests[0]!.commandId,
-		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
+		sessionId: 'session-1', threadId: 'thread-1', mode: 'swarm',
 		model: undefined, reasoningEffort: undefined,
 		modelRouting: 'auto',
 		commandInterpretation: undefined,
@@ -4278,7 +4278,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	}]);
 	assert.equal(model.inputState.activeMode, 'plan');
 	assert.equal(value.turns[0]!.approvalMode, 'manual');
-	assert.equal(model.inputState.mode, 'multitask');
+	assert.equal(model.inputState.mode, 'swarm');
 });
 
 for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
@@ -4308,7 +4308,7 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		fixture.input.focus();
 		const focused = document.activeElement;
 		const provider = focusedChatHelp(fixture.services);
-		assert.match(provider.provideContent(), /退出到 Agent、Debug 或 Multitask 需要你的选择，并保留权限模式/);
+		assert.match(provider.provideContent(), /退出到 Agent、Debug 或蜂群 需要你的选择，并保留权限模式/);
 		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
 		assert.doesNotMatch(provider.provideContent(), /按 1、2、3/);
 		assert.equal(provider.provideContent().match(/聊天：配置工具/g)?.length, 1);

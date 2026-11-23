@@ -184,10 +184,10 @@
             "debug": {
               "type": "string"
             },
-            "multitask": {
+            "plan": {
               "type": "string"
             },
-            "plan": {
+            "swarm": {
               "type": "string"
             }
           },

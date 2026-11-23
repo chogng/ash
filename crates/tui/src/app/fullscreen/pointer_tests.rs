@@ -46,7 +46,7 @@ fn agent_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
         let mut settings = crate::config::TerminalSettings::default();
         settings.set_language(language);
         app.update(crate::config::Event::SettingsReceived(settings));
-        app.set_agent_mode(AgentMode::Multitask);
+        app.set_agent_mode(AgentMode::Swarm);
         let mut status = crate::status::StatusLineSettings::default();
         status.set(crate::status::StatusLineItem::Mode, true);
         app.update(crate::status::Event::LineSettingsReceived(status));
@@ -60,7 +60,7 @@ fn agent_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
             ))
         );
         update_pointer_hover(&mut app, area, position.x, position.y);
-        assert_eq!(app.agent_mode(), AgentMode::Multitask);
+        assert_eq!(app.agent_mode(), AgentMode::Swarm);
         assert!(app.command_panel().is_none());
         activate_pointer_item(&mut app, area, position.x, position.y);
         assert_eq!(

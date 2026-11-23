@@ -98,7 +98,7 @@ fn legacy_single_asset_remains_a_single_recorded_asset() {
 #[test]
 fn replacing_mode_retains_common_rules_and_model_selection() {
     let shared = TurnInstructions::new("prompts", "common", "v1", "shared rules").unwrap();
-    let parent_mode = TurnInstructions::new("modes", "multitask", "v2", "coordinate").unwrap();
+    let parent_mode = TurnInstructions::new("modes", "swarm", "v2", "coordinate").unwrap();
     let worker_mode = TurnInstructions::new("modes", "agent", "v2", "execute").unwrap();
     let base = TurnInstructions::new("prompts", "task", "v1", "task rules")
         .unwrap()

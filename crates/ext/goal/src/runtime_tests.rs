@@ -399,7 +399,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
         AgentMode::Agent,
         AgentMode::Plan,
         AgentMode::Debug,
-        AgentMode::Multitask,
+        AgentMode::Swarm,
         AgentMode::Ask,
     ] {
         let (threads, thread_id, turn_id) =

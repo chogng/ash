@@ -84,7 +84,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "chatInputChrome" => &mut palette.chat_input_chrome,
         "modePlan" => &mut palette.mode_plan,
         "modeDebug" => &mut palette.mode_debug,
-        "modeMultitask" => &mut palette.mode_multitask,
+        "modeSwarm" => &mut palette.mode_swarm,
         "modeAsk" => &mut palette.mode_ask,
         "danger" => &mut palette.danger,
         "disabledForeground" => &mut palette.disabled_foreground,

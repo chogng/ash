@@ -303,7 +303,7 @@ fn mode_id(mode: AgentMode) -> String {
 fn definition() -> ToolDefinition {
     ToolDefinition {
         name: ToolName::new(SWITCH_MODE_TOOL_NAME).expect("static tool name is valid"),
-        description: "Changes the current approach when the task needs planning, debugging, implementation, delegation or explanation. Use plan to investigate and design without implementing; debug to reproduce and fix a problem; agent to implement; multitask to coordinate delegated work; ask to explain without editing. Supply a short user-facing reason. Do not switch repeatedly or for minor changes. Leaving plan or ask for an execution mode requires an explicit user decision through this tool. A rejected switch keeps the current mode. Permissions, role and tool ceilings remain unchanged. After success, subsequent model invocations use the selected mode instructions.".into(),
+        description: "Changes the current approach when the task needs planning, debugging, implementation, delegation or explanation. Use plan to investigate and design without implementing; debug to reproduce and fix a problem; agent to implement; swarm to coordinate delegated work; ask to explain without editing. Supply a short user-facing reason. Do not switch repeatedly or for minor changes. Leaving plan or ask for an execution mode requires an explicit user decision through this tool. A rejected switch keeps the current mode. Permissions, role and tool ceilings remain unchanged. After success, subsequent model invocations use the selected mode instructions.".into(),
         parameters: json!({
             "type": "object",
             "properties": {

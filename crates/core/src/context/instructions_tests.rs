@@ -20,7 +20,7 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
         .into(),
         agent_modes: [
             (ash_protocol::AgentMode::Plan, asset("MODEL_PLAN")),
-            (ash_protocol::AgentMode::Multitask, asset("MODEL_MULTITASK")),
+            (ash_protocol::AgentMode::Swarm, asset("MODEL_SWARM")),
         ]
         .into(),
         root: Some(asset("MODEL_ROOT")),
@@ -48,13 +48,13 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
             AgentInstructionRole::Root,
             "MODEL_PLAN",
             "MODEL_ROOT",
-            "MODEL_MULTITASK",
+            "MODEL_SWARM",
             "MODEL_WORKER",
         ),
         (
-            ash_protocol::AgentMode::Multitask,
+            ash_protocol::AgentMode::Swarm,
             AgentInstructionRole::Subagent,
-            "MODEL_MULTITASK",
+            "MODEL_SWARM",
             "MODEL_WORKER",
             "MODEL_PLAN",
             "MODEL_ROOT",

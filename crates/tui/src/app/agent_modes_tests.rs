@@ -76,7 +76,7 @@ fn agent_mode_shortcuts_preserve_drafts_permissions_and_history_search() {
         for mode in [
             AgentMode::Plan,
             AgentMode::Debug,
-            AgentMode::Multitask,
+            AgentMode::Swarm,
             AgentMode::Ask,
             AgentMode::Agent,
         ] {
@@ -312,7 +312,7 @@ fn agent_mode_commands_use_protocol_ids_in_every_language() {
                 ("agent", AgentMode::Agent),
                 ("plan", AgentMode::Plan),
                 ("debug", AgentMode::Debug),
-                ("multitask", AgentMode::Multitask),
+                ("swarm", AgentMode::Swarm),
                 ("ask", AgentMode::Ask),
             ] {
                 assert_eq!(serde_json::to_value(mode).unwrap(), id);
@@ -329,7 +329,7 @@ fn agent_mode_commands_use_protocol_ids_in_every_language() {
                     assert!(app.chat_input_focused());
                 }
             }
-            for argument in ["计划", "計画", "custom/example", "unknown"] {
+            for argument in ["计划", "計画", "multitask", "custom/example", "unknown"] {
                 assert_eq!(command(&mut app, &format!("/mode {argument}")), None);
                 assert_eq!(app.agent_mode(), AgentMode::Ask);
                 assert!(app.chat_input_focused());
@@ -360,7 +360,7 @@ fn agent_mode_selector_selects_and_dismisses_in_both_screens() {
         }
         key(&mut app, KeyCode::Down, KeyModifiers::NONE);
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-        assert_eq!(app.agent_mode(), AgentMode::Multitask);
+        assert_eq!(app.agent_mode(), AgentMode::Swarm);
         assert!(app.command_panel().is_none());
         assert!(app.chat_input_focused());
         assert_eq!(app.input(), "draft behind selector");
@@ -381,7 +381,7 @@ fn agent_mode_selector_selects_and_dismisses_in_both_screens() {
                 ScreenMode::Inline
             },
         );
-        assert_eq!(app.agent_mode(), AgentMode::Multitask);
+        assert_eq!(app.agent_mode(), AgentMode::Swarm);
     }
 }
 
@@ -405,7 +405,7 @@ fn agent_mode_permission_and_effort_commands_are_independent() {
     );
     command(&mut app, "/mode unknown");
     assert_eq!(app.agent_mode(), AgentMode::Ask);
-    assert!(render(&app).contains("Use /mode agent|plan|debug|multitask|ask"));
+    assert!(render(&app).contains("Use /mode agent|plan|debug|swarm|ask"));
     crate::tui_assert_snapshot!(app = &app; "agent_mode_option_error_on_home", render(&app));
     command(&mut app, "/permission");
     assert_eq!(
@@ -418,7 +418,7 @@ fn agent_mode_permission_and_effort_commands_are_independent() {
 }
 
 #[test]
-fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
+fn cooperation_aliases_use_ash_swarm_without_changing_effort() {
     use ash_protocol::ReasoningEffort;
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
@@ -438,29 +438,29 @@ fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
                 ),
             ));
             command(&mut app, "/mode plan");
-            assert_eq!(command(&mut app, "/effort multitask"), None);
-            assert_eq!(app.agent_mode(), AgentMode::Multitask);
+            assert_eq!(command(&mut app, "/effort swarm"), None);
+            assert_eq!(app.agent_mode(), AgentMode::Swarm);
             assert_eq!(app.status_line().model_label(), "test-model (high)");
             assert_eq!(app.approval_mode(), ApprovalMode::Manual);
             assert!(app.chat_input_focused());
             assert!(app.input().is_empty());
             assert!(app.command_panel().is_none());
-            assert_eq!(command(&mut app, "/effort multitask off"), None);
+            assert_eq!(command(&mut app, "/effort swarm off"), None);
             assert_eq!(app.agent_mode(), AgentMode::Agent);
             command(&mut app, "/mode plan");
-            command(&mut app, "/effort multitask off");
+            command(&mut app, "/effort swarm off");
             assert_eq!(app.agent_mode(), AgentMode::Plan);
-            command(&mut app, "/effort multitask on");
+            command(&mut app, "/effort swarm on");
             assert_eq!(
                 command(&mut app, "/effort high"),
                 Some(AppCommand::Models(crate::models::Command::SetEffort {
                     effort: ReasoningEffort::High
                 }))
             );
-            assert_eq!(app.agent_mode(), AgentMode::Multitask);
+            assert_eq!(app.agent_mode(), AgentMode::Swarm);
             // Keep the snapshot focused on the final acknowledgement, rather than the matrix.
             app.update(ThreadEvent::TranscriptCleared);
-            command(&mut app, "/effort multitask on");
+            command(&mut app, "/effort swarm on");
             match (screen, language) {
                 (ScreenMode::Fullscreen, crate::nls::Language::English) => {
                     crate::tui_assert_snapshot!(app = &app; "cooperation_alias_fullscreen", render_effort(&app));
@@ -495,6 +495,7 @@ fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
                 "ultra unknown",
                 "ultracode on extra",
                 "max on",
+                "multitask",
             ] {
                 assert_eq!(command(&mut app, &format!("/effort {value}")), None);
                 assert_eq!(app.agent_mode(), AgentMode::Plan);
@@ -510,18 +511,18 @@ fn cooperation_alias_during_a_turn_only_changes_the_next_submission() {
     let turn = running_turn(AgentMode::Debug);
     app.sync_active_turn(&[turn.clone()]);
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    assert_eq!(command(&mut app, "/effort multitask"), None);
+    assert_eq!(command(&mut app, "/effort swarm"), None);
     assert_eq!(app.status(), &super::Status::Working);
     app.sync_active_turn(&[turn]);
-    assert_eq!(app.agent_mode(), AgentMode::Multitask);
+    assert_eq!(app.agent_mode(), AgentMode::Swarm);
     app.insert_text("execute the next task");
     let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
         key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL)
     else {
         panic!("the new cooperation mode must submit a separate queued task")
     };
-    assert_eq!(submission.mode, AgentMode::Multitask);
-    assert_eq!(serde_json::to_value(submission.mode).unwrap(), "multitask");
+    assert_eq!(submission.mode, AgentMode::Swarm);
+    assert_eq!(serde_json::to_value(submission.mode).unwrap(), "swarm");
     assert_eq!(app.queue_view().items[0].text, "execute the next task");
 }
 
@@ -994,7 +995,7 @@ fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
 }
 
 #[test]
-fn fullscreen_effort_confirm_applies_multitask_and_only_supported_levels() {
+fn fullscreen_effort_confirm_applies_swarm_and_only_supported_levels() {
     let data = effort_data();
     let mut app = App::new();
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
@@ -1010,7 +1011,7 @@ fn fullscreen_effort_confirm_applies_multitask_and_only_supported_levels() {
             effort: ash_protocol::ReasoningEffort::Max
         }))
     );
-    assert_eq!(app.agent_mode(), AgentMode::Multitask);
+    assert_eq!(app.agent_mode(), AgentMode::Swarm);
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());
     crate::tui_assert_snapshot!(app = &app; "effort_selector_confirm_restores_composer", render_effort(&app));

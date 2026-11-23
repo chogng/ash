@@ -992,7 +992,7 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
         ash_protocol::AgentMode::Agent,
         ash_protocol::AgentMode::Plan,
         ash_protocol::AgentMode::Debug,
-        ash_protocol::AgentMode::Multitask,
+        ash_protocol::AgentMode::Swarm,
         ash_protocol::AgentMode::Ask,
     ] {
         for text in ["Inspect the module", "/init"] {

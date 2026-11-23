@@ -24,7 +24,7 @@ const LEVEL_CENTER_SPACING: u16 = 12;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Target {
     Level(usize),
-    Multitask,
+    Swarm,
 }
 
 #[derive(Debug)]
@@ -42,7 +42,7 @@ pub(crate) struct EffortSelector {
     levels: Vec<ash_protocol::ModelReasoningEffortOption>,
     selected: usize,
     original_mode: AgentMode,
-    multitask: bool,
+    swarm: bool,
     opened: Instant,
     phase: usize,
     hints: KeyHints,
@@ -62,12 +62,12 @@ impl EffortSelector {
                 .and_then(|value| levels.iter().position(|option| option.effort == value))
                 .unwrap_or(0),
             original_mode: mode,
-            multitask: mode == AgentMode::Multitask,
+            swarm: mode == AgentMode::Swarm,
             opened: Instant::now(),
             phase: 0,
             hints: KeyHints::new()
                 .with_compact_action("←/→", "choose")
-                .with_compact_action("Tab", "toggle multitask")
+                .with_compact_action("Tab", "toggle swarm")
                 .with_compact_action("Enter", "apply")
                 .with_compact_action("Esc", "cancel"),
         }
@@ -91,14 +91,14 @@ impl EffortSelector {
                 ));
             }
             KeyCode::Tab if key.kind == KeyEventKind::Press => {
-                return self.activate(Target::Multitask);
+                return self.activate(Target::Swarm);
             }
             KeyCode::Enter if key.kind == KeyEventKind::Press => {
                 // Turning cooperation off restores the mode that was edited, rather than
                 // silently replacing Plan, Ask or Debug with an execution mode.
-                let mode = if self.multitask {
-                    AgentMode::Multitask
-                } else if self.original_mode == AgentMode::Multitask {
+                let mode = if self.swarm {
+                    AgentMode::Swarm
+                } else if self.original_mode == AgentMode::Swarm {
                     AgentMode::Agent
                 } else {
                     self.original_mode
@@ -117,13 +117,13 @@ impl EffortSelector {
     pub(crate) fn activate(&mut self, target: Target) -> Outcome {
         match target {
             Target::Level(index) => self.selected = index,
-            Target::Multitask => self.multitask = !self.multitask,
+            Target::Swarm => self.swarm = !self.swarm,
         }
         Outcome::Consumed
     }
 
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
-        if self.levels[self.selected].effort != ReasoningEffort::Max && !self.multitask {
+        if self.levels[self.selected].effort != ReasoningEffort::Max && !self.swarm {
             return false;
         }
         let phase = (now.saturating_duration_since(self.opened).as_millis() / 80 % 48) as usize;
@@ -175,7 +175,7 @@ impl EffortSelector {
         let scale_width = (label_span + spacing * intervals)
             .max(end_labels_width)
             .min(area.width);
-        let toggle_width = (crate::render::display_width(&context.localize("Multitask"))
+        let toggle_width = (crate::render::display_width(&context.localize("Swarm"))
             + 2
             + crate::render::display_width(&context.localize("on"))
                 .max(crate::render::display_width(&context.localize("off"))))
@@ -247,7 +247,7 @@ impl EffortSelector {
         }
         let layout = self.layout(area, context);
         if layout.toggle.contains(position) {
-            return Some(Target::Multitask);
+            return Some(Target::Swarm);
         }
         layout.levels.iter().find_map(|level| {
             level
@@ -295,7 +295,7 @@ impl EffortSelector {
             context.success(),
             context.accent(),
             context.function(),
-            context.mode_color(AgentMode::Multitask),
+            context.mode_color(AgentMode::Swarm),
         ];
         for LevelLayout {
             index,
@@ -370,23 +370,23 @@ impl EffortSelector {
         }
         let toggle = format!(
             "{}  {}",
-            context.localize("Multitask"),
-            context.localize(if self.multitask { "on" } else { "off" })
+            context.localize("Swarm"),
+            context.localize(if self.swarm { "on" } else { "off" })
         );
-        let style = Style::default().fg(if self.multitask {
-            context.mode_color(AgentMode::Multitask)
+        let style = Style::default().fg(if self.swarm {
+            context.mode_color(AgentMode::Swarm)
         } else {
             context.foreground()
         });
         let interaction = crate::render::interaction_style(
             context,
             InteractionState {
-                hovered: hovered == Some(Target::Multitask),
-                pressed: pressed == Some(Target::Multitask),
+                hovered: hovered == Some(Target::Swarm),
+                pressed: pressed == Some(Target::Swarm),
                 ..Default::default()
             },
         );
-        let toggle = if self.multitask {
+        let toggle = if self.swarm {
             // The wave blends two theme text colors, independent of whether the
             // host terminal reported its background. Text and the on/off value stay stable.
             Line::from(

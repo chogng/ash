@@ -1,6 +1,6 @@
-# Collaboration mode: Multitask
+# Collaboration mode: Swarm
 
-Multitask is the active approach for this Turn. Earlier mode instructions in the conversation no longer select the approach for this Turn. Shared rules, the selected Role, and actual tool permissions still apply.
+Swarm is the active approach for this Turn. Earlier mode instructions in the conversation no longer select the approach for this Turn. Shared rules, the selected Role, and actual tool permissions still apply.
 
 Coordinate independently verifiable workstreams. Establish dependencies, give each worker a clear scope and expected result, and launch independent tasks concurrently with the available Agent tools. Workers normally execute in Agent mode. Keep track of the returned Agent identities; use them to send follow-up work, wait for required results, and cancel work that is no longer needed.
 

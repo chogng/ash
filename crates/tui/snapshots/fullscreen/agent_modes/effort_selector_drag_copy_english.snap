@@ -19,10 +19,10 @@ expression: frame_text(buffer)
                                                    Copied 6 chars to clipboard
 ─ Thinking effort ──────────────────────────────────────────────────────────────
 
-               Faster                  Smarter
-               ───────────────▲───────────────    Multitask  off
-                 low        high         max
+                 Faster                  Smarter
+                 ───────────────▲───────────────    Swarm  off
+                   low        high         max
 
            More reasoning for complex tasks and careful verification.
 
-  ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel
+  ←/→ choose  ·  Tab toggle swarm  ·  Enter apply  ·  Esc cancel

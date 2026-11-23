@@ -175,7 +175,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
         protocol::AgentMode::Agent,
         protocol::AgentMode::Plan,
         protocol::AgentMode::Debug,
-        protocol::AgentMode::Multitask,
+        protocol::AgentMode::Swarm,
         protocol::AgentMode::Ask,
     ] {
         let threads = Arc::new(ThreadController::with_store(Arc::new(

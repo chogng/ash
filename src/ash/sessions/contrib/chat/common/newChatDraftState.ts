@@ -58,7 +58,7 @@ function readStoredDraft(storage: IStorageService, draftId: string, persistence:
 }
 
 function validateChatDraft(draft: unknown): ChatDraft {
-	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'multitask', 'ask'].includes(draft.mode as string)
+	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'swarm', 'ask'].includes(draft.mode as string)
 		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
 		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'
 			&& typeof context.kind === 'string' && typeof context.name === 'string' && typeof context.content === 'string'

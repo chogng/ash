@@ -7,7 +7,7 @@ import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceT
 
 export type CommandInterpretation = 'product' | 'literal';
 
-export type SessionMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
+export type SessionMode = 'agent' | 'plan' | 'debug' | 'swarm' | 'ask';
 
 export type SessionId = string;
 

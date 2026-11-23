@@ -2,7 +2,7 @@
 source: crates/tui/src/app/agent_modes_tests.rs
 expression: "format!(\"{history}\\n{}\", render_effort(&app))"
 ---
-● 已 开 启 多 任 务 协 作 ； 推 理 强 度 保 持 不 变 。                                           
+● 已 开 启 蜂 群 模 式 ； 推 理 强 度 保 持 不 变 。                                             
                                                                                 
 
 

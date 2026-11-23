@@ -580,11 +580,11 @@ fn parallel_develop_command_is_not_reinterpreted_as_generic_team_work() {
 }
 
 #[test]
-fn workflow_delegation_preserves_debug_and_replaces_multitask_with_agent() {
+fn workflow_delegation_preserves_debug_and_replaces_swarm_with_agent() {
     for mode in [
         protocol::AgentMode::Agent,
         protocol::AgentMode::Debug,
-        protocol::AgentMode::Multitask,
+        protocol::AgentMode::Swarm,
     ] {
         let fixture = Fixture::new(Store::in_memory().unwrap());
         let mut request = fixture.request("begin", "/team improve search");
@@ -663,7 +663,7 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             root,
         };
         let mut request = fixture.request("start", "/develop durable feature");
-        request.mode = protocol::AgentMode::Multitask;
+        request.mode = protocol::AgentMode::Swarm;
         request.reasoning_effort = Some(protocol::ReasoningEffort::High);
         request.instructions = request
             .instructions
@@ -695,7 +695,7 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.recover().unwrap(), 0);
         let snapshot = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(snapshot.turns.len(), 1);
-        assert_eq!(snapshot.turns[0].mode, protocol::AgentMode::Multitask);
+        assert_eq!(snapshot.turns[0].mode, protocol::AgentMode::Swarm);
         assert_eq!(
             snapshot.turns[0].reasoning_effort,
             Some(protocol::ReasoningEffort::High)

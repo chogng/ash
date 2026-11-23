@@ -146,7 +146,7 @@ fn analysis_mode_requires_user_authority_to_start_execution() {
             .read_thread(&fixture.thread)
             .unwrap()
             .sequence;
-        for to in [AgentMode::Agent, AgentMode::Debug, AgentMode::Multitask] {
+        for to in [AgentMode::Agent, AgentMode::Debug, AgentMode::Swarm] {
             assert!(matches!(
                 fixture.change(from, to, ModeChangeAuthority::Agent),
                 Err(CoreError::Policy(_))

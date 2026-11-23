@@ -42,7 +42,7 @@ Team 的任务列表从 `TeamRunId` 关联和所属 Session 的事实构成。�
 
 长期产品入口分别提供 Team 的创建、成员管理、讨论、任务启动和历史查看。Agents Window 展示 Team 列表、成员、团队讨论和关联任务；进入某次任务后继续使用现有 Agent 树视图。直接与某个成员交谈时，明确选择 Team 和成员，建立归属于该成员的新 Thread，而不修改其旧 Thread。
 
-当前 `/team <任务>`、`/team status|resume|cancel` 实际管理一次临时协作工作，属于任务调度入口。它与 Multitask 模式的关系及入口命名候选集中说明在 [Multitask 的执行边界](../agent-mode-templates/agent-modes.md#multitask-的执行边界)。历史 `/team` 工作记录保持原 Session 和委托事实，不推断或补造 Team 成员身份。`/develop` 的阶段工作可以选择一个已有 Team；阶段版本和验收仍由 `/develop` 管理。
+`/team <任务>`、`/team status|resume|cancel` 管理一次有协调、实施和审查角色的协作工作流。Swarm 模式由当前 Agent 直接委托并行任务。两者的执行契约见 [Swarm 的执行边界](../agent-mode-templates/agent-modes.md#swarm-的执行边界)。历史 `/team` 工作记录保持原 Session 和委托事实，不推断或补造 Team 成员身份。`/develop` 的阶段工作可以选择一个已有 Team；阶段版本和验收仍由 `/develop` 管理。
 
 ## 所有权与接口
 
@@ -55,7 +55,7 @@ Team 的任务列表从 `TeamRunId` 关联和所属 Session 的事实构成。�
 
 App Server 提供 `team/list|read|command`、`team/run/start|attach|read|list` 和 `team/message/post|list`。`team/run/start` 新建 Session 和协调 Thread，并启动第一轮任务；`team/run/attach` 将已用协调者身份创建的 Thread 关联到它所在的 Session。两者均保存成员快照。Agent 工具通过 `team_run_id` 和 `member_id` 指定委托对象，并通过 `team_read_messages`、`team_post_message` 继续讨论。Memory 的 Team 作用域只向参与该任务的 Thread 提供，具体读取与写入仍受 Memory 策略控制。
 
-Agents Window 目前提供 Team 名册、成员和角色修改、任务启动、历史任务及讨论。`/develop` 尚未增加直接选择 Team 的命令参数；其已有 Session 可通过 `team/run/attach` 关联，但该工作流还未自动选择成员。旧 `/team` 命令也尚未更名为 `multitask`。这些命令入口需要与现有工作流语义一起调整，不能把历史临时委托推断为持久成员。
+Agents Window 目前提供 Team 名册、成员和角色修改、任务启动、历史任务及讨论。`/develop` 的已有 Session 可通过 `team/run/attach` 关联 Team。直接选择 Team 的命令参数和成员自动选择尚未接入。
 
 ## 完成条件
 

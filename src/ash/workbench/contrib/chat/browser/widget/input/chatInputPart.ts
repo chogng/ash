@@ -176,7 +176,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: 'agent', label: 'Agent', icon: Lxicon.unlimited },
 	{ id: 'plan', label: 'Plan', icon: Lxicon.plan },
 	{ id: 'debug', label: 'Debug', icon: Lxicon.debug },
-	{ id: 'multitask', label: 'Multitask', icon: Lxicon.multitask },
+	{ id: 'swarm', get label() { return localize('chat.modePicker.swarm', 'Swarm'); }, icon: Lxicon.multitask },
 	{ id: 'ask', label: 'Ask', icon: Lxicon.ask },
 ];
 

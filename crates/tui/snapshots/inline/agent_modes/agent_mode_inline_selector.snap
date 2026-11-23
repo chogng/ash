@@ -19,10 +19,10 @@ expression: render(&app)
                                                                                 
 ─ Mode ─────────────────────────────────────────────────────────────────────────
                                                                                 
-  Agent        Complete the task                                                
-  Plan         Analyze and plan without editing                                 
-> Debug        Investigate and fix a problem                           Current  
-  Multitask    Ash delegates and combines results                               
-  Ask          Answer questions without editing                                 
+  Agent    Complete the task                                                    
+  Plan     Analyze and plan without editing                                     
+> Debug    Investigate and fix a problem                               Current  
+  Swarm    Ash delegates and combines results                                   
+  Ask      Answer questions without editing                                     
                                                                                 
   Esc to close

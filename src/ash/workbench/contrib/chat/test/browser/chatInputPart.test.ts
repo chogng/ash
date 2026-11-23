@@ -315,7 +315,7 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const widget = await opened;
 	const choices = Array.from(widget.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
 	assert.deepEqual(choices.map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [
-		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Multitask', 'false'], ['Ask', 'false'],
+		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Swarm', 'false'], ['Ask', 'false'],
 		['Reviewer', 'false'],
 	]);
 	choices[5]!.click();
@@ -4130,6 +4130,7 @@ suite('chatInput browser component', () => {
 			await trigger.press('ArrowDown');
 			const menu = page.locator('.ash-chat-input-mode-menu');
 			await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+			await expect(menu.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '蜂群' : 'Swarm', exact: true })).toBeVisible();
 			const geometry = await menu.evaluate(element => ({
 				width: element.getBoundingClientRect().width,
 				overflow: element.scrollWidth - element.clientWidth,
@@ -4420,9 +4421,9 @@ suite('chatInput browser component', () => {
 		}
 		const modes: Record<string, { icon: string; color?: string; }> = {
 			Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
-			Multitask: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
+			Swarm: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
 		};
-		for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
+		for (const name of ['Plan', 'Agent', 'Debug', 'Swarm', 'Ask']) {
 			await mode.press('ArrowDown');
 			const item = menu.getByRole('menuitemradio', { name, exact: true });
 			await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();

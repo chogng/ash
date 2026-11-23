@@ -66,7 +66,7 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
         AgentMode::Plan,
         AgentMode::Debug,
         AgentMode::Ask,
-        AgentMode::Multitask,
+        AgentMode::Swarm,
     ] {
         let mut selector = selector(&levels, Some(ReasoningEffort::High), mode);
         key(&mut selector, KeyCode::Left);
@@ -77,7 +77,7 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
             Outcome::Apply { effort: ReasoningEffort::Low, mode: result } if result == mode));
         assert!(matches!(key(&mut selector, KeyCode::Esc), Outcome::Dismiss));
     }
-    let mut selector = selector(&levels, None, AgentMode::Multitask);
+    let mut selector = selector(&levels, None, AgentMode::Swarm);
     key(&mut selector, KeyCode::Tab);
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
@@ -301,7 +301,7 @@ fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
                 Position::new(layout.toggle.x, layout.toggle.y),
                 context
             ),
-            Some(Target::Multitask)
+            Some(Target::Swarm)
         );
         assert_eq!(
             selector.target_at(buffer.area, Position::new(0, high.y), context),
@@ -482,7 +482,7 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
 }
 
 #[test]
-fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
+fn effort_selector_swarm_wave_moves_without_changing_text_or_effort() {
     for palette in [ThemePalette::dark(), ThemePalette::light()] {
         for capability in [ColorLevel::TrueColor, ColorLevel::Ansi256] {
             let theme = RenderTheme::from_palette(palette, capability).with_terminal_defaults();
@@ -490,13 +490,13 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
             let mut selector = selector(
                 &[ReasoningEffort::Low, ReasoningEffort::High],
                 Some(ReasoningEffort::High),
-                AgentMode::Multitask,
+                AgentMode::Swarm,
             );
             let first = render(&selector, 120, context);
             let toggle = selector.layout(first.area, context).toggle;
             let head = (toggle.x, toggle.y);
             let middle = (toggle.x + 4, toggle.y);
-            assert_eq!(first[head].fg, context.mode_color(AgentMode::Multitask));
+            assert_eq!(first[head].fg, context.mode_color(AgentMode::Swarm));
             assert_ne!(first[head].fg, first[middle].fg);
             assert!(first[head].modifier.contains(Modifier::BOLD));
             let halfway = selector.opened + Duration::from_millis(1920);
@@ -526,12 +526,12 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
 }
 
 #[test]
-fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
+fn effort_selector_swarm_wave_preserves_hover_and_press_feedback() {
     let context = crate::render::test_context();
     let mut selector = selector(
         &[ReasoningEffort::High],
         Some(ReasoningEffort::High),
-        AgentMode::Multitask,
+        AgentMode::Swarm,
     );
     selector.tick(selector.opened + Duration::from_millis(1920));
     let mut terminal =
@@ -539,17 +539,9 @@ fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
     let toggle = selector
         .layout(terminal.backend().buffer().area, context)
         .toggle;
-    for pressed in [None, Some(Target::Multitask)] {
+    for pressed in [None, Some(Target::Swarm)] {
         terminal
-            .draw(|frame| {
-                selector.draw(
-                    frame,
-                    frame.area(),
-                    Some(Target::Multitask),
-                    pressed,
-                    context,
-                )
-            })
+            .draw(|frame| selector.draw(frame, frame.area(), Some(Target::Swarm), pressed, context))
             .unwrap();
         let cell = &terminal.backend().buffer()[(toggle.x, toggle.y)];
         assert_eq!(
@@ -573,7 +565,7 @@ fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
             key(&mut selector, KeyCode::Enter),
             Outcome::Apply {
                 effort: ReasoningEffort::High,
-                mode: AgentMode::Multitask
+                mode: AgentMode::Swarm
             }
         ));
     }
@@ -610,15 +602,15 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
     let toggle = selector.layout(buffer.area, context).toggle;
     assert_eq!(
         selector.target_at(buffer.area, Position::new(toggle.x, toggle.y), context),
-        Some(Target::Multitask)
+        Some(Target::Swarm)
     );
-    selector.activate(Target::Multitask);
+    selector.activate(Target::Swarm);
     selector.activate(Target::Level(0));
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
         Outcome::Apply {
             effort: ReasoningEffort::None,
-            mode: AgentMode::Multitask
+            mode: AgentMode::Swarm
         }
     ));
 }
@@ -634,7 +626,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Max),
-        AgentMode::Multitask,
+        AgentMode::Swarm,
     );
     let buffer = render(&selector, 60, context);
     let content = text(&buffer);
@@ -642,7 +634,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
     assert!(content.contains("更聪明"));
     assert!(!content.contains("当前："));
     assert!(!content.contains("由 Ash 协调"));
-    assert!(content.contains("多任务  开启"));
+    assert!(content.contains("蜂群  开启"));
     assert!(content.contains("最高推理强度"));
     crate::tui_assert_snapshot!("effort_selector_chinese", content);
 }

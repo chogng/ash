@@ -293,6 +293,7 @@
     "chat.tip.resetDismissed": "重置已关闭的提示",
     "chat.input.queuedMessages": "{0} 条消息正在排队",
     "chat.input.modeChangeQueued": "正在使用 {0}。下一条消息将以 {1} 模式排队。",
+    "chat.modePicker.swarm": "蜂群",
     "chat.input.contextUsageUnavailable": "暂无上下文用量数据",
     "chat.input.send": "发送",
     "chat.input.runCommand": "运行命令",

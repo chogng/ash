@@ -1971,7 +1971,7 @@ fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
     for mode in [
         ash_protocol::AgentMode::Plan,
         ash_protocol::AgentMode::Ask,
-        ash_protocol::AgentMode::Multitask,
+        ash_protocol::AgentMode::Swarm,
     ] {
         let root = tempfile::tempdir().unwrap();
         let (server, _) = queued_server(root.path());

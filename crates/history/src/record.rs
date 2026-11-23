@@ -10,6 +10,7 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 36 records the Swarm agent mode as `swarm`.
 /// Version 35 supports opt-in context-window tool hints in frozen Turn policies.
 /// Version 34 records the actual Turn execution directory at acceptance.
 /// Version 33 records the Session classification as kind.
@@ -21,7 +22,7 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 35;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 36;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one

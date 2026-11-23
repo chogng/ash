@@ -2,8 +2,8 @@
 source: crates/tui/src/models/effort_selector_tests.rs
 expression: "text(&render(&selector, 120, context))"
 ---
-                                   Faster                  Smarter
-                                   ───────────────▲───────────────    Multitask  off
-                                     low        high         max
+                                     Faster                  Smarter
+                                     ───────────────▲───────────────    Swarm  off
+                                       low        high         max
 
                                More reasoning for complex tasks and careful verification.

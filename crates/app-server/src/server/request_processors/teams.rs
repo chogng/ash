@@ -316,7 +316,7 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
             },
             run.coordinator_thread_id.clone(),
             ash_protocol::ApprovalMode::default(),
-            ash_protocol::AgentMode::Multitask,
+            ash_protocol::AgentMode::Swarm,
             TurnToolModeSelection::ConfiguredDefault,
             vec![ash_protocol::UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Coding,

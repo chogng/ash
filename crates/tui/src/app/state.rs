@@ -3838,10 +3838,10 @@ impl App {
                     }
                     Ok(options::EffortSelection::Mode(mode)) => {
                         self.set_agent_mode(mode);
-                        let notice = if mode == ash_protocol::AgentMode::Multitask {
-                            "Multitask enabled. Thinking effort is unchanged."
+                        let notice = if mode == ash_protocol::AgentMode::Swarm {
+                            "Swarm enabled. Thinking effort is unchanged."
                         } else {
-                            "Multitask disabled. Thinking effort is unchanged."
+                            "Swarm disabled. Thinking effort is unchanged."
                         };
                         self.thread.update(ThreadPresentationEvent::NoticeReceived(
                             crate::nls::localize_owned(self.language(), notice),

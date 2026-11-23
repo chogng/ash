@@ -1052,7 +1052,7 @@ pub trait ToolService: Send + Sync {
 ### 当前 Turn 的模式切换
 
 内置工具 `switch_mode` 接收 `{ "mode": "plan", "reason": "先确认实现方案" }`，支持
-`agent`、`plan`、`debug`、`multitask`、`ask`。`reason` 必须是 1–1000 字符的非空说明。
+`agent`、`plan`、`debug`、`swarm`、`ask`。`reason` 必须是 1–1000 字符的非空说明。
 
 App Server 注册工具并处理用户选择；Core 的 `ThreadController.change_turn_mode` 拥有状态变更，
 写入 `turnModeChanged` 事件及新的模式指令。下一次模型调用读取更新后的 Turn，历史调用保留原有
@@ -1061,9 +1061,9 @@ App Server 注册工具并处理用户选择；Core 的 `ThreadController.change
 
 | 切换情况                                            | 行为                                               |
 | --------------------------------------------------- | -------------------------------------------------- |
-| Agent / Debug / Multitask 之间，或进入 Plan / Ask   | 直接切换                                           |
+| Agent / Debug / Swarm 之间，或进入 Plan / Ask       | 直接切换                                           |
 | Plan 与 Ask 之间                                    | 直接切换                                           |
-| Plan / Ask → Agent / Debug / Multitask              | 通过现有用户输入交互等待明确选择；拒绝后保留原模式 |
+| Plan / Ask → Agent / Debug / Swarm                  | 通过现有用户输入交互等待明确选择；拒绝后保留原模式 |
 | 已在目标模式                                        | 返回 `changed: false`，不重复写事件                |
 | Turn 已结束、不是 coding Turn，或确认期间原模式改变 | 拒绝变更                                           |
 
