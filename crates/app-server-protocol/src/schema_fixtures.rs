@@ -250,6 +250,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("terminal/resize"));
     assert!(methods.contains("terminal/read"));
     assert!(methods.contains("terminal/close"));
+    assert!(methods.contains("textDocument/confirmRename"));
     assert!(methods.contains("plugin/request/upsert"));
     assert!(methods.contains("hook/upsert"));
     assert!(methods.contains("memory/add"));
@@ -285,8 +286,11 @@ fn registry_method_and_notification_names_are_unique() {
             "browser/observe",
             "browser/perform",
             "textDocument/apply",
+            "textDocument/applyRename",
             "textDocument/list",
+            "textDocument/prepareRename",
             "textDocument/read",
+            "textDocument/references",
             "textDocument/release",
         ])
     );
