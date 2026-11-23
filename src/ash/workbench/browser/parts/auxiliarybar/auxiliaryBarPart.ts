@@ -13,8 +13,10 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Separator } from '../../../../base/common/actions.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../common/configuration.js';
+import { AuxiliaryBarHasActiveViewsContext } from '../../../common/contextkeys.js';
 import { VisibleViewContainersTracker } from '../visibleViewContainersTracker.js';
 import type { PartTitleProjection } from '../views/viewPane.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -93,7 +95,11 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			}
 		}));
 		this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, ViewContainerLocation.AuxiliaryBar));
+		const hasActiveViews = AuxiliaryBarHasActiveViewsContext.bindTo(contextKeyService);
+		hasActiveViews.set(this.visibleViewContainersTracker.visibleCount > 0);
+		this._register(toDisposable(() => hasActiveViews.reset()));
 		this._register(this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
+			hasActiveViews.set(after > 0);
 			if ((before > 1) !== (after > 1)) {
 				this.updateContainerSelector();
 			}

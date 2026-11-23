@@ -47,6 +47,10 @@ export const ActiveViewletContext = new RawContextKey<string>('activeViewlet', '
 
 /** Whether the auxiliary side bar is currently visible. */
 export const AuxiliaryBarVisibleContext = new RawContextKey<boolean>('auxiliaryBarVisible', true);
+/** Whether the auxiliary side bar has a container with active views. */
+export const AuxiliaryBarHasActiveViewsContext = new RawContextKey<boolean>('auxiliaryBarHasActiveViews', false);
+/** Whether the IDE title bar's right side bar control targets Chat. */
+export const TitleBarRightSideBarShowsChatContext = new RawContextKey<boolean>('titleBarRightSideBarShowsChat', false);
 export const ChatPartVisibleContext = new RawContextKey<boolean>('chatPartVisible', false);
 export const EditorAreaHiddenByChatContext = new RawContextKey<boolean>('editorAreaHiddenByChat', false);
 

@@ -920,7 +920,8 @@ test.describe('Manage menu', () => {
 	test('Manage menu runs its other workbench commands', async ({ application, target, workbench }) => {
 		const page = workbench.page;
 		const manageButton = page.getByRole('button', { name: 'Manage' });
-		const layoutButton = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
+		const layoutButton = page.getByRole('toolbar', { name: 'Title Bar global actions' })
+			.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button, [data-action-id="workbench.action.toggleChat"] button');
 		const [manageBounds, layoutBounds] = await Promise.all([manageButton.boundingBox(), layoutButton.boundingBox()]);
 		expect(manageBounds).not.toBeNull();
 		expect(layoutBounds).not.toBeNull();
@@ -937,9 +938,11 @@ test.describe('Manage menu', () => {
 
 		await select('Keyboard Shortcuts');
 		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
+		const closeEditor = page.locator('.ash-modal-editor-close');
+		if (await closeEditor.isVisible()) await closeEditor.click();
 
 		await select('Extensions');
-		await expect(page.locator('.ash-extensions')).toBeVisible();
+		await expect(page.locator('[data-view-container-id="ash.extensions"]')).toBeVisible();
 
 		await select('Run Task...');
 		if (target.kind === 'browser' && target.appServerMode === 'required') {
@@ -947,7 +950,8 @@ test.describe('Manage menu', () => {
 			await expect(page.getByPlaceholder('Select a task to run')).toBeVisible();
 			await page.keyboard.press('Escape');
 		} else {
-			await expect(page.locator('.ash-tasks')).toBeVisible();
+			await expect(page.getByRole('region', { name: 'Notifications', exact: true })
+				.getByText('Open a folder to configure tasks.', { exact: true })).toBeVisible();
 		}
 		await manageButton.focus();
 		await workbench.menus.inspect(application, () => manageButton.press('ArrowDown'));

@@ -609,11 +609,13 @@ test.describe('welcome brand', () => {
 
 	test('secondary sidebar narrows welcome cards without rearranging them', async ({ driver, workbench }) => {
 		await driver.setWindowSize({ width: 1050, height: 800 });
+		await workbench.quickaccess.runCommand('workbench.action.openWelcome');
 		const page = workbench.page;
 		const welcome = workbench.editors.groupAt(0).welcome;
 		const primaryBar = page.locator("[data-part='sidebar']");
 		const auxiliaryBar = page.locator("[data-part='auxiliarybar']");
-		const toggle = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
+		const titleBar = page.getByRole('toolbar', { name: 'Title Bar global actions' });
+		const toggle = titleBar.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
 		const geometry = async () => welcome.evaluate(element => {
 			const content = element.querySelector('.ash-getting-started-content')!.getBoundingClientRect();
 			const cards = [...element.querySelectorAll('.ash-getting-started-card')].map(card => card.getBoundingClientRect());
@@ -631,15 +633,18 @@ test.describe('welcome brand', () => {
 			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
 		}
 		await expect(primaryBar).toBeVisible();
+		if (await page.locator('[data-part="chat"]').isVisible()) {
+			await workbench.quickaccess.runCommand('workbench.action.toggleChat');
+		}
 		if (await auxiliaryBar.isHidden()) {
-			await toggle.click();
+			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
 		}
 		await expect(auxiliaryBar).toBeVisible();
 		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right"]')).toBeVisible();
 		const expanded = await geometry();
 		await toggle.click();
 		await expect(auxiliaryBar).toBeHidden();
-		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right-off"]')).toBeVisible();
+		await expect(titleBar.locator('[data-ash-icon-id="layout-sidebar-right-off"]')).toBeVisible();
 		const collapsed = await geometry();
 		expect(expanded.editorWidth).toBeLessThan(collapsed.editorWidth);
 		expect(expanded.cardWidth).toBeGreaterThanOrEqual(160);

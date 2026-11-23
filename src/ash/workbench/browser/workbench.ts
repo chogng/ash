@@ -1576,33 +1576,36 @@ export class Workbench extends Disposable {
 			const auxiliaryBarMaximized = layout.isAuxiliaryBarMaximized();
 			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
+			let restoreAuxiliaryBarMaximized = false;
 			for (const [location, part] of paneParts) {
 				const partId = panes.getPartId(location);
 				const visible = layout.isPartVisible(partId);
 				if (location === ViewContainerLocation.AgentSidebar && !visible) { continue; }
-				if (viewDescriptors.getViewContainers(location).length === 0) {
+				// Navigation from the live shell takes precedence over saved view state.
+				const active = isStartup ? panes.getActivePaneComposite(location) : undefined;
+				const auxiliary = location === ViewContainerLocation.AuxiliaryBar;
+				// Older workspaces can retain a visible secondary bar after Chat moved out.
+				const containerId = active?.id ?? part.getCompositeIdToRestore({ requireActiveViews: auxiliary });
+				if (isStartup && (!visible || !containerId)) deferredPaneLocations.set(partId, location);
+				if (!containerId) {
 					layout.hidePart(partId);
 					continue;
 				}
-				if (isStartup && !visible) {
-					deferredPaneLocations.set(partId, location);
-					continue;
-				}
-				// Navigation from the live shell takes precedence over saved view state.
-				if (isStartup && panes.getActivePaneComposite(location)) continue;
-				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
+				restoreAuxiliaryBarMaximized ||= auxiliary;
+				if (isStartup && !visible) continue;
+				if (active) continue;
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
 					if (location === ViewContainerLocation.Sidebar) { performance.mark('ash.workbench.sidebar-restore-start'); }
 					if (location === ViewContainerLocation.Panel) { performance.mark('ash.workbench.panel-restore-start'); }
 					if (location === ViewContainerLocation.AuxiliaryBar) { performance.mark('ash.workbench.auxiliary-restore-start'); }
 				}
-				openings.push(views.openViewContainer(container.id));
-				if (!visible) { views.closeViewContainer(container.id); }
+				openings.push(views.openViewContainer(containerId));
+				if (!visible) { views.closeViewContainer(containerId); }
 			}
 			try { await Promise.all(openings); }
 			finally {
-				if (auxiliaryBarMaximized && viewDescriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar).length > 0) {
+				if (auxiliaryBarMaximized && restoreAuxiliaryBarMaximized) {
 					layout.setAuxiliaryBarMaximized(true);
 				}
 			}
@@ -1815,20 +1818,4 @@ export class Workbench extends Disposable {
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
 		await this.contributions.workspaceRestored();
 	}
-}
-
-function requiredViewContainerToRestore(
-	service: IViewDescriptorService,
-	location: ViewContainerLocation,
-	containerId: string | undefined,
-) {
-	const container = service
-		.getViewContainers(location)
-		.find((candidate) => candidate.id === containerId);
-	if (!container) {
-		throw new Error(
-			`Workbench has no ${location} view container to restore`,
-		);
-	}
-	return container;
 }
