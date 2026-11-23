@@ -44,9 +44,11 @@
 
 Swarm 由当前 Agent 识别依赖、委托互不依赖的工作、等待并验收结果。子任务在 `spawn_agent` 成功后取得委托和 Thread 身份。依赖步骤等待前置结果，同一工作区的修改按文件或任务分工。隔离、并发上限、超时、取消和恢复由运行环境和[委托契约](../../docs/core-multi-agent.md)管理。小任务可直接完成。
 
+使用 `send_agent_message` 定向更新子任务，用 `wait_agent` 收集所需结果，按运行时记录报告进展。角色或工作流需要持续共享决定、阻塞和证据时，使用讨论板。
+
 [`/team` 工作流和持久 Team](../teams/README.md#产品入口与已有命令)分别管理会话内的角色分工和跨任务的成员关系。Swarm 适用于当前 Agent 直接组织的委托。主 Turn 的后台交接和 Plan 专用的并行实施入口尚未提供。后台交接需要明确的任务身份、执行所有权、在途工具与取消边界。
 
-Swarm 与模型推理档位独立选择。桌面 Chat 的 Ultra 设置由[模型请求配置](../model-provider/README.md#ultra-与推理档位)解析。终端可通过 [`/effort`](../tui/README.md#推理档位与-swarm) 设置下一条消息的模式。
+Swarm 与模型推理档位独立选择。桌面 Chat 的 Ultra 设置由[模型请求配置](../model-provider/README.md#ultra-与推理档位)解析。终端使用 [`/mode swarm`](../tui/README.md#推理档位与-swarm) 设置下一条消息的模式。
 
 ## 自定义模式候选
 

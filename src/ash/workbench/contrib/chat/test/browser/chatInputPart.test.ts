@@ -4421,7 +4421,7 @@ suite('chatInput browser component', () => {
 		}
 		const modes: Record<string, { icon: string; color?: string; }> = {
 			Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
-			Swarm: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
+			Swarm: { icon: 'swarm', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
 		};
 		for (const name of ['Plan', 'Agent', 'Debug', 'Swarm', 'Ask']) {
 			await mode.press('ArrowDown');

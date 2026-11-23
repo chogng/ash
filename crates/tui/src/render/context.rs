@@ -34,16 +34,6 @@ impl<'a> RenderContext<'a> {
         Self::interpolate_foreground(style, background, opacity)
     }
 
-    /// Blends theme text colors while preserving terminal color depth and interaction backgrounds.
-    pub(crate) fn blend_style(
-        self,
-        style: ratatui::style::Style,
-        target: Color,
-        amount: f32,
-    ) -> ratatui::style::Style {
-        Self::interpolate_foreground(style, target, 1.0 - amount)
-    }
-
     fn interpolate_foreground(
         style: ratatui::style::Style,
         background: Color,

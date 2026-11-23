@@ -4,7 +4,6 @@ use crate::keymap::KeyEvent;
 use crate::render::InteractionState;
 use crate::render::RenderContext;
 use crate::widgets::key_hint::KeyHints;
-use ash_protocol::AgentMode;
 use ash_protocol::ReasoningEffort;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
@@ -22,17 +21,11 @@ use std::time::Instant;
 const LEVEL_CENTER_SPACING: u16 = 12;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Target {
-    Level(usize),
-    Swarm,
-}
+pub(crate) struct Target(usize);
 
 #[derive(Debug)]
 pub(crate) enum Outcome {
-    Apply {
-        effort: ReasoningEffort,
-        mode: AgentMode,
-    },
+    Apply(ReasoningEffort),
     Consumed,
     Dismiss,
 }
@@ -41,8 +34,6 @@ pub(crate) enum Outcome {
 pub(crate) struct EffortSelector {
     levels: Vec<ash_protocol::ModelReasoningEffortOption>,
     selected: usize,
-    original_mode: AgentMode,
-    swarm: bool,
     opened: Instant,
     phase: usize,
     hints: KeyHints,
@@ -52,7 +43,6 @@ impl EffortSelector {
     pub(super) fn new(
         levels: &[ash_protocol::ModelReasoningEffortOption],
         current: Option<ReasoningEffort>,
-        mode: AgentMode,
     ) -> Self {
         // The validated catalog entry supplies at least one level, in provider order.
         assert!(!levels.is_empty());
@@ -61,13 +51,10 @@ impl EffortSelector {
             selected: current
                 .and_then(|value| levels.iter().position(|option| option.effort == value))
                 .unwrap_or(0),
-            original_mode: mode,
-            swarm: mode == AgentMode::Swarm,
             opened: Instant::now(),
             phase: 0,
             hints: KeyHints::new()
                 .with_compact_action("←/→", "choose")
-                .with_compact_action("Tab", "toggle swarm")
                 .with_compact_action("Enter", "apply")
                 .with_compact_action("Esc", "cancel"),
         }
@@ -83,30 +70,13 @@ impl EffortSelector {
         }
         match key.code {
             KeyCode::Left | KeyCode::Up => {
-                return self.activate(Target::Level(self.selected.saturating_sub(1)));
+                return self.activate(Target(self.selected.saturating_sub(1)));
             }
             KeyCode::Right | KeyCode::Down => {
-                return self.activate(Target::Level(
-                    (self.selected + 1).min(self.levels.len() - 1),
-                ));
-            }
-            KeyCode::Tab if key.kind == KeyEventKind::Press => {
-                return self.activate(Target::Swarm);
+                return self.activate(Target((self.selected + 1).min(self.levels.len() - 1)));
             }
             KeyCode::Enter if key.kind == KeyEventKind::Press => {
-                // Turning cooperation off restores the mode that was edited, rather than
-                // silently replacing Plan, Ask or Debug with an execution mode.
-                let mode = if self.swarm {
-                    AgentMode::Swarm
-                } else if self.original_mode == AgentMode::Swarm {
-                    AgentMode::Agent
-                } else {
-                    self.original_mode
-                };
-                return Outcome::Apply {
-                    effort: self.levels[self.selected].effort,
-                    mode,
-                };
+                return Outcome::Apply(self.levels[self.selected].effort);
             }
             KeyCode::Esc if key.kind == KeyEventKind::Press => return Outcome::Dismiss,
             _ => {}
@@ -115,15 +85,12 @@ impl EffortSelector {
     }
 
     pub(crate) fn activate(&mut self, target: Target) -> Outcome {
-        match target {
-            Target::Level(index) => self.selected = index,
-            Target::Swarm => self.swarm = !self.swarm,
-        }
+        self.selected = target.0;
         Outcome::Consumed
     }
 
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
-        if self.levels[self.selected].effort != ReasoningEffort::Max && !self.swarm {
+        if self.levels[self.selected].effort != ReasoningEffort::Max {
             return false;
         }
         let phase = (now.saturating_duration_since(self.opened).as_millis() / 80 % 48) as usize;
@@ -175,18 +142,7 @@ impl EffortSelector {
         let scale_width = (label_span + spacing * intervals)
             .max(end_labels_width)
             .min(area.width);
-        let toggle_width = (crate::render::display_width(&context.localize("Swarm"))
-            + 2
-            + crate::render::display_width(&context.localize("on"))
-                .max(crate::render::display_width(&context.localize("off"))))
-            as u16;
-        let alongside = area.width >= scale_width + 4 + toggle_width;
-        let group_width = if alongside {
-            scale_width + 4 + toggle_width
-        } else {
-            scale_width
-        };
-        let x = area.x + (area.width - group_width) / 2;
+        let x = area.x + (area.width - scale_width) / 2;
         let first = self.selected.saturating_sub(visible - 1);
         let first_center = x + scale_width.saturating_sub(spacing * intervals + 1) / 2;
         let levels = (first..first + visible)
@@ -216,16 +172,10 @@ impl EffortSelector {
                 }
             })
             .collect();
-        let description_row = if alongside { 4 } else { 6 };
+        let description_row = 4;
         let description_width = area.width.min(84);
         Layout {
             levels,
-            toggle: if alongside {
-                Rect::new(x + scale_width + 4, area.y + 1, toggle_width, 1)
-            } else {
-                let width = toggle_width.min(area.width);
-                Rect::new(area.x + (area.width - width) / 2, area.y + 4, width, 1)
-            },
             axis: Rect::new(x, area.y + 1, scale_width, 1),
             description: Rect::new(
                 area.x + (area.width - description_width) / 2,
@@ -246,14 +196,11 @@ impl EffortSelector {
             return None;
         }
         let layout = self.layout(area, context);
-        if layout.toggle.contains(position) {
-            return Some(Target::Swarm);
-        }
         layout.levels.iter().find_map(|level| {
             level
                 .hit_area
                 .contains(position)
-                .then_some(Target::Level(level.index))
+                .then_some(Target(level.index))
         })
     }
 
@@ -295,7 +242,7 @@ impl EffortSelector {
             context.success(),
             context.accent(),
             context.function(),
-            context.mode_color(AgentMode::Swarm),
+            context.focus(),
         ];
         for LevelLayout {
             index,
@@ -304,7 +251,7 @@ impl EffortSelector {
             marker,
         } in layout.levels
         {
-            let target = Target::Level(index);
+            let target = Target(index);
             let selected = self.selected == index;
             let level = self.levels[index].effort;
             // Colors belong to effort identities, so a model's subset or order
@@ -368,53 +315,6 @@ impl EffortSelector {
                 );
             }
         }
-        let toggle = format!(
-            "{}  {}",
-            context.localize("Swarm"),
-            context.localize(if self.swarm { "on" } else { "off" })
-        );
-        let style = Style::default().fg(if self.swarm {
-            context.mode_color(AgentMode::Swarm)
-        } else {
-            context.foreground()
-        });
-        let interaction = crate::render::interaction_style(
-            context,
-            InteractionState {
-                hovered: hovered == Some(Target::Swarm),
-                pressed: pressed == Some(Target::Swarm),
-                ..Default::default()
-            },
-        );
-        let toggle = if self.swarm {
-            // The wave blends two theme text colors, independent of whether the
-            // host terminal reported its background. Text and the on/off value stay stable.
-            Line::from(
-                toggle
-                    .chars()
-                    .enumerate()
-                    .map(|(index, ch)| {
-                        let wave = (self.phase as f32 * std::f32::consts::TAU / 48.0
-                            - index as f32 * 0.5)
-                            .cos();
-                        let amount = (1.0 - wave) / 2.0;
-                        Span::styled(
-                            ch.to_string(),
-                            context
-                                .blend_style(
-                                    style.add_modifier(Modifier::BOLD),
-                                    context.function(),
-                                    amount,
-                                )
-                                .patch(interaction),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            Line::from(Span::styled(toggle, style.patch(interaction)))
-        };
-        frame.render_widget(Paragraph::new(toggle), layout.toggle.intersection(area));
         let lines = crate::render::wrap_lines(
             vec![Line::raw(context.localize(self.description()).into_owned())],
             layout.description.width as usize,
@@ -430,7 +330,6 @@ impl EffortSelector {
 
 struct Layout {
     levels: Vec<LevelLayout>,
-    toggle: Rect,
     axis: Rect,
     description: Rect,
 }

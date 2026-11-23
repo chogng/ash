@@ -8,14 +8,6 @@ use ash_protocol::ApprovalMode;
 use ash_protocol::ReasoningEffort;
 use std::collections::BTreeMap;
 
-pub(crate) const MODES: [AgentMode; 5] = [
-    AgentMode::Agent,
-    AgentMode::Plan,
-    AgentMode::Debug,
-    AgentMode::Swarm,
-    AgentMode::Ask,
-];
-
 /// Composer selectors change the next submission; they never mutate an accepted Turn.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ComposerOption {
@@ -52,46 +44,14 @@ pub(crate) fn parse_mode(value: &str) -> Result<AgentMode, String> {
         .map_err(|_| "Use /mode agent|plan|debug|swarm|ask".into())
 }
 
-pub(crate) enum EffortSelection {
-    Effort(ReasoningEffort),
-    Mode(AgentMode),
-}
-
-pub(crate) fn parse_effort(
-    value: &str,
-    current_mode: AgentMode,
-) -> Result<EffortSelection, String> {
-    let mut arguments = value.split_whitespace();
-    let selection = arguments.next().unwrap_or_default().to_ascii_lowercase();
-    if selection == "swarm" {
-        let mode = match arguments.next().map(str::to_ascii_lowercase).as_deref() {
-            None | Some("on") => AgentMode::Swarm,
-            Some("off") if current_mode == AgentMode::Swarm => AgentMode::Agent,
-            Some("off") => current_mode,
-            Some(_) => return Err(effort_usage().into()),
-        };
-        if arguments.next().is_some() {
-            return Err(effort_usage().into());
-        }
-        return Ok(EffortSelection::Mode(mode));
-    }
-    if arguments.next().is_some() {
-        return Err(effort_usage().into());
-    }
-    selection
-        .parse()
-        .map(EffortSelection::Effort)
-        .map_err(|_| effort_usage().into())
-}
-
-fn effort_usage() -> &'static str {
-    "Use /effort <level> or /effort swarm [on|off]"
+pub(crate) fn parse_effort(value: &str) -> Result<ReasoningEffort, String> {
+    value.parse().map_err(|_| "Use /effort <level>".into())
 }
 
 pub(crate) fn mode_choices(current: AgentMode) -> ComposerOptions {
     choices(
         "Mode",
-        MODES.into_iter().map(|mode| {
+        AgentMode::ALL.into_iter().map(|mode| {
             let description = match mode {
                 AgentMode::Agent => "Complete the task",
                 AgentMode::Plan => "Analyze and plan without editing",

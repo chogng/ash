@@ -37,16 +37,33 @@ test('malformed legacy drafts preserve their raw entries while valid drafts stil
 	assert.deepEqual(readNewChatDraftState(storage, 'valid'), draft);
 });
 
-test('migration deduplicates a legacy Multitask draft against a matching Swarm draft', () => {
+test('migration deduplicates a Swarm draft in the old storage layout', () => {
 	using fixture = createStorage();
 	const { storage } = fixture;
 	const swarmDraft = { ...draft, mode: 'swarm' as const };
 	writeNewChatDraftState(storage, swarmDraft, 'same');
-	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: 'multitask' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: 'swarm' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 
 	assert.deepEqual(migrateNewChatDraftState(storage), []);
 	assert.equal(storage.get('sessions.draftState:same', StorageScope.WORKSPACE), undefined);
 	assert.deepEqual(readNewChatDraftState(storage, 'same'), swarmDraft);
+});
+
+test('stored Multitask drafts are rejected during restore and migration', () => {
+	using fixture = createStorage();
+	const { storage } = fixture;
+	const retiredDraft = JSON.stringify({ ...draft, mode: 'multitask' });
+	storage.store('sessions.inputDraft:retired', retiredDraft, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.draftState:retired-migration', retiredDraft, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+
+	assert.throws(() => readNewChatDraftState(storage, 'retired'), /Invalid stored Chat draft/);
+	const errors: unknown[] = [];
+	assert.deepEqual(migrateNewChatDraftState(storage, error => errors.push(error)), []);
+	assert.equal(errors.length, 1);
+	assert.ok(errors[0] instanceof TypeError);
+	assert.equal(readNewChatDraftState(storage, 'retired-migration'), undefined);
+	assert.equal(storage.get('sessions.inputDraft:retired', StorageScope.WORKSPACE), retiredDraft);
+	assert.equal(storage.get('sessions.draftState:retired-migration', StorageScope.WORKSPACE), retiredDraft);
 });
 
 test('a corrupt destination preserves both copies and does not block another draft', () => {
@@ -79,23 +96,23 @@ test('migration keeps a legacy entry when writing its replacement fails', () => 
 	assert.equal(readNewChatDraftState(storage, 'source'), undefined);
 });
 
-test('a stored Multitask draft recovers as Swarm and keeps its separate attachment after editing', () => {
+test('a stored Swarm draft keeps its separate attachment after editing', () => {
 	using fixture = createStorage();
 	const { storage } = fixture;
 	const attachments = '34d83c82-ca55-4745-ae31-94faf41b034f';
 	const draftKey = 'sessions.inputDraft:untitled:upgrade';
 	const attachmentKey = `sessions.inputDraftAttachments:untitled:upgrade:${attachments}`;
-	const oldState = JSON.stringify({ ...draft, mode: 'multitask', contexts: [] });
-	const record = JSON.stringify({ state: oldState, attachments });
+	const swarmDraft = { ...draft, mode: 'swarm' as const };
+	const state = JSON.stringify({ ...swarmDraft, contexts: [] });
+	const record = JSON.stringify({ state, attachments });
 	const payload = JSON.stringify(draft.contexts);
 	storage.store(attachmentKey, payload, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store(draftKey, record, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 
-	const restored = readNewChatDraftState(storage, 'untitled:upgrade');
-	assert.deepEqual(restored, { ...draft, mode: 'swarm' });
+	assert.deepEqual(readNewChatDraftState(storage, 'untitled:upgrade'), swarmDraft);
 	assert.equal(storage.get(draftKey, StorageScope.WORKSPACE), record);
 
-	const edited = { ...restored!, text: `${draft.text} after upgrading` };
+	const edited = { ...swarmDraft, text: 'Updated task' };
 	writeNewChatDraftState(storage, edited, 'untitled:upgrade');
 	assert.deepEqual(JSON.parse(storage.get(draftKey, StorageScope.WORKSPACE)!), {
 		state: JSON.stringify({ ...edited, contexts: [] }), attachments,

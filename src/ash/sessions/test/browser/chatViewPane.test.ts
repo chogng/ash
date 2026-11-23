@@ -1164,7 +1164,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot [data-ash-icon-id]')?.getAttribute('data-ash-icon-id') ?? null),
-		['unlimited', 'plan', 'debug', 'multitask', 'ask'],
+		['unlimited', 'plan', 'debug', 'swarm', 'ask'],
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),
@@ -1571,22 +1571,21 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
 });
 
-test('Sessions composer restores an unsent Multitask draft and its attachment as Swarm', async () => {
+test('Sessions composer restores a Swarm draft and its attachment', async () => {
 	const draft = {
-		mode: 'multitask',
+		mode: 'swarm',
 		text: 'Review task.ts ',
 		contexts: [{ id: 'source', kind: 'file', name: 'task.ts', content: 'Unsaved code', resource: 'file:///project/task.ts', reference: { start: 7, end: 14 } }],
 	};
 	using fixture = await sessionsInputFixture(undefined, JSON.stringify(draft));
 	const { input, storage, notices, identity } = fixture;
-	const restored = { ...draft, mode: 'swarm' };
 	assert.deepEqual(notices.model.getNotifications(), []);
-	assert.deepEqual((await input.captureDraft())?.draft, restored);
+	assert.deepEqual((await input.captureDraft())?.draft, draft);
 
 	input.appendToDraft('Keep this edit');
 	const editedText = `${draft.text}\n\nKeep this edit`;
 	await waitFor(() => readNewChatDraftState(storage, identity)?.text === editedText);
-	assert.deepEqual(readNewChatDraftState(storage, identity), { ...restored, text: editedText });
+	assert.deepEqual(readNewChatDraftState(storage, identity), { ...draft, text: editedText });
 });
 
 test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {

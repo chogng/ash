@@ -762,9 +762,8 @@ impl App {
                 None
             }
             CommandPanelOutcome::Effort(outcome) => match outcome {
-                crate::models::EffortSelectorOutcome::Apply { effort, mode } => {
+                crate::models::EffortSelectorOutcome::Apply(effort) => {
                     self.close_command_panel();
-                    self.set_agent_mode(mode);
                     Some(ModelCommand::SetEffort { effort }.into())
                 }
                 crate::models::EffortSelectorOutcome::Dismiss => {
@@ -3832,23 +3831,9 @@ impl App {
                 }
                 let option = invocation
                     .text_arguments()
-                    .and_then(|value| options::parse_effort(&value, self.agent_mode()));
+                    .and_then(|value| options::parse_effort(&value));
                 return match option {
-                    Ok(options::EffortSelection::Effort(effort)) => {
-                        Some(ModelCommand::SetEffort { effort }.into())
-                    }
-                    Ok(options::EffortSelection::Mode(mode)) => {
-                        self.set_agent_mode(mode);
-                        let notice = if mode == ash_protocol::AgentMode::Swarm {
-                            "Swarm enabled. Thinking effort is unchanged."
-                        } else {
-                            "Swarm disabled. Thinking effort is unchanged."
-                        };
-                        self.thread.update(ThreadPresentationEvent::NoticeReceived(
-                            crate::nls::localize_owned(self.language(), notice),
-                        ));
-                        None
-                    }
+                    Ok(effort) => Some(ModelCommand::SetEffort { effort }.into()),
                     Err(error) => {
                         self.report_composer_option_error(error);
                         None

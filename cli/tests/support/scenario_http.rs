@@ -111,17 +111,25 @@ struct ServerState {
 
 impl ScenarioServer {
     pub fn start(responses: impl IntoIterator<Item = HttpResponse>) -> Self {
+        let mut responses = responses.into_iter().collect::<VecDeque<_>>();
+        Self::start_routed(responses.len(), move |_| responses.pop_front().unwrap())
+    }
+
+    pub fn start_routed(
+        request_count: usize,
+        mut respond: impl FnMut(&str) -> HttpResponse + Send + 'static,
+    ) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let state = Arc::new(Mutex::new(ServerState {
             requests: Vec::new(),
         }));
         let thread_state = Arc::clone(&state);
-        let mut responses = responses.into_iter().collect::<VecDeque<_>>();
         let server_thread = thread::spawn(move || {
-            while let Some(response) = responses.pop_front() {
+            for _ in 0..request_count {
                 let (mut stream, _) = listener.accept().unwrap();
                 let request = read_http_request(&mut stream);
+                let response = respond(&request);
                 thread_state.lock().unwrap().requests.push(request);
                 response.write_to(&mut stream);
             }

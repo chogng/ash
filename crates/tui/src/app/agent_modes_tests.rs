@@ -418,7 +418,7 @@ fn agent_mode_permission_and_effort_commands_are_independent() {
 }
 
 #[test]
-fn cooperation_aliases_use_ash_swarm_without_changing_effort() {
+fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
     use ash_protocol::ReasoningEffort;
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
@@ -437,81 +437,39 @@ fn cooperation_aliases_use_ash_swarm_without_changing_effort() {
                     None,
                 ),
             ));
-            command(&mut app, "/mode plan");
-            assert_eq!(command(&mut app, "/effort swarm"), None);
-            assert_eq!(app.agent_mode(), AgentMode::Swarm);
-            assert_eq!(app.status_line().model_label(), "test-model (high)");
-            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
-            assert!(app.chat_input_focused());
-            assert!(app.input().is_empty());
-            assert!(app.command_panel().is_none());
-            assert_eq!(command(&mut app, "/effort swarm off"), None);
-            assert_eq!(app.agent_mode(), AgentMode::Agent);
-            command(&mut app, "/mode plan");
-            command(&mut app, "/effort swarm off");
-            assert_eq!(app.agent_mode(), AgentMode::Plan);
-            command(&mut app, "/effort swarm on");
-            assert_eq!(
-                command(&mut app, "/effort high"),
-                Some(AppCommand::Models(crate::models::Command::SetEffort {
-                    effort: ReasoningEffort::High
-                }))
-            );
-            assert_eq!(app.agent_mode(), AgentMode::Swarm);
-            // Keep the snapshot focused on the final acknowledgement, rather than the matrix.
-            app.update(ThreadEvent::TranscriptCleared);
-            command(&mut app, "/effort swarm on");
-            match (screen, language) {
-                (ScreenMode::Fullscreen, crate::nls::Language::English) => {
-                    crate::tui_assert_snapshot!(app = &app; "cooperation_alias_fullscreen", render_effort(&app));
+            app.open_home();
+            let usage = match language {
+                crate::nls::Language::Chinese => "使用 /effort <档位>",
+                _ => "Use /effort <level>",
+            };
+            for (mode, selected) in [("plan", AgentMode::Plan), ("swarm", AgentMode::Swarm)] {
+                command(&mut app, &format!("/mode {mode}"));
+                for value in [
+                    "swarm",
+                    "swarm on",
+                    "swarm off",
+                    "multitask",
+                    "ultra",
+                    "ultracode",
+                    "max on",
+                ] {
+                    assert_eq!(command(&mut app, &format!("/effort {value}")), None);
+                    assert_eq!(app.top_tip().text(None), Some(usage));
+                    assert_eq!(app.agent_mode(), selected);
+                    assert_eq!(app.status_line().model_label(), "test-model (high)");
                 }
-                (ScreenMode::Inline, crate::nls::Language::Chinese) => {
-                    // Inline commits notices above the live viewport, through the history renderer.
-                    assert_eq!(app.history_prefix().len(), 1);
-                    let view = app.history_prefix()[0].history_view();
-                    let context = app.render_context();
-                    let cache = app.transcript_render_cache();
-                    let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(
-                        0,
-                        0,
-                        80,
-                        view.height(80, context, cache) as u16,
-                    ));
-                    view.render_rows(&mut buffer, 0, context, cache);
-                    let history = buffer
-                        .content
-                        .chunks(80)
-                        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    crate::tui_assert_snapshot!(app = &app; "cooperation_alias_inline_chinese", format!("{history}\n{}", render_effort(&app)));
-                }
-                _ => {}
-            }
-            command(&mut app, "/mode plan");
-            for value in [
-                "ultra",
-                "ultracode",
-                "ultra unknown",
-                "ultracode on extra",
-                "max on",
-                "multitask",
-            ] {
-                assert_eq!(command(&mut app, &format!("/effort {value}")), None);
-                assert_eq!(app.agent_mode(), AgentMode::Plan);
-                assert_eq!(app.status_line().model_label(), "test-model (high)");
             }
         }
     }
 }
 
 #[test]
-fn cooperation_alias_during_a_turn_only_changes_the_next_submission() {
+fn swarm_mode_selected_during_a_turn_applies_to_the_next_submission() {
     let mut app = App::new();
     let turn = running_turn(AgentMode::Debug);
     app.sync_active_turn(&[turn.clone()]);
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    assert_eq!(command(&mut app, "/effort swarm"), None);
+    assert_eq!(command(&mut app, "/mode swarm"), None);
     assert_eq!(app.status(), &super::Status::Working);
     app.sync_active_turn(&[turn]);
     assert_eq!(app.agent_mode(), AgentMode::Swarm);
@@ -519,7 +477,7 @@ fn cooperation_alias_during_a_turn_only_changes_the_next_submission() {
     let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
         key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL)
     else {
-        panic!("the new cooperation mode must submit a separate queued task")
+        panic!("the next Swarm submission must be queued")
     };
     assert_eq!(submission.mode, AgentMode::Swarm);
     assert_eq!(serde_json::to_value(submission.mode).unwrap(), "swarm");
@@ -578,7 +536,7 @@ fn effort_selector_applies_a_supported_value_and_restores_focus() {
         Some(AppCommand::Models(crate::models::Command::OpenEffortPicker))
     );
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
-        data.effort_selector(app.agent_mode()).unwrap(),
+        data.effort_selector().unwrap(),
     ));
     assert!(matches!(
         app.command_panel(),
@@ -613,7 +571,7 @@ fn effort_selector_title_shares_the_separator_in_both_screen_modes() {
                 app.update(ConfigEvent::SettingsReceived(settings));
                 app.insert_text("keep this draft");
                 app.open_command_panel(super::command_panel::CommandPanel::Effort(
-                    effort_data().effort_selector(app.agent_mode()).unwrap(),
+                    effort_data().effort_selector().unwrap(),
                 ));
                 let mut terminal =
                     ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 24)).unwrap();
@@ -672,7 +630,7 @@ fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
         app.update(ConfigEvent::SettingsReceived(settings));
         app.insert_text("keep this draft");
         app.open_command_panel(super::command_panel::CommandPanel::Effort(
-            effort_data().effort_selector(app.agent_mode()).unwrap(),
+            effort_data().effort_selector().unwrap(),
         ));
         let area = Rect::new(0, 0, 80, 24);
         let areas = super::fullscreen::layout(&app, area).session;
@@ -977,7 +935,7 @@ fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
     ));
     app.insert_text("keep this draft\nand this line");
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
-        data.effort_selector(app.agent_mode()).unwrap(),
+        data.effort_selector().unwrap(),
     ));
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
@@ -995,16 +953,17 @@ fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
 }
 
 #[test]
-fn fullscreen_effort_confirm_applies_swarm_and_only_supported_levels() {
+fn fullscreen_effort_confirm_applies_only_the_selected_effort() {
     let data = effort_data();
     let mut app = App::new();
+    app.set_agent_mode(AgentMode::Swarm);
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
-        data.effort_selector(app.agent_mode()).unwrap(),
+        data.effort_selector().unwrap(),
     ));
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
-    assert_eq!(app.agent_mode(), AgentMode::Agent);
+    assert_eq!(app.agent_mode(), AgentMode::Swarm);
     assert_eq!(
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE),
         Some(AppCommand::Models(crate::models::Command::SetEffort {
@@ -1026,7 +985,7 @@ fn fullscreen_effort_narrow_chinese_keeps_controls_and_draft_isolated() {
     app.update(ConfigEvent::SettingsReceived(settings));
     app.insert_text("原来的草稿");
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
-        data.effort_selector(app.agent_mode()).unwrap(),
+        data.effort_selector().unwrap(),
     ));
     let area = ratatui::layout::Rect::new(0, 0, 40, 24);
     app.handle_key_in_area(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE), area);

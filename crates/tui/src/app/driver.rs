@@ -419,7 +419,7 @@ impl AppDriver {
             ) {
                 let panel = if self.app.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
                     self.model_picker
-                        .effort_selector(self.app.agent_mode())
+                        .effort_selector()
                         .map(super::command_panel::CommandPanel::Effort)
                 } else {
                     self.model_picker

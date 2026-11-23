@@ -47,7 +47,7 @@ fn submit_prompt_carries_every_agent_mode_to_the_app_server() {
     use ash_app_server_protocol::protocol::session::SessionRequest;
     use ash_app_server_protocol::protocol::session::SessionRequestParams;
     use ash_app_server_protocol::protocol::turn::TurnStartResult;
-    for mode in crate::thread::composer::options::MODES {
+    for mode in ash_protocol::AgentMode::ALL {
         let recorded = Arc::new(Mutex::new(None));
         let result = SessionRequestResult::Turn(TurnStartResult {
             turn_id: TurnId::new("turn").unwrap(),

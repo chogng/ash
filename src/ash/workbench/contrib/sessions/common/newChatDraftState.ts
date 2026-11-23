@@ -51,10 +51,6 @@ function readStoredDraft(storage: IStorageService, draftId: string): { readonly 
 }
 
 function decodeStoredChatDraft(draft: unknown): ChatDraft {
-	// Multitask is a legacy ID in local draft storage. The Agents Window contract uses Swarm.
-	if (isRecord(draft) && draft.mode === 'multitask') {
-		draft = { ...draft, mode: 'swarm' };
-	}
 	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'swarm', 'ask'].includes(draft.mode as string)
 		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
 		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'

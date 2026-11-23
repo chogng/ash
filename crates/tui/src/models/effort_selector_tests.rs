@@ -22,12 +22,8 @@ fn catalog_levels(levels: &[ReasoningEffort]) -> Vec<ash_protocol::ModelReasonin
     }).collect()
 }
 
-fn selector(
-    levels: &[ReasoningEffort],
-    current: Option<ReasoningEffort>,
-    mode: AgentMode,
-) -> EffortSelector {
-    EffortSelector::new(&catalog_levels(levels), current, mode)
+fn selector(levels: &[ReasoningEffort], current: Option<ReasoningEffort>) -> EffortSelector {
+    EffortSelector::new(&catalog_levels(levels), current)
 }
 
 fn key(selector: &mut EffortSelector, code: KeyCode) -> Outcome {
@@ -55,41 +51,30 @@ fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
-fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
+fn effort_selector_stages_edits_until_enter() {
     let levels = [
         ReasoningEffort::Low,
         ReasoningEffort::High,
         ReasoningEffort::Max,
     ];
-    for mode in [
-        AgentMode::Agent,
-        AgentMode::Plan,
-        AgentMode::Debug,
-        AgentMode::Ask,
-        AgentMode::Swarm,
-    ] {
-        let mut selector = selector(&levels, Some(ReasoningEffort::High), mode);
-        key(&mut selector, KeyCode::Left);
-        key(&mut selector, KeyCode::Left);
-        key(&mut selector, KeyCode::Tab);
-        key(&mut selector, KeyCode::Tab);
-        assert!(matches!(key(&mut selector, KeyCode::Enter),
-            Outcome::Apply { effort: ReasoningEffort::Low, mode: result } if result == mode));
-        assert!(matches!(key(&mut selector, KeyCode::Esc), Outcome::Dismiss));
-    }
-    let mut selector = selector(&levels, None, AgentMode::Swarm);
-    key(&mut selector, KeyCode::Tab);
+    let mut selector = selector(&levels, Some(ReasoningEffort::High));
+    assert!(matches!(
+        key(&mut selector, KeyCode::Left),
+        Outcome::Consumed
+    ));
+    assert!(matches!(
+        key(&mut selector, KeyCode::Tab),
+        Outcome::Consumed
+    ));
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
-        Outcome::Apply {
-            mode: AgentMode::Agent,
-            ..
-        }
+        Outcome::Apply(ReasoningEffort::Low)
     ));
+    assert!(matches!(key(&mut selector, KeyCode::Esc), Outcome::Dismiss));
 }
 
 #[test]
-fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle() {
+fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply() {
     let mut selector = selector(
         &[
             ReasoningEffort::Low,
@@ -97,7 +82,6 @@ fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle()
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Low),
-        AgentMode::Agent,
     );
     key(&mut selector, KeyCode::Right);
     let repeat = |code| KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Repeat);
@@ -111,10 +95,7 @@ fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle()
     }
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
-        Outcome::Apply {
-            effort: ReasoningEffort::Max,
-            mode: AgentMode::Agent
-        }
+        Outcome::Apply(ReasoningEffort::Max)
     ));
 }
 
@@ -143,7 +124,7 @@ fn effort_selector_keyboard_selection_colors_every_level_without_filling_the_bac
                 context.danger(),
             ];
             for width in [24, 120] {
-                let mut selector = selector(&levels, Some(ReasoningEffort::None), AgentMode::Agent);
+                let mut selector = selector(&levels, Some(ReasoningEffort::None));
                 for (selected, effort) in levels.iter().enumerate() {
                     let buffer = render(&selector, width, context);
                     let layout = selector.layout(buffer.area, context);
@@ -171,7 +152,7 @@ fn effort_selector_keyboard_selection_colors_every_level_without_filling_the_bac
                     }
                     assert!(matches!(
                         key(&mut selector, KeyCode::Enter),
-                        Outcome::Apply { effort: applied, .. } if applied == *effort
+                        Outcome::Apply(applied) if applied == *effort
                     ));
                     key(&mut selector, KeyCode::Right);
                 }
@@ -195,7 +176,7 @@ fn effort_selector_centers_each_description_line_in_both_languages() {
     for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
         let context = RenderContext::new(&theme, 0).with_language(language);
         for width in [24, 60, 120] {
-            let mut selector = selector(&levels, Some(ReasoningEffort::None), AgentMode::Agent);
+            let mut selector = selector(&levels, Some(ReasoningEffort::None));
             for effort in levels {
                 let buffer = render(&selector, width, context);
                 let description = selector.layout(buffer.area, context).description;
@@ -222,7 +203,7 @@ fn effort_selector_centers_each_description_line_in_both_languages() {
                 }
                 assert!(matches!(
                     key(&mut selector, KeyCode::Enter),
-                    Outcome::Apply { effort: applied, .. } if applied == effort
+                    Outcome::Apply(applied) if applied == effort
                 ));
                 key(&mut selector, KeyCode::Right);
             }
@@ -238,7 +219,6 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
         let mut selector = selector(
             &[ReasoningEffort::Low, ReasoningEffort::Max],
             Some(ReasoningEffort::Max),
-            AgentMode::Agent,
         );
         let first = render(&selector, 80, context);
         let layout = selector.layout(first.area, context);
@@ -269,21 +249,20 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
 #[test]
 fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
     let context = crate::render::test_context();
-    let mut selector = selector(
+    let selector = selector(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::High),
-        AgentMode::Agent,
     );
     for width in [120, 200] {
         let buffer = render(&selector, width, context);
         let layout = selector.layout(buffer.area, context);
         assert_eq!(layout.axis.width, 31);
         let left = layout.axis.x;
-        let right = width - layout.toggle.right();
+        let right = width - layout.axis.right();
         assert!(left.abs_diff(right) <= 1);
         assert!(left >= 20);
         assert_eq!(buffer[(layout.axis.x, 0)].symbol(), "F");
@@ -293,15 +272,7 @@ fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
         assert_eq!(buffer[(high.x + 2, layout.axis.y)].symbol(), "▲");
         assert_eq!(
             selector.target_at(buffer.area, Position::new(high.x, high.y), context),
-            Some(Target::Level(1))
-        );
-        assert_eq!(
-            selector.target_at(
-                buffer.area,
-                Position::new(layout.toggle.x, layout.toggle.y),
-                context
-            ),
-            Some(Target::Swarm)
+            Some(Target(1))
         );
         assert_eq!(
             selector.target_at(buffer.area, Position::new(0, high.y), context),
@@ -315,17 +286,6 @@ fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
         "effort_selector_centered_wide",
         text(&render(&selector, 120, context))
     );
-    for width in [73, 120] {
-        let rows = selector.body_rows(width, context);
-        let area = Rect::new(0, 0, width, rows);
-        let before = selector.layout(area, context);
-        key(&mut selector, KeyCode::Tab);
-        let enabled = selector.layout(area, context);
-        assert_eq!(before.axis, enabled.axis);
-        assert_eq!(before.toggle, enabled.toggle);
-        assert_eq!(rows, selector.body_rows(width, context));
-        key(&mut selector, KeyCode::Tab);
-    }
 }
 
 #[test]
@@ -365,7 +325,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
             model: "test-model".into(),
         });
         let data = crate::models::ModelPickerData::new(catalog, config);
-        let mut selector = data.effort_selector(AgentMode::Agent).unwrap();
+        let mut selector = data.effort_selector().unwrap();
         assert_eq!(
             selector
                 .levels
@@ -390,7 +350,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
             );
             assert_eq!(
                 selector.target_at(buffer.area, level.label.as_position(), context),
-                Some(Target::Level(level.index))
+                Some(Target(level.index))
             );
         }
         let selected = &layout.levels[count - 1];
@@ -407,7 +367,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
         }
         screens.push(format!("{count} levels\n{}", text(&buffer)));
         assert!(
-            matches!(key(&mut selector, KeyCode::Enter), Outcome::Apply { effort, .. } if effort == levels[count - 1])
+            matches!(key(&mut selector, KeyCode::Enter), Outcome::Apply(effort) if effort == levels[count - 1])
         );
     }
     crate::tui_assert_snapshot!("effort_selector_catalog_level_counts", screens.join("\n\n"));
@@ -426,7 +386,7 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
     ];
     let context = crate::render::test_context();
     for width in [1, 8, 12, 24, 40, 64, 80, 120] {
-        let mut selector = selector(&levels, Some(levels[0]), AgentMode::Agent);
+        let mut selector = selector(&levels, Some(levels[0]));
         for selected in 0..levels.len() {
             let buffer = render(&selector, width, context);
             let layout = selector.layout(buffer.area, context);
@@ -457,7 +417,7 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
                             Position::new(x, level.hit_area.y),
                             context
                         ),
-                        Some(Target::Level(level.index))
+                        Some(Target(level.index))
                     );
                 }
             }
@@ -482,96 +442,6 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
 }
 
 #[test]
-fn effort_selector_swarm_wave_moves_without_changing_text_or_effort() {
-    for palette in [ThemePalette::dark(), ThemePalette::light()] {
-        for capability in [ColorLevel::TrueColor, ColorLevel::Ansi256] {
-            let theme = RenderTheme::from_palette(palette, capability).with_terminal_defaults();
-            let context = RenderContext::new(&theme, 0);
-            let mut selector = selector(
-                &[ReasoningEffort::Low, ReasoningEffort::High],
-                Some(ReasoningEffort::High),
-                AgentMode::Swarm,
-            );
-            let first = render(&selector, 120, context);
-            let toggle = selector.layout(first.area, context).toggle;
-            let head = (toggle.x, toggle.y);
-            let middle = (toggle.x + 4, toggle.y);
-            assert_eq!(first[head].fg, context.mode_color(AgentMode::Swarm));
-            assert_ne!(first[head].fg, first[middle].fg);
-            assert!(first[head].modifier.contains(Modifier::BOLD));
-            let halfway = selector.opened + Duration::from_millis(1920);
-            assert!(selector.tick(halfway));
-            let second = render(&selector, 120, context);
-            assert_eq!(text(&first), text(&second));
-            assert_ne!(first[head].fg, second[head].fg);
-            assert_ne!(first[middle].fg, second[middle].fg);
-            assert!(!selector.tick(halfway));
-            assert_eq!(second, render(&selector, 120, context));
-            assert!(selector.tick(selector.opened + Duration::from_millis(3840)));
-            assert_eq!(first, render(&selector, 120, context));
-            key(&mut selector, KeyCode::Tab);
-            assert!(!selector.tick(selector.opened + Duration::from_secs(5)));
-            let disabled = render(&selector, 120, context);
-            assert_eq!(disabled[head].fg, context.foreground());
-            assert!(!disabled[head].modifier.contains(Modifier::BOLD));
-            assert!(matches!(
-                key(&mut selector, KeyCode::Enter),
-                Outcome::Apply {
-                    effort: ReasoningEffort::High,
-                    mode: AgentMode::Agent
-                }
-            ));
-        }
-    }
-}
-
-#[test]
-fn effort_selector_swarm_wave_preserves_hover_and_press_feedback() {
-    let context = crate::render::test_context();
-    let mut selector = selector(
-        &[ReasoningEffort::High],
-        Some(ReasoningEffort::High),
-        AgentMode::Swarm,
-    );
-    selector.tick(selector.opened + Duration::from_millis(1920));
-    let mut terminal =
-        Terminal::new(TestBackend::new(120, selector.body_rows(120, context))).unwrap();
-    let toggle = selector
-        .layout(terminal.backend().buffer().area, context)
-        .toggle;
-    for pressed in [None, Some(Target::Swarm)] {
-        terminal
-            .draw(|frame| selector.draw(frame, frame.area(), Some(Target::Swarm), pressed, context))
-            .unwrap();
-        let cell = &terminal.backend().buffer()[(toggle.x, toggle.y)];
-        assert_eq!(
-            cell.bg,
-            if pressed.is_some() {
-                context.pressed_background()
-            } else {
-                context.hover_background()
-            }
-        );
-        assert_eq!(
-            cell.fg,
-            if pressed.is_some() {
-                context.pressed_foreground()
-            } else {
-                context.hover_foreground()
-            }
-        );
-        assert!(cell.modifier.contains(Modifier::BOLD));
-        assert!(matches!(
-            key(&mut selector, KeyCode::Enter),
-            Outcome::Apply {
-                effort: ReasoningEffort::High,
-                mode: AgentMode::Swarm
-            }
-        ));
-    }
-}
-
-#[test]
 fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_aligned() {
     let context = crate::render::test_context();
     let levels = [
@@ -583,7 +453,7 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
         ReasoningEffort::ExtraHigh,
         ReasoningEffort::Max,
     ];
-    let mut selector = selector(&levels, Some(ReasoningEffort::Max), AgentMode::Agent);
+    let mut selector = selector(&levels, Some(ReasoningEffort::Max));
     for width in [24, 40, 80] {
         let buffer = render(&selector, width, context);
         assert!(text(&buffer).contains("max"));
@@ -592,26 +462,17 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
             for x in rect.x..rect.right() {
                 assert_eq!(
                     selector.target_at(buffer.area, Position::new(x, rect.y), context),
-                    Some(Target::Level(level.index))
+                    Some(Target(level.index))
                 );
             }
         }
     }
     let buffer = render(&selector, 40, context);
     crate::tui_assert_snapshot!("effort_selector_narrow", text(&buffer));
-    let toggle = selector.layout(buffer.area, context).toggle;
-    assert_eq!(
-        selector.target_at(buffer.area, Position::new(toggle.x, toggle.y), context),
-        Some(Target::Swarm)
-    );
-    selector.activate(Target::Swarm);
-    selector.activate(Target::Level(0));
+    selector.activate(Target(0));
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
-        Outcome::Apply {
-            effort: ReasoningEffort::None,
-            mode: AgentMode::Swarm
-        }
+        Outcome::Apply(ReasoningEffort::None)
     ));
 }
 
@@ -626,7 +487,6 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Max),
-        AgentMode::Swarm,
     );
     let buffer = render(&selector, 60, context);
     let content = text(&buffer);
@@ -634,7 +494,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
     assert!(content.contains("更聪明"));
     assert!(!content.contains("当前："));
     assert!(!content.contains("由 Ash 协调"));
-    assert!(content.contains("蜂群  开启"));
+    assert!(!content.contains("蜂群"));
     assert!(content.contains("最高推理强度"));
     crate::tui_assert_snapshot!("effort_selector_chinese", content);
 }
@@ -649,15 +509,14 @@ fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
             ReasoningEffort::Max,
         ],
         Some(ReasoningEffort::Low),
-        AgentMode::Agent,
     );
     let mut terminal =
         Terminal::new(TestBackend::new(80, selector.body_rows(80, context))).unwrap();
     let layout = selector.layout(terminal.backend().buffer().area, context);
     let high = layout.levels[1].hit_area;
-    let target = Target::Level(1);
+    let target = Target(1);
     for selected in [0, 1] {
-        selector.activate(Target::Level(selected));
+        selector.activate(Target(selected));
         for pressed in [None, Some(target)] {
             terminal
                 .draw(|frame| selector.draw(frame, frame.area(), Some(target), pressed, context))
@@ -695,8 +554,7 @@ fn effort_selector_uses_catalog_copy_and_leaves_unknown_descriptions_empty() {
     let mut screens = Vec::new();
     for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
         let context = RenderContext::new(&theme, 0).with_language(language);
-        let mut selector =
-            EffortSelector::new(&levels, Some(ReasoningEffort::Low), AgentMode::Agent);
+        let mut selector = EffortSelector::new(&levels, Some(ReasoningEffort::Low));
         assert_eq!(
             selector.description(),
             "Fast responses with lighter reasoning"
@@ -709,10 +567,7 @@ fn effort_selector_uses_catalog_copy_and_leaves_unknown_descriptions_empty() {
         assert_eq!(selector.description(), "");
         assert!(matches!(
             key(&mut selector, KeyCode::Enter),
-            Outcome::Apply {
-                effort: ReasoningEffort::High,
-                ..
-            }
+            Outcome::Apply(ReasoningEffort::High)
         ));
         screens.push(format!(
             "{language:?} unknown\n{}",

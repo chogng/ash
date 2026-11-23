@@ -4,8 +4,6 @@ use super::MultiAgentCoordinator;
 use super::SendAgentMessageRequest;
 use super::SpawnAgentRequest;
 use super::build_context_seed;
-use super::context_seed_digest;
-use super::validate_context_seed_digest;
 use crate::AgentCommandDisposition;
 use crate::AgentTreeLimits;
 use crate::ContextBudget;
@@ -39,7 +37,6 @@ use ash_protocol::DelegationResultDigest;
 use ash_protocol::DelegationResultStatus;
 use ash_protocol::ForkedAgentContext;
 use ash_protocol::FrozenSkillActivation;
-use ash_protocol::ModelRef;
 use ash_protocol::SessionId;
 use ash_protocol::SkillActivationReason;
 use ash_protocol::SkillId;
@@ -1163,38 +1160,6 @@ fn recovery_reconciles_a_terminal_child_result_once_without_a_join() {
             .summary,
         "Recovered result"
     );
-}
-
-#[test]
-fn legacy_context_seed_digest_accepts_the_original_mode_keys() {
-    let fixture = fixture();
-    let parent = fixture
-        .threads
-        .read_thread(&fixture.parent_thread_id)
-        .unwrap();
-    let mut seed = build_context_seed(spawn_request(&fixture), parent.sequence).unwrap();
-    let guidance = ash_protocol::TurnInstructions::new("models", "test", "v1", "guidance").unwrap();
-    seed.agent.base_instructions = Some(guidance.clone().with_model_guidance(
-        ash_protocol::ModelInstructionSelection::Specialized {
-            model: ModelRef::new(
-                ash_protocol::ProviderId::new("test").unwrap(),
-                ash_protocol::ModelId::new("model").unwrap(),
-            ),
-            instructions: guidance.as_text(),
-            digest: ash_protocol::ContentDigest::sha256(guidance.body().as_bytes()),
-            messages: Some(ash_protocol::ModelInstructionMessages {
-                agent_modes: [(ash_protocol::AgentMode::Swarm, guidance.as_text())].into(),
-                ..Default::default()
-            }),
-        },
-    ));
-    seed.digest =
-        ash_protocol::AgentMode::with_legacy_history_encoding(|| context_seed_digest(&seed))
-            .unwrap();
-    assert_ne!(context_seed_digest(&seed).unwrap(), seed.digest);
-    validate_context_seed_digest(&seed).unwrap();
-    seed.parent_sequence += 1;
-    assert!(validate_context_seed_digest(&seed).is_err());
 }
 
 #[test]

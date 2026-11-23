@@ -188,7 +188,7 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 ## Agent 模式
 
-`session/request.startTurn.mode` 和 `queue/enqueue.mode` 选择模式，缺省为 `agent`。客户端从 `Turn.mode` 读取当前模式。`TurnInstructions.modeInstructions` 保存模式资产。协议主版本 11 与历史 schema 36 使用 `swarm`，含旧 `multitask` ID 的记录需由旧版读取。[Turn、切换与排队](../agent-mode-templates/README.md#turn切换与排队)
+`session/request.startTurn.mode` 和 `queue/enqueue.mode` 选择模式，缺省为 `agent`。客户端从 `Turn.mode` 读取当前模式。`TurnInstructions.modeInstructions` 保存模式资产。协议主版本 11 与历史 schema 36 使用 `swarm`。[Turn、切换与排队](../agent-mode-templates/README.md#turn切换与排队)
 
 ## 指令导入
 

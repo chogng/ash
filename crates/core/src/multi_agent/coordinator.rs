@@ -1426,15 +1426,12 @@ fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, Cor
 }
 
 pub(crate) fn validate_context_seed_digest(seed: &AgentContextSeed) -> Result<(), CoreError> {
-    if context_seed_digest(seed)? == seed.digest
-        || ash_protocol::AgentMode::with_legacy_history_encoding(|| context_seed_digest(seed))?
-            == seed.digest
-    {
-        return Ok(());
+    if context_seed_digest(seed)? != seed.digest {
+        return Err(CoreError::Context(
+            "Agent context seed digest does not match its immutable material".into(),
+        ));
     }
-    Err(CoreError::Context(
-        "Agent context seed digest does not match its immutable material".into(),
-    ))
+    Ok(())
 }
 
 #[derive(Serialize)]

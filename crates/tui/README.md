@@ -122,11 +122,11 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 ### 推理档位与 Swarm
 
-`/effort <档位>` 设置当前模型的推理强度。无参数时，fullscreen 打开底部横向编辑器，inline 打开选项列表。在横向编辑器中按 ←/→ 暂选档位，按 Tab 暂选 Swarm，Enter 应用，Esc 取消并保留草稿。切换屏幕时，已打开的编辑器与未确认选项一起转交。[选择器布局和主题](LAYOUT.md#推理档位选择器)
+`/effort <档位>` 设置当前模型的推理强度。无参数时，fullscreen 打开底部横向编辑器，inline 打开选项列表。在横向编辑器中按 ←/→ 暂选档位，Enter 应用，Esc 取消并保留草稿。切换屏幕时，已打开的编辑器与未确认选项一起转交。[选择器布局和主题](LAYOUT.md#推理档位选择器)
 
 输入框中的 Shift+↓ / Shift+↑ 在当前模型支持的档位内降档或升档，到边界后停住。未设置时从模型默认档开始；模型也无默认档时，首次调整选择第一档。状态栏显示当前档位。可在 `/shortcuts` 重绑，在 `/help` 查看。未明确选择模型或模型不支持推理档位时显示对应说明。选择、升降、边界判断及配置更新共用 [reasoning_effort.rs](src/models/reasoning_effort.rs)。
 
-`/effort swarm [on|off]` 设置下一条消息的模式。省略 `on|off` 时启用 Swarm，`off` 将 Swarm 改回 Agent。也可使用 `/mode swarm`。[Swarm 行为](../agent-mode-templates/README.md#swarm-的执行边界)
+使用 `/mode swarm` 或从模式选择器选中 Swarm，设置下一条消息的模式。[Swarm 行为](../agent-mode-templates/README.md#swarm-的执行边界)
 
 ## 面板怎样接入后端
 

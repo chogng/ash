@@ -1241,14 +1241,11 @@ fn acceleration_control_cycles_catalog_ids_in_both_directions() {
         catalog.models[0].selected_acceleration = selected.map(str::to_owned);
         picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
         let mut effort = ModelPickerData::new(catalog.clone(), config.clone())
-            .effort_selector(ash_protocol::AgentMode::Swarm)
+            .effort_selector()
             .unwrap();
         assert!(matches!(
             effort.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            crate::models::effort_selector::Outcome::Apply {
-                effort: ash_protocol::ReasoningEffort::Max,
-                mode: ash_protocol::AgentMode::Swarm,
-            }
+            crate::models::effort_selector::Outcome::Apply(ash_protocol::ReasoningEffort::Max)
         ));
     }
     catalog.models[0].acceleration_options.remove(0);

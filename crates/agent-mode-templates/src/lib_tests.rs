@@ -22,7 +22,7 @@ fn every_mode_freezes_its_authored_asset() {
         (AgentMode::Agent, "agent", "agent-v3", super::AGENT),
         (AgentMode::Plan, "plan", "plan-v5", super::PLAN),
         (AgentMode::Debug, "debug", "debug-v3", super::DEBUG),
-        (AgentMode::Swarm, "swarm", "swarm-v1", super::SWARM),
+        (AgentMode::Swarm, "swarm", "swarm-v2", super::SWARM),
         (AgentMode::Ask, "ask", "ask-v4", super::ASK),
     ] {
         let frozen = super::instructions(mode);

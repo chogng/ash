@@ -4,8 +4,150 @@ use crate::scenario_http::ScenarioServer;
 use crate::tui_process::Fixture;
 use crate::tui_process::LARGE_SIZE;
 use crate::tui_process::TuiProcess;
+use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
+use ash_protocol::AgentMode;
+use ash_protocol::TurnStatus;
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
+use std::time::Instant;
+
+#[test]
+fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
+    let fixture = Fixture::new();
+    let reply = "Swarm combined both findings.";
+    let workers = [
+        (
+            "checklist",
+            "Inspect the checklist.",
+            "Checklist is complete.",
+        ),
+        (
+            "interface",
+            "Inspect the interface.",
+            "Interface is consistent.",
+        ),
+    ];
+    // Requests from the coordinator and workers may arrive in any order.
+    let server = ScenarioServer::start_routed(6, move |request| {
+        if request.contains("Collaboration mode: Agent") {
+            let Some((_, _, finding)) = workers.iter().find(|(_, task, _)| request.contains(*task))
+            else {
+                return HttpResponse::failure(422, "Unexpected Swarm worker task");
+            };
+            return HttpResponse::streaming([finding], None);
+        }
+        let (_, body) = request.split_once("\r\n\r\n").unwrap();
+        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        let messages = body["messages"].as_array().unwrap();
+        let tool_result = |call_id: &str| {
+            messages
+                .iter()
+                .find(|message| message["tool_call_id"] == call_id)
+                .and_then(|message| message["content"].as_str())
+        };
+        if let Some(content) = tool_result("wait-for-findings") {
+            let outcome: serde_json::Value = serde_json::from_str(content).unwrap();
+            if outcome["status"] == "satisfied"
+                && workers
+                    .iter()
+                    .all(|(_, _, finding)| content.contains(*finding))
+            {
+                return HttpResponse::streaming([reply], None);
+            }
+            return HttpResponse::failure(422, "Swarm wait did not return both findings");
+        }
+        let mut delegation_ids = Vec::new();
+        for (name, task, _) in workers {
+            let call_id = format!("spawn-{name}");
+            let Some(content) = tool_result(&call_id) else {
+                return HttpResponse::tool_call(
+                    &call_id,
+                    "spawn_agent",
+                    serde_json::json!({"task": task, "name": name, "context": {"mode": "fresh"}}),
+                );
+            };
+            let spawned: serde_json::Value = serde_json::from_str(content).unwrap();
+            delegation_ids.push(spawned["delegation_id"].as_str().unwrap().to_owned());
+        }
+        HttpResponse::tool_call(
+            "wait-for-findings",
+            "wait_agent",
+            serde_json::json!({"delegation_ids": delegation_ids, "policy": "all", "timeout_ms": 10000}),
+        )
+    });
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Ash Code v");
+    process.submit("/mode swarm");
+    process.wait_for_stable_screen(" · Swarm");
+    process.submit("Coordinate a review of the synthetic checklist.");
+    process.wait_for_stable_screen(reply);
+
+    let inspector = fixture.connect();
+    let mut client = inspector.client();
+    let sessions = client.list_sessions().unwrap().sessions;
+    assert_eq!(sessions.len(), 1);
+    let session = &sessions[0];
+    assert_eq!(session.threads.len(), workers.len() + 1);
+    let root = session
+        .threads
+        .iter()
+        .find(|thread| thread.parent_thread_id.is_none())
+        .unwrap();
+    for thread in &session.threads {
+        let mode = if thread.thread_id == root.thread_id {
+            AgentMode::Swarm
+        } else {
+            assert_eq!(thread.parent_thread_id.as_ref(), Some(&root.thread_id));
+            AgentMode::Agent
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let restored = client
+                .read_session_thread(SessionThreadReadParams {
+                    session_id: session.session_id.clone(),
+                    thread_id: thread.thread_id.clone(),
+                    history: None,
+                })
+                .unwrap();
+            let turn = &restored.thread.turns[0];
+            assert_eq!(turn.mode, mode);
+            if turn.status == TurnStatus::Completed {
+                break;
+            }
+            assert_ne!(turn.status, TurnStatus::Failed, "{restored:?}");
+            assert!(Instant::now() < deadline, "{mode:?} turn did not complete");
+            std::thread::yield_now();
+        }
+    }
+    inspector.shutdown().unwrap();
+    process.quit();
+
+    let bodies = server.request_bodies();
+    assert_eq!(bodies.len(), 6);
+    assert!(bodies[0].contains("Collaboration mode: Swarm"));
+    assert!(
+        bodies[0].contains(
+            "Use a shared board when the Role or workflow calls for ongoing coordination"
+        )
+    );
+
+    let mut resumed = TuiProcess::start(
+        &fixture,
+        &[
+            "resume",
+            session.session_id.as_str(),
+            root.thread_id.as_str(),
+        ],
+        LARGE_SIZE,
+    );
+    resumed.wait_for_stable_screen(reply);
+    resumed.wait_for_stable_screen(" · Swarm");
+    assert_eq!(server.request_count(), 6);
+    resumed.quit();
+}
 
 #[test]
 fn actual_tui_recalls_input_history_after_process_restart() {

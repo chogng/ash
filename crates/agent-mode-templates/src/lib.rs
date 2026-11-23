@@ -17,7 +17,7 @@ pub fn instructions(mode: protocol::AgentMode) -> protocol::TurnInstructions {
         protocol::AgentMode::Agent => ("collaboration-mode/agent", "agent-v3", AGENT),
         protocol::AgentMode::Plan => ("collaboration-mode/plan", "plan-v5", PLAN),
         protocol::AgentMode::Debug => ("collaboration-mode/debug", "debug-v3", DEBUG),
-        protocol::AgentMode::Swarm => ("collaboration-mode/swarm", "swarm-v1", SWARM),
+        protocol::AgentMode::Swarm => ("collaboration-mode/swarm", "swarm-v2", SWARM),
         protocol::AgentMode::Ask => ("collaboration-mode/ask", "ask-v4", ASK),
     };
     let body = if mode == protocol::AgentMode::Plan {

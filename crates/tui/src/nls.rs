@@ -1128,24 +1128,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("Faster", "速く", "更快", "Plus rapide"),
     translation("Smarter", "賢く", "更聪明", "Plus intelligent"),
     translation(
-        "toggle swarm",
-        "スウォームを切り替え",
-        "切换蜂群模式",
-        "basculer le mode essaim",
-    ),
-    translation(
-        "Swarm enabled. Thinking effort is unchanged.",
-        "スウォームを有効にしました。推論レベルは変わりません。",
-        "已开启蜂群模式；推理强度保持不变。",
-        "Mode essaim activé. Le niveau de raisonnement reste inchangé.",
-    ),
-    translation(
-        "Swarm disabled. Thinking effort is unchanged.",
-        "スウォームを無効にしました。推論レベルは変わりません。",
-        "已关闭蜂群模式；推理强度保持不变。",
-        "Mode essaim désactivé. Le niveau de raisonnement reste inchangé.",
-    ),
-    translation(
         "No additional reasoning",
         "追加の推論なし",
         "不增加额外推理",
@@ -1266,10 +1248,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "choisir comment traiter la prochaine tâche",
     ),
     translation(
-        "set thinking effort or Ash swarm",
-        "推論レベルまたは Ash のスウォームを選択",
-        "选择推理强度或 Ash 蜂群模式",
-        "choisir le raisonnement ou le mode essaim Ash",
+        "set thinking effort",
+        "推論レベルを選択",
+        "设置推理强度",
+        "choisir le niveau de raisonnement",
     ),
     translation(
         "prepare and review project background for Guardian",
@@ -1604,17 +1586,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "<agent|plan|debug|swarm|ask>",
     ),
     translation(
-        "Use /effort <level> or /effort swarm [on|off]",
-        "/effort <推論レベル> または /effort swarm [on|off] を使用",
-        "使用 /effort <档位> 或 /effort swarm [on|off]",
-        "Utiliser /effort <niveau> ou /effort swarm [on|off]",
+        "Use /effort <level>",
+        "/effort <推論レベル> を使用",
+        "使用 /effort <档位>",
+        "Utiliser /effort <niveau>",
     ),
-    translation(
-        "<effort> | swarm [on|off]",
-        "<推論レベル> | swarm [on|off]",
-        "<推理强度> | swarm [on|off]",
-        "<niveau> | swarm [on|off]",
-    ),
+    translation("<effort>", "<推論レベル>", "<推理强度>", "<niveau>"),
     translation(
         "<manual|auto|bypassPermissions>",
         "<manual|auto|bypassPermissions>",

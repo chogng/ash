@@ -1152,11 +1152,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "multitask",
-      "file": "multitask.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "mute",
       "file": "mute.svg",
       "rendering": "symbolic"
@@ -1559,6 +1554,11 @@
     {
       "id": "summary",
       "file": "summary.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "swarm",
+      "file": "swarm.svg",
       "rendering": "symbolic"
     },
     {

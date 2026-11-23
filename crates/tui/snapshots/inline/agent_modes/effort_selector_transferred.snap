@@ -18,11 +18,11 @@ expression: render_effort(&app)
 
 ─ Thinking effort ──────────────────────────────────────────────────────────────
 
-                 Faster                  Smarter
-                 ───────────────────────────▲───    Swarm  on
-                   low        high         max
+                        Faster                  Smarter
+                        ───────────────────────────▲───
+                          low        high         max
 
   Maximum reasoning. May use more tokens and take longer; use for the hardest
                                      tasks.
 
-  ←/→ choose  ·  Tab toggle swarm  ·  Enter apply  ·  Esc cancel
+  ←/→ choose  ·  Enter apply  ·  Esc cancel

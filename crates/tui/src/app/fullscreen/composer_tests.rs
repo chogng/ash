@@ -155,7 +155,7 @@ fn composer_agent_modes_color_both_rules_prompt_and_selector() {
         assert_eq!(
             app.list_selection().unwrap().selected_visible_index(),
             Some(
-                crate::thread::composer::options::MODES
+                ash_protocol::AgentMode::ALL
                     .iter()
                     .position(|value| *value == mode)
                     .unwrap()
