@@ -5,7 +5,7 @@ import type { ColorThemeChangeSource, IWorkbenchFileIconTheme, IWorkbenchThemeSe
 import { Emitter } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { equals } from '../../../../base/common/objects.js';
-import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon, setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
@@ -54,6 +54,11 @@ interface IWindowColorOverrides {
 	resolve(theme: IColorTheme): Readonly<Record<string, ColorValue>> | undefined;
 }
 
+interface IWorkbenchThemeOptions {
+	readonly colorOverrides?: IWindowColorOverrides;
+	readonly fileIconTheme?: IWorkbenchFileIconTheme;
+}
+
 /** Owns active theme selection and its window-scoped visual resources. */
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
@@ -65,6 +70,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	private reportedColorTheme: ReportedColorTheme | undefined;
 	private initialized = false;
 	private windowColorOverrides: IWindowColorOverrides | undefined;
+	private windowFileIconTheme: IWorkbenchFileIconTheme | undefined;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
 	private readonly resourceIconChange = this._register(new Emitter<void>());
 	public readonly onDidChangeResourceIcons = this.resourceIconChange.event;
@@ -89,13 +95,14 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(toDisposable(() => this.previews.clear()));
 	}
 
-	public initialize(windowColorOverrides?: IWindowColorOverrides): void {
+	public initialize(options: IWorkbenchThemeOptions = {}): void {
 		this.assertNotDisposed();
 		if (this.initialized) {
 			throw new Error('Workbench themes are already initialized');
 		}
 		this.initialized = true;
-		this.windowColorOverrides = windowColorOverrides;
+		this.windowColorOverrides = options.colorOverrides;
+		this.windowFileIconTheme = options.fileIconTheme;
 		this.colorStyles = this._register(new ManagedStyleSheet(this.container.ownerDocument));
 		// The document scope also covers popups mounted outside the workbench container.
 		const root = this.container.ownerDocument.documentElement;
@@ -305,7 +312,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 
 	private updateFileIconTheme(): void {
 		const id = this.configurationService.getValue<string | null>(WorkbenchConfiguration.iconTheme);
-		const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === id);
+		const theme = this.windowFileIconTheme ?? WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === id);
 		if (theme === this.fileIconTheme) { return; }
 		this.fileIconTheme = theme;
 		if (this.iconStyles) {
@@ -328,6 +335,11 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	public renderFileIcon(resource: URI, container: HTMLElement, classes: readonly string[] = getIconClasses(undefined, this.languageService, resource, FileKind.File)): void {
 		const icon = this.fileIconTheme?.resolveFileIcon(classes, this.colorTheme.colorScheme);
 		container.classList.add(...classes);
+		if (icon?.productIcon) {
+			container.replaceChildren();
+			appendIcon(icon.productIcon, container);
+			return;
+		}
 		container.classList.toggle('ash-file-icon', icon !== undefined);
 		container.textContent = icon?.character ?? '';
 		container.style.color = icon?.color ?? '';

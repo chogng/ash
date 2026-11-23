@@ -39,6 +39,8 @@ import type { IUserThemeService } from '../../../../common/userThemes.js';
 import { WorkbenchProductIconThemesRegistry } from '../../common/themeExtensionPoints.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.js';
+import { FileIconThemeData } from '../../browser/fileIconThemeData.js';
+import { getBuiltinFileIcon } from '../../../../common/fileIcons.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
@@ -74,7 +76,7 @@ class ThemeChanges extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly themes: WorkbenchThemeService;
 
-	constructor() {
+	constructor(options?: Parameters<WorkbenchThemeService['initialize']>[0]) {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
 		this.services.registerInstance(IConfigurationService, this.configuration);
@@ -82,9 +84,29 @@ class ThemeChanges extends Disposable {
 		this.services.registerInstance(IHostColorSchemeService, this.host);
 		this.services.registerInstance(ITelemetryService, this.telemetry);
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.browser.window.document.body));
-		this.themes.initialize();
+		this.themes.initialize(options);
 	}
 }
+
+test('window file icon theme uses built-in product icons independently of profile file icon settings', async () => {
+	const fileIconTheme = FileIconThemeData.createBuiltin();
+	using changes = new ThemeChanges({ fileIconTheme });
+	await changes.configuration.updateValue(WorkbenchConfiguration.iconTheme, null);
+	assert.equal(changes.themes.getFileIconTheme(), fileIconTheme);
+	const document = changes.browser.window.document;
+	const container = document.createElement('span');
+	const renderedIcons = [
+		['paper.PDF', 'pdf-red'], ['.pdf', 'pdf-red'], ['table.csv', 'csv-green'], ['book.xlsx', 'xls-green'],
+		['document.docx', 'docx-blue'], ['archive.zip', 'file'], ['pdf', 'file'],
+	] as const;
+	for (const [name, id] of renderedIcons) {
+		assert.equal(getBuiltinFileIcon(name).id, id);
+		changes.themes.renderFileIcon(URI.file(`/workspace/${name}`), container);
+		assert.equal(container.children.length, 1);
+		assert.equal(container.firstElementChild?.getAttribute('data-ash-icon-id'), id);
+	}
+	assert.match(document.head.textContent!, /\.ash-themed-file-icon\.file-icon\[class~="pdf-ext-file-icon"\]::before/);
+});
 
 test('committed color theme changes report their source and bounded appearance without duplicate selections', async () => {
 	using changes = new ThemeChanges();

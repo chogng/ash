@@ -80,6 +80,7 @@ import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
 import { ObjectTreeElementCollapseState, type TreeDragAndDrop, type TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
 import type { URI } from '../../../../../base/common/uri.js';
+import { getBuiltinFileIcon } from '../../../../../workbench/common/fileIcons.js';
 import { IBlockedSessionsIndicatorService, type IBlockedSession } from '../blockedSessionsIndicatorModel.js';
 
 const attentionSection = 'attention';
@@ -1352,7 +1353,7 @@ export class SessionsList extends DomWidget {
 				for (const file of files?.rows ?? []) {
 					if (!this.search.matches(file.name, project.title)) continue;
 					const fileKey = JSON.stringify(['file', project.key, file.id]);
-					const item = itemFor(fileKey, 'file', Lxicon.file);
+					const item = itemFor(fileKey, 'file', getBuiltinFileIcon(file.name));
 					item.update(file.name, false, () => this.openProjectFile(fileKey, file.open));
 					children.push(item.domNode);
 				}

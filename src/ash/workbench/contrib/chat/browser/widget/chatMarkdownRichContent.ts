@@ -4,11 +4,11 @@ import '../../../../../base/browser/ui/countBadge/countBadge.css';
 import { escapeIcons } from '../../../../../base/common/iconLabels.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Marked, type MarkedExtension, type Token } from '../../../../../base/common/marked/marked.js';
-import { extname } from '../../../../../base/common/path.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue as escapeHTML } from '../../../../../base/common/strings.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { parseGitHubLinkTarget } from '../../../../../platform/github/common/githubUrls.js';
+import { getBuiltinFileIcon } from '../../../../common/fileIcons.js';
 import type { ChatMarkdownRichContent, ChatMarkdownRichPart, ChatMarkdownRichStyle } from '../../common/model/chatMarkdownRichContent.js';
 import { getChatMarkdownExtensions } from './chatCjkMarkdown.js';
 
@@ -20,19 +20,6 @@ export const chatSourcePreviewClass = 'ash-chat-source-preview';
 export const chatCitationLinkClass = 'ash-chat-citation-link';
 export const chatCitationClass = 'ash-chat-citation';
 export const chatExternalLinkClass = 'ash-chat-external-link';
-
-const fileIcons = new Map([
-	['.csv', Lxicon.csvGreen],
-	['.doc', Lxicon.docxBlue],
-	['.docx', Lxicon.docxBlue],
-	['.pdf', Lxicon.pdfRed],
-	['.xls', Lxicon.xlsGreen],
-	['.xlsx', Lxicon.xlsGreen],
-]);
-
-export function getChatFileIcon(name: string) {
-	return fileIcons.get(extname(name).toLowerCase()) ?? Lxicon.file;
-}
 
 function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
 	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
@@ -138,7 +125,7 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			if (inLink || !part.uri) return label;
 			const href = CHAT_RESPONSE_DOWNLOAD_SCHEME + ':' + index;
 			const title = part.title ? ` title="${escapeHTML(part.title)}"` : '';
-			const icon = getChatFileIcon(part.label);
+			const icon = getBuiltinFileIcon(part.label);
 			return `<a href="${href}"${title}><span class="ash-chat-file-link-icon">$(${icon.id})</span>${label}</a>`;
 		}
 		case 'box':

@@ -27,7 +27,7 @@ import { IContextKeyService } from '../../../../../../platform/contextkey/browse
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ImagePreviewPopup } from '../../../../mediaPreview/browser/imagePreviewPopup.js';
 import { ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
-import { getChatFileIcon } from '../chatMarkdownRichContent.js';
+import { getBuiltinFileIcon } from '../../../../../common/fileIcons.js';
 import { renderChatChartDocument } from './chatChartDocument.js';
 
 /** A provider-owned resource; only its reader knows authentication or protocol coordinates. */
@@ -513,7 +513,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 		const restoreFocus = row.element.contains(document.activeElement);
 		const label = localize('chat.resource.downloadFile', 'Download {0}', part.name);
 		const icon = h(document, 'span', { className: 'ash-chat-file-link-icon' });
-		appendIcon(getChatFileIcon(part.name), icon);
+		appendIcon(getBuiltinFileIcon(part.name), icon);
 		const link = h(document, 'a', {
 			className: 'ash-chat-file-download',
 			properties: { download: part.name, title: label },

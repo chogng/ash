@@ -1,8 +1,7 @@
 {
   "name": "theme-seti",
   "ashUiTargets": [
-    "ide",
-    "agents"
+    "ide"
   ],
   "publisher": "ash",
   "version": "1.0.0",

@@ -58,7 +58,7 @@
 | [sql](../extensions/sql/package.json)                                               | IDE          | 提供 sql 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                            |
 | [swift](../extensions/swift/package.json)                                           | IDE          | 提供 swift 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                          |
 | [theme-defaults](../extensions/theme-defaults/package.json)                         | 通用         | 颜色主题作用于整个 Workbench，两种窗口都消费主题设置。                                                 |
-| [theme-seti](../extensions/theme-seti/package.json)                                 | 通用         | 文件图标主题用于两端的资源和文件标签。                                                                 |
+| [theme-seti](../extensions/theme-seti/package.json)                                 | IDE          | IDE 的文件图标主题。Agent Window 使用内置文件图标。                                                    |
 | [toml](../extensions/toml/package.json)                                             | IDE          | 提供 toml 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                           |
 | [typescript-basics](../extensions/typescript-basics/package.json)                   | IDE          | 提供 typescript, typescriptreact, jsonc, json 的语法、语言配置或编辑片段；主要入口是源码编辑器。       |
 | [xml](../extensions/xml/package.json)                                               | IDE          | 提供 xml, xsl, dtd 的语法、语言配置或编辑片段；主要入口是源码编辑器。                                  |

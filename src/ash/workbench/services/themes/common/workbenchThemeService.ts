@@ -3,8 +3,10 @@ import type { IColorTheme, IThemeService } from '../../../../platform/theme/comm
 import type { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { IFileIconTheme, IProductIconTheme } from '../../../../platform/theme/common/themeService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { Icon } from '../../../../base/common/icon.js';
 
 export interface FileIconDefinition {
+	readonly productIcon?: Icon;
 	readonly character: string;
 	readonly color: string;
 	readonly fontFamily: string;

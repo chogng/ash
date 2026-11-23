@@ -348,6 +348,7 @@ import type { ExtensionColorThemeService } from '../../workbench/services/extens
 import type { BrowserStorageServiceOptions } from '../../workbench/services/storage/browser/storageService.js';
 import { IWorkbenchHostService } from '../../workbench/services/host/common/workbenchHostService.js';
 import { WorkbenchThemeService } from '../../workbench/services/themes/browser/workbenchThemeService.js';
+import { FileIconThemeData } from '../../workbench/services/themes/browser/fileIconThemeData.js';
 import { IHostColorSchemeService } from '../../workbench/services/themes/common/hostColorSchemeService.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from '../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import { AppServerTeamsProvider } from '../contrib/providers/agentHost/browser/appServerTeamsProvider.js';
@@ -600,7 +601,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalGitService, options.api.localGit);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
-		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement, extensionManagementService);
+		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.theme-seti');
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		const themeService = this.registerHostServices(services, options, configurationService, enabledExtensions, ownerWindow);
@@ -689,8 +690,11 @@ export abstract class Workbench extends Disposable {
 		const themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize({
-			settings: [SessionsConfiguration.backgroundColor],
-			resolve: theme => getSessionsWindowColorOverrides(theme.colorScheme, configurationService.getValue<SessionsBackgroundColor>(SessionsConfiguration.backgroundColor)),
+			colorOverrides: {
+				settings: [SessionsConfiguration.backgroundColor],
+				resolve: theme => getSessionsWindowColorOverrides(theme.colorScheme, configurationService.getValue<SessionsBackgroundColor>(SessionsConfiguration.backgroundColor)),
+			},
+			fileIconTheme: FileIconThemeData.createBuiltin(),
 		});
 		services.registerInstance(IAuxiliaryWindowService, this._register(options.createAuxiliaryWindowService ? options.createAuxiliaryWindowService(ownerWindow, options.container, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, options.container)));
 		const workbenchWindow = this._register(new WorkbenchWindow({

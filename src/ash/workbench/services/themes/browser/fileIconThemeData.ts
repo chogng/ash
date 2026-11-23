@@ -1,6 +1,9 @@
 import { ColorScheme, isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { FileIconDefinition, IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
 import { fileIconSelectorEscape, getIconClassesForLanguageId } from '../../../../editor/common/services/getIconClasses.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
+import { builtinFileIcons } from '../../../common/fileIcons.js';
 
 interface Associations {
 	readonly file?: string;
@@ -25,6 +28,24 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 	) {
 		this.hasFileIcons = [normal, light, highContrast].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
 		this.hasFolderIcons = [normal, light, highContrast].some(associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')));
+	}
+
+	public static createBuiltin(): FileIconThemeData {
+		const icons = new Map<string, FileIconDefinition>();
+		for (const productIcon of new Set([Lxicon.file, ...builtinFileIcons.values()])) {
+			const definition = getLxiconDefinition(productIcon.id);
+			if (!definition) throw new ReferenceError(`Unknown file icon: ${productIcon.id}`);
+			icons.set(productIcon.id, {
+				productIcon, character: definition.fontCharacter, color: '', image: '',
+				fontFamily: 'Ash UI Icons', fontSize: '100%', fontWeight: 'normal', fontStyle: 'normal',
+			});
+		}
+		const normal: Associations = {
+			file: Lxicon.file.id,
+			selectors: new Map(Array.from(builtinFileIcons, ([extension, icon]) => [`${fileIconSelectorEscape(extension)}-ext-file-icon`, icon.id])),
+		};
+		const empty: Associations = { selectors: new Map() };
+		return new FileIconThemeData('ash', 'Ash', suggestionStyles(icons, normal, empty, empty).join('\n'), icons, normal, empty, empty, false);
 	}
 
 	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
@@ -173,10 +194,12 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		styles.push(`${selector}{font-size:0;min-width:16px;inline-size:16px;}`);
 		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
 		// The wrapper hides fallback text at 0px; theme percentages still scale the UI font.
-		const glyphSize = `calc(var(--ash-fontSize-body1) * ${parseFloat(icon.fontSize) / 100})`;
+		const glyphFont = icon.productIcon
+			? `font:var(--ash-icon-font-style, normal) var(--ash-icon-font-weight, 400) var(--ash-lxiconFontSize)/16px var(--ash-icon-font-family, ${cssString(icon.fontFamily)});`
+			: `font-family:${cssString(icon.fontFamily)};font-size:calc(var(--ash-fontSize-body1) * ${parseFloat(icon.fontSize) / 100});font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;`;
 		styles.push(icon.image
 			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
-			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${glyphSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
+			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}${glyphFont}}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
 	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';

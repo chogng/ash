@@ -156,6 +156,8 @@ Docs 底部编辑工具栏使用 28 × 28px 点击区域和 18px 图标；Ask As
 
 IDE 与 Agent Window 共用图标注册、主题解析和 WOFF2 渲染机制。IDE 保持原 SVG 的字形、字重与线宽；字体格式迁移不改变其外观。Agent Window 的可变字重、线宽及选中态调整只在 Sessions 作用域内生效，不修改共享默认值或影响 IDE。
 
+Agent Window 使用内置 Lxicon 文件图标。项目侧栏、文件标签页和聊天附件共用扩展名映射，未知类型使用通用文件图标。IDE 通过 `workbench.iconTheme` 选择文件图标主题。
+
 ## 字体与留白
 
 | 角色                                                     | Agent Window 字号 | 字重 |

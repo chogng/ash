@@ -26,7 +26,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
 			if (!new URL(route.request().url()).pathname.endsWith(id)) return route.fallback();
 			if (++detailsReads === 1) return route.fulfill({ status: 500 });
-			return route.fulfill({ json: { gizmo: { id, display: { name: 'Research' } }, files: [{ file_id: 'file-report', name: 'report.txt' }] } });
+			return route.fulfill({
+				json: {
+					gizmo: { id, display: { name: 'Research' } }, files: [
+						{ file_id: 'file-report', name: 'report.txt' }, { file_id: 'file-paper', name: 'paper.PDF' },
+					]
+				}
+			});
 		});
 		await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/plain', body: 'Research report' }));
 		await page.goto('/chatgptNavigation.html?sidebarProjectFiles&projectMaterials&locale=zh-CN&theme=light');
@@ -51,6 +57,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await remote.press('ArrowRight');
 		await list.getByRole('button', { name: '无法加载项目文件。重试', exact: true }).press('Enter');
 		await expect(files).toBeVisible();
+		await expect(files.locator('..').locator('.ash-icon-file')).toBeVisible();
+		const paper = list.getByRole('button', { name: 'paper.PDF', exact: true });
+		const pdfIcon = paper.locator('..').locator('.ash-icon-pdf-red');
+		await expect(pdfIcon).toBeVisible();
+		await expect(pdfIcon).toHaveAttribute('aria-hidden', 'true');
 		await expect(chat).toBeVisible();
 		await local.press('ArrowRight');
 		await expect(notes).toBeVisible();
