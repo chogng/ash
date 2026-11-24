@@ -44,6 +44,10 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			const marker = ['workspace-a', 'workspace-b', 'workspace-retry'].find(marker => body.messages?.some((message: { role: string; content: unknown; }) => message.role === 'user' && JSON.stringify(message.content).includes(marker)));
 			if (!marker) throw new Error('Unexpected fixture prompt');
 			const call = !sent.has(marker);
+			if (call) {
+				expect(body.model).toBe(model.model);
+				expect(body.tools).toEqual(expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: 'shell-command' }) })]));
+			}
 			sent.add(marker);
 			if (marker === 'workspace-a' && call) await firstResponse;
 			// Relative dot deliberately lets the real tool runtime choose its directory.
