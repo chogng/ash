@@ -981,26 +981,10 @@ fn refresh_server_event(
             };
             match current.subscription.classify_update(&update) {
                 ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
-                ThreadUpdateDisposition::RefreshSnapshot => {
-                    if let ash_protocol::ThreadUpdate::Committed {
-                        event:
-                            ash_protocol::ThreadEvent::TurnModeChanged {
-                                turn_id,
-                                from_mode,
-                                mode,
-                                ..
-                            },
-                    } = &update.update
-                        && app.active_turn() == Some(turn_id)
-                        && app.agent_mode() == *from_mode
-                    {
-                        app.set_agent_mode(*mode);
-                    }
-                    ServerRefresh {
-                        thread: true,
-                        ..ServerRefresh::default()
-                    }
-                }
+                ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
+                    thread: true,
+                    ..ServerRefresh::default()
+                },
             }
         }
         client::ClientEvent::ThreadTranscriptUpdated(update) => {

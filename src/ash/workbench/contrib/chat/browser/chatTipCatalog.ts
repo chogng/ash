@@ -8,7 +8,7 @@ export const TIP_CATALOG = [
 	},
 	{
 		id: 'plan',
-		message: () => localize('chat.tip.plan', 'Tip: Choose Plan in the mode picker to investigate and plan before making changes.'),
+		message: () => localize('chat.tip.plan', 'Tip: Start the message with /plan to investigate and propose changes without editing files.'),
 	},
 	{
 		id: 'background-send',

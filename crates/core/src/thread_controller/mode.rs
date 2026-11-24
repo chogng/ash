@@ -79,8 +79,13 @@ impl ThreadController {
                 .ok_or_else(|| {
                     CoreError::Policy("mode changes require frozen Turn instructions".into())
                 })?
-                .clone()
-                .with_mode(&request.mode_instructions);
+                .clone();
+            if instructions.task_command().is_some() {
+                return Err(CoreError::Policy(
+                    "A task command keeps its execution constraints until completion".into(),
+                ));
+            }
+            let instructions = instructions.with_mode(&request.mode_instructions);
             self.record_batch(
                 snapshot,
                 vec![ThreadEvent::TurnModeChanged {

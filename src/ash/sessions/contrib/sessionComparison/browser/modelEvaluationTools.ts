@@ -9,7 +9,7 @@ import { ISessionProviderScopeService } from '../../../browser/agentHost/session
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import type { IModelEvaluationTools, ModelEvaluationCaller, ModelEvaluationOperation, ModelEvaluationSelection } from '../../../services/appTools/browser/appTools.js';
-import { comparisonTurn, ISessionComparisonService, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
+import { comparisonAttemptTurn, ISessionComparisonService, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { COMPARE_AGENTS_TOOLS_ENABLED_SETTING, type SessionComparison } from '../../../services/sessions/common/sessionComparison.js';
@@ -158,7 +158,7 @@ export class ModelEvaluationToolContribution implements IModelEvaluationTools {
 		const reads = await Promise.all(comparison.attempts.map(attempt => this.chat.readThread(attempt.sessionId, attempt.threadId).catch(() => undefined)));
 		const attempts = comparison.attempts.map((attempt, index) => {
 			const read = reads[index];
-			const turn = read && comparisonTurn(read.thread, attempt, comparison.task);
+			const turn = read && comparisonAttemptTurn(read.thread, comparison, attempt);
 			return {
 				number: attempt.number,
 				agent: attempt.agent,

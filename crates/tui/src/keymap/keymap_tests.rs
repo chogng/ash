@@ -42,7 +42,7 @@ fn control(character: char) -> KeyEvent {
 }
 
 #[test]
-fn crossterm_adapter_normalizes_backtab_and_character_case() {
+fn backtab_has_no_task_mode_binding_and_character_case_is_normalized() {
     let keymap = AppKeymap::default();
 
     assert_eq!(
@@ -50,7 +50,7 @@ fn crossterm_adapter_normalizes_backtab_and_character_case() {
             &KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
             context(),
         ),
-        Some(AppKeymapAction::CycleAgentMode)
+        None
     );
     assert_eq!(
         keymap.resolve_single(
@@ -73,7 +73,6 @@ fn action_hints_abbreviate_escape_and_up_and_down_arrow_names() {
         for (action, hint) in [
             (AppKeymapAction::DecreaseReasoningEffort, "shift+↓"),
             (AppKeymapAction::IncreaseReasoningEffort, "shift+↑"),
-            (AppKeymapAction::CycleAgentMode, "shift+tab"),
             (AppKeymapAction::InterruptOrQuit, "ctrl+c"),
         ] {
             assert_eq!(keymap.action_hint(action, context()).as_deref(), Some(hint));

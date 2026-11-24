@@ -110,6 +110,7 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 	}
 
 	private effectiveKind(): ChatRequestQueueKind {
+		if (this.contextKeys.getValue(ChatContextKeys.inputStartsTaskCommand.key) === true) return ChatRequestQueueKind.Queued;
 		const editing = this.contextKeys.getValue(ChatContextKeys.editingRequestType.key);
 		const queue = editing === ChatContextKeys.EditingRequestType.Queue || editing !== ChatContextKeys.EditingRequestType.Steer && this.configuration.getValue<string>(ChatConfiguration.RequestQueueingDefaultAction) === 'queue';
 		return queue !== this.alternate ? ChatRequestQueueKind.Queued : ChatRequestQueueKind.Steering;
@@ -142,7 +143,8 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 		const widget = (this.actionContext as IChatExecuteActionContext | undefined)?.widget;
 		if (!widget?.visible) return;
 		const editing = this.contextKeys.getValue(ChatContextKeys.editingRequestType.key);
-		const queueDefault = editing === ChatContextKeys.EditingRequestType.Queue || editing !== ChatContextKeys.EditingRequestType.Steer && this.configuration.getValue<string>(ChatConfiguration.RequestQueueingDefaultAction) === 'queue';
+		const startsTaskCommand = this.contextKeys.getValue(ChatContextKeys.inputStartsTaskCommand.key) === true;
+		const queueDefault = startsTaskCommand || editing === ChatContextKeys.EditingRequestType.Queue || editing !== ChatContextKeys.EditingRequestType.Steer && this.configuration.getValue<string>(ChatConfiguration.RequestQueueingDefaultAction) === 'queue';
 		const lookup: Context = {
 			getValue: <T extends ContextKeyValue>(key: string) => (key === ChatContextKeys.inChatInput.key ? true : this.contextKeys.getValue(key)) as T | undefined,
 		};
@@ -157,12 +159,14 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 				description: localize('chat.queuePicker.queueDescription', 'Send after the current task finishes without interrupting it.'),
 				group: { title: '', icon: Lxicon.add }, item: ChatQueueMessageAction.ID, keybinding: this.keybindings.lookupKeybinding(ChatQueueMessageAction.ID, lookup),
 			},
-			{
+		];
+		if (!startsTaskCommand) {
+			items.push({
 				kind: ActionListItemKind.Action, label: localize('chat.queuePicker.steer', 'Steer with Message'), checked: !queueDefault,
 				description: localize('chat.queuePicker.steerDescription', 'Give the running task additional instructions at its next opportunity.'),
 				group: { title: '', icon: Lxicon.enter }, item: ChatSteerWithMessageAction.ID, keybinding: this.keybindings.lookupKeybinding(ChatSteerWithMessageAction.ID, lookup),
-			},
-		];
+			});
+		}
 		if (editing === undefined && widget.sessionId && widget.threadId && this.sideChats.canAskInSideChat(LocalChatSessionUri.forSession(widget.sessionId, widget.threadId))) {
 			items.push({
 				kind: ActionListItemKind.Action, label: localize('chat.askInSideChat', 'Ask in Side Chat'), item: ChatAskInSideChatAction.ID,

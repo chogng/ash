@@ -78,7 +78,7 @@ export class OpenModePickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openModePicker';
 	constructor() {
 		super({
-			id: OpenModePickerAction.ID, title: localize2('chat.execute.modePicker', 'Chat: Open Mode or Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
+			id: OpenModePickerAction.ID, title: localize2('chat.execute.modePicker', 'Chat: Open Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
 				primary: Keybinding.single(physicalKey('Period', { primaryKey: true })), weight: KeybindingWeight.WorkbenchContrib, when: ChatContextKeys.inChatInput.isEqualTo(true),
 			}
 		});
@@ -175,6 +175,7 @@ export function registerChatExecuteActions(): DisposableStore {
 			for (const key of ['sessionId', 'threadId', 'turnId', 'itemId', 'text', 'commandId']) {
 				if (typeof value[key] !== 'string' || !(value[key] as string).trim()) throw new TypeError(invalid);
 			}
+			if (value.commandInterpretation !== undefined && value.commandInterpretation !== 'literal' && value.commandInterpretation !== 'product') throw new TypeError(invalid);
 			if (value.contexts !== undefined && (!Array.isArray(value.contexts) || !value.contexts.every(context => {
 				if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.content !== 'string') return false;
 				if (context.kind !== undefined && context.kind !== 'image' && context.kind !== 'instruction' && context.kind !== 'toolSelection') return false;

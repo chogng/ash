@@ -80,9 +80,7 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
     fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Ash Code v");
-    process.submit("/mode swarm");
-    process.wait_for_stable_screen(" · Swarm");
-    process.submit("Coordinate a review of the synthetic checklist.");
+    process.submit("/swarm Coordinate a review of the synthetic checklist.");
     process.wait_for_stable_screen(reply);
 
     let inspector = fixture.connect();
@@ -113,7 +111,8 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
                 })
                 .unwrap();
             let turn = &restored.thread.turns[0];
-            assert_eq!(turn.mode, mode);
+            assert_eq!(turn.mode, AgentMode::Agent);
+            assert_eq!(turn.execution_approach(), mode);
             if turn.status == TurnStatus::Completed {
                 break;
             }
@@ -139,7 +138,7 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
         LARGE_SIZE,
     );
     resumed.wait_for_stable_screen(reply);
-    resumed.wait_for_stable_screen(" · Swarm");
+    resumed.wait_for_stable_screen("/swarm Coordinate a review of the synthetic checklist.");
     assert_eq!(server.request_count(), 6);
     resumed.quit();
 }

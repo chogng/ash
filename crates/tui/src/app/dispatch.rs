@@ -437,9 +437,9 @@ where
                 "host command reached the App Server dispatcher".into(),
             ));
         }
-        TuiSlashCommandAction::Mode
-        | TuiSlashCommandAction::Permission
-        | TuiSlashCommandAction::Effort => unreachable!("composer selectors are handled locally"),
+        TuiSlashCommandAction::Permission | TuiSlashCommandAction::Effort => {
+            unreachable!("composer selectors are handled locally")
+        }
         TuiSlashCommandAction::Model => unreachable!("model commands are handled by AppDriver"),
         TuiSlashCommandAction::Theme => unreachable!("theme commands are handled locally"),
         TuiSlashCommandAction::Quit => {

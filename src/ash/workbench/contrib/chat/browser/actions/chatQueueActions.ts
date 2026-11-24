@@ -26,8 +26,10 @@ const notEditingPending = ContextKeyExpr.and(
 	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Queue),
 	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Steer),
 );
-const effectiveQueue = ContextKeyExpr.or(editingQueue, ContextKeyExpr.and(notEditingPending, ContextKeyExpr.notEquals(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, 'steer')))!;
-const effectiveSteer = ContextKeyExpr.or(editingSteer, ContextKeyExpr.and(notEditingPending, steerDefault))!;
+const startsTaskCommand = ChatContextKeys.inputStartsTaskCommand.isEqualTo(true);
+const ordinaryMessage = ContextKeyExpr.not(ChatContextKeys.inputStartsTaskCommand.key);
+const effectiveQueue = ContextKeyExpr.or(startsTaskCommand, editingQueue, ContextKeyExpr.and(notEditingPending, ContextKeyExpr.notEquals(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, 'steer')))!;
+const effectiveSteer = ContextKeyExpr.and(ordinaryMessage, ContextKeyExpr.or(editingSteer, ContextKeyExpr.and(notEditingPending, steerDefault)))!;
 const queueAvailable = ContextKeyExpr.and(
 	ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.inputBlocked.isEqualTo(false),
 	ChatContextKeys.transcriptProgressActive.isEqualTo(false),
@@ -47,7 +49,7 @@ export class ChatQueueMessageAction extends Action2 {
 			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
 			keybinding: [
 				{ primary: Keybinding.single(logicalKey('Enter')), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
-				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveSteer), weight: KeybindingWeight.EditorContrib + 1 },
+				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, ContextKeyExpr.or(startsTaskCommand, effectiveSteer)), weight: KeybindingWeight.EditorContrib + 1 },
 			],
 		});
 	}
@@ -62,10 +64,10 @@ export class ChatSteerWithMessageAction extends Action2 {
 	constructor() {
 		super({
 			id: ChatSteerWithMessageAction.ID, title: localize2('chat.steerWithMessage', 'Chat: Steer with Message'),
-			f1: true, precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), taskInput),
+			f1: true, precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), taskInput, ordinaryMessage),
 			keybinding: [
 				{ primary: Keybinding.single(logicalKey('Enter')), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveSteer), weight: KeybindingWeight.EditorContrib + 1 },
-				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
+				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, ordinaryMessage, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
 			],
 		});
 	}

@@ -1,6 +1,6 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
-import { ChatHistoryAnchorError, ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, ChatRequestQueueKind, isTaskSlashCommand } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
@@ -251,7 +251,6 @@ export class ChatWidgetModel extends Disposable {
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
-			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
 			inputBlocked: this._thread?.status === 'archived' || modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
@@ -805,6 +804,17 @@ export class ChatWidgetModel extends Disposable {
 
 	private async submitMessage(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions, backgroundDraftId?: string): Promise<IActiveSessionThread | undefined> {
 		if (!text.trim() && !contexts?.length) return;
+		const explicitTaskCommand = isTaskSlashCommand(text);
+		// Older embedded composers can still supply an approach. Submit it as a task command
+		// and preserve the positions of context references in the resulting text.
+		if (mode !== 'agent' && !explicitTaskCommand) {
+			const prefix = `/${mode} `;
+			text = `${prefix}${text}`;
+			contexts = contexts?.map(context => context.reference ? {
+				...context,
+				reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
+			} : context);
+		}
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
@@ -857,6 +867,7 @@ export class ChatWidgetModel extends Disposable {
 			}
 			if (options?.signal?.aborted || options?.source && (active.session.sessionId !== options.source.sessionId || active.threadId !== options.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
+			const taskCommand = isTaskSlashCommand(text);
 			const submission = {
 				isNewSession: thread.turns.length === 0,
 				sessionId: active.session.sessionId,
@@ -864,7 +875,6 @@ export class ChatWidgetModel extends Disposable {
 				expectedSequence: thread.sequence,
 				// Reference offsets belong to the exact composer text, including leading whitespace.
 				text,
-				mode,
 				// An unknown/default choice stays with the backend authority; only conversation choices override it.
 				approvalMode: this.submissionApprovalMode,
 				model,
@@ -874,7 +884,7 @@ export class ChatWidgetModel extends Disposable {
 				signal: operation.signal,
 				commandId: options?.commandId,
 				source: options?.source,
-				...(this.commandInterpretation && { commandInterpretation: this.commandInterpretation }),
+				...(!taskCommand && this.commandInterpretation && { commandInterpretation: this.commandInterpretation }),
 				skills,
 			};
 			if (backgroundDraftId) {
@@ -883,9 +893,9 @@ export class ChatWidgetModel extends Disposable {
 				if (this.isCurrentTarget(operation)) this.setState('ready');
 				return active;
 			}
-			const needsNewTurn = !!turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
-			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn) {
-				throw new Error(localize('chat.steer.incompatible', 'The current request has a different mode, Skill or task type. Add this message to the queue instead.'));
+			const needsNewTurn = !!turn && (taskCommand || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
+			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn && !explicitTaskCommand) {
+				throw new Error(localize('chat.steer.incompatible', 'The current request has a different task command, Skill or task type. Add this message to the queue instead.'));
 			}
 			if (turn && (options?.queue === ChatRequestQueueKind.Queued || needsNewTurn)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
@@ -1054,7 +1064,8 @@ export class ChatWidgetModel extends Disposable {
 		if (turn?.turnId !== turnId || turn.status !== 'failed' || turn.error?.retryable !== true || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') {
 			throw new Error('Only the latest retryable failed Turn can be retried');
 		}
-		await this.send('Try again.', turn.mode);
+		const command = turn.mode === 'agent' ? '' : `/${turn.mode} `;
+		await this.send(`${command}Try again.`, 'agent');
 	}
 
 	async interrupt(): Promise<void> {
@@ -1145,7 +1156,9 @@ export class ChatWidgetModel extends Disposable {
 
 	private async loadCatalogs(): Promise<void> {
 		const generation = ++this.modelsGeneration;
-		const slashCatalog = this.commandInterpretation === 'literal' ? [] : this.chatService.listSlashCommands();
+		const slashCatalog = this.chatService.listSlashCommands().then(commands => this.commandInterpretation === 'literal'
+			? commands.filter(command => isTaskSlashCommand(`/${command.name}`))
+			: commands);
 		const [models, slashCommands] = await Promise.allSettled([this.languageModels.listModelCatalog(), slashCatalog, this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
 		if (this.isDisposed) return;
 		if (generation === this.modelsGeneration && models.status === 'fulfilled') {
@@ -1361,9 +1374,6 @@ export class ChatWidgetModel extends Disposable {
 			const snapshot = this.acceptThreadSnapshot(result, request);
 			const currentThread = this.thread;
 			this.refreshContextUsage.schedule();
-			if (currentThread && !this.selectedModes.has(active.threadId)) {
-				this.selectedModes.set(active.threadId, currentThread.turns.at(-1)?.mode ?? 'agent');
-			}
 			for (const update of result.updates) {
 				if (update.durableSequence > (currentThread?.sequence ?? this.durableSequence)) {
 					this.acceptUpdate(update);
@@ -1412,7 +1422,6 @@ export class ChatWidgetModel extends Disposable {
 			this._onDidChange.fire();
 		}
 		if (update.update.event.type === 'turnAccepted') this.historyRedo.reset();
-		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
 
@@ -1529,23 +1538,6 @@ export class ChatWidgetModel extends Disposable {
 			this._onDidChange.fire();
 		} catch {
 			// Summary state remains useful while a detail read is retried by the next update.
-		}
-	}
-
-	private acceptCommittedEvent(update: ThreadUpdateEnvelope): void {
-		if (update.update.type !== 'committed') return;
-		const event = update.update.event;
-		switch (event.type) {
-			case 'turnModeChanged':
-				// Follow an Agent's switch unless the user has chosen a different next-turn mode.
-				if (this._thread && update.durableSequence > this._thread.sequence
-					&& this._thread.turns.at(-1)?.turnId === event.turnId && this.mode === event.fromMode) {
-					this.selectedModes.set(update.threadId, event.mode);
-					this._onDidChange.fire();
-				}
-				break;
-			default:
-				break;
 		}
 	}
 

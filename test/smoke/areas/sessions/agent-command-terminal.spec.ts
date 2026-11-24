@@ -129,7 +129,6 @@ test('Manually approved Agent terminal keeps the original command across handoff
 			// Protected metadata would require a sandbox even with an explicit grant.
 			expect((await readdir(cwd)).filter(name => /^\.(?:git|agents|codex|ash|env)$/iu.test(name))).toEqual([]);
 		}
-		await expect(chat.locator('.ash-chat-input-mode-selector.mode-agent')).toBeVisible();
 		await expect(chat.getByRole('button', { name: 'Permissions: Manual', exact: true })).toBeVisible();
 		const input = new Editor(chat).input;
 		await input.focus();

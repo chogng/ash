@@ -2396,6 +2396,8 @@ use crate::protocol::session::MessageCheckpointsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::RewriteCommandInterpretation;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionCatalogReadResult;
 use crate::protocol::session::SessionChanged;
 #[cfg(any(test, feature = "export"))]
@@ -7472,6 +7474,7 @@ typescript_bindings! {
     SessionChanged,
     SessionCatalogReadResult,
     SessionDeleted,
+    RewriteCommandInterpretation,
     SessionRequest,
     SessionRequestParams,
     SessionRequestResult,

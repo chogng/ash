@@ -123,7 +123,7 @@ class NativeChatWorkspaceModel extends AshChatModel implements ICompactChatModel
 		const generation = this.composerGeneration;
 		const revision = this.view.navigationRevision;
 		const isCurrent = () => !this.isDisposed && generation === this.composerGeneration && revision === this.view.navigationRevision;
-		const target = await this.chatService.rewriteRequest({ ...source, text, commandId });
+		const target = await this.chatService.rewriteRequest({ ...source, text, commandId, commandInterpretation: this.commandInterpretation });
 		if (!isCurrent()) return;
 		await this.management.prepareThread(target.sessionId, target.threadId);
 		if (isCurrent()) this.view.selectChatThread(target.sessionId, target.threadId);

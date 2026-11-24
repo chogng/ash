@@ -59,14 +59,14 @@ test('/btw is a registered client command and submits to the captured source wit
 	await f.commands.executeCommand('btw', 'Question\nsecond line', f.resource, { attachedContext: [{ id: 'context', kind: 'context', name: 'frozen', resolve: async () => ({ name: 'frozen', content: 'captured bytes' }) }] });
 	assert.deepEqual(f.calls.create.map(value => { const { commandId, ...options } = value as Record<string, unknown>; assert.equal(typeof commandId, 'string'); return options; }), [{ sessionId: 'session', threadId: 'source', sourceTurnId: 'turn-source', title: 'Side question: Question second line' }]);
 	assert.equal(f.calls.start.length, 1);
-	assert.deepEqual(f.calls.start[0], { sessionId: 'session', threadId: 'side', commandId: (f.calls.start[0] as { commandId: string; }).commandId, expectedSequence: 4, text: 'Question\nsecond line', mode: 'ask', model: f.state.selectedModel, reasoningEffort: 'high', approvalMode: 'manual', contexts: [{ name: 'frozen', content: 'captured bytes' }], signal: undefined });
+	assert.deepEqual(f.calls.start[0], { sessionId: 'session', threadId: 'side', commandId: (f.calls.start[0] as { commandId: string; }).commandId, expectedSequence: 4, text: '/ask Question\nsecond line', model: f.state.selectedModel, reasoningEffort: 'high', approvalMode: 'manual', contexts: [{ name: 'frozen', content: 'captured bytes' }], signal: undefined });
 	assert.deepEqual(f.calls.navigate, [['session', 'side']]);
 	assert.equal(f.model.thread.turns[0].status, 'running');
 });
 
 for (const commandInterpretation of [undefined, 'literal'] as const) {
 	for (const mode of ['ask', 'plan', 'agent']) {
-		for (const query of ['/init', '/develop synthetic task']) {
+		for (const query of ['/init', '/develop synthetic task', '/debug Reproduce the failure']) {
 			test(`Side Chat preserves ${commandInterpretation ?? 'product'} input semantics for ${mode} ${query}`, async () => {
 				using f = fixture(false, commandInterpretation);
 				f.state.mode = mode;
@@ -74,9 +74,10 @@ for (const commandInterpretation of [undefined, 'literal'] as const) {
 				f.widgets.unshift({ ...f.widget, visible: false, model: { ...f.model, commandInterpretation: commandInterpretation ? undefined : 'literal' } } as unknown as IChatWidget);
 				await f.commands.executeCommand('btw', query, f.resource, { attachedContext: [{ id: 'attachment', kind: 'context', name: 'frozen', resolve: async () => ({ name: 'frozen', content: 'attachment bytes' }) }] });
 				const submission = f.calls.start[0] as Record<string, unknown>;
-				assert.equal(submission.commandInterpretation, commandInterpretation);
-				assert.equal(submission.text, query);
-				assert.equal(submission.mode, mode);
+				const explicitTask = query.startsWith('/debug ');
+				assert.equal(submission.commandInterpretation, !explicitTask && mode === 'agent' ? commandInterpretation : undefined);
+				assert.equal(submission.text, explicitTask || mode === 'agent' ? query : `/${mode} ${query}`);
+				assert.equal(submission.mode, undefined);
 				assert.deepEqual(submission.contexts, [{ name: 'frozen', content: 'attachment bytes' }]);
 				assert.deepEqual(f.calls.navigate, [['session', 'side']]);
 			});
@@ -86,6 +87,7 @@ for (const commandInterpretation of [undefined, 'literal'] as const) {
 
 test('Side Chat retains literal semantics after a failed submission is retried', async () => {
 	using f = fixture(false, 'literal');
+	f.state.mode = 'agent';
 	let attempts = 0;
 	const start = f.chat.startTurn;
 	f.chat.startTurn = async options => {
@@ -119,6 +121,7 @@ for (const retirement of ['abort', 'composer', 'hide'] as const) test(`Side Chat
 
 test('Side Chat ignores another registered conversation and keeps its source policy', async () => {
 	using f = fixture(false, 'literal');
+	f.state.mode = 'agent';
 	f.widgets.unshift({ ...f.widget, sessionId: 'other-host-session', model: { ...f.model, commandInterpretation: undefined } } as unknown as IChatWidget);
 	await f.commands.executeCommand('btw', '/init', f.resource);
 	assert.equal((f.calls.create[0] as { sessionId: string; }).sessionId, 'session');

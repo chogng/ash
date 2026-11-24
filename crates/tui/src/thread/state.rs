@@ -102,7 +102,7 @@ impl ThreadState {
             turns
                 .iter()
                 .find(|turn| &turn.turn_id == id)
-                .map(|turn| turn.mode)
+                .map(Turn::execution_approach)
         });
         updates
     }

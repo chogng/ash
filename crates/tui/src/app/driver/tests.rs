@@ -880,14 +880,7 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
             &mut app,
         );
         assert!(refresh.thread);
-        assert_eq!(
-            app.agent_mode(),
-            if selected == AgentMode::Agent {
-                AgentMode::Plan
-            } else {
-                selected
-            }
-        );
+        assert_eq!(app.agent_mode(), selected);
     }
 }
 

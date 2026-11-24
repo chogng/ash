@@ -53,6 +53,8 @@ fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
             &request.command_id,
             first.revision,
             &crate::QueueEdit::ReplaceText {
+                task_command: None,
+                command_interpretation: None,
                 text: "stale".into()
             }
         ),
@@ -89,7 +91,11 @@ fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
             &request.thread_id,
             &request.command_id,
             paused.revision,
-            &crate::QueueEdit::ReplaceText { text: " \n".into() }
+            &crate::QueueEdit::ReplaceText {
+                task_command: None,
+                command_interpretation: None,
+                text: " \n".into()
+            }
         ),
         Err(QueueError::Invalid(_))
     ));
@@ -100,6 +106,8 @@ fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
             &request.command_id,
             paused.revision,
             &crate::QueueEdit::ReplaceText {
+                task_command: None,
+                command_interpretation: None,
                 text: "Edited\ntext".into(),
             },
         )
@@ -241,6 +249,7 @@ fn input(id: &str) -> QueueInput {
     QueueInput {
         command_interpretation: protocol::CommandInterpretation::Product,
         mode: Default::default(),
+        task_command: None,
         model: None,
         model_routing: None,
         reasoning_effort: None,
@@ -409,6 +418,8 @@ fn editing_pauses_delivery_and_reordering_is_revision_checked() {
             &paused.request.command_id,
             paused.revision,
             &crate::QueueEdit::Replace {
+                task_command: None,
+                command_interpretation: None,
                 input: vec![UserInput::Text {
                     text: "updated".into(),
                 }],
@@ -479,6 +490,8 @@ fn literal_messages_preserve_command_interpretation_after_edit_and_reopen() {
             &request.command_id,
             paused.revision,
             &crate::QueueEdit::ReplaceText {
+                task_command: None,
+                command_interpretation: None,
                 text: "/develop ordinary message".into(),
             },
         )
@@ -535,6 +548,8 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
     let preserved = edit(
         original.revision,
         &crate::QueueEdit::ReplaceText {
+            task_command: None,
+            command_interpretation: None,
             text: "edited steering".into(),
         },
     )
@@ -543,6 +558,8 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
     let queued = edit(
         preserved.revision,
         &crate::QueueEdit::ReplaceTextWithDelivery {
+            task_command: None,
+            command_interpretation: None,
             text: "queued".into(),
             delivery: crate::QueueDelivery::Queued,
         },
@@ -562,6 +579,8 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
     let steering = edit(
         queued.revision,
         &crate::QueueEdit::ReplaceTextWithDelivery {
+            task_command: None,
+            command_interpretation: None,
             text: "steering again".into(),
             delivery: crate::QueueDelivery::Steering {
                 turn_id: turn.clone(),
@@ -588,6 +607,8 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
     let immediate = edit(
         steering.revision,
         &crate::QueueEdit::ReplaceTextWithDelivery {
+            task_command: None,
+            command_interpretation: None,
             text: "immediate edited text".into(),
             delivery: crate::QueueDelivery::Immediate,
         },
@@ -612,6 +633,8 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
         edit(
             steering.revision,
             &crate::QueueEdit::ReplaceTextWithDelivery {
+                task_command: None,
+                command_interpretation: None,
                 text: "stale".into(),
                 delivery: crate::QueueDelivery::Queued
             }

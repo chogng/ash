@@ -502,10 +502,6 @@ impl ChatInput {
         self.mode = Some(mode);
     }
 
-    pub(crate) fn initialize_mode(&mut self, mode: ash_protocol::AgentMode) {
-        self.mode.get_or_insert(mode);
-    }
-
     pub(crate) fn prompt(&self) -> &'static str {
         match self.input_mode {
             ChatInputMode::Standard => "> ",

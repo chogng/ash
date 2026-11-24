@@ -36,6 +36,56 @@ pub struct SlashCommandDefinition {
     pub argument_hint: Option<String>,
 }
 
+/// A command that runs the user's request with task-specific instructions and tools.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskSlashCommand {
+    Ask,
+    Plan,
+    Debug,
+    Swarm,
+}
+
+impl TaskSlashCommand {
+    pub const ALL: [Self; 4] = [Self::Ask, Self::Plan, Self::Debug, Self::Swarm];
+
+    pub fn parse(text: &str) -> Option<Self> {
+        let token = text
+            .trim_start()
+            .strip_prefix('/')?
+            .split_whitespace()
+            .next()?;
+        Self::from_name(token)
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|command| command.name() == name)
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::Plan => "plan",
+            Self::Debug => "debug",
+            Self::Swarm => "swarm",
+        }
+    }
+
+    pub fn definition(self) -> SlashCommandDefinition {
+        let description = match self {
+            Self::Ask => "Answer a question without making changes",
+            Self::Plan => "Investigate and propose a plan without making changes",
+            Self::Debug => "Reproduce, diagnose, and fix a problem",
+            Self::Swarm => "Delegate independent work and verify the combined result",
+        };
+        SlashCommandDefinition {
+            name: self.name().into(),
+            description: description.into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+            argument_hint: None,
+        }
+    }
+}
+
 /// Shared management commands. Clients bind these to their own panels, outside Turn input.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]

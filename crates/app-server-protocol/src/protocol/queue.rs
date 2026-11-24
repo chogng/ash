@@ -20,7 +20,7 @@ pub struct QueueEnqueueParams {
     #[ts(optional)]
     pub command_interpretation: Option<CommandInterpretation>,
     pub input: Vec<InputItem>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "ash_protocol::AgentMode::is_agent")]
     pub mode: ash_protocol::AgentMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -72,6 +72,9 @@ pub struct QueueEditParams {
     #[schemars(range(min = 0))]
     #[ts(type = "number")]
     pub expected_revision: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command_interpretation: Option<CommandInterpretation>,
     pub action: QueueEditAction,
 }
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]

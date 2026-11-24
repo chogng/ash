@@ -44,7 +44,6 @@ pub(crate) enum TuiSlashCommandAction {
     Export,
     Recap,
     Model,
-    Mode,
     Effort,
     Permission,
     Guardian,
@@ -127,7 +126,6 @@ impl TuiSlashCommandAction {
             Self::Export => "export this conversation as Markdown",
             Self::Recap => "Generate a recap of this conversation",
             Self::Model => "show or set the preferred provider/model",
-            Self::Mode => "choose how the next task is handled",
             Self::Effort => "set thinking effort",
             Self::Permission => return ProductSlashCommand::Permission.definition(),
             Self::Guardian => return ProductSlashCommand::Guardian.definition(),
@@ -156,7 +154,6 @@ impl TuiSlashCommandAction {
             | Self::Fork
             | Self::Export
             | Self::Model
-            | Self::Mode
             | Self::Effort
             | Self::Permission
             | Self::Guardian
@@ -170,7 +167,6 @@ impl TuiSlashCommandAction {
         match self {
             Self::Cd | Self::AddDir | Self::Export => Some("<path>"),
             Self::Model => Some("<model> [effort]"),
-            Self::Mode => Some("<agent|plan|debug|swarm|ask>"),
             Self::Effort => Some("<effort>"),
             Self::Permission => Some("<manual|auto|bypassPermissions>"),
             Self::Guardian => Some("[setup]"),

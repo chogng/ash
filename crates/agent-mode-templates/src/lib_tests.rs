@@ -20,10 +20,10 @@ fn every_mode_freezes_its_authored_asset() {
     use protocol::AgentMode;
     for (mode, id, revision, body) in [
         (AgentMode::Agent, "agent", "agent-v4", super::AGENT),
-        (AgentMode::Plan, "plan", "plan-v6", super::PLAN),
+        (AgentMode::Plan, "plan", "plan-v7", super::PLAN),
         (AgentMode::Debug, "debug", "debug-v4", super::DEBUG),
         (AgentMode::Swarm, "swarm", "swarm-v3", super::SWARM),
-        (AgentMode::Ask, "ask", "ask-v5", super::ASK),
+        (AgentMode::Ask, "ask", "ask-v6", super::ASK),
     ] {
         let frozen = super::instructions(mode);
         assert_eq!(frozen.owner(), "agent-mode-templates");

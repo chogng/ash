@@ -1053,18 +1053,7 @@ pub trait ToolService: Send + Sync {
 
 ### 当前 Turn 的模式切换
 
-内置工具 `switch_mode` 接收 `{ "mode": "plan", "reason": "先确认实现方案" }`。`mode` 使用[内置模式 ID](../../crates/agent-mode-templates/README.md#内置模式)，`reason` 是 1–1000 字符的非空说明。从 Plan 请求执行时，可传入 1–16000 字符的 Markdown `plan`，交由用户审阅并收集反馈。
-
-App Server 处理用户选择。Core 的 `ThreadController.change_turn_mode` 写入 `turnModeChanged` 事件与新模式指令。下一次模型调用使用新指令。事件的 `fromMode` 用于识别过期切换和同步输入区。桌面与 TUI 在同步时保留用户独立选择的草稿模式。
-
-| 切换情况                                                | 行为                                             |
-| ------------------------------------------------------- | ------------------------------------------------ |
-| 从执行模式切换，或在 Plan 与 Ask 之间切换               | 直接切换                                         |
-| 从 Plan 或 Ask 切换到执行模式                           | 所有权限模式均要求用户明确确认，拒绝时保留原模式 |
-| 已在目标模式                                            | 返回 `changed: false`，跳过事件写入              |
-| Turn 已结束、属于非 coding 类型，或确认期间原模式已改变 | 拒绝变更                                         |
-
-成功输出示例为 `{ "changed": true, "from_mode": "agent", "mode": "plan", "sequence": 8 }`。用户拒绝时返回 `{ "changed": false, "mode": "plan", "rejected": true }`。用户提交的计划反馈通过 `feedback` 返回。工具只更新模式和模式指令。
+`switch_mode` 用于恢复已有的冻结工具调用。新任务通过[斜杠命令](../../crates/agent-mode-templates/README.md)指定执行方式。只读命令交付后，用户通过新请求开始实施。
 
 ## 9. 输出与结果
 

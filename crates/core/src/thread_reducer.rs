@@ -376,6 +376,15 @@ pub struct TurnSnapshot {
     pub nonterminal_continuations: u32,
 }
 
+impl TurnSnapshot {
+    pub fn execution_approach(&self) -> ash_protocol::AgentMode {
+        self.instructions
+            .as_ref()
+            .and_then(ash_protocol::TurnInstructions::task_command)
+            .unwrap_or(self.mode)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToolExecutionStartSnapshot {
     pub action_digest: String,

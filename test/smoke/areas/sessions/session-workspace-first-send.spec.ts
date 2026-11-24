@@ -126,7 +126,6 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await expect(active()).toHaveAttribute('data-untitled-session-id', id);
 			await expectWorktreeEnabled();
 			await new Editor(active()).waitForEditorContents(text => text === marker);
-			await expect(active().getByRole('button', { name: 'Mode: Agent', exact: true })).toBeVisible();
 			await active().getByRole('button', { name: /^Permissions:/ }).press('ArrowDown');
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await page.locator('.ash-chat-permission-menu').getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click({ timeout: 10_000 });

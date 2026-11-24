@@ -8,7 +8,6 @@ const SHOW_GIT_CHANGES_AS_DIFF_KEY: &str = "showGitChangesAsDiff";
 pub(crate) enum StatusLineItem {
     Permissions,
     Model,
-    Mode,
     CacheHitRate,
     ReferenceCost,
     Memory,
@@ -19,10 +18,9 @@ pub(crate) enum StatusLineItem {
 }
 
 impl StatusLineItem {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Permissions,
         Self::Model,
-        Self::Mode,
         Self::CacheHitRate,
         Self::ReferenceCost,
         Self::Memory,
@@ -37,7 +35,6 @@ impl StatusLineItem {
             "context" => Some(Self::Context),
             "permissions" => Some(Self::Permissions),
             "model" => Some(Self::Model),
-            "mode" => Some(Self::Mode),
             "cache-hit-rate" => Some(Self::CacheHitRate),
             "reference-cost" => Some(Self::ReferenceCost),
             "memory" => Some(Self::Memory),
@@ -53,7 +50,6 @@ impl StatusLineItem {
             Self::Context => "context",
             Self::Permissions => "permissions",
             Self::Model => "model",
-            Self::Mode => "mode",
             Self::CacheHitRate => "cache-hit-rate",
             Self::ReferenceCost => "reference-cost",
             Self::Memory => "memory",
@@ -68,7 +64,6 @@ impl StatusLineItem {
             Self::Context => "Context",
             Self::Permissions => "Permissions",
             Self::Model => "Model",
-            Self::Mode => "Mode",
             Self::CacheHitRate => "Cache hit rate",
             Self::ReferenceCost => "Reference cost",
             Self::Memory => "Memory",
@@ -83,7 +78,6 @@ impl StatusLineItem {
             Self::Context => "Current Thread context usage",
             Self::Permissions => "Current permission mode",
             Self::Model => "Configured model",
-            Self::Mode => "Mode for the next task",
             Self::CacheHitRate => "Cached input as a share of total input",
             Self::ReferenceCost => "Current Thread accumulated reference cost",
             Self::Memory => "Local TUI, App Server, and child-process resident memory",
@@ -136,6 +130,10 @@ impl StatusLineSettings {
                 let id = value.as_str().ok_or_else(|| {
                     "invalid [tui].statusLine: every item name must be a string".to_owned()
                 })?;
+                // Older profiles showed the approach for the next task here.
+                if id == "mode" {
+                    continue;
+                }
                 let item = StatusLineItem::from_id(id)
                     .ok_or_else(|| format!("invalid [tui].statusLine item `{id}`"))?;
                 if items.contains(&item) {

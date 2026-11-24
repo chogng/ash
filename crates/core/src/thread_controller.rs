@@ -1314,6 +1314,18 @@ impl ThreadController {
             crate::tool_profile::validate_tool_profile_snapshot(profile)
                 .map_err(CoreError::InvalidInput)?;
         }
+        if request.mode.is_agent()
+            && let Some(profile) = request.tool_profile.as_mut()
+        {
+            // Keep the service available to frozen historical profiles. New requests select their
+            // approach at admission and cannot change it through a model tool.
+            let tool = ToolName::new("switch_mode").expect("built-in tool name is valid");
+            if profile.tool_names.contains(&tool) && !profile.disabled_tools.contains(&tool) {
+                profile.disabled_tools.push(tool);
+                crate::tool_profile::validate_tool_profile_snapshot(profile)
+                    .map_err(CoreError::InvalidInput)?;
+            }
+        }
         request
             .instructions
             .validate()

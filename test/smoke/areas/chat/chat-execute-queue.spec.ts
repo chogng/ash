@@ -230,16 +230,6 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			await expect(models).toBeVisible();
 			await page.keyboard.press('Escape');
 			await draft.focus();
-			await page.keyboard.press('ControlOrMeta+.');
-			const modes = page.locator('.ash-chat-input-mode-menu');
-			await expect(modes).toBeVisible();
-			await modes.getByRole('menuitemradio', { name: 'Ask', exact: true }).press('Enter');
-			await expect(modes).toBeHidden();
-			await draft.focus();
-			await window.quickaccess.runCommand('workbench.action.chat.openModePicker');
-			await expect(modes.getByRole('menuitemradio', { name: 'Ask', exact: true })).toHaveAttribute('aria-checked', 'true');
-			await page.keyboard.press('Escape');
-			await draft.focus();
 			await window.quickaccess.runCommand('workbench.action.chat.openPermissionPicker');
 			await page.getByRole('menuitemradio', { name: 'Auto', exact: true }).click();
 			await expect(composer.locator('.view-lines')).toContainText('Preserve picker draft');
@@ -259,7 +249,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('running');
 			await expect.poll(() => calls).toBe(1);
 			const initialTurn = (await read()).turns.at(-1)!;
-			expect(initialTurn.mode).toBe('ask');
+			expect(initialTurn.mode).toBeUndefined();
 			expect(initialTurn.approvalMode).toBe('auto');
 			await expect(chat.locator('.ash-chat-list-widget')).toContainText('Controlled execution is running.');
 			await window.quickaccess.runCommand('workbench.action.chat.nextCodeBlock');

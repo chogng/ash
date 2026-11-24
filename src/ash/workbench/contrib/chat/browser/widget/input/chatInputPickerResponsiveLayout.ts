@@ -1,7 +1,7 @@
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 
-// Preserve a readable model name in toolbars that only compact the mode picker.
+// Preserve a readable model name in toolbars that only compact the Agent picker.
 const minimumReadableModelWidth = 48;
 
 export interface IChatInputPickerResponsiveLayoutItem {

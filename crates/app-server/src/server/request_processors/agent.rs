@@ -14,6 +14,7 @@ use ash_app_server_protocol::protocol::goal::ThreadGoalSetParams;
 use ash_app_server_protocol::protocol::goal::ThreadGoalSetResponse;
 
 use ash_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
+use ash_app_server_protocol::protocol::session::RewriteCommandInterpretation;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
@@ -42,6 +43,7 @@ use ash_protocol::Session;
 use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
 use ash_protocol::UserInput;
+use ash_slash_commands::TaskSlashCommand;
 
 use core_api::AgentRuntime;
 use core_api::CreateBranchRequest;
@@ -56,19 +58,23 @@ use core_api::SequenceExpectation;
 use core_api::ShellTurnInvocation;
 use core_api::SteerTurnRequest;
 use core_api::ThreadView;
+use core_api::TurnView;
 use serde_json::Value;
 
 pub(super) enum TurnInstructionSelection {
     Agent,
+    TaskCommand,
     Product(ash_protocol::TurnInstructions),
     Setup(ash_protocol::TurnInstructions),
     Workflow(workflows::Command),
 }
 
+const INIT_PROMPT_ID: &str = "instructions/init";
+
 fn init_prompt() -> ash_protocol::TurnInstructions {
     ash_protocol::TurnInstructions::new(
         "app-server",
-        "instructions/init",
+        INIT_PROMPT_ID,
         "instructions-init-v1",
         format!(
             "{}\n\n<always-on-template>\n{}\n</always-on-template>",
@@ -89,6 +95,34 @@ fn product_command(input: &[UserInput]) -> Option<&str> {
         .and_then(|text| text.split_whitespace().next())
 }
 
+pub(super) fn resolve_task_command(
+    input: &[UserInput],
+    interpretation: ash_protocol::CommandInterpretation,
+) -> Option<ash_protocol::AgentMode> {
+    if !interpretation.is_product() {
+        return None;
+    }
+    let command = TaskSlashCommand::parse(product_command(input)?)?;
+    Some(match command {
+        TaskSlashCommand::Ask => ash_protocol::AgentMode::Ask,
+        TaskSlashCommand::Plan => ash_protocol::AgentMode::Plan,
+        TaskSlashCommand::Debug => ash_protocol::AgentMode::Debug,
+        TaskSlashCommand::Swarm => ash_protocol::AgentMode::Swarm,
+    })
+}
+
+pub(super) fn task_command_for_request(
+    input: &[UserInput],
+    interpretation: ash_protocol::CommandInterpretation,
+    legacy: ash_protocol::AgentMode,
+) -> Option<ash_protocol::AgentMode> {
+    // Older requests with an explicit approach retain their scope.
+    legacy
+        .is_agent()
+        .then(|| resolve_task_command(input, interpretation))
+        .flatten()
+}
+
 pub(super) struct SessionMutation {
     pub(super) command_id: ash_protocol::CommandId,
     pub(super) session_id: ash_protocol::SessionId,
@@ -106,8 +140,20 @@ struct RewriteSessionMutation {
     parent_thread_id: ash_protocol::ThreadId,
     before_turn_id: ash_protocol::TurnId,
     title: String,
+    command_interpretation: Option<RewriteCommandInterpretation>,
     tool_mode: Option<ash_protocol::ToolMode>,
     input: Vec<InputItem>,
+}
+
+fn rewrite_source_turn<'a>(
+    thread: &'a ThreadView,
+    before_turn_id: &ash_protocol::TurnId,
+) -> Result<&'a TurnView, RpcError> {
+    thread
+        .turns
+        .iter()
+        .find(|turn| &turn.turn_id == before_turn_id)
+        .ok_or_else(|| core_error(core_api::CoreError::NotFound(before_turn_id.to_string())))
 }
 
 pub(super) enum TurnToolModeSelection {
@@ -362,7 +408,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 } else {
                     self.model_instructions.for_turn(base, model.as_ref())
                 };
-                let mode = latest.map(|turn| turn.mode).unwrap_or_default();
+                let mode = latest
+                    .map(|turn| turn.execution_approach())
+                    .unwrap_or_default();
                 base.with_mode(&agent_mode_templates::instructions(mode))
             }
         };
@@ -924,6 +972,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 parent_thread_id,
                 before_turn_id,
                 title,
+                command_interpretation,
                 tool_mode,
                 input,
             } => result(&SessionRequestResult::Rewrite(
@@ -934,6 +983,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                         parent_thread_id,
                         before_turn_id,
                         title,
+                        command_interpretation,
                         tool_mode,
                         input,
                     },
@@ -1062,7 +1112,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
                     vec![UserInput::Text { text: question }],
                     ash_protocol::TurnKind::Advisor,
-                    TurnInstructionSelection::Agent,
+                    TurnInstructionSelection::TaskCommand,
                     TurnModelSelection::Current,
                     None,
                 )?))
@@ -1189,7 +1239,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     return Err(core_error(core_api::CoreError::CommandConflict));
                 }
                 let mut input = normalize()?;
-                let selection = self.turn_instruction_selection(
+                let (mode, selection) = self.prepare_coding_request(
                     &mut input,
                     *mode,
                     command_interpretation.unwrap_or_default(),
@@ -1198,7 +1248,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     target,
                     command_id,
                     &input,
-                    *mode,
+                    mode,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
@@ -1220,6 +1270,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             SessionRequest::RewriteThread {
                 before_turn_id,
                 title,
+                command_interpretation,
                 tool_mode,
                 ..
             } => {
@@ -1249,17 +1300,19 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 let Some(turn) = branch.turns.iter().find(|turn| turn.turn_id == turn_id) else {
                     return Ok(None);
                 };
+                let source_turn = rewrite_source_turn(target, before_turn_id)?;
                 let mut input = normalize()?;
-                let selection = self.turn_instruction_selection(
+                let (mode, selection) = self.prepare_rewrite_request(
                     &mut input,
-                    turn.mode,
-                    ash_protocol::CommandInterpretation::Product,
+                    source_turn,
+                    *command_interpretation,
+                    self.is_chat_session(&target.session_id)?,
                 )?;
                 let Some(turn) = self.replay_referenced_turn(
                     &branch,
                     &start_command_id,
                     &input,
-                    turn.mode,
+                    mode,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
@@ -1306,7 +1359,13 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 command_id,
                 core_api::SubmittedCommand::Turn {
                     kind: ash_protocol::TurnKind::Coding,
-                    mode,
+                    mode: if matches!(selection, TurnInstructionSelection::TaskCommand) {
+                        ash_protocol::AgentMode::Agent
+                    } else {
+                        mode
+                    },
+                    task_command: matches!(selection, TurnInstructionSelection::TaskCommand)
+                        .then_some(mode),
                     tool_mode,
                     input,
                     automatic_model,
@@ -1542,33 +1601,18 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         mutation: SessionMutation,
         rewrite: RewriteSessionMutation,
     ) -> Result<SessionRewriteResult, RpcError> {
-        let source = self.read_session_thread(&mutation.session_id, &rewrite.parent_thread_id)?;
-        let source_turn = source
-            .turns
-            .iter()
-            .find(|turn| turn.turn_id == rewrite.before_turn_id)
-            .ok_or_else(|| {
-                core_error(core_api::CoreError::NotFound(
-                    rewrite.before_turn_id.to_string(),
-                ))
-            })?;
-        let mode = source_turn.mode;
+        let source =
+            self.read_session_thread_snapshot(&mutation.session_id, &rewrite.parent_thread_id)?;
+        let source_turn = rewrite_source_turn(&source, &rewrite.before_turn_id)?;
         let mut normalized_input =
             self.normalize_input(Some(connection_id), &mutation.session_id, rewrite.input)?;
-        let session = self
-            .context
-            .agent_runtime()
-            .read_session_catalog(&mutation.session_id)
-            .map_err(core_error)?;
-        let is_chat =
-            session.is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat);
-        let interpretation = if is_chat {
-            ash_protocol::CommandInterpretation::Literal
-        } else {
-            ash_protocol::CommandInterpretation::Product
-        };
-        let selection =
-            self.turn_instruction_selection(&mut normalized_input, mode, interpretation)?;
+        let is_chat = self.is_chat_session(&mutation.session_id)?;
+        let (mode, selection) = self.prepare_rewrite_request(
+            &mut normalized_input,
+            source_turn,
+            rewrite.command_interpretation,
+            is_chat,
+        )?;
         let rewound = self
             .context
             .agent_runtime()
@@ -1594,6 +1638,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 &start_command_id,
                 core_api::SubmittedCommand::Input {
                     input: &normalized_input,
+                    task_command: matches!(selection, TurnInstructionSelection::TaskCommand)
+                        .then_some(mode),
                 },
             )
             .map_err(core_error)?
@@ -1661,6 +1707,45 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             thread_id,
             turn,
         })
+    }
+
+    fn is_chat_session(&self, session_id: &ash_protocol::SessionId) -> Result<bool, RpcError> {
+        Ok(self
+            .context
+            .agent_runtime()
+            .read_session_catalog(session_id)
+            .map_err(core_error)?
+            .is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat))
+    }
+
+    fn prepare_rewrite_request(
+        &self,
+        input: &mut Vec<UserInput>,
+        source: &TurnView,
+        requested: Option<RewriteCommandInterpretation>,
+        is_chat: bool,
+    ) -> Result<(ash_protocol::AgentMode, TurnInstructionSelection), RpcError> {
+        use ash_protocol::CommandInterpretation::{Literal, Product};
+        let interpretation = match requested {
+            Some(RewriteCommandInterpretation::Accepted) => {
+                if let Some(instructions) = &source.instructions {
+                    if let Some(command) = instructions.task_command() {
+                        return Ok((command, TurnInstructionSelection::TaskCommand));
+                    }
+                    if instructions.id() == INIT_PROMPT_ID
+                        && product_command(input) == Some("/init")
+                    {
+                        return self.prepare_coding_request(input, source.mode, Product);
+                    }
+                }
+                Literal
+            }
+            Some(RewriteCommandInterpretation::Product) => Product,
+            Some(RewriteCommandInterpretation::Literal) => Literal,
+            None if is_chat && resolve_task_command(input, Product).is_none() => Literal,
+            None => Product,
+        };
+        self.prepare_coding_request(input, source.mode, interpretation)
     }
 
     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
@@ -2028,8 +2113,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .resolve_turn_approval_mode(&mutation.session_id, approval_mode)?;
         let mut input =
             self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
-        let selection =
-            self.turn_instruction_selection(&mut input, mode, command_interpretation)?;
+        let (mode, selection) =
+            self.prepare_coding_request(&mut input, mode, command_interpretation)?;
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -2042,6 +2127,21 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             model_selection,
             reasoning_effort,
         )
+    }
+
+    fn prepare_coding_request(
+        &self,
+        input: &mut Vec<UserInput>,
+        legacy: ash_protocol::AgentMode,
+        interpretation: ash_protocol::CommandInterpretation,
+    ) -> Result<(ash_protocol::AgentMode, TurnInstructionSelection), RpcError> {
+        if let Some(command) = task_command_for_request(input, interpretation, legacy) {
+            return Ok((command, TurnInstructionSelection::TaskCommand));
+        }
+        Ok((
+            legacy,
+            self.turn_instruction_selection(input, legacy, interpretation)?,
+        ))
     }
 
     pub(super) fn turn_instruction_selection(
@@ -2200,6 +2300,12 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         model_selection: TurnModelSelection,
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<TurnStartResult, RpcError> {
+        let task_command = matches!(selection, TurnInstructionSelection::TaskCommand);
+        let recorded_mode = if task_command {
+            ash_protocol::AgentMode::Agent
+        } else {
+            mode
+        };
         let thread_before = self
             .context
             .agent_runtime()
@@ -2240,7 +2346,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     core_api::SubmittedCommand::Turn {
                         kind,
                         tool_mode,
-                        mode,
+                        mode: recorded_mode,
+                        task_command: task_command.then_some(mode),
                         input: &input,
                         automatic_model: matches!(&model_selection, TurnModelSelection::Auto),
                     },
@@ -2333,6 +2440,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .expect("Agent base records its model selection");
         let (workflow, instructions) = match selection {
             TurnInstructionSelection::Agent => (None, base),
+            TurnInstructionSelection::TaskCommand => (None, base.with_task_command(Some(mode))),
             TurnInstructionSelection::Product(prompt) => (None, prompt.with_shared(&base)),
             TurnInstructionSelection::Setup(prompt) => (None, prompt.with_shared(&base)),
             TurnInstructionSelection::Workflow(command) => (Some(command), base),
@@ -2383,7 +2491,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
                 .map(|snapshot| snapshot.values.context)
                 .unwrap_or_default(),
-            mode,
+            mode: recorded_mode,
             command_id: mutation.command_id,
             expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
             model,
@@ -2574,6 +2682,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             ));
         }
         let input = self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
+        if resolve_task_command(&input, ash_protocol::CommandInterpretation::Product).is_some() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let receipt = self
             .context
             .agent_runtime()

@@ -4,8 +4,8 @@ expression: bottom
 ---
 ─ Keyboard shortcuts ───────────────────────
 
-  ctrl+c     Interrupt or quit
-  ctrl+z     Suspend Ash
+  ctrl+c   Interrupt or quit
+  ctrl+z   Suspend Ash
 
   Transcript
   PageUp / PageDown     Scroll transcript

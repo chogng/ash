@@ -24,6 +24,7 @@ use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
+use ash_protocol::AgentMode;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
 use ash_protocol::TurnStatus;
@@ -58,19 +59,17 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let _guard = crate::test_support::in_process_test_guard();
     let state_root = tempdir().unwrap();
     let model = Arc::new(ScriptedModel::default());
-    let mut client = start_in_process_client(
-        crate::test_support::in_process_options(
-            state_root.path(),
-            ClientInfo {
-                name: "ash-tui-conversation-test".into(),
-                version: "1".into(),
-            },
-        )
-        .with_capabilities(crate::client_capabilities())
-        .with_model_operation_client(model.clone())
-        .without_built_in_skills(),
+    let options = crate::test_support::in_process_options(
+        state_root.path(),
+        ClientInfo {
+            name: "ash-tui-conversation-test".into(),
+            version: "1".into(),
+        },
     )
-    .unwrap();
+    .with_capabilities(crate::client_capabilities())
+    .with_model_operation_client(model.clone())
+    .without_built_in_skills();
+    let mut client = start_in_process_client(options.clone()).unwrap();
     let revision = client.read_config().unwrap().revision;
     client
         .configure_provider(ProviderConfigureParams {
@@ -199,6 +198,53 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     assert!(json_contains_text(&second_request, SECOND_PROMPT));
     drop(requests);
     crate::tui_assert_snapshot!(app = &app; "conversation_second_turn", render(&app));
+
+    conversation.set_thread_sequence(completed.thread.sequence);
+    let swarm_prompt = "/swarm Compare the two parts of this checklist.";
+    let ordinary_prompt = "Explain the result in one paragraph.";
+    for (expected_turns, prompt, approach) in [
+        (3, swarm_prompt, AgentMode::Swarm),
+        (4, ordinary_prompt, AgentMode::Agent),
+    ] {
+        let submission = submit_from_input(&mut app, prompt);
+        let started = submit_prompt(
+            &mut client,
+            request_scope(&conversation),
+            submission,
+            ApprovalMode::Manual,
+        )
+        .unwrap();
+        app.set_active_turn(started.turn_id);
+        let completed = wait_for_completed_thread(&mut client, &conversation, expected_turns);
+        let turn = completed.thread.turns.last().unwrap();
+        assert_eq!(turn.mode, AgentMode::Agent);
+        assert_eq!(turn.execution_approach(), approach);
+        conversation.set_thread_sequence(completed.thread.sequence);
+        app.update(ThreadEvent::TranscriptSnapshotReceived(
+            completed.transcript,
+        ));
+        apply_active_turn_snapshot(&mut app, &completed.thread.turns);
+        assert_eq!(app.agent_mode(), AgentMode::Agent);
+    }
+
+    drop(client);
+    let mut reopened = start_in_process_client(options).unwrap();
+    let restored = read_thread(&mut reopened, &conversation);
+    assert_eq!(
+        restored.thread.turns[2].execution_approach(),
+        AgentMode::Swarm
+    );
+    assert_eq!(
+        restored.thread.turns[3].execution_approach(),
+        AgentMode::Agent
+    );
+    let app = app_for_conversation(&mut reopened, &conversation);
+    assert!(
+        app.messages()
+            .iter()
+            .any(|message| message.text() == swarm_prompt)
+    );
+    assert_eq!(app.agent_mode(), AgentMode::Agent);
 }
 
 fn app_for_conversation(
@@ -212,7 +258,10 @@ fn app_for_conversation(
         .unwrap()
         .session;
     let initial = read_thread(client, conversation);
-    let mut app = App::new();
+    let mut app = App::for_dir_with_slash_commands(
+        std::path::Path::new("."),
+        ash_slash_commands::SlashCommandCatalog::default(),
+    );
     app.update(ThreadEvent::ContextChanged {
         session_id: conversation.session_id().clone(),
         thread_id: conversation.thread_id().clone(),

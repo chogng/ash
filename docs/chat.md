@@ -40,7 +40,7 @@ host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerC
 
 上下文补全也先核对捕获的模型版本，再通过同文件的 `computeCompletionRanges` 和 `getCompletionRangeWord` 区分光标前的查询与完整替换词，保留词后消息及已有分隔空格。范围工具不维护候选或草稿状态。host 结果目前受 App Server 的 command／skill／resource 领域契约约束；上游 chat 引用、配置动作等变体不能只在 Renderer 增加分支，须先有后端契约与实际 producer。
 
-`widget/chatAgentHover.ts / ChatAgentHover` 展示现有选中自定义 Agent 的名称与描述，不发布第二份 Agent 目录，也不展示内部目录标识。模式选择器使用原托管 Hover；输入开头的 `@名称` 与选中 Agent 精确匹配时，`editor/chatInputEditorContrib.ts / InputEditorDecorations` 借用同一对象投影引用，`ChatAgentHoverParticipant` 通过原编辑器 Hover 展示同一信息卡。引用文字保留在草稿中，不切换 Agent 或建立新的请求路由语义。键盘 hover、无障碍纯文本、Escape 焦点恢复及切换 Agent／模式、隐藏、释放均沿现有输入与 Hover 生命周期处理。
+`widget/chatAgentHover.ts / ChatAgentHover` 展示现有选中自定义 Agent 的名称与描述，不发布第二份 Agent 目录，也不展示内部目录标识。Agent 选择器使用原托管 Hover；输入开头的 `@名称` 与选中 Agent 精确匹配时，`editor/chatInputEditorContrib.ts / InputEditorDecorations` 借用同一对象投影引用，`ChatAgentHoverParticipant` 通过原编辑器 Hover 展示同一信息卡。引用文字保留在草稿中，不切换 Agent 或建立新的请求路由语义。键盘 hover、无障碍纯文本、Escape 焦点恢复及切换 Agent、隐藏、释放均沿现有输入与 Hover 生命周期处理。
 
 当前 Ash 生产链的职责归位与上游全量功能覆盖分别记录。目录仍有以下上游差异，未创建无调用方入口：
 

@@ -88,7 +88,9 @@ suite('Chat code mapper through the Core execution owner', () => {
 		const mapping = f.map();
 		const submission = await f.started.p;
 		assert.deepEqual(submission.model, { provider: 'fixture', model: 'source-model' });
-		assert.equal(submission.commandInterpretation, 'literal');
+		assert.equal(submission.commandInterpretation, undefined);
+		assert.equal(submission.mode, undefined);
+		assert.match(submission.text, /^\/ask Apply the supplied code/u);
 		assert.equal(submission.contexts?.[0]?.content, 'old\nfile');
 		f.push('new'); await f.batchReady.p;
 		f.batchReady = new DeferredPromise<void>();

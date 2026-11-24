@@ -186,9 +186,13 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 用户写入继续使用带 `commandId` 和 `expectedRevision` 的 `hook/upsert`、`hook/remove`、
 `hook/enablement/set`。用户指南和运行时约定集中在 [Hooks crate](../hooks/README.md)。
 
-## Agent 模式
+## Agent 任务命令
 
-`session/request.startTurn.mode` 和 `queue/enqueue.mode` 选择模式，缺省为 `agent`。客户端从 `Turn.mode` 读取当前模式。`TurnInstructions.modeInstructions` 保存模式资产。协议主版本 11 与历史 schema 36 使用 `swarm`。[Turn、切换与排队](../agent-mode-templates/README.md#turn切换与排队)
+在 `session/request.startTurn` 或 `queue/enqueue` 的用户文本中提交 `/ask`、`/plan`、`/debug`、`/swarm`。App Server 在受理时解析任务命令，冻结 `TurnInstructions.taskCommand` 和对应指令。命令占用新的 Turn。旧请求与历史保留 `mode` 读取兼容。见 [Agent 任务命令](../agent-mode-templates/README.md)。
+
+`queue/edit` 替换消息时可提供 `commandInterpretation`。App Server 在同一修订中更新解释规则、任务命令和消息内容。省略该字段时沿用已保存的解释规则。
+
+`session/request.rewriteThread` 可提供 `commandInterpretation`。`accepted` 从原轮次读取已接受的任务命令及执行范围。`product` 和 `literal` 分别用于编辑后的命令和普通文本。重复提交需要匹配原调用捕获的任务命令。
 
 ## 指令导入
 

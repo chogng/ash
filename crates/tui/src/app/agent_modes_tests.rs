@@ -57,77 +57,11 @@ fn frame_text(buffer: &ratatui::buffer::Buffer) -> String {
 }
 
 #[test]
-fn agent_mode_shortcuts_preserve_drafts_permissions_and_history_search() {
-    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
-        let mut app = App::new();
-        let root = tempfile::tempdir().unwrap();
-        let store = std::sync::Arc::new(
-            state::SqliteMessageHistory::open(
-                &root.path().join("history.sqlite3"),
-                message_history::MessageHistoryRetention::default(),
-            )
-            .unwrap(),
-        );
-        app.connect_input_history(
-            message_history::MessageHistory::with_waker(store, || {}).unwrap(),
-        );
-        switch(&mut app, screen);
-        app.insert_text("keep this draft\nand this line");
-        for mode in [
-            AgentMode::Plan,
-            AgentMode::Debug,
-            AgentMode::Swarm,
-            AgentMode::Ask,
-            AgentMode::Agent,
-        ] {
-            assert_eq!(key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT), None);
-            assert_eq!(app.agent_mode(), mode);
-            assert_eq!(app.input(), "keep this draft\nand this line");
-            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
-            assert_eq!(app.top_tip().text(None), None);
-        }
-        for (code, modifiers, command) in [
-            (
-                KeyCode::Down,
-                KeyModifiers::SHIFT,
-                crate::models::Command::DecreaseEffort,
-            ),
-            (
-                KeyCode::Up,
-                KeyModifiers::SHIFT,
-                crate::models::Command::IncreaseEffort,
-            ),
-        ] {
-            assert_eq!(
-                key(&mut app, code, modifiers),
-                Some(AppCommand::Models(command))
-            );
-            assert_eq!(app.input(), "keep this draft\nand this line");
-            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
-        }
-        key(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
-        assert!(app.input_state().searching_history());
-        for (code, modifiers) in [
-            (KeyCode::Up, KeyModifiers::SHIFT),
-            (KeyCode::Down, KeyModifiers::SHIFT),
-        ] {
-            assert_eq!(key(&mut app, code, modifiers), None);
-            assert!(app.input_state().searching_history());
-        }
-        assert_eq!(app.agent_mode(), AgentMode::Agent);
-        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-        key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
-        assert_eq!(app.agent_mode(), AgentMode::Plan);
-        assert_eq!(app.input(), "keep this draft\nand this line");
-    }
-}
-
-#[test]
 fn effort_shortcuts_leave_open_selectors_in_control() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();
         switch(&mut app, screen);
-        command(&mut app, "/mode");
+        command(&mut app, "/permission");
         app.insert_text("keep this draft");
         for (code, modifiers) in [
             (KeyCode::Up, KeyModifiers::SHIFT),
@@ -295,129 +229,6 @@ fn effort_boundaries_are_silent_in_both_modes() {
 }
 
 #[test]
-fn agent_mode_commands_use_protocol_ids_in_every_language() {
-    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
-        for language in [
-            crate::nls::Language::English,
-            crate::nls::Language::Japanese,
-            crate::nls::Language::Chinese,
-            crate::nls::Language::French,
-        ] {
-            let mut app = App::new();
-            let mut settings = TerminalSettings::default();
-            settings.set_screen_mode(screen);
-            settings.set_language(language);
-            app.update(ConfigEvent::SettingsReceived(settings));
-            for (id, mode) in [
-                ("agent", AgentMode::Agent),
-                ("plan", AgentMode::Plan),
-                ("debug", AgentMode::Debug),
-                ("swarm", AgentMode::Swarm),
-                ("ask", AgentMode::Ask),
-            ] {
-                assert_eq!(serde_json::to_value(mode).unwrap(), id);
-                for argument in [id.to_owned(), id.to_ascii_uppercase()] {
-                    if app.agent_mode() == mode {
-                        key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
-                    }
-                    assert_ne!(app.agent_mode(), mode);
-                    assert_eq!(command(&mut app, &format!("/mode {argument}")), None);
-                    assert_eq!(app.agent_mode(), mode);
-                    assert_eq!(app.approval_mode(), ApprovalMode::Manual);
-                    assert!(app.input().is_empty());
-                    assert!(app.command_panel().is_none());
-                    assert!(app.chat_input_focused());
-                }
-            }
-            for argument in ["计划", "計画", "multitask", "custom/example", "unknown"] {
-                assert_eq!(command(&mut app, &format!("/mode {argument}")), None);
-                assert_eq!(app.agent_mode(), AgentMode::Ask);
-                assert!(app.chat_input_focused());
-            }
-        }
-    }
-}
-
-#[test]
-fn agent_mode_selector_selects_and_dismisses_in_both_screens() {
-    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
-        let mut app = App::new();
-        switch(&mut app, screen);
-        assert_eq!(command(&mut app, "/mode debug"), None);
-        assert_eq!(command(&mut app, "/mode"), None);
-        assert_eq!(
-            app.list_selection().unwrap().selected_visible_index(),
-            Some(2)
-        );
-        app.insert_text("draft behind selector");
-        match screen {
-            ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!(app = &app; "agent_mode_fullscreen_selector", render(&app))
-            }
-            ScreenMode::Inline => {
-                crate::tui_assert_snapshot!(app = &app; "agent_mode_inline_selector", render(&app))
-            }
-        }
-        key(&mut app, KeyCode::Down, KeyModifiers::NONE);
-        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-        assert_eq!(app.agent_mode(), AgentMode::Swarm);
-        assert!(app.command_panel().is_none());
-        assert!(app.chat_input_focused());
-        assert_eq!(app.input(), "draft behind selector");
-        assert_eq!(app.top_tip().text(None), None);
-        match screen {
-            ScreenMode::Fullscreen => {
-                crate::tui_assert_snapshot!(app = &app; "agent_mode_fullscreen_selected", render(&app))
-            }
-            ScreenMode::Inline => {
-                crate::tui_assert_snapshot!(app = &app; "agent_mode_inline_selected", render(&app))
-            }
-        }
-        switch(
-            &mut app,
-            if screen == ScreenMode::Inline {
-                ScreenMode::Fullscreen
-            } else {
-                ScreenMode::Inline
-            },
-        );
-        assert_eq!(app.agent_mode(), AgentMode::Swarm);
-    }
-}
-
-#[test]
-fn agent_mode_permission_and_effort_commands_are_independent() {
-    let mut app = App::new();
-    app.open_home();
-    command(&mut app, "/mode ask");
-    command(&mut app, "/permission auto");
-    assert_eq!(app.agent_mode(), AgentMode::Ask);
-    assert_eq!(app.approval_mode(), ApprovalMode::Auto);
-    assert_eq!(
-        command(&mut app, "/effort high"),
-        Some(AppCommand::Models(crate::models::Command::SetEffort {
-            effort: ash_protocol::ReasoningEffort::High
-        }))
-    );
-    assert_eq!(
-        command(&mut app, "/effort"),
-        Some(AppCommand::Models(crate::models::Command::OpenEffortPicker))
-    );
-    command(&mut app, "/mode unknown");
-    assert_eq!(app.agent_mode(), AgentMode::Ask);
-    assert!(render(&app).contains("Use /mode agent|plan|debug|swarm|ask"));
-    crate::tui_assert_snapshot!(app = &app; "agent_mode_option_error_on_home", render(&app));
-    command(&mut app, "/permission");
-    assert_eq!(
-        app.list_selection().unwrap().selected_visible_index(),
-        Some(0)
-    );
-    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!(app.agent_mode(), AgentMode::Ask);
-    assert_eq!(app.approval_mode(), ApprovalMode::Auto);
-}
-
-#[test]
 fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
     use ash_protocol::ReasoningEffort;
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
@@ -442,8 +253,8 @@ fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
                 crate::nls::Language::Chinese => "使用 /effort <档位>",
                 _ => "Use /effort <level>",
             };
-            for (mode, selected) in [("plan", AgentMode::Plan), ("swarm", AgentMode::Swarm)] {
-                command(&mut app, &format!("/mode {mode}"));
+            for selected in [AgentMode::Plan, AgentMode::Swarm] {
+                app.set_agent_mode(selected);
                 for value in [
                     "swarm",
                     "swarm on",
@@ -464,27 +275,6 @@ fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
 }
 
 #[test]
-fn swarm_mode_selected_during_a_turn_applies_to_the_next_submission() {
-    let mut app = App::new();
-    let turn = running_turn(AgentMode::Debug);
-    app.sync_active_turn(&[turn.clone()]);
-    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    assert_eq!(command(&mut app, "/mode swarm"), None);
-    assert_eq!(app.status(), &super::Status::Working);
-    app.sync_active_turn(&[turn]);
-    assert_eq!(app.agent_mode(), AgentMode::Swarm);
-    app.insert_text("execute the next task");
-    let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
-        key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL)
-    else {
-        panic!("the next Swarm submission must be queued")
-    };
-    assert_eq!(submission.mode, AgentMode::Swarm);
-    assert_eq!(serde_json::to_value(submission.mode).unwrap(), "swarm");
-    assert_eq!(app.queue_view().items[0].text, "execute the next task");
-}
-
-#[test]
 fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();
@@ -493,7 +283,6 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         settings.set_language(crate::nls::Language::Chinese);
         settings.set_screen_mode(screen);
         app.update(ConfigEvent::SettingsReceived(settings));
-        command(&mut app, "/mode plan");
         command(&mut app, "/permission");
         assert_eq!(
             app.list_selection().unwrap().selected_visible_index(),
@@ -513,7 +302,7 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         key(&mut app, KeyCode::Home, KeyModifiers::NONE);
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         assert_eq!(app.approval_mode(), ApprovalMode::Auto);
-        assert_eq!(app.agent_mode(), AgentMode::Plan);
+        assert_eq!(app.agent_mode(), AgentMode::Agent);
         for (id, mode) in [
             ("manual", ApprovalMode::Manual),
             ("auto", ApprovalMode::Auto),
@@ -521,7 +310,7 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         ] {
             command(&mut app, &format!("/permission {id}"));
             assert_eq!(app.approval_mode(), mode);
-            assert_eq!(app.agent_mode(), AgentMode::Plan);
+            assert_eq!(app.agent_mode(), AgentMode::Agent);
         }
     }
 }
@@ -756,64 +545,6 @@ fn fullscreen_effort_drag_copy_keeps_tip_above_panel_and_hints_below() {
     }
 }
 
-#[test]
-fn agent_mode_inline_statusline_can_be_enabled_and_localized() {
-    use crate::status::StatusLineItem;
-    use crate::status::StatusLineSettings;
-    let mut app = App::new();
-    let mut settings = TerminalSettings::default();
-    settings.set_screen_mode(ScreenMode::Inline);
-    settings.set_language(crate::nls::Language::Chinese);
-    app.update(ConfigEvent::SettingsReceived(settings));
-    app.update(crate::models::Event::SummaryReceived(
-        crate::models::ModelSummary::from_catalog(None, None, None),
-    ));
-    let mut statusline = StatusLineSettings::default();
-    for item in StatusLineItem::ALL {
-        statusline.set(
-            item,
-            matches!(item, StatusLineItem::Model | StatusLineItem::Mode),
-        );
-    }
-    app.update(crate::status::Event::LineSettingsReceived(
-        statusline.clone(),
-    ));
-    app.chat_panel.reset_top_tip();
-    assert_eq!(
-        app.status_line()
-            .top_text_for_width(78, app.status_line_runtime()),
-        "Automatic model"
-    );
-    crate::tui_assert_snapshot!(
-        app = &app;
-        "agent_mode_inline_default_statusline_chinese",
-        render(&app)
-    );
-    command(&mut app, "/mode plan");
-    app.chat_panel.reset_top_tip();
-    let output = render(&app);
-    assert!(
-        app.status_line()
-            .top_text_for_width(78, app.status_line_runtime())
-            .contains("计划")
-    );
-    crate::tui_assert_snapshot!(app = &app; "agent_mode_inline_statusline_chinese", output);
-    statusline.set(StatusLineItem::Mode, false);
-    app.update(crate::status::Event::LineSettingsReceived(statusline));
-    app.chat_panel.reset_top_tip();
-    assert!(
-        !app.status_line()
-            .top_text_for_width(78, app.status_line_runtime())
-            .contains("计划")
-    );
-    command(&mut app, "/mode");
-    assert_eq!(
-        app.list_selection().unwrap().selected_visible_index(),
-        Some(1)
-    );
-    crate::tui_assert_snapshot!(app = &app; "agent_mode_selector_chinese", render(&app));
-}
-
 fn running_turn(mode: AgentMode) -> Turn {
     Turn {
         mode,
@@ -838,31 +569,6 @@ fn running_turn(mode: AgentMode) -> Turn {
         skill_loads: None,
         error: None,
     }
-}
-
-#[test]
-fn agent_mode_changed_during_a_turn_is_queued_instead_of_steered() {
-    let mut app = App::new();
-    let turn = running_turn(AgentMode::Debug);
-    app.sync_active_turn(&[turn.clone()]);
-    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    assert_eq!(app.agent_mode(), AgentMode::Debug);
-    command(&mut app, "/mode invalid");
-    assert_eq!(app.status(), &super::Status::Working);
-    assert!(app.steers_active_turn());
-    command(&mut app, "/mode plan");
-    app.sync_active_turn(&[turn]);
-    assert_eq!(app.agent_mode(), AgentMode::Plan);
-    let previous_rows = app.messages().len();
-    app.insert_text("plan the next task");
-    let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
-        key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL)
-    else {
-        panic!("a different mode must start a queued turn")
-    };
-    assert_eq!(submission.mode, AgentMode::Plan);
-    assert_eq!(app.messages().len(), previous_rows);
-    assert_eq!(app.queue_view().items[0].text, "plan the next task");
 }
 
 fn effort_data() -> crate::models::ModelPickerData {
@@ -1025,4 +731,45 @@ fn render_effort(app: &App) -> String {
         .map(str::trim_end)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[test]
+fn slash_task_commands_forward_without_a_mode_selection() {
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for verb in ["ask", "plan", "debug", "swarm"] {
+            let mut app = App::for_dir_with_slash_commands(
+                std::path::Path::new("."),
+                ash_slash_commands::SlashCommandCatalog::default(),
+            );
+            switch(&mut app, screen);
+            let input = format!("/{verb} Inspect the requested task");
+            let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+                command(&mut app, &input)
+            else {
+                panic!("task command should submit directly: {input}");
+            };
+            assert_eq!(submission.mode, AgentMode::Agent);
+            assert_eq!(submission.display_text, input);
+            assert_eq!(app.agent_mode(), AgentMode::Agent);
+        }
+    }
+}
+
+#[test]
+fn task_command_queues_while_another_turn_is_running() {
+    let mut app = App::for_dir_with_slash_commands(
+        std::path::Path::new("."),
+        ash_slash_commands::SlashCommandCatalog::default(),
+    );
+    app.sync_active_turn(&[running_turn(AgentMode::Agent)]);
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    let input = "/swarm Check the two modules";
+    let Some(AppCommand::Thread(ThreadCommand::Enqueue { submission, .. })) =
+        command(&mut app, input)
+    else {
+        panic!("the command needs a separate queued request");
+    };
+    assert_eq!(submission.mode, AgentMode::Agent);
+    assert_eq!(submission.display_text, input);
+    assert_eq!(app.queue_view().items[0].text, input);
 }

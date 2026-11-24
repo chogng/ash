@@ -87,7 +87,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
 		const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
 		const editor = element.querySelector<HTMLElement>('.ash-chat-input-editor');
-		const action = element.querySelector<HTMLElement>('.ash-chat-input-mode-action');
+		const action = element.querySelector<HTMLElement>('.ash-chat-input-model-action');
 		const secondary = element.querySelector<HTMLElement>('.ash-chat-secondary-toolbar');
 		if (!list || !input || !composer || !toolbar || !editor || !action || !secondary) throw new Error('Chat layout is incomplete');
 		const chatBounds = element.getBoundingClientRect();
@@ -147,40 +147,19 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	});
 });
 
-test('Chat mode changes reach the input and keyboard help restores its selected action', async ({ workbench }) => {
+test('Chat exposes task slash commands in the composer', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-	const picker = chat.locator('[data-action-id="ash.chat.input.mode"] button');
-	const welcome = chat.locator('.ash-chat-welcome');
-	await expect(welcome.getByRole('heading', { name: 'Build with Agent' })).toBeVisible();
-	await expect(chat.locator('.ash-chat-list-widget')).toHaveCSS('display', 'none');
-	await expect(chat.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
-	for (const [name, title] of [['Plan', 'Start a conversation'], ['Ask', 'Ask about your code'], ['Agent', 'Build with Agent']]) {
-		await picker.press('ArrowDown');
-		await page.getByRole('menuitemradio', { name, exact: true }).click();
-		await expect(picker).toHaveText(name);
-		await expect(welcome.getByRole('heading', { name: title, exact: true })).toBeVisible();
-	}
-	await picker.press('ArrowDown');
-	const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
-	const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
-	await expect(agent).toBeFocused();
-	await expect(agent).toHaveAttribute('aria-checked', 'true');
-	await agent.press('Alt+F1');
-	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help).toBeVisible();
-	await expect(help.getByRole('textbox')).toHaveValue(/Use Up and Down Arrow to move between available actions/);
-	await help.press('Escape');
-	await expect(help).toHaveCount(0);
-	await expect(agent).toBeFocused();
-	await agent.press('ArrowDown');
-	await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(widget).toHaveCount(0);
-	await expect(picker).toBeFocused();
+	const input = chat.getByRole('textbox', { name: 'Chat message' });
+	await expect(chat.locator('.ash-chat-welcome').getByRole('heading', { name: 'Build with Agent' })).toBeVisible();
+	await input.focus();
+	await page.keyboard.insertText('/plan ');
+	await expect(chat.locator('.view-lines')).toContainText('/plan');
+	await expect(chat.locator('.ash-chat-input-mode-menu')).toHaveCount(0);
+	await expect(chat.locator('.ash-chat-welcome').getByRole('heading', { name: 'Build with Agent' })).toBeVisible();
 });
 
 test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {

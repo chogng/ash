@@ -3,3 +3,4 @@
 pub use slash_commands::ProductSlashCommand;
 pub use slash_commands::SlashCommandArgumentMode as SlashCommandArgumentModeDto;
 pub use slash_commands::SlashCommandDefinition;
+pub use slash_commands::TaskSlashCommand;

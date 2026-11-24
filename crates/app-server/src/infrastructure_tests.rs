@@ -342,7 +342,9 @@ fn referenced_session_commands_replay_after_the_source_is_deleted() {
         "jsonrpc":"2.0","id":6,"method":"session/request","params":{
             "commandId":"rewrite-with-reference","sessionId":session,"request":{
                 "type":"rewriteThread","parentThreadId":destination,
-                "beforeTurnId":started["result"]["value"]["turnId"],"title":"Rewritten","input":input
+                "beforeTurnId":started["result"]["value"]["turnId"],"title":"Rewritten",
+                "commandInterpretation":"accepted",
+                "input":[{"type":"text","text":"/plan Explain this prefix literally"},input[0]]
             }
         }
     });
@@ -351,6 +353,14 @@ fn referenced_session_commands_replay_after_the_source_is_deleted() {
         .as_str()
         .expect(&rewritten.to_string());
     super::wait_for_latest_turn(&server, branch, ash_protocol::TurnStatus::Completed);
+    let thread = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(branch).unwrap())
+        .unwrap();
+    assert_eq!(
+        thread.turns[0].execution_approach(),
+        ash_protocol::AgentMode::Agent
+    );
 
     let deleted = call(
         &server,
@@ -366,7 +376,7 @@ fn referenced_session_commands_replay_after_the_source_is_deleted() {
     rewrite["id"] = json!(9);
     let replayed = call(&server, &mut connection, start.clone());
     assert_eq!(replayed["result"], started["result"], "{replayed}");
-    let replayed = call(&server, &mut connection, rewrite);
+    let replayed = call(&server, &mut connection, rewrite.clone());
     assert_eq!(
         replayed["result"]["value"]["threadId"], branch,
         "{replayed}"
@@ -374,6 +384,14 @@ fn referenced_session_commands_replay_after_the_source_is_deleted() {
     assert_eq!(
         replayed["result"]["value"]["turn"],
         rewritten["result"]["value"]["turn"]
+    );
+
+    rewrite["id"] = json!(12);
+    rewrite["params"]["request"]["commandInterpretation"] = json!("product");
+    let conflict = call(&server, &mut connection, rewrite);
+    assert_eq!(
+        conflict["error"]["message"], "CommandConflict",
+        "{conflict}"
     );
 
     start["id"] = json!(10);
@@ -2042,6 +2060,87 @@ fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
         );
         assert!(response.get("error").is_some(), "{response}");
     }
+}
+
+#[test]
+fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, _) = queued_server(root.path());
+    let mut connection = server.connection();
+    let (session, thread) = create(&server, &mut connection);
+    let response = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":{
+            "commandId":"queued-task-command","sessionId":session,"threadId":thread,
+            "input":[{"type":"text","text":"/plan Inspect build prerequisites"}]
+        }}),
+    );
+    let accepted: queue::QueuedMessage =
+        serde_json::from_value(response["result"].clone()).expect(&response.to_string());
+    assert!(response["result"]["request"].get("mode").is_none());
+    assert_eq!(
+        accepted.request.task_command,
+        Some(ash_protocol::AgentMode::Plan)
+    );
+    let mut queued = accepted.clone();
+    for (index, (interpretation, text, command)) in [
+        ("literal", "/init", None),
+        (
+            "product",
+            "/plan Inspect build prerequisites",
+            Some(ash_protocol::AgentMode::Plan),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let paused = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":5 + 2 * index,"method":"queue/edit","params":{
+                "commandId":queued.request.command_id,"sessionId":session,"threadId":thread,
+                "expectedRevision":queued.revision,"action":{"type":"pause"}
+            }}),
+        );
+        assert!(paused["result"]["revision"].is_number(), "{paused}");
+        let edited = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":6 + 2 * index,"method":"queue/edit","params":{
+                "commandId":queued.request.command_id,"sessionId":session,"threadId":thread,
+                "expectedRevision":paused["result"]["revision"],"commandInterpretation":interpretation,
+                "action":{"type":"replaceTextWithDelivery","text":text,"delivery":{"type":"queued"}}
+            }}),
+        );
+        queued = serde_json::from_value(edited["result"].clone()).expect(&edited.to_string());
+        assert_eq!(queued.request.task_command, command);
+        assert_eq!(
+            queued.request.command_interpretation.is_product(),
+            interpretation == "product"
+        );
+    }
+    let store = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+    let message = store.get(&queued.request.command_id).unwrap().unwrap();
+    let queue::Delivery::Started(turn_id) = server.deliver_queued_message(&message).unwrap() else {
+        panic!("queued task command did not start")
+    };
+    super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
+    let snapshot = server
+        .threads()
+        .read_thread(&message.request.thread_id)
+        .unwrap();
+    let turn = snapshot
+        .turns
+        .iter()
+        .find(|turn| turn.turn_id == turn_id)
+        .unwrap();
+    assert_eq!(turn.mode, ash_protocol::AgentMode::Agent);
+    assert_eq!(turn.execution_approach(), ash_protocol::AgentMode::Plan);
+    assert!(matches!(
+        server.deliver_queued_message(&message).unwrap(),
+        queue::Delivery::Started(id) if id == turn_id
+    ));
 }
 
 #[test]

@@ -65,7 +65,6 @@ import { notifyDictationSubmitted } from '../../speechToText/dictationSession.js
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { ActionViewItem, ButtonActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, type IAction } from '../../../../../../base/common/actions.js';
-import { Separator } from '../../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -145,7 +144,7 @@ import { SubmenuItemAction } from '../../../../../../platform/actions/common/act
 import { ChatSubmitAction, type IChatExecuteActionContext } from '../../actions/chatExecuteActions.js';
 import { ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../actions/chatQueueActions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
-import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
+import { ChatRequestQueueKind, isTaskSlashCommand } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 
@@ -171,14 +170,6 @@ interface ChatInputToolbarState {
 	readonly agentName?: string;
 	readonly canSelectAgent: boolean;
 }
-
-const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon; }[] = [
-	{ id: 'agent', label: 'Agent', icon: Lxicon.unlimited },
-	{ id: 'plan', label: 'Plan', icon: Lxicon.plan },
-	{ id: 'debug', label: 'Debug', icon: Lxicon.debug },
-	{ id: 'swarm', get label() { return localize('chat.modePicker.swarm', 'Swarm'); }, icon: Lxicon.swarm },
-	{ id: 'ask', label: 'Ask', icon: Lxicon.ask },
-];
 
 const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 	auto: Lxicon.sparkle,
@@ -350,7 +341,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly executeMenu: IMenu;
 	private readonly executeContext: IContextKeyService;
 	private readonly executeInstantiation: IInstantiationService;
-	private readonly queueContextKeys: { hasText: IContextKey<boolean>; running: IContextKey<boolean>; blocked: IContextKey<boolean>; progress: IContextKey<boolean>; };
+	private readonly queueContextKeys: { hasText: IContextKey<boolean>; startsTaskCommand: IContextKey<boolean>; running: IContextKey<boolean>; blocked: IContextKey<boolean>; progress: IContextKey<boolean>; };
 	private readonly attachmentToolbar: WorkbenchToolBar | undefined;
 	private readonly inlineActionsToolbar: WorkbenchToolBar | undefined;
 	protected readonly inputFooter: HTMLElement | undefined;
@@ -464,6 +455,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.executeContext = context;
 		this.queueContextKeys = {
 			hasText: ChatContextKeys.inputHasText.bindTo(context), running: ChatContextKeys.requestInProgress.bindTo(context),
+			startsTaskCommand: ChatContextKeys.inputStartsTaskCommand.bindTo(context),
 			blocked: ChatContextKeys.inputBlocked.bindTo(context), progress: ChatContextKeys.transcriptProgressActive.bindTo(context),
 		};
 		this.executeInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
@@ -1290,9 +1282,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private applyDraft(draft: IChatComposerDraft): void {
 		this.inputChanges.pause();
 		try {
-			this.delegate.selectMode(draft.mode);
-			const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, draft.contexts, true) : draft;
-			this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
+			const prefix = draft.mode !== 'agent' && (draft.text.trim() || draft.contexts.length) && !isTaskSlashCommand(draft.text)
+				? `/${draft.mode} ` : '';
+			const draftText = `${prefix}${draft.text}`;
+			const draftContexts = prefix ? draft.contexts.map(context => context.reference ? {
+				...context,
+				reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
+			} : context) : draft.contexts;
+			this.delegate.selectMode('agent');
+			const { text, contexts } = this.options.stageImages
+				? projectChatDraftReferences(draftText, draftContexts, true)
+				: { text: draftText, contexts: draftContexts };
+			this.setInputValue(text !== draftText && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
 			const references: ChatContextAttachment[] = [];
 			const legacyReferences: ChatContextAttachment[] = [];
 			for (const attachment of contexts) {
@@ -1809,6 +1810,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private parseInput(text: string): SlashCommandInput {
 		const input = parseSlashCommandInput(text, this.slashCommands);
+		if (input.kind === 'command' && input.binding.origin === 'server' && isTaskSlashCommand(text)) {
+			return { kind: 'message', text };
+		}
 		return this.delegate.executeServerCommand || input.kind === 'command' && input.binding.origin === 'client' ? input : { kind: 'message', text };
 	}
 
@@ -1826,6 +1830,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderToolbar(): void {
 		const input = this.parseInput(this.commandText());
+		this.queueContextKeys.startsTaskCommand.set(!!this.delegate.executeServerCommand && input.kind === 'message' && isTaskSlashCommand(input.text));
 		const canSubmitIntent = input.kind === 'message' ? input.text.trim().length > 0 || !!this.state.draft?.files.length || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
@@ -1905,18 +1910,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderToolbarActions(): void {
-		const mode = modeOptions.find(option => option.id === this.mode) ?? modeOptions[0]!;
-		const modeLabel = this.mode === 'agent' ? this.state.selectedAgent?.name ?? this.state.agentName ?? mode.label : mode.label;
-		const modeTooltip = this.mode === 'agent' && modeLabel !== mode.label
-			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
-			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
-		const modeAction = this.options.modePicker === 'hidden' ? undefined : this.toolbarState.inputKind === 'command'
-			? new ChatInputAction('ash.chat.input.command', 'Command', 'Slash command', Lxicon.play, false, 'mode', () => { })
+		const agentName = this.state.selectedAgent?.name ?? this.state.agentName;
+		const agentLabel = agentName ?? localize('chat.agentPicker.select', 'Select Agent');
+		const modeAction = this.options.modePicker === 'hidden' || (!this.state.canSelectAgent && !agentName) || this.toolbarState.inputKind === 'command'
+			? undefined
 			: new SelectorAction(
 				'ash.chat.input.mode',
-				modeLabel,
-				modeTooltip,
-				mode.icon,
+				agentLabel,
+				agentName ? localize('chat.agentPicker.mode', 'Agent: {0}', agentName) : agentLabel,
+				Lxicon.unlimited,
 				'mode',
 				async () => {
 					let agents: readonly ChatAgent[] = [];
@@ -1924,28 +1926,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						try {
 							agents = await this.delegate.listAgents();
 						} catch {
-							// Built-in modes remain available when custom Agents cannot be listed.
+							// The default Agent remains available if custom Agents cannot be listed.
 						}
 					}
-					const options = modeOptions.map(option => new ChatInputAction(
-						`ash.chat.input.mode.${option.id}`,
-						option.label,
-						localize('chat.modePicker.use', 'Use {0} mode', option.label),
-						option.icon,
-						true,
-						'mode',
-						() => {
-							this.draftRevision++;
-							if (option.id === 'agent' && this.state.canSelectAgent && this.state.selectedAgent) {
-								this.delegate.selectAgent(undefined);
-							}
-							this.delegate.selectMode(option.id);
-						},
-						option.id === this.mode && (option.id !== 'agent' || !this.state.canSelectAgent || !this.state.selectedAgent),
-					));
 					const agentOptions: IAction[] = [];
-					if (!this.state.canSelectAgent && this.state.agentName) {
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
+					if (this.state.canSelectAgent) {
+						const label = localize('chat.agentPicker.default', 'Default Agent');
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => this.delegate.selectAgent(undefined), !this.state.selectedAgent));
+					} else if (agentName) {
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', agentName, agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
 					}
 					agentOptions.push(...agents.map(agent => new ChatInputAction(
 						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
@@ -1957,7 +1946,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						() => this.delegate.selectAgent(agent),
 						this.state.selectedAgent?.name === agent.name && this.state.selectedAgent.sourceId === agent.sourceId,
 					)));
-					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
+					return agentOptions;
 				},
 			);
 		const micAction = this.dictationSession.action;
@@ -2490,7 +2479,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return localize('chat.input.unavailable', 'Chat is unavailable.');
 			case 'ready':
 				if (state.queuedMessages > 0) return localize('chat.input.queuedMessages', '{0} messages queued', state.queuedMessages);
-				if (!this.replyOnly && state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
 				return state.canInterrupt && !this.delegate.responseProgressInTranscript ? localize('chat.input.working', 'Working…') : '';
 		}
 	}
@@ -2715,6 +2703,7 @@ export class ChatQueueEditor extends Disposable {
 		const type = paused.steerTurnId ? ChatContextKeys.EditingRequestType.Steer : ChatContextKeys.EditingRequestType.Queue;
 		ChatContextKeys.editingRequestType.bindTo(context).set(type);
 		const hasText = ChatContextKeys.inputHasText.bindTo(context);
+		const startsTaskCommand = ChatContextKeys.inputStartsTaskCommand.bindTo(context);
 		const blocked = ChatContextKeys.inputBlocked.bindTo(context);
 		ChatContextKeys.transcriptProgressActive.bindTo(context).set(false);
 		const defaultAction = context.createKey(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, this.configuration.getValue<string>(ChatConfiguration.RequestQueueingDefaultAction) ?? 'steer');
@@ -2751,6 +2740,7 @@ export class ChatQueueEditor extends Disposable {
 		let pending: Promise<void> | undefined;
 		const update = (): void => {
 			hasText.set(!!input.value.trim()); blocked.set(!!pending);
+			startsTaskCommand.set(!replyOnly && isTaskSlashCommand(input.value));
 			save.enabled = !!input.value.trim() && !pending;
 		};
 		this.submitEdit = (value, options) => {
@@ -2758,9 +2748,12 @@ export class ChatQueueEditor extends Disposable {
 			if (pending || !current() || !input.value.trim()) return pending ?? Promise.resolve();
 			input.inputElement.readOnly = true;
 			feedback.textContent = '';
+			const taskCommand = !replyOnly && isTaskSlashCommand(input.value);
+			const commandInterpretation = replyOnly ? undefined : taskCommand ? 'product' : this.widget.model?.commandInterpretation ?? 'product';
+			const queue = replyOnly ? undefined : taskCommand ? ChatRequestQueueKind.Queued : options?.queue ?? (paused.steerTurnId ? ChatRequestQueueKind.Steering : ChatRequestQueueKind.Queued);
 			pending = (options?.cancelCurrentRequest
-				? this.chat.sendPendingRequestImmediately(target(paused), input.value)
-				: this.chat.editPendingRequest(target(paused), input.value, replyOnly ? undefined : options?.queue ?? (paused.steerTurnId ? ChatRequestQueueKind.Steering : ChatRequestQueueKind.Queued)))
+				? this.chat.sendPendingRequestImmediately(target(paused), input.value, commandInterpretation)
+				: this.chat.editPendingRequest(target(paused), input.value, queue, commandInterpretation))
 				.then(() => { saved = true; announceStatus(localize('chat.queue.saved', 'Queued message saved.')); dialog.dispose(); }, error => {
 					if (!hidden) feedback.textContent = localize('chat.queue.saveFailed', 'Could not save queued message: {0}', String(error instanceof Error ? error.message : error));
 				}).finally(() => { pending = undefined; input.inputElement.readOnly = false; update(); });

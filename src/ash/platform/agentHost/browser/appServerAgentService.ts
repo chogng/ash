@@ -425,7 +425,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		rewrite: async (params, signal) => {
 			const result = await withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'session/request', sessionRequest(params, {
 				type: 'rewriteThread', parentThreadId: params.threadId, beforeTurnId: params.beforeTurnId, title: params.title,
-				input,
+				input, ...(params.commandInterpretation && { commandInterpretation: params.commandInterpretation }),
 			})), signal);
 			if (result.type !== 'rewrite' || result.value.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.value.session.sessionId, threadId: result.value.threadId };
@@ -615,7 +615,7 @@ function queuedMessage(value: QueuedMessageDto): QueuedMessage {
 	return {
 		...(value.request.steerTurn ? { steerTurnId: value.request.steerTurn } : {}),
 		sessionId: value.request.sessionId, threadId: value.request.threadId, commandId: value.request.commandId,
-		revision: value.revision, status: value.status, mode: value.request.mode,
+		revision: value.revision, status: value.status, mode: value.request.mode ?? 'agent',
 		text: value.request.input.flatMap(item => item.type === 'text' ? [item.text] : []).join(''),
 		contextCount: value.request.input.filter(item => item.type !== 'text').length,
 		turnId: value.turnId ?? undefined, error: value.error ?? undefined,
@@ -640,7 +640,7 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 			appServerRequest(connection, 'queue/list', params).then((result) => ({
 				messages: result.messages.map(queuedMessage)
 			})),
-		editQueued: (params, action) => appServerRequest(connection, 'queue/edit', { ...params, action: action.type === 'send' ? { type: 'send', turnId: null } : action }).then(queuedMessage).catch(queueFailure),
+		editQueued: (params, action, commandInterpretation) => appServerRequest(connection, 'queue/edit', { ...params, ...(commandInterpretation && { commandInterpretation }), action: action.type === 'send' ? { type: 'send', turnId: null } : action }).then(queuedMessage).catch(queueFailure),
 		cancelQueued: params => appServerRequest(connection, 'queue/cancel', params).then(queuedMessage).catch(queueFailure),
 		start: (params, signal) =>
 			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(
@@ -651,7 +651,7 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					commandInterpretation: params.commandInterpretation,
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,
-					mode: params.mode,
+					...(params.mode && { mode: params.mode }),
 					approvalMode: params.approvalMode,
 					model: params.model,
 					modelRouting: params.modelRouting,
@@ -804,7 +804,7 @@ function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority:
 			directory: toExecutionTarget(turn.directory, remoteHost),
 			kind: turn.kind,
 			status: turn.status,
-			mode: turn.mode,
+			mode: turn.instructions?.taskCommand ?? turn.mode ?? 'agent',
 			approvalMode: turn.approvalMode,
 			startedToolCallIds: turn.startedToolCallIds ? [...turn.startedToolCallIds] : turn.startedToolCallIds,
 			pendingInteraction: turn.pendingInteraction ? {

@@ -54,12 +54,9 @@ impl GoalExtension {
         else {
             return Ok(None);
         };
-        // Analysis modes wait for the user's next instruction, even while a Goal remains active.
+        // Read-only requests wait for the user's next instruction, even while a Goal is active.
         if completed_turn.kind != protocol::TurnKind::Coding
-            || matches!(
-                completed_turn.mode,
-                protocol::AgentMode::Plan | protocol::AgentMode::Ask
-            )
+            || completed_turn.execution_approach().is_analysis()
         {
             return Ok(None);
         }

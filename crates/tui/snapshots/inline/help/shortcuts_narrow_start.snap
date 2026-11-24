@@ -17,6 +17,6 @@ expression: "text(&render(&app, narrow))"
                         image
 
   Session
-  ?          Keyboard shortcuts
+  ?        Keyboard shortcuts
 
   ↑/↓ scroll · Esc to close

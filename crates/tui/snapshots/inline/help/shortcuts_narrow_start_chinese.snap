@@ -14,9 +14,9 @@ expression: "text(&render(&app, narrow))"
   ctrl+v                附加剪贴板图片
 
   会话
-  ?          键盘快捷键
-  ←          仪表盘（输入为空或只读）
-  Esc Esc    打开回退检查点
-  esc        中断任务
+  ?        键盘快捷键
+  ←        仪表盘（输入为空或只读）
+  Esc Esc  打开回退检查点
+  esc      中断任务
 
   ↑/↓ 滚动 · Esc 关闭

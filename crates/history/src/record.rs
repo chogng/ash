@@ -10,6 +10,7 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 38 records task commands in frozen instructions and omits the default legacy mode.
 /// Version 37 records frozen model guidance under `agentModes`.
 /// Version 36 records the Swarm agent mode as `swarm`.
 /// Version 35 supports opt-in context-window tool hints in frozen Turn policies.
@@ -23,7 +24,7 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Supported older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 37;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 38;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
@@ -186,7 +187,7 @@ impl Serialize for StoredThreadEvent<'_> {
     {
         // Old imported Turns must retain their byte representation: history prefixes are
         // addressed by a digest of their serialized records, not just their reduced state.
-        if self.0.schema_version < 23 {
+        if self.0.schema_version < 38 {
             match &self.0.event {
                 ThreadEvent::TurnAccepted {
                     thread_id,
@@ -203,7 +204,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     reasoning_effort,
                     advisor,
                     tool_profile,
-                } => {
+                } if self.0.schema_version < 23 => {
                     let mut event = serializer.serialize_struct("TurnAccepted", 15)?;
                     event.serialize_field("type", "turnAccepted")?;
                     event.serialize_field("threadId", thread_id)?;
@@ -355,7 +356,13 @@ impl Serialize for LegacyTurn<'_> {
             };
         }
         optional!("instructions", &turn.instructions);
+        if self.1 >= 23 {
+            optional!("directory", &turn.directory);
+        }
         optional!("model", &turn.model);
+        if self.1 >= 23 {
+            optional!("modelRouting", &turn.model_routing);
+        }
         optional!("reasoningEffort", &turn.reasoning_effort);
         optional!("advisor", &turn.advisor);
         optional!("toolProfile", &turn.tool_profile);
@@ -367,8 +374,14 @@ impl Serialize for LegacyTurn<'_> {
         record.serialize_field("usage", &turn.usage)?;
         optional!("contextUsage", &turn.context_usage);
         record.serialize_field("items", &turn.items)?;
+        if self.1 >= 23 {
+            optional!("skillLoads", &turn.skill_loads);
+        }
         optional!("plan", &turn.plan);
         optional!("pendingInteraction", &turn.pending_interaction);
+        if self.1 >= 23 {
+            optional!("startedToolCallIds", &turn.started_tool_call_ids);
+        }
         optional!("error", &turn.error);
         record.end()
     }

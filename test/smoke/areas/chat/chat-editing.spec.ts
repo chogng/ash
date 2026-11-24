@@ -169,7 +169,6 @@ const documentTest = test.extend<{
 			const sessions = new Workbench(page);
 			const composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
-			await expect(composer.getByRole('button', { name: 'Mode: Agent', exact: true })).toBeVisible();
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await composer.getByRole('button', { name: /^Permissions:/ }).click();
 			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
@@ -421,8 +420,6 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
 		const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]');
 		await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
-		await composer.locator('.ash-chat-input-mode-action').click();
-		await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
 		const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions');
 		if (!bypass) { throw new Error('The profile has no bypass permission definition'); }
 		await composer.getByRole('button', { name: /^Permissions:/ }).click();

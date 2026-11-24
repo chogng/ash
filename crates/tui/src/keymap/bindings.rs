@@ -26,7 +26,6 @@ use std::sync::LazyLock;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AppKeymapAction {
     CycleApprovalMode,
-    CycleAgentMode,
     DecreaseReasoningEffort,
     IncreaseReasoningEffort,
     ScreenEscape,
@@ -42,7 +41,6 @@ impl AppKeymapAction {
     pub(crate) const fn command_id(self) -> Option<&'static str> {
         match self {
             Self::CycleApprovalMode => Some("ashCode.action.cycleApprovalMode"),
-            Self::CycleAgentMode => Some("ashCode.action.cycleAgentMode"),
             Self::DecreaseReasoningEffort => Some("ashCode.action.decreaseReasoningEffort"),
             Self::IncreaseReasoningEffort => Some("ashCode.action.increaseReasoningEffort"),
             Self::ScreenEscape => None,
@@ -61,9 +59,8 @@ impl AppKeymapAction {
             .find(|action| action.command_id() == Some(id))
     }
 
-    const USER_BINDABLE: [Self; 10] = [
+    const USER_BINDABLE: [Self; 9] = [
         Self::CycleApprovalMode,
-        Self::CycleAgentMode,
         Self::DecreaseReasoningEffort,
         Self::IncreaseReasoningEffort,
         Self::OpenRewind,
@@ -77,7 +74,6 @@ impl AppKeymapAction {
     pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
-            Self::CycleAgentMode => "Cycle task mode",
             Self::DecreaseReasoningEffort => "Decrease thinking effort",
             Self::IncreaseReasoningEffort => "Increase thinking effort",
             Self::ScreenEscape => "Rewind escape gesture",
@@ -162,11 +158,6 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
         keybinding: "shift+arrowup",
         action: AppKeymapAction::IncreaseReasoningEffort,
-        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
-    },
-    AppKeybindingSpec {
-        keybinding: "shift+tab",
-        action: AppKeymapAction::CycleAgentMode,
         condition: AppKeymapCondition::PressWithComposerWithoutSelection,
     },
     AppKeybindingSpec {

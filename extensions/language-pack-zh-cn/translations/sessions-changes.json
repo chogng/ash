@@ -4,7 +4,7 @@
     "sessions.compare.needAgents": "此主机至少需要配置两个 Agent 才能进行比较。",
     "sessions.compare.pickAgents": "至少选择两个 Agent。按空格切换选中状态，按 Enter 继续。",
     "sessions.compare.answers": "比较回答",
-    "sessions.compare.answersDetail": "使用 Ask 模式调查并回答问题。",
+    "sessions.compare.answersDetail": "只读调查并回答问题。",
     "sessions.compare.code": "比较代码改动",
     "sessions.compare.codeDetail": "让每个 Agent 在独立的 Git worktree 中运行。",
     "sessions.compare.pickMode": "选择 Agent 的运行方式",

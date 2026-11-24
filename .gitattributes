@@ -31,3 +31,17 @@
 /resources/icons/manifest.json text eol=lf
 /app-rs/icons/src/generated.rs text eol=lf
 /generated/product-icons.ts text eol=lf
+
+# Full-width terminal frames retain their right-hand padding.
+/crates/tui/snapshots/fullscreen/chat_view/configured_statusline_fullscreen.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/chat_view/dictation_and_permission_fullscreen.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/chat_view/fixed_progress_scrolled_fullscreen.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/extensions/extensions_chinese_command_completion.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/frame/hooks_slash_completion.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/frame/slash_popup_clears_covered_transcript_rows_edge_to_edge.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/frame/slash_popup_scrolled_to_last_command.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/fullscreen/state/english_punctuation_slash_completion_chinese.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/inline/chat_view/configured_statusline_inline.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/inline/chat_view/dictation_and_permission_inline.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/inline/chat_view/fixed_progress_scrolled_inline.snap whitespace=-blank-at-eol
+/crates/tui/snapshots/inline/state/english_punctuation_slash_completion_chinese.snap whitespace=-blank-at-eol

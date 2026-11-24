@@ -115,11 +115,17 @@ function isComparisonThread(value: unknown): value is ComparisonThread {
 		&& (value.afterTurn === undefined || typeof value.afterTurn === 'string');
 }
 
-export function comparisonTurn(thread: Thread, reference: ComparisonThread, prompt: string): Turn | undefined {
+export function comparisonTurn(thread: Thread, reference: ComparisonThread, ...prompts: string[]): Turn | undefined {
 	const previous = reference.afterTurn === undefined ? -1 : thread.turns.findIndex(turn => turn.turnId === reference.afterTurn);
 	if (reference.afterTurn !== undefined && previous === -1) return undefined;
 	const turn = thread.turns[previous + 1];
-	return turn?.items.some(item => item.type === 'userMessage' && item.text === prompt) ? turn : undefined;
+	return turn?.items.some(item => item.type === 'userMessage' && prompts.includes(item.text)) ? turn : undefined;
+}
+
+export function comparisonAttemptTurn(thread: Thread, comparison: SessionComparison, attempt: ComparisonThread): Turn | undefined {
+	return comparison.isolated
+		? comparisonTurn(thread, attempt, comparison.task)
+		: comparisonTurn(thread, attempt, `/ask ${comparison.task}`, comparison.task);
 }
 
 export function parseComparisonVerdict(reply: string, attempts: readonly number[]): ComparisonVerdict | undefined {

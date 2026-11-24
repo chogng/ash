@@ -101,6 +101,7 @@ impl<'a> Runtime<'a> {
         schedule_title: impl FnOnce(crate::ThreadTitleRequest, Arc<dyn ThreadUpdateSink>),
     ) -> Result<TurnReceipt, CoreError> {
         let automatic_model = request.model_routing.is_some();
+        let task_command = request.instructions.task_command();
         if let Some(receipt) = self.replay_turn(
             thread_id,
             &request.command_id,
@@ -109,6 +110,7 @@ impl<'a> Runtime<'a> {
                 input: &request.input,
                 tool_mode: request.tool_mode,
                 mode: request.mode,
+                task_command,
                 automatic_model,
             },
         )? {
@@ -156,6 +158,7 @@ impl<'a> Runtime<'a> {
                         input: &input,
                         tool_mode,
                         mode,
+                        task_command,
                         automatic_model,
                     },
                 )?
@@ -393,6 +396,7 @@ impl AgentRuntime for Runtime<'_> {
                     tool_mode,
                     kind,
                     model_routing,
+                    instructions,
                     ..
                 },
                 SubmittedCommand::Turn {
@@ -400,6 +404,7 @@ impl AgentRuntime for Runtime<'_> {
                     input: wanted,
                     tool_mode: wanted_tool_mode,
                     mode: wanted_mode,
+                    task_command,
                     automatic_model,
                 },
             ) => {
@@ -407,10 +412,28 @@ impl AgentRuntime for Runtime<'_> {
                     && *tool_mode == wanted_tool_mode
                     && *kind == wanted_kind
                     && *mode == wanted_mode
+                    && instructions
+                        .as_ref()
+                        .and_then(ash_protocol::TurnInstructions::task_command)
+                        == task_command
                     && model_routing.is_some() == automatic_model
             }
-            (ThreadCommand::StartTurn { input, .. }, SubmittedCommand::Input { input: wanted }) => {
+            (
+                ThreadCommand::StartTurn {
+                    input,
+                    instructions,
+                    ..
+                },
+                SubmittedCommand::Input {
+                    input: wanted,
+                    task_command,
+                },
+            ) => {
                 input == wanted
+                    && instructions
+                        .as_ref()
+                        .and_then(ash_protocol::TurnInstructions::task_command)
+                        == task_command
             }
             _ => false,
         };
@@ -450,10 +473,12 @@ impl AgentRuntime for Runtime<'_> {
                     tool_mode,
                     approval_mode,
                     model_routing,
+                    instructions,
                     ..
                 },
                 AcceptedCommand::Turn {
                     mode: wanted_mode,
+                    task_command,
                     input: wanted,
                     tool_mode: mode_tool,
                     approval_mode: approval,
@@ -462,6 +487,10 @@ impl AgentRuntime for Runtime<'_> {
             ) => {
                 input == wanted
                     && *mode == wanted_mode
+                    && instructions
+                        .as_ref()
+                        .and_then(ash_protocol::TurnInstructions::task_command)
+                        == task_command
                     && *tool_mode == mode_tool
                     && *approval_mode == approval
                     && model_routing.is_some() == automatic_model

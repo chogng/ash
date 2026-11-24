@@ -109,8 +109,8 @@ pub struct Turn {
     pub status: TurnStatus,
     #[serde(default)]
     pub kind: TurnKind,
-    /// Approach accepted for this Turn, independent of prompt asset identity.
-    #[serde(default)]
+    /// Compatibility approach for Turns accepted before request-scoped task commands.
+    #[serde(default, skip_serializing_if = "crate::AgentMode::is_agent")]
     pub mode: crate::AgentMode,
     /// Exact instructions frozen when this Turn was accepted.
     ///
@@ -164,4 +164,14 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub error: Option<StableTurnError>,
+}
+
+impl Turn {
+    /// The frozen command takes precedence over the compatibility field in historical snapshots.
+    pub fn execution_approach(&self) -> crate::AgentMode {
+        self.instructions
+            .as_ref()
+            .and_then(TurnInstructions::task_command)
+            .unwrap_or(self.mode)
+    }
 }

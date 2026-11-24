@@ -89,7 +89,7 @@ suite('Model evaluation tools', () => {
 		assert.equal(launched.comparisonId, group.sectionId);
 		assert.deepEqual(launched.attempts.map(attempt => attempt.status), ['launched', 'launched', 'launchFailed']);
 		assert.deepEqual(submissions.map(({ model, text, approvalMode, reasoningEffort, mode }) => ({ model, text, approvalMode, reasoningEffort, mode })),
-			models.map(({ model }) => ({ model, text: create.prompt, approvalMode: 'manual', reasoningEffort: 'high', mode: 'ask' })));
+			models.map(({ model }) => ({ model, text: `/ask ${create.prompt}`, approvalMode: 'manual', reasoningEffort: 'high', mode: undefined })));
 		assert.deepEqual(members, ['attempt-1', 'attempt-2']);
 		assert.deepEqual(await tools.execute(caller, {
 			type: 'listModelComparisons', includeArchived: false, workspace: null, comparisonIds: [], cursor: null,

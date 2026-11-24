@@ -15,7 +15,6 @@ for (const surface of ['chat', 'cowork']) {
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 			const menu = page.getByRole('menu', { name: 'Model options', exact: true });
 			const triggers = [{ trigger: model, popup: picker }, { trigger: options, popup: menu }];
-			if (surface === 'chat') { triggers.push({ trigger: page.locator('.ash-chat-input-mode-action'), popup: page.locator('.ash-chat-input-mode-menu') }); }
 			for (const { trigger, popup } of triggers) {
 				await trigger.tap();
 				await expect(popup).toBeVisible();

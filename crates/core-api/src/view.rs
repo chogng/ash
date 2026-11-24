@@ -87,6 +87,15 @@ pub struct TurnView {
     pub context_usage: Option<ModelContextUsage>,
 }
 
+impl TurnView {
+    pub fn execution_approach(&self) -> ash_protocol::AgentMode {
+        self.instructions
+            .as_ref()
+            .and_then(TurnInstructions::task_command)
+            .unwrap_or(self.mode)
+    }
+}
+
 impl ThreadView {
     pub fn agent_configuration(&self) -> Option<&AgentConfiguration> {
         self.agent.as_ref()

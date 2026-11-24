@@ -3,7 +3,6 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
-use ash_protocol::AgentMode;
 use ash_protocol::ApprovalMode;
 use ash_protocol::ReasoningEffort;
 use std::collections::BTreeMap;
@@ -11,62 +10,14 @@ use std::collections::BTreeMap;
 /// Composer selectors change the next submission; they never mutate an accepted Turn.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ComposerOption {
-    Mode(AgentMode),
     Policy(ApprovalMode),
     Effort(ReasoningEffort),
 }
 
 pub(crate) type ComposerOptions = ListSelectionSpec<ComposerOption>;
 
-pub(crate) const fn mode_label(mode: AgentMode) -> &'static str {
-    match mode {
-        AgentMode::Agent => "Agent",
-        AgentMode::Plan => "Plan",
-        AgentMode::Debug => "Debug",
-        AgentMode::Swarm => "Swarm",
-        AgentMode::Ask => "Ask",
-    }
-}
-
-pub(crate) fn next_mode(mode: AgentMode) -> AgentMode {
-    match mode {
-        AgentMode::Agent => AgentMode::Plan,
-        AgentMode::Plan => AgentMode::Debug,
-        AgentMode::Debug => AgentMode::Swarm,
-        AgentMode::Swarm => AgentMode::Ask,
-        AgentMode::Ask => AgentMode::Agent,
-    }
-}
-
-pub(crate) fn parse_mode(value: &str) -> Result<AgentMode, String> {
-    // The protocol owns stable IDs; display labels and translations may change independently.
-    serde_json::from_value(serde_json::Value::String(value.to_ascii_lowercase()))
-        .map_err(|_| "Use /mode agent|plan|debug|swarm|ask".into())
-}
-
 pub(crate) fn parse_effort(value: &str) -> Result<ReasoningEffort, String> {
     value.parse().map_err(|_| "Use /effort <level>".into())
-}
-
-pub(crate) fn mode_choices(current: AgentMode) -> ComposerOptions {
-    choices(
-        "Mode",
-        AgentMode::ALL.into_iter().map(|mode| {
-            let description = match mode {
-                AgentMode::Agent => "Complete the task",
-                AgentMode::Plan => "Analyze and plan without editing",
-                AgentMode::Debug => "Investigate and fix a problem",
-                AgentMode::Swarm => "Ash delegates and combines results",
-                AgentMode::Ask => "Answer questions without editing",
-            };
-            (
-                mode_label(mode).into(),
-                description.into(),
-                ComposerOption::Mode(mode),
-                mode == current,
-            )
-        }),
-    )
 }
 
 pub(crate) fn policy_choices(current: ApprovalMode) -> ComposerOptions {

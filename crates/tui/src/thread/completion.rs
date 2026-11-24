@@ -462,6 +462,8 @@ fn queue_request(
                 thread_id: scope.thread_id().clone(),
                 command_id: target.command_id,
                 expected_revision: target.revision,
+                command_interpretation: matches!(&action, QueueEditAction::Replace { .. })
+                    .then_some(ash_protocol::CommandInterpretation::Product),
                 action,
             })?;
         }

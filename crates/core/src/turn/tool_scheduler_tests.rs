@@ -1976,7 +1976,7 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
 }
 
 #[test]
-fn analysis_modes_block_mutation_before_review_or_execution_in_every_permission_mode() {
+fn read_only_commands_block_mutation_before_review_or_execution_in_every_permission_mode() {
     for mode in [ash_protocol::AgentMode::Plan, ash_protocol::AgentMode::Ask] {
         for approval in [
             ash_protocol::ApprovalMode::Manual,
@@ -2101,10 +2101,11 @@ fn fixture_with_modes(
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode,
+                mode: ash_protocol::AgentMode::Agent,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
-                instructions: crate::test_turn_instructions(),
+                instructions: crate::test_turn_instructions()
+                    .with_task_command((!mode.is_agent()).then_some(mode)),
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

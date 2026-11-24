@@ -146,7 +146,7 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { ChatHistoryAnchorError, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, ChatRequestQueueKind, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import type { ThreadChangesSummary } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -615,7 +615,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	assert.equal(sessions.navigationRevision, revision);
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	assert.equal(mainInput.value, 'Keep the main draft');
-	assert.equal(original.querySelector('[data-action-id="ash.chat.input.mode"]')?.textContent, 'Ask');
+	assert.equal(original.querySelector('.ash-chat-input-mode-menu'), null);
 	const helpImplementation = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'quickChat' && provider.type === AccessibleViewType.Help)!;
 	using help = helpImplementation.getProvider(services)!;
 	assert.match(help.provideContent(), /workbench.action.quickchat.toggle/);
@@ -633,7 +633,8 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await waitFor(() => fake.turnStartRequests.length === 1);
 	await nextTask();
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.equal(fake.turnStartRequests[0]!.mode, 'ask');
+	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.ok(fake.turnStartRequests[0]!.input.some(item => item.type === 'text' && item.text.startsWith('/ask ')));
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	quick.close();
 	fake.emit({
@@ -1042,13 +1043,11 @@ test('Chat title and history switching retain conversations and drafts', async (
 		assert.deepEqual(
 			[...inputToolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map((item) => item.dataset.actionId),
 			[
-				'ash.chat.input.mode',
 				'ash.chat.input.model',
 				'workbench.action.chat.toggleSpeechToText',
 				'ash.chat.input.voice',
 			],
 		);
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'High');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), `${subscriptionModel.displayName} High`);
@@ -1152,28 +1151,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(dom.window.document.activeElement, effort);
 	reopenedPicker.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-picker'), null);
-	shownContextMenuActions = [];
-	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-	assert.deepEqual(shownContextMenuActions, []);
-	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	const modeMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-input-mode-menu');
-	assert.equal(modeMenu?.closest('.ash-context-view')?.parentElement, contextViewService.container);
-	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.textContent),
-		['Agent', 'Plan', 'Debug', 'Swarm', 'Ask'],
-	);
-	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot [data-ash-icon-id]')?.getAttribute('data-ash-icon-id') ?? null),
-		['unlimited', 'plan', 'debug', 'swarm', 'ask'],
-	);
-	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),
-		['true', 'false', 'false', 'false', 'false'],
-	);
-	modeMenu?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-	assert.equal(firstChatPane.querySelector('.ash-chat-input-mode-selector')?.classList.contains('mode-agent'), true);
-	assert.equal(dom.window.document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-menu"), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
 		const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
@@ -1571,7 +1549,26 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
 });
 
-test('Sessions composer restores a Swarm draft and its attachment', async () => {
+test('Task slash commands preserve attachments and queue intent through the composer', async () => {
+	const sends: unknown[] = [];
+	using fixture = await sessionsInputFixture(async (text, mode, _skills, contexts, _signal, queue) => {
+		sends.push({ text, mode, contexts: contexts?.map(context => context.name), queue });
+	});
+	const { input, model } = fixture;
+	input.render({
+		...model.inputState, canInterrupt: true,
+		slashCommands: [{ name: 'plan', description: 'Read-only planning', argumentMode: 'optional' }]
+	});
+	input.appendToDraft('/plan Inspect task.ts');
+	input.addContext({ id: 'task', kind: 'file', name: 'task.ts', resolve: async () => ({ name: 'task.ts', content: 'Source' }) });
+	assert.equal(fixture.services.get(IContextKeyService).getContext(input.element).getValue(ChatContextKeys.inputStartsTaskCommand.key), true);
+	const text = (await input.captureDraft())?.draft.text;
+	await input.acceptInput(undefined, { queue: ChatRequestQueueKind.Queued });
+	assert.match(text ?? '', /^\/plan Inspect task\.ts/u);
+	assert.deepEqual(sends, [{ text, mode: 'agent', contexts: ['task.ts'], queue: ChatRequestQueueKind.Queued }]);
+});
+
+test('Sessions composer migrates a legacy Swarm draft and its attachment to slash syntax', async () => {
 	const draft = {
 		mode: 'swarm',
 		text: 'Review task.ts ',
@@ -1580,12 +1577,17 @@ test('Sessions composer restores a Swarm draft and its attachment', async () => 
 	using fixture = await sessionsInputFixture(undefined, JSON.stringify(draft));
 	const { input, storage, notices, identity } = fixture;
 	assert.deepEqual(notices.model.getNotifications(), []);
-	assert.deepEqual((await input.captureDraft())?.draft, draft);
+	const migrated = {
+		mode: 'agent',
+		text: '/swarm Review task.ts ',
+		contexts: [{ ...draft.contexts[0], reference: { start: 14, end: 21 } }],
+	};
+	assert.deepEqual((await input.captureDraft())?.draft, migrated);
 
 	input.appendToDraft('Keep this edit');
-	const editedText = `${draft.text}\n\nKeep this edit`;
+	const editedText = `${migrated.text}\n\nKeep this edit`;
 	await waitFor(() => readNewChatDraftState(storage, identity)?.text === editedText);
-	assert.deepEqual(readNewChatDraftState(storage, identity), { ...draft, text: editedText });
+	assert.deepEqual(readNewChatDraftState(storage, identity), { ...migrated, text: editedText });
 });
 
 test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {
@@ -2089,7 +2091,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.equal(fake.turnStartRequests[0]?.mode, 'agent');
+	assert.equal(fake.turnStartRequests[0]?.mode, undefined);
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: 'context', name: 'Git commit abc1234', content: 'diff --git a/file b/file' },
@@ -2179,7 +2181,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 	const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input');
 	assert.ok(input);
 	typeChatText(dom.window, input, '/new');
-	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent, 'Command');
+	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button"), null);
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -4266,7 +4268,7 @@ test('ChatWidgetModel dispatches compact as a standalone server command', async 
 	}]);
 });
 
-test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged', async () => {
+test('ChatWidgetModel queues a task command while keeping the active Turn unchanged', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	const value = thread('working');
 	value.turns[0]!.status = 'running';
@@ -4276,25 +4278,24 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.equal(model.inputState.mode, 'plan');
+	assert.equal(model.inputState.mode, 'agent');
 	await model.selectAutomaticModel();
-	model.selectMode('swarm');
 	model.selectApprovalMode('auto');
-	await model.send('Implement independent steps', 'swarm', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
+	await model.send('/swarm Implement independent steps', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
 		commandId: fake.queuedRequests[0]!.commandId,
-		sessionId: 'session-1', threadId: 'thread-1', mode: 'swarm',
+		sessionId: 'session-1', threadId: 'thread-1',
 		model: undefined, reasoningEffort: undefined,
 		modelRouting: 'auto',
 		commandInterpretation: undefined,
-		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
+		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: '/swarm Implement independent steps' }],
 		approvalMode: 'auto',
 	}]);
-	assert.equal(model.inputState.activeMode, 'plan');
+	assert.equal(model.thread?.turns[0]?.mode, 'plan');
 	assert.equal(value.turns[0]!.approvalMode, 'manual');
-	assert.equal(model.inputState.mode, 'swarm');
+	assert.equal(model.inputState.mode, 'agent');
 });
 
 for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
@@ -4317,14 +4318,14 @@ for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
 	});
 }
 
-test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
+test('Chat accessibility help explains task commands in Chinese and restores input focus', async () => {
 	initializeTestLocalization('zh-CN');
 	try {
 		using fixture = await sessionsInputFixture();
 		fixture.input.focus();
 		const focused = document.activeElement;
 		const provider = focusedChatHelp(fixture.services);
-		assert.match(provider.provideContent(), /退出到 Agent、Debug 或蜂群 需要你的选择，并保留权限模式/);
+		assert.match(provider.provideContent(), /\/ask.*\/plan.*\/debug.*\/swarm/u);
 		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
 		assert.doesNotMatch(provider.provideContent(), /按 1、2、3/);
 		assert.equal(provider.provideContent().match(/聊天：配置工具/g)?.length, 1);
@@ -4404,7 +4405,7 @@ for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help follows Code
 	} finally { resetNlsResolver(); }
 });
 
-test('ChatWidgetModel follows switch_mode while preserving a different next-message mode', async () => {
+test('ChatWidgetModel displays legacy mode updates without changing the next request', async () => {
 	for (const selectedMode of [undefined, 'ask'] as const) {
 		const activeSession = session('session-1', 'thread-1');
 		let value = thread('working');
@@ -4433,15 +4434,15 @@ test('ChatWidgetModel follows switch_mode while preserving a different next-mess
 		};
 		fake.emit(update);
 		await waitFor(() => model.thread?.sequence === value.sequence);
-		assert.equal(model.inputState.activeMode, 'plan');
-		assert.equal(model.inputState.mode, selectedMode ?? 'plan');
+		assert.equal(model.thread?.turns[0]?.mode, 'plan');
+		assert.equal(model.inputState.mode, selectedMode ?? 'agent');
 		model.selectMode('agent');
 		fake.emit(update);
 		assert.equal(model.inputState.mode, 'agent', 'replayed events must not overwrite a later choice');
 	}
 });
 
-test('ChatWidgetModel restores the mode once and keeps it when reconnecting to newer Turns', async () => {
+test('ChatWidgetModel keeps ordinary requests independent of restored task history', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	let value = thread('planning');
 	value.turns[0]!.mode = 'plan';
@@ -4450,16 +4451,17 @@ test('ChatWidgetModel restores the mode once and keeps it when reconnecting to n
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.equal(model.inputState.mode, 'plan');
+	assert.equal(model.inputState.mode, 'agent');
 	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'agent' }] };
 	fake.emitReady();
 	await waitFor(() => model.thread?.sequence === value.sequence);
-	assert.equal(model.inputState.mode, 'plan');
+	assert.equal(model.inputState.mode, 'agent');
 	await model.send('Continue planning');
-	assert.equal(fake.turnStartRequests[0]!.mode, 'plan');
+	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: 'Continue planning' }]);
 });
 
-test('ChatWidgetModel submits server commands using the selected mode', async () => {
+test('ChatWidgetModel keeps the embedded Ask scope when submitting a server command', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
@@ -4468,11 +4470,11 @@ test('ChatWidgetModel submits server commands using the selected mode', async ()
 	await model.initialize();
 	model.selectMode('ask');
 	await model.executeServerCommand('init', '');
-	assert.equal(fake.turnStartRequests[0]!.mode, 'ask');
-	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/init' }]);
+	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/ask /init' }]);
 });
 
-test('ChatWidgetModel retries the recorded mode independently of prompt identity', async () => {
+test('ChatWidgetModel retries a legacy Debug request as a task command', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	const value = threadWithFailure('providerUnavailable', true);
 	value.turns[0]!.mode = 'debug';
@@ -4484,7 +4486,8 @@ test('ChatWidgetModel retries the recorded mode independently of prompt identity
 	await model.initialize();
 	model.selectMode('ask');
 	await model.retryFailedTurn('turn-1');
-	assert.equal(fake.turnStartRequests[0]!.mode, 'debug');
+	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/debug Try again.' }]);
 });
 
 function testLayoutService(chatVisible = true): IWorkbenchLayoutService {
@@ -4885,7 +4888,7 @@ function pagedChatFixture(initialCount = 65) {
 		const end = history?.type === 'before' ? value.turns.findIndex(turn => turn.turnId === history.turnId) : count;
 		assert.ok(end >= 0, 'the requested cursor must exist');
 		const start = history ? Math.max(0, end - history.turnLimit) : 0;
-		const visible = { ...value, turns: value.turns.slice(start, end) };
+		const visible = { ...value, turns: value.turns.slice(start, end).map(turn => ({ ...turn, mode: turn.mode ?? 'agent' as const })) };
 		return {
 			thread: visible,
 			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: sequence, revision: history?.type === 'before' ? 0 : sequence, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
@@ -5128,7 +5131,7 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	assert.equal(model.thread?.sequence, 67);
 });
 
-function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items'> & { items: []; } {
+function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items' | 'mode'> & { mode: 'agent'; items: []; } {
 	return {
 		turnId: 'turn-1',
 		status: 'failed',

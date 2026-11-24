@@ -615,7 +615,7 @@ impl ToolExecutionOrchestrator {
             .iter()
             .find(|turn| &turn.turn_id == context.turn_id)
             .ok_or_else(|| CoreError::Journal("sandbox denial has no owning Turn".into()))?;
-        if turn.mode.is_analysis() {
+        if turn.execution_approach().is_analysis() {
             return Ok(ToolAttempt::Commit {
                 output: ToolCallOutput::Failure(format!(
                     "Plan and Ask cannot expand the investigation sandbox: {denial_reason}"

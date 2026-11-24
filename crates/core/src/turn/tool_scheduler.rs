@@ -411,7 +411,7 @@ impl ToolScheduler {
                             request.clone(),
                         ));
                         if let Some(denial) = request.sandbox_denial.clone() {
-                            if turn.mode.is_analysis() {
+                            if turn.execution_approach().is_analysis() {
                                 self.record_failure(
                                     thread_id,
                                     turn_id,
@@ -751,7 +751,7 @@ impl ToolScheduler {
             .iter()
             .find(|turn| &turn.turn_id == turn_id)
             .ok_or_else(|| CoreError::Journal("tool review has no owning Turn".into()))?
-            .mode;
+            .execution_approach();
         let request = constrain_analysis_review(request, mode)?;
         if let Some(environment) = &self.review_environment {
             evidence.extend(environment.evidence(&snapshot.thread_id, &request)?);
@@ -815,7 +815,7 @@ impl ToolScheduler {
                     .ok_or_else(|| {
                         CoreError::Journal("tool execution has no owning Turn".into())
                     })?;
-                if turn.mode.is_analysis() {
+                if turn.execution_approach().is_analysis() {
                     ToolAuthorization::Sandboxed(*policy)
                 } else {
                     authorization

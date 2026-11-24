@@ -193,7 +193,7 @@ impl MultiAgentToolService {
                                         .ok_or_else(|| {
                                             CoreError::NotFound(identity.turn_id().to_string())
                                         })?
-                                        .mode
+                                        .execution_approach()
                                         .delegated(),
                                 ),
                             ),

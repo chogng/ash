@@ -24,6 +24,10 @@ pub struct TurnInstructions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     mode_instructions: Option<InstructionText>,
+    /// Task approach resolved by the host for this execution, from a command or owning workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    task_command: Option<crate::AgentMode>,
 }
 
 impl TurnInstructions {
@@ -42,6 +46,7 @@ impl TurnInstructions {
             shared: Vec::new(),
             model_guidance: None,
             mode_instructions: None,
+            task_command: None,
         };
         instructions.validate()?;
         Ok(instructions)
@@ -66,6 +71,9 @@ impl TurnInstructions {
         }
         if let Some(mode) = &self.mode_instructions {
             mode.validate()?;
+        }
+        if self.task_command == Some(crate::AgentMode::Agent) {
+            return Err(InvalidTurnInstructions("task command"));
         }
         if let Some(ModelInstructionSelection::Specialized {
             instructions,
@@ -122,6 +130,15 @@ impl TurnInstructions {
 
     pub fn mode_instructions(&self) -> Option<&InstructionText> {
         self.mode_instructions.as_ref()
+    }
+
+    pub fn with_task_command(mut self, command: Option<crate::AgentMode>) -> Self {
+        self.task_command = command;
+        self
+    }
+
+    pub fn task_command(&self) -> Option<crate::AgentMode> {
+        self.task_command
     }
 
     /// Returns the frozen common assets preceding the primary instruction body.

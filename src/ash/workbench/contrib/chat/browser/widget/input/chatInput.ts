@@ -48,7 +48,6 @@ export interface ChatInputState {
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
 	readonly mode: ChatMode;
-	readonly activeMode?: ChatMode;
 	readonly queuedMessages: number;
 	readonly phase: ChatInputPhase;
 	/** Keeps the draft editable when history or the window's AI preference prevents sending. */

@@ -5,6 +5,7 @@ import type { ChatResponseVote } from '../chatResponseFeedback.js';
 export namespace ChatContextKeys {
 	export const Setup = ChatEntitlementContextKeys.Setup;
 	export const inputHasText = new RawContextKey<boolean>('chatInputHasText', false);
+	export const inputStartsTaskCommand = new RawContextKey<boolean>('chatInputStartsTaskCommand', false);
 	export const requestInProgress = new RawContextKey<boolean>('chatRequestInProgress', false);
 	export const inputBlocked = new RawContextKey<boolean>('chatInputBlocked', false);
 	export const transcriptProgressActive = new RawContextKey<boolean>('chatTranscriptProgressActive', false);

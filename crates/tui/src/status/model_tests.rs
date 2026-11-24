@@ -23,7 +23,6 @@ fn status_line_combines_plan_subagents_model_branch_and_changes() {
         status_line.top_text_for_width(
             100,
             StatusLineRuntime {
-                mode: Default::default(),
                 language: Default::default(),
                 plan: Some((1, 3)),
                 subagents: 1,
@@ -72,7 +71,6 @@ fn memory_and_cpu_are_opt_in_and_use_compact_text_when_space_is_tight() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_settings(settings);
     let runtime = StatusLineRuntime {
-        mode: Default::default(),
         language: Default::default(),
         process_resources: ProcessUsageView {
             memory: ProcessMemoryCurrent::Available(146_590_924),
@@ -109,7 +107,6 @@ fn runtime_status_hides_resource_demand_when_it_uses_the_available_width() {
     let mut status_line = StatusLineModel::new();
     status_line.apply_settings(settings);
     let runtime = StatusLineRuntime {
-        mode: Default::default(),
         language: Default::default(),
         plan: Some((1, 3)),
         ..StatusLineRuntime::default()
@@ -449,7 +446,6 @@ fn expressive_status_line_shrinks_bars_before_removing_numbers() {
     let mut line = StatusLineModel::new();
     line.apply_settings(settings);
     let runtime = StatusLineRuntime {
-        mode: Default::default(),
         language: Default::default(),
         plan: Some((1, 3)),
         ..Default::default()
@@ -464,7 +460,6 @@ fn expressive_status_line_shrinks_bars_before_removing_numbers() {
         line.top_text_for_width(
             80,
             StatusLineRuntime {
-                mode: Default::default(),
                 language: Default::default(),
                 plan: Some((0, 0)),
                 ..Default::default()

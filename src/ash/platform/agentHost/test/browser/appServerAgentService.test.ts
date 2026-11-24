@@ -973,11 +973,11 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	const base = { sessionId: 'source', threadId: 'original', title: 'New history', commandId: 'command' };
 	assert.deepEqual(await service.fork({ ...base, target: 'session' }), { sessionId: 'new-session', threadId: 'new-thread' });
 	assert.deepEqual(await service.fork({ ...base, target: 'thread' }), { sessionId: 'source', threadId: 'new-thread' });
-	assert.deepEqual(await service.rewrite({ ...base, beforeTurnId: 'old-turn', input: [{ type: 'text', text: 'Edited' }] }), { sessionId: 'source', threadId: 'new-thread' });
+	assert.deepEqual(await service.rewrite({ ...base, beforeTurnId: 'old-turn', input: [{ type: 'text', text: '/swarm Reviewed as text' }], commandInterpretation: 'literal' }), { sessionId: 'source', threadId: 'new-thread' });
 	assert.deepEqual(requests, [
 		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'forkSession', parentThreadId: 'original', title: 'New history' } } },
 		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'forkThread', parentThreadId: 'original', title: 'New history' } } },
-		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'rewriteThread', parentThreadId: 'original', beforeTurnId: 'old-turn', title: 'New history', input: [{ type: 'text', text: 'Edited' }] } } },
+		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'rewriteThread', parentThreadId: 'original', beforeTurnId: 'old-turn', title: 'New history', input: [{ type: 'text', text: '/swarm Reviewed as text' }], commandInterpretation: 'literal' } } },
 	]);
 	wrongSession = true;
 	await assert.rejects(service.fork({ ...base, target: 'thread' }), /different conversation/);
@@ -1041,12 +1041,12 @@ test('Queue adapters preserve durable identity and revision and map guarded muta
 	assert.deepEqual(await api.listQueued({ sessionId: 'session', threadId: 'thread' }), { messages: [expected] });
 	const target = { sessionId: 'session', threadId: 'thread', commandId: 'queued', expectedRevision: 9 };
 	for (const action of [{ type: 'pause' }, { type: 'resume' }, { type: 'replaceText', text: 'Edited' }, { type: 'send' }] as const) {
-		assert.deepEqual(await api.editQueued(target, action), expected);
+		assert.deepEqual(await api.editQueued(target, action, action.type === 'replaceText' ? 'literal' : undefined), expected);
 	}
 	assert.deepEqual(await api.cancelQueued(target), expected);
 	assert.deepEqual(calls.slice(1), [
 		['queue/edit', { ...target, action: { type: 'pause' } }], ['queue/edit', { ...target, action: { type: 'resume' } }],
-		['queue/edit', { ...target, action: { type: 'replaceText', text: 'Edited' } }], ['queue/edit', { ...target, action: { type: 'send', turnId: null } }], ['queue/cancel', target],
+		['queue/edit', { ...target, action: { type: 'replaceText', text: 'Edited' }, commandInterpretation: 'literal' }], ['queue/edit', { ...target, action: { type: 'send', turnId: null } }], ['queue/cancel', target],
 	]);
 	for (const kind of ['QueueConflict', 'QueueBusy', 'QueueNotFound'] as const) {
 		failure = new AppServerRemoteError(-32122, 'wire diagnostic', { kind });

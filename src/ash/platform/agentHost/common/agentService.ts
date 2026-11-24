@@ -215,6 +215,7 @@ export interface IAgentThreadService {
 		readonly beforeTurnId: string;
 		readonly title: string;
 		readonly input: readonly Agent.AgentInput[];
+		readonly commandInterpretation?: Agent.CommandInterpretation | 'accepted';
 	}, signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	rename(params: Agent.SessionMutationParams & { readonly threadId: string; readonly title: string; readonly source: 'manual' | 'automatic'; }): Promise<void>;
 	/** Delivery grants are independent of historical committed events. */
@@ -277,7 +278,7 @@ export interface IAgentTurnService {
 	readonly onDidChangeQueue: Event<void>;
 	enqueue(params: Agent.QueueEnqueueParams, signal?: AbortSignal): Promise<Agent.QueuedMessage>;
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
-	editQueued(params: Agent.QueueMessageTarget, action: Agent.QueueMessageEdit): Promise<Agent.QueuedMessage>;
+	editQueued(params: Agent.QueueMessageTarget, action: Agent.QueueMessageEdit, commandInterpretation?: Agent.CommandInterpretation): Promise<Agent.QueuedMessage>;
 	cancelQueued(params: Agent.QueueMessageTarget): Promise<Agent.QueuedMessage>;
 	consultAdvisor(params: Agent.SessionOperationInput<'consultAdvisor'>): Promise<Agent.TurnStartResult>;
 	start(params: Agent.SessionOperationInput<'startTurn'>, signal?: AbortSignal): Promise<Agent.TurnStartResult>;

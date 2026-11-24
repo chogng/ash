@@ -81,7 +81,6 @@ fn keymap_choices_lists_keys_before_responsibilities() {
         labels,
         vec![
             "unbound",
-            "shift+tab",
             "shift+arrowdown",
             "shift+arrowup",
             "unbound",

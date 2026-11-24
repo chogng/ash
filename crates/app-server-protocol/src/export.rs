@@ -244,6 +244,7 @@ fn generated_server_request_map() -> String {
 
 fn generated_product_slash_commands() -> String {
     use crate::protocol::slash_commands::ProductSlashCommand;
+    use crate::protocol::slash_commands::TaskSlashCommand;
 
     let definitions = ProductSlashCommand::ALL
         .into_iter()
@@ -251,10 +252,13 @@ fn generated_product_slash_commands() -> String {
         .collect::<BTreeMap<_, _>>();
     let definitions =
         serde_json::to_string_pretty(&definitions).expect("product command definitions serialize");
+    let task_commands = serde_json::to_string(&TaskSlashCommand::ALL.map(TaskSlashCommand::name))
+        .expect("task command names serialize");
     format!(
         "{GENERATED_TYPESCRIPT_HEADER}\
          import type {{ SlashCommandDefinition }} from './types/SlashCommandDefinition.js';\n\n\
-         export const PRODUCT_SLASH_COMMANDS = {definitions} as const satisfies Readonly<Record<string, SlashCommandDefinition>>;\n"
+         export const PRODUCT_SLASH_COMMANDS = {definitions} as const satisfies Readonly<Record<string, SlashCommandDefinition>>;\n\
+         export const TASK_SLASH_COMMAND_NAMES = {task_commands} as const;\n"
     )
 }
 
@@ -484,7 +488,7 @@ fn generated_index() -> String {
          export type {{ WebWorkspaceListResult }} from './WebWorkspaceListResult.js';\n\
          export type {{ WebWorkspaceOpenRequest }} from './WebWorkspaceOpenRequest.js';\n\
          export {{ APP_SERVER_METHODS }} from './AppServerRequestMap.js';\n\
-         export {{ PRODUCT_SLASH_COMMANDS }} from './ProductSlashCommands.js';\n\
+         export {{ PRODUCT_SLASH_COMMANDS, TASK_SLASH_COMMAND_NAMES }} from './ProductSlashCommands.js';\n\
          export {{ APPROVAL_MODE_DEFINITIONS }} from './ApprovalModes.js';\n\
          export type {{ AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult }} from './AppServerRequestMap.js';\n\
          export {{ APP_SERVER_NOTIFICATIONS }} from './AppServerNotificationMap.js';\n\

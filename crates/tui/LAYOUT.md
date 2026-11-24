@@ -453,17 +453,7 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 ### 任务模式选择与显示
 
-`/mode` 打开模式选择器，也可传入稳定 ID。参数按 ASCII 不区分大小写。模式和队列契约见 [Agent 模式](../agent-mode-templates/README.md)。
-
-输入框聚焦时，Shift+Tab 按 Agent、Plan、Debug、Swarm、Ask 的顺序循环。切换只影响下一条消息；运行中选择其他模式后，Ctrl+Enter 也会排队。弹层继续使用所属组件自己的按键处理。
-
-| 呈现       | 当前显示方式                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| fullscreen | `model` 控制模型与推理档位标签，`mode` 控制非默认模式的可点击名称；输入框上下边线和输入符号使用模式色 |
-| inline     | 底部 statusline 显示模型与非默认任务模式，同样受 `model`、`mode` 控制；`mode` 两种模式均默认关闭      |
-| 默认 Agent | 两种呈现均隐藏模式名称与对应分隔符；模式身份仍为 `agent`，fullscreen 使用普通前景色                   |
-
-模式颜色与默认值由 [palette.rs](src/render/palette.rs) 维护，用户主题可覆盖 `modePlan`、`modeDebug`、`modeSwarm` 和 `modeAsk`。推理强度、权限及输入历史按键见 [README](README.md#命令与补全)。
+输入 `/` 查看 `/ask`、`/plan`、`/debug`、`/swarm`。命令与任务一起发送。并行或只读命令在新 Turn 执行，运行中的会话可以先将它加入队列。见 [Agent 任务命令](../agent-mode-templates/README.md)。
 
 ## 终端生命周期
 

@@ -138,12 +138,14 @@ pub enum SubmittedCommand<'a> {
     Turn {
         kind: ash_protocol::TurnKind,
         mode: ash_protocol::AgentMode,
+        task_command: Option<ash_protocol::AgentMode>,
         input: &'a [UserInput],
         tool_mode: ToolMode,
         automatic_model: bool,
     },
     Input {
         input: &'a [UserInput],
+        task_command: Option<ash_protocol::AgentMode>,
     },
 }
 
@@ -151,6 +153,7 @@ pub enum SubmittedCommand<'a> {
 pub enum AcceptedCommand<'a> {
     Turn {
         mode: ash_protocol::AgentMode,
+        task_command: Option<ash_protocol::AgentMode>,
         input: &'a [UserInput],
         tool_mode: ToolMode,
         approval_mode: ApprovalMode,

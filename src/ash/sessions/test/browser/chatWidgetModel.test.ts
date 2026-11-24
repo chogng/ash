@@ -87,7 +87,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const turnApi = {
 		onDidChangeQueue: Event.None,
 		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
-		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { sessionId: input.sessionId, threadId: input.threadId, commandId: input.commandId, revision: 1, mode: input.mode, text: '', contextCount: 0, status: 'pending' as const }; }, editQueued: async () => { throw new Error('Unexpected queue edit'); }, cancelQueued: async () => { throw new Error('Unexpected queue cancel'); }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
+		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { sessionId: input.sessionId, threadId: input.threadId, commandId: input.commandId, revision: 1, mode: input.mode ?? 'agent', text: '', contextCount: 0, status: 'pending' as const }; }, editQueued: async () => { throw new Error('Unexpected queue edit'); }, cancelQueued: async () => { throw new Error('Unexpected queue cancel'); }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
 	} as IAgentTurnService;
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } };
 	const appServer = { isAvailable: true, get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
@@ -528,7 +528,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			const requests = route === 'start' ? f.starts : route === 'queue' ? f.queues : f.steers;
 			assert.equal(requests.length, 1);
 			assert.deepEqual(requests[0].input, [
-				{ type: 'text', text: ' \nBefore🙂 ' },
+				{ type: 'text', text: route === 'queue' ? '/plan  \nBefore🙂 ' : ' \nBefore🙂 ' },
 				{ type: 'context', name: 'log.txt', content: 'First captured version' },
 				{ type: 'text', text: '\nBetween ' },
 				{ type: 'image', url: 'data:image/png;base64,captured' },
@@ -1317,6 +1317,30 @@ for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`e
 	assert.equal(rewrites.length, 1);
 });
 
+test('Chat rewrites task prompts with the intended command interpretation', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	const read = snapshot('A', 8, true);
+	const turn = read.thread.turns[0];
+	const prompt = '/swarm Compare the two modules';
+	const items: typeof turn.items = [{ type: 'userMessage', clientId: 'original', itemId: 'original-input', turnId: turn.turnId, text: prompt }];
+	const rewrites: { text: string | undefined; interpretation: string | undefined; }[] = [];
+	f.threadApi.rewrite = async options => {
+		rewrites.push({ text: options.input.find(item => item.type === 'text')?.text, interpretation: options.commandInterpretation });
+		return { sessionId: options.sessionId, threadId: 'edited' };
+	};
+	const request = { sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', commandId: 'rewrite' };
+	f.threadApi.read = async () => ({ ...read, thread: { ...read.thread, turns: [{ ...turn, status: 'completed', items }] } });
+	await f.chat.rewriteRequest(request);
+	await f.chat.rewriteRequest({ ...request, text: '/develop Discuss this command', commandInterpretation: 'literal' });
+	await f.chat.rewriteRequest({ ...request, text: '/plan Compare the options', commandInterpretation: 'literal' });
+	assert.deepEqual(rewrites, [
+		{ text: prompt, interpretation: 'accepted' },
+		{ text: '/develop Discuss this command', interpretation: 'literal' },
+		{ text: '/plan Compare the options', interpretation: 'product' },
+	]);
+});
+
 test('Chat preserves the composer cancellation signal through start, queue and steering domain dispatch', async () => {
 	const f = fixture('Code');
 	using resources = f.resources;
@@ -1324,7 +1348,7 @@ test('Chat preserves the composer cancellation signal through start, queue and s
 	const controller = new AbortController();
 	const signals: (AbortSignal | undefined)[] = [];
 	f.turnApi.start = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
-	f.turnApi.enqueue = async (params, signal) => { signals.push(signal); return { sessionId: params.sessionId, threadId: params.threadId, commandId: params.commandId, revision: 1, mode: params.mode, text: '', contextCount: 0, status: 'pending' }; };
+	f.turnApi.enqueue = async (params, signal) => { signals.push(signal); return { sessionId: params.sessionId, threadId: params.threadId, commandId: params.commandId, revision: 1, mode: params.mode ?? 'agent', text: '', contextCount: 0, status: 'pending' }; };
 	f.turnApi.steer = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
 	const options = { sessionId: 'session', threadId: 'A', text: 'Captured context', mode: 'agent' as const, expectedSequence: 1, signal: controller.signal };
 	await f.chat.startTurn(options);
@@ -1429,7 +1453,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const f = fixture(kind, undefined, true);
 		using resources = f.resources;
 		await f.model.initialize();
-		await assert.rejects(f.model.send('Changed approach', 'plan', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different mode, Skill or task type/);
+		await assert.rejects(f.model.send('Changed approach', 'plan', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
 		assert.equal(f.starts.length + f.queues.length + f.steers.length, 0);
 	});
 	test(`${kind} special task kinds queue automatic input and reject explicit steering`, async () => {
@@ -1439,7 +1463,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		}, true);
 		using resources = f.resources;
 		await f.model.initialize();
-		await assert.rejects(f.model.send('Cannot steer advisor', 'agent', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different mode, Skill or task type/);
+		await assert.rejects(f.model.send('Cannot steer advisor', 'agent', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
 		assert.equal(f.steers.length + f.queues.length, 0);
 		await f.model.send('Next task', 'agent');
 		assert.equal(f.queues.length, 1);
@@ -1516,6 +1540,21 @@ test('Cancelling a queue editor restores already admitted input after AI is disa
 	assert.deepEqual(calls, [[target, { type: 'resume' }]]);
 });
 
+
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} submits a task command without a mode field and queues it during active work`, async () => {
+	for (const running of [false, true]) {
+		const f = fixture(kind, undefined, running);
+		using resources = f.resources;
+		await f.model.initialize();
+		await f.model.send('/plan Inspect task.ts', 'agent', undefined, undefined, running ? { queue: ChatRequestQueueKind.Steering } : undefined);
+		const requests = running ? f.queues : f.starts;
+		assert.equal(requests.length, 1);
+		assert.deepEqual(requests[0].input, [{ type: 'text', text: '/plan Inspect task.ts' }]);
+		assert.equal(requests[0].mode, undefined);
+		assert.equal(requests[0].commandInterpretation, undefined);
+		assert.equal(f.steers.length, 0);
+	}
+});
 
 test('Cowork submits slash text literally for start and queue', async () => {
 	for (const route of ['start', 'queue'] as const) {

@@ -30,6 +30,9 @@ fn configured_rules_replace_user_keybindings() {
     let section = FrontendConfigDto(BTreeMap::from([(
         "keybindings".into(),
         json!([{
+            "key": "ctrl+g",
+            "command": "ashCode.action.cycleAgentMode"
+        }, {
             "key": "ctrl+y",
             "command": "ashCode.action.copyLastResponse"
         }]),
@@ -43,6 +46,13 @@ fn configured_rules_replace_user_keybindings() {
             context(),
         ),
         Some(AppKeymapAction::CopyLastResponse)
+    );
+    assert_eq!(
+        settings.keymap.resolve_single(
+            &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL),
+            context(),
+        ),
+        None
     );
 }
 
@@ -62,12 +72,15 @@ fn missing_keybindings_restore_builtins_without_user_rules() {
 #[test]
 fn shortcut_edit_preserves_unrelated_rules() {
     let document = json!([{
+        "key": "shift+tab",
+        "command": "ashCode.action.cycleAgentMode"
+    }, {
         "key": "ctrl+x",
         "command": "ashCode.action.cycleApprovalMode"
     }]);
     let edit = KeymapEdit {
         expected_revision: 7,
-        command_id: "ashCode.action.cycleAgentMode".into(),
+        command_id: "ashCode.action.decreaseReasoningEffort".into(),
         kind: KeymapEditKind::Set {
             key: "ctrl+y".into(),
             intent: KeymapEditIntent::AddAlternate,
@@ -78,6 +91,7 @@ fn shortcut_edit_preserves_unrelated_rules() {
 
     assert_eq!(notice, "Added user shortcut `ctrl+y`.");
     assert_eq!(edited.as_array().unwrap().len(), 2);
+    assert_eq!(edited[0]["command"], "ashCode.action.cycleApprovalMode");
     let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), edited)]));
     let settings = settings_from_tui(&section).unwrap();
     assert_eq!(
@@ -85,7 +99,7 @@ fn shortcut_edit_preserves_unrelated_rules() {
             &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
             context(),
         ),
-        Some(AppKeymapAction::CycleAgentMode)
+        Some(AppKeymapAction::DecreaseReasoningEffort)
     );
 }
 

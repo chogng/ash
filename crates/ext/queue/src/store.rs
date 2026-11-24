@@ -212,8 +212,17 @@ impl QueueStore {
                 }
                 status = "pending";
             }
-            crate::QueueEdit::ReplaceText { text }
-            | crate::QueueEdit::ReplaceTextWithDelivery { text, .. } => {
+            crate::QueueEdit::ReplaceText {
+                text,
+                task_command,
+                command_interpretation,
+            }
+            | crate::QueueEdit::ReplaceTextWithDelivery {
+                text,
+                task_command,
+                command_interpretation,
+                ..
+            } => {
                 if message.status != QueueStatus::Paused || text.trim().is_empty() {
                     return Err(QueueError::Invalid(
                         "pause the message before editing nonempty text".into(),
@@ -236,6 +245,10 @@ impl QueueStore {
                         .input
                         .push(protocol::UserInput::Text { text: text.clone() });
                 }
+                message.request.task_command = *task_command;
+                if let Some(interpretation) = command_interpretation {
+                    message.request.command_interpretation = *interpretation;
+                }
                 if let crate::QueueEdit::ReplaceTextWithDelivery { delivery, .. } = edit {
                     message.request.steer_turn = match delivery {
                         crate::QueueDelivery::Queued => None,
@@ -245,13 +258,21 @@ impl QueueStore {
                 }
                 status = "pending";
             }
-            crate::QueueEdit::Replace { input } => {
+            crate::QueueEdit::Replace {
+                input,
+                task_command,
+                command_interpretation,
+            } => {
                 if message.status != QueueStatus::Paused || input.is_empty() {
                     return Err(QueueError::Invalid(
                         "pause the message before editing".into(),
                     ));
                 }
                 message.request.input = input.clone();
+                message.request.task_command = *task_command;
+                if let Some(interpretation) = command_interpretation {
+                    message.request.command_interpretation = *interpretation;
+                }
                 message.request.steer_turn = None;
                 status = "pending";
             }
@@ -289,6 +310,11 @@ impl QueueStore {
                     )?;
                 }
             }
+        }
+        if message.request.task_command.is_some() && message.request.steer_turn.is_some() {
+            return Err(QueueError::Invalid(
+                "task commands require a new request".into(),
+            ));
         }
         // Replacements carry the editor's scope. Resuming or editing text can only
         // narrow the scope of retained references.

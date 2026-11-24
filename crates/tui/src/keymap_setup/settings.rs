@@ -56,15 +56,22 @@ pub(crate) struct KeymapEditorUpdate {
 }
 
 pub(crate) fn settings_from_tui(section: &FrontendConfigDto) -> Result<KeymapSettings, String> {
-    let document = section
+    let mut document = section
         .0
         .get(CONFIG_KEY)
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
-    if !document.is_array() {
-        return Err("invalid [tui].keybindings: expected an array of shortcut rules".into());
-    }
+    let entries = document.as_array_mut().ok_or_else(|| {
+        "invalid [tui].keybindings: expected an array of shortcut rules".to_owned()
+    })?;
+    remove_retired_shortcuts(entries);
     compile_settings(&document)
+}
+
+fn remove_retired_shortcuts(entries: &mut Vec<Value>) {
+    entries.retain(|entry| {
+        entry.get("command").and_then(Value::as_str) != Some("ashCode.action.cycleAgentMode")
+    });
 }
 
 pub(crate) fn read_keymap<T>(client: &mut AppServerClient<T>) -> Result<KeymapEditorUpdate, String>
@@ -172,6 +179,7 @@ fn edited_document(mut document: Value, edit: &KeymapEdit) -> Result<(Value, Str
     let entries = document.as_array_mut().ok_or_else(|| {
         "invalid [tui].keybindings: expected an array of shortcut rules".to_owned()
     })?;
+    remove_retired_shortcuts(entries);
     let command_matches = |entry: &Value| {
         entry.get("command").and_then(Value::as_str) == Some(edit.command_id.as_str())
     };

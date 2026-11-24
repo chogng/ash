@@ -285,7 +285,7 @@ test('Chat working logo follows the current input state without replacing the st
 	assert.equal(logo.isConnected, false);
 });
 
-test('Chat mode picker loads Agents before opening the shared action widget and dispatches its selection', async () => {
+test('Chat Agent picker loads Agents before opening the shared action widget and dispatches its selection', async () => {
 	using resources = new DisposableStore();
 	const agent: ChatAgent = { name: 'Reviewer', description: 'Review changes', sourceId: 'workspace' };
 	let finishListing!: (agents: readonly ChatAgent[]) => void;
@@ -315,10 +315,10 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const widget = await opened;
 	const choices = Array.from(widget.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
 	assert.deepEqual(choices.map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [
-		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Swarm', 'false'], ['Ask', 'false'],
+		['Default Agent', 'true'],
 		['Reviewer', 'false'],
 	]);
-	choices[5]!.click();
+	choices[1]!.click();
 	assert.deepEqual(await selection, agent);
 	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
@@ -327,13 +327,13 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const reopenedChoices = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
 	assert.equal(reopenedChoices[0]!.getAttribute('aria-checked'), 'false');
-	assert.equal(reopenedChoices[5]!.getAttribute('aria-checked'), 'true');
+	assert.equal(reopenedChoices[1]!.getAttribute('aria-checked'), 'true');
 	reopenedChoices[0]!.click();
 	assert.deepEqual(selectedAgents, [agent, undefined]);
 	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 });
 
-test('Session option loading retires with the input and can reopen for the next visible lifetime', async () => {
+test('Agent picker ignores a late load and reloads when shown again', async () => {
 	const agent: ChatAgent = { name: 'Reviewer', description: 'Review changes', sourceId: 'workspace' };
 	const listing = new DeferredPromise<readonly ChatAgent[]>();
 	let reads = 0;
@@ -354,8 +354,9 @@ test('Session option loading retires with the input and can reopen for the next 
 	trigger().click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
-	assert.equal(options.length, 6);
-	options.find(option => option.getAttribute('aria-label') === agent.name)!.click();
+	assert.equal(reads, 2);
+	assert.deepEqual(options.map(option => option.getAttribute('aria-label')), ['Default Agent', agent.name]);
+	options[1]!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(selected, [agent]);
 	trigger().click();
@@ -547,8 +548,7 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts', reference: { start: 17, end: 24 } }],
 	});
 	target.restoreDraft(captured.draft);
-	assert.equal(target.element.querySelector('textarea')?.value, 'Review this file file.ts ');
-	assert.equal(target.element.querySelector('[data-action-id="ash.chat.input.mode"] button')?.textContent, 'Debug');
+	assert.equal(target.element.querySelector('textarea')?.value, '/debug Review this file file.ts ');
 	assert.equal(target.element.querySelector('.ash-chat-input-attachments'), null);
 	assert.throws(() => target.restoreDraft(captured.draft), /already has an unsent draft/u);
 	captured.clear();
@@ -1958,6 +1958,31 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Task command completion queues the message and its attachment during active work', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(async () => {
+			const input = window.ashChatInputIntegration;
+			input.setSlashCommands([{ name: 'plan', description: 'Investigate and propose a plan', argumentMode: 'optional' }]);
+			await input.setQueueDefault('steer');
+			input.setRunning(true);
+		});
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('/pla');
+		const option = page.getByRole('option').filter({ has: page.locator('.stanza-editor-completion-label', { hasText: '/plan' }) });
+		await expect(option).toBeVisible();
+		await input.press('Tab');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('/plan ');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.queueState())).toEqual([]);
+		await page.keyboard.insertText('Inspect the draft');
+		await page.evaluate(() => window.ashChatInputIntegration.addHistoryContext());
+		await expect(page.getByRole('button', { name: 'Add to Queue', exact: true })).toBeEnabled();
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.queueState())).toEqual([
+			{ kind: 'send', text: '/plan Inspect the draft draft.txt ', queue: ChatRequestQueueKind.Queued },
+		]);
+		await expect(page.getByLabel('Submission', { exact: true })).toContainText('"content":"synthetic context"');
+	});
 	for (const compact of [false, true]) for (const rich of [false, true]) {
 		test(`Composer padding focuses the editor without changing selection (${compact ? 'compact' : 'regular'}, ${rich ? 'rich' : 'textarea'})`, async () => {
 			const { page } = browserTests;
@@ -4007,42 +4032,18 @@ suite('chatInput browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`model and mode menus share primary option typography in ${locale}`, async function () {
-			const { page } = browserTests;
-
-			await page.goto(`/chatInput.html?locale=${locale}`);
-			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			const typography = [];
-			for (const [trigger, popup] of [
-				['.ash-chat-input-mode-action', '.ash-chat-input-mode-menu'],
-				['.ash-chat-input-model-action', '.ash-chat-model-picker'],
-			]) {
-				await page.locator(trigger).press('ArrowDown');
-				const option = page.locator(popup).getByRole('menuitemradio').first();
-				await expect(option).toBeVisible();
-				typography.push(await option.evaluate(element => {
-					const style = getComputedStyle(element);
-					return { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight };
-				}));
-				await page.keyboard.press('Escape');
-				await expect(page.locator(trigger)).toBeFocused();
-			}
-			expect(typography[0].fontSize).toBe('13px');
-			expect(typography[1]).toEqual(typography[0]);
-		});
 
 		test(`model and effort buttons share typography, pill corners and adjacent spacing in ${locale}`, async function () {
 			const { page } = browserTests;
 
 			await page.goto(`/chatInput.html?locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			const mode = page.locator('.ash-chat-input-mode-action');
 			const model = page.locator('.ash-chat-input-model-action');
 			const effort = page.locator('.ash-chat-input-configuration-action');
 			for (const width of [800, 400, 280]) {
 				await page.setViewportSize({ width, height: 600 });
 				await expect.poll(async () => {
-					const metrics = await Promise.all([mode, model, effort].map(trigger => trigger.evaluate(element => {
+					const metrics = await Promise.all([model, effort].map(trigger => trigger.evaluate(element => {
 						const style = getComputedStyle(element);
 						const bounds = element.getBoundingClientRect();
 						return {
@@ -4051,12 +4052,12 @@ suite('chatInput browser component', () => {
 							radius: style.borderRadius, padding: style.padding,
 						};
 					})));
-					const [modeMetrics, modelMetrics, effortMetrics] = metrics;
+					const [modelMetrics, effortMetrics] = metrics;
 					return {
 						matchingTypography: modelMetrics.fontSize === effortMetrics.fontSize && modelMetrics.fontWeight === effortMetrics.fontWeight,
 						matchingPillCorners: modelMetrics.radius === effortMetrics.radius && parseFloat(effortMetrics.radius) >= effortMetrics.height / 2,
 						matchingPadding: modelMetrics.padding === effortMetrics.padding,
-						matchingSpacing: Math.abs((modelMetrics.left - modeMetrics.right) - (effortMetrics.left - modelMetrics.right)) < 1,
+						matchingSpacing: effortMetrics.left >= modelMetrics.right,
 						fits: effortMetrics.right <= width,
 					};
 				}).toEqual({ matchingTypography: true, matchingPillCorners: true, matchingPadding: true, matchingSpacing: true, fits: true });
@@ -4120,31 +4121,6 @@ suite('chatInput browser component', () => {
 		});
 	}
 
-	for (const locale of ['en', 'zh-CN']) {
-		test(`mode menu fits its contents and retains keyboard selection in ${locale}`, async function () {
-			const { page } = browserTests;
-
-			await page.goto(`/chatInput.html?locale=${locale}`);
-			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			const trigger = page.locator('[data-action-id="ash.chat.input.mode"] button');
-			await trigger.press('ArrowDown');
-			const menu = page.locator('.ash-chat-input-mode-menu');
-			await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
-			await expect(menu.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '蜂群' : 'Swarm', exact: true })).toBeVisible();
-			const geometry = await menu.evaluate(element => ({
-				width: element.getBoundingClientRect().width,
-				overflow: element.scrollWidth - element.clientWidth,
-			}));
-			expect(geometry.width).toBeGreaterThanOrEqual(100);
-			expect(geometry.width).toBeLessThan(240);
-			expect(geometry.overflow).toBe(0);
-			await expect(menu.getByRole('menuitemradio').first()).toBeFocused();
-			await page.keyboard.press('ArrowDown');
-			await expect(menu.getByRole('menuitemradio').nth(1)).toBeFocused();
-			await page.keyboard.press('Enter');
-			await expect(menu).toHaveCount(0);
-		});
-	}
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`command approval explanation keeps the draft and retires with its original offer in ${locale}`, async function () {
@@ -4382,75 +4358,6 @@ suite('chatInput browser component', () => {
 	}
 
 
-	test('Mode picker keeps its Tab stop and shares menu activation, placement and dismissal', async function () {
-		const { page } = browserTests;
-
-		await page.goto('/chatInput.html');
-		await page.evaluate(() => {
-			window.ashChatInputIntegration.showModels();
-			document.querySelector<HTMLElement>('main')!.style.marginTop = '300px';
-		});
-		const mode = page.locator('.ash-chat-input-mode-action');
-		const model = page.locator('.ash-chat-input-model-action');
-		const menu = page.locator('.ash-chat-input-mode-menu');
-		await expect(mode).toHaveAttribute('tabindex', '0');
-		await mode.focus();
-		await page.keyboard.press('Tab');
-		await expect(model).toBeFocused();
-		await page.keyboard.press('Shift+Tab');
-		await expect(mode).toBeFocused();
-		await mode.hover();
-		await page.mouse.down();
-		await expect(menu).toBeVisible();
-		await page.mouse.up();
-		await expect(menu).toBeVisible();
-		const trigger = (await mode.boundingBox())!;
-		const popup = (await menu.boundingBox())!;
-		expect(popup.y + popup.height).toBeLessThanOrEqual(trigger.y);
-		await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
-		await page.keyboard.press('Escape');
-		await expect(mode).toBeFocused();
-		await expect(mode).toHaveAttribute('aria-expanded', 'false');
-		for (const key of ['Enter', 'Space']) {
-			await page.keyboard.down(key);
-			await expect(menu).toBeVisible();
-			await page.keyboard.up(key);
-			await expect(menu).toBeVisible();
-			await page.keyboard.press('Escape');
-			await expect(mode).toBeFocused();
-		}
-		const modes: Record<string, { icon: string; color?: string; }> = {
-			Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
-			Swarm: { icon: 'swarm', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
-		};
-		for (const name of ['Plan', 'Agent', 'Debug', 'Swarm', 'Ask']) {
-			await mode.press('ArrowDown');
-			const item = menu.getByRole('menuitemradio', { name, exact: true });
-			await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
-			await item.click();
-			await expect(menu).toBeHidden();
-			await expect(mode).toHaveText(name);
-			await expect(mode.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
-			if (modes[name]!.color) {
-				expect(await mode.evaluate((button, variable) => {
-					const probe = document.createElement('span'); probe.style.color = `var(${variable})`; button.append(probe);
-					try { return getComputedStyle(button).color === getComputedStyle(probe).color; } finally { probe.remove(); }
-				}, modes[name]!.color!)).toBe(true);
-			}
-			await mode.press('ArrowDown');
-			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
-			await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
-			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
-			await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
-			await expect(item.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
-			await page.keyboard.press('Escape');
-			await expect(mode).toBeFocused();
-		}
-		await model.press('Enter');
-		await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(model).toBeFocused();
-	});
 
 	test('model picker serializes selection across reopen and retires the previous composer', async () => {
 		const { page } = browserTests;
@@ -5203,52 +5110,6 @@ suite('chatInput browser component', () => {
 		});
 	}
 
-	test('Chat mode choices use the shared action widget and floating elevation across themes', async function () {
-		const { page } = browserTests;
-
-		for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-			await page.goto(`/chatInput.html?theme=${theme}`);
-			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			const picker = page.locator('[data-action-id="ash.chat.input.mode"] button');
-			await picker.press('ArrowDown');
-			const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
-			await expect(widget).toBeVisible();
-			const geometry = await widget.evaluate(element => ({
-				width: element.getBoundingClientRect().width,
-				overflow: element.scrollWidth - element.clientWidth,
-				truncated: [...element.querySelectorAll('.ash-button-label')].some(label => label.scrollWidth > label.clientWidth),
-			}));
-			expect(geometry.width).toBeGreaterThanOrEqual(100);
-			expect(geometry.width).toBeLessThan(240);
-			expect(geometry.overflow).toBe(0);
-			expect(geometry.truncated).toBe(false);
-			const shell = widget.locator('..');
-			await expect(shell).toHaveCSS('box-shadow', 'none');
-			await expect(shell).toHaveCSS('border-width', '0px');
-			await expect(shell).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await expect(widget).toHaveCSS('box-shadow', theme.startsWith('hc') ? 'none' : 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
-			await expect(widget).toHaveCSS('border-radius', '8px');
-			await expect(widget).toHaveCSS('border-style', 'solid');
-			expect(await widget.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
-			await expect(widget).toHaveCSS('font-size', '13px');
-			const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
-			await expect(agent).toBeFocused();
-			await expect(agent).toHaveAttribute('aria-checked', 'true');
-			await expect(agent.locator('.ash-menu-leading-slot [data-ash-icon-id="unlimited"]')).toBeVisible();
-			const check = agent.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]');
-			await expect(check).toBeVisible();
-			const labelBounds = (await agent.locator('.ash-button-label').boundingBox())!;
-			const checkBounds = (await check.boundingBox())!;
-			expect(checkBounds.x).toBeGreaterThan(labelBounds.x + labelBounds.width);
-			await agent.press('ArrowDown');
-			const plan = widget.getByRole('menuitemradio', { name: 'Plan', exact: true });
-			await expect(plan).toBeFocused();
-			await expect(plan.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeHidden();
-			await page.keyboard.press('Escape');
-			await expect(widget).toHaveCount(0);
-			await expect(picker).toBeFocused();
-		}
-	});
 
 	test('Chat input omits the unused find control and keeps the prompt evenly inset', async function () {
 		const { page } = browserTests;
@@ -5289,45 +5150,6 @@ suite('chatInput browser component', () => {
 		expect(editorChrome.editorBackground).toBe(editorChrome.inputBackground);
 	});
 
-	test('Agent mode picker compacts when the model needs room', async function () {
-		const { page } = browserTests;
-
-		await page.goto('/chatInput.html?inlineCode');
-		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		const composer = page.locator('.ash-chat-input-container');
-		const picker = composer.locator('[data-action-id="ash.chat.input.mode"] button');
-		const label = picker.locator('.ash-icon-label-container');
-		try {
-			await composer.evaluate(element => { element.style.width = '380px'; });
-			await expect(label).toBeVisible();
-			await composer.evaluate(element => { element.style.width = '320px'; });
-			await expect(label).toBeVisible();
-			await composer.evaluate(element => { element.style.width = '180px'; });
-			await expect(label).toBeHidden();
-			await expect(picker.locator('.ash-icon-label-icon')).toBeVisible();
-			await expect(picker.locator('.ash-dropdown-menu-indicator')).toHaveCount(0);
-			await expect(picker).toHaveAttribute('aria-label', /^Mode: /);
-			const triggerBounds = await picker.evaluate(button => {
-				const icon = button.querySelector<HTMLElement>('.ash-icon-label-icon');
-				if (!icon) throw new Error('Agent mode trigger is incomplete');
-				const buttonBounds = button.getBoundingClientRect();
-				return {
-					iconInside: icon.getBoundingClientRect().left >= buttonBounds.left,
-					iconRightInside: icon.getBoundingClientRect().right <= buttonBounds.right,
-				};
-			});
-			expect(triggerBounds).toEqual({ iconInside: true, iconRightInside: true });
-			await picker.press('ArrowDown');
-			const menu = page.locator('.ash-chat-input-mode-menu');
-			await expect(menu).toBeVisible();
-			await menu.press('Escape');
-			await expect(picker).toBeFocused();
-			await composer.evaluate(element => { element.style.width = '380px'; });
-			await expect(label).toBeVisible();
-		} finally {
-			await composer.evaluate(element => { element.style.removeProperty('width'); });
-		}
-	});
 
 	test('Model picker uses free toolbar space before truncating its label', async function () {
 		const { page } = browserTests;

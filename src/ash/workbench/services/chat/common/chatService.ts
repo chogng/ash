@@ -51,7 +51,7 @@ export type {
 import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
 export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
 import type { Event } from '../../../../base/common/event.js';
-import { PRODUCT_SLASH_COMMANDS } from '../../../../../../.build/protocol/typescript/index.js';
+import { PRODUCT_SLASH_COMMANDS, TASK_SLASH_COMMAND_NAMES } from '../../../../../../.build/protocol/typescript/index.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelReasoningEffort } from './modelCatalog.js';
@@ -105,6 +105,12 @@ export interface SlashCommandDefinition {
 
 /** Shared product metadata; execution bindings remain with each client. */
 export const ProductSlashCommands: Readonly<Record<keyof typeof PRODUCT_SLASH_COMMANDS, SlashCommandDefinition>> = PRODUCT_SLASH_COMMANDS;
+
+/** Task commands use the ordinary submission path, including attachments and queueing. */
+export function isTaskSlashCommand(text: string): boolean {
+	const command = text.trimStart().split(/\s/, 1)[0];
+	return TASK_SLASH_COMMAND_NAMES.some(name => command === `/${name}`);
+}
 
 export interface SkillSelectorDefinition {
 	readonly name: string;
@@ -162,7 +168,7 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
 	readonly text: string;
-	readonly mode: ChatMode;
+	readonly mode?: ChatMode;
 	readonly approvalMode?: ApprovalMode;
 	readonly model?: ModelRef;
 	readonly modelRouting?: 'auto';
@@ -228,10 +234,12 @@ export type RewriteChatRequestOptions = {
 } & ({
 	readonly text: string;
 	readonly contexts?: readonly ResolvedChatContext[];
+	readonly commandInterpretation?: CommandInterpretation;
 } | {
 	/** Replay the accepted submission, without borrowing text from the rendered row. */
 	readonly text?: undefined;
 	readonly contexts?: undefined;
+	readonly commandInterpretation?: undefined;
 });
 
 export function getAcceptedChatRequest(turn: Turn) {
@@ -289,10 +297,10 @@ export interface IChatService {
 	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	movePendingRequest(target: QueueMessageTarget, direction: 'up' | 'down'): Promise<QueuedMessage>;
-	editPendingRequest(target: QueueMessageTarget, text: string, queue?: ChatRequestQueueKind): Promise<QueuedMessage>;
+	editPendingRequest(target: QueueMessageTarget, text: string, queue?: ChatRequestQueueKind, commandInterpretation?: CommandInterpretation): Promise<QueuedMessage>;
 	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	/** Promote the durable message before interrupting the captured active task. */
-	sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void>;
+	sendPendingRequestImmediately(target: QueueMessageTarget, text?: string, commandInterpretation?: CommandInterpretation): Promise<void>;
 	setRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	generateRecap?(sessionId: SessionId, threadId: ThreadId): Promise<string>;
 	compactContext(options: CompactContextOptions): Promise<void>;

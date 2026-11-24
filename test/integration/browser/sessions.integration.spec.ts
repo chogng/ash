@@ -1230,7 +1230,6 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(picker).toBeFocused();
 
 	for (const [triggerSelector, menuSelector, nextOption] of [
-		['.ash-chat-input-mode-action', '.ash-chat-input-mode-menu', 'Plan'],
 		['.ash-chat-input-permission-picker', '.ash-chat-permission-menu', 'Bypass permissions'],
 	]) {
 		const trigger = page.locator('.ash-sessions-chat-slot.active').locator(triggerSelector);

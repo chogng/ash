@@ -15,10 +15,10 @@ const FOLLOWUPS: &str = "When a completed reply naturally leaves a specific next
 pub fn instructions(mode: protocol::AgentMode) -> protocol::TurnInstructions {
     let (id, revision, body) = match mode {
         protocol::AgentMode::Agent => ("agent-mode/agent", "agent-v4", AGENT),
-        protocol::AgentMode::Plan => ("agent-mode/plan", "plan-v6", PLAN),
+        protocol::AgentMode::Plan => ("agent-mode/plan", "plan-v7", PLAN),
         protocol::AgentMode::Debug => ("agent-mode/debug", "debug-v4", DEBUG),
         protocol::AgentMode::Swarm => ("agent-mode/swarm", "swarm-v3", SWARM),
-        protocol::AgentMode::Ask => ("agent-mode/ask", "ask-v5", ASK),
+        protocol::AgentMode::Ask => ("agent-mode/ask", "ask-v6", ASK),
     };
     let body = if mode == protocol::AgentMode::Plan {
         std::borrow::Cow::Borrowed(body)

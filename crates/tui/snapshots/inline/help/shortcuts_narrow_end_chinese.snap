@@ -4,10 +4,10 @@ expression: bottom
 ---
 ─ 键盘快捷键 ───────────────────────────────
 
-  shift+↑    提高推理强度
-  ctrl+o     复制上一条回复
-  ctrl+c     中断或退出
-  ctrl+z     挂起 Ash
+  shift+↑  提高推理强度
+  ctrl+o   复制上一条回复
+  ctrl+c   中断或退出
+  ctrl+z   挂起 Ash
 
   正文
   PageUp / PageDown     滚动正文

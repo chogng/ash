@@ -1,8 +1,8 @@
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions, StartReviewOptions } from '../common/chatService.js';
-import { getAcceptedChatRequest } from '../common/chatService.js';
-import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
+import { getAcceptedChatRequest, isTaskSlashCommand } from '../common/chatService.js';
+import type { AgentInteractionOffer, AgentInput, CommandInterpretation, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
@@ -156,7 +156,16 @@ export class ChatService extends Disposable implements IChatService {
 
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
 		const commands = await this.appServerApi.getSlashCommands();
-		const definitions = commands.map(command => ({ ...command }));
+		const taskDescriptions: Readonly<Record<string, string>> = {
+			ask: localize('chat.slash.ask', 'Answer a question without making changes'),
+			plan: localize('chat.slash.plan', 'Investigate and propose a plan without making changes'),
+			debug: localize('chat.slash.debug', 'Reproduce, diagnose, and fix a problem'),
+			swarm: localize('chat.slash.swarm', 'Delegate independent work and verify the combined result'),
+		};
+		const definitions = commands.map(command => ({
+			...command,
+			description: Object.hasOwn(taskDescriptions, command.name) ? taskDescriptions[command.name] : command.description,
+		}));
 		if (this.threadApi.generateRecap && !definitions.some(command => command.name === 'recap')) {
 			definitions.push({ name: 'recap', argumentMode: 'none', description: localize('chat.recap.commandDescription', 'Generate a recap of this conversation') });
 		}
@@ -193,12 +202,15 @@ export class ChatService extends Disposable implements IChatService {
 			const firstText = input.findIndex(item => item.type === 'text');
 			input.splice(firstText, 1, ...messageInput(options.text, options.contexts));
 		}
+		const commandInterpretation = options.text === undefined ? 'accepted'
+			: isTaskSlashCommand(options.text) ? 'product' : options.commandInterpretation;
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		this.assertAIEnabled();
 		this.requireSubmissionOwner(options);
 		const result = await this.threadApi.rewrite({
 			sessionId: options.sessionId, threadId: options.threadId, beforeTurnId: options.turnId,
 			commandId: options.commandId, title: thread.title, input,
+			...(commandInterpretation && { commandInterpretation }),
 		}, options.signal);
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		return result;
@@ -297,7 +309,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input }, options.signal);
+		await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, ...(options.mode && options.mode !== 'agent' && { mode: options.mode }), commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input }, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
 	}
 
@@ -315,7 +327,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
-		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode }, options.signal);
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, ...(options.mode && options.mode !== 'agent' && { mode: options.mode }), commandInterpretation: options.commandInterpretation, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode }, options.signal);
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
@@ -344,21 +356,24 @@ export class ChatService extends Disposable implements IChatService {
 		return this.turnApi.editQueued(target, { type: 'move', direction });
 	}
 
-	async editPendingRequest(target: QueueMessageTarget, text: string, queue?: import('../common/chatService.js').ChatRequestQueueKind) {
+	async editPendingRequest(target: QueueMessageTarget, text: string, queue?: import('../common/chatService.js').ChatRequestQueueKind, commandInterpretation?: CommandInterpretation) {
 		this.assertAIEnabled();
-		if (queue) {
+		if (queue === 'queued') {
+			return this.turnApi.editQueued(target, { type: 'replaceTextWithDelivery', text, delivery: { type: 'queued' } }, commandInterpretation);
+		}
+		if (queue === 'steering') {
 			const thread = await this.readThread(target.sessionId, target.threadId, { type: 'latest', turnLimit: 1 });
 			const active = thread.thread.turns.find(turn => ['created', 'running', 'waitingForApproval', 'waitingForUserInput', 'waitingForCapability', 'cancelling'].includes(turn.status));
-			return this.turnApi.editQueued(target, { type: 'replaceTextWithDelivery', text, delivery: queue === 'steering' && active ? { type: 'steering', turnId: active.turnId } : { type: 'queued' } });
+			return this.turnApi.editQueued(target, { type: 'replaceTextWithDelivery', text, delivery: active ? { type: 'steering', turnId: active.turnId } : { type: 'queued' } }, commandInterpretation);
 		}
-		return this.turnApi.editQueued(target, { type: 'replaceText', text });
+		return this.turnApi.editQueued(target, { type: 'replaceText', text }, commandInterpretation);
 	}
 
 	async removePendingRequest(target: QueueMessageTarget) {
 		return this.turnApi.cancelQueued(target);
 	}
 
-	async sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void> {
+	async sendPendingRequestImmediately(target: QueueMessageTarget, text?: string, commandInterpretation?: CommandInterpretation): Promise<void> {
 		this.assertAIEnabled();
 		const generation = this.connectionEpoch;
 		const { thread } = await this.readThread(target.sessionId, target.threadId);
@@ -367,7 +382,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.assertAIEnabled();
 		// Keep identity, frozen input and FIFO ownership in Core. Promotion precedes
 		// interruption so another queued message cannot claim the newly idle thread.
-		await this.turnApi.editQueued(target, text === undefined ? { type: 'send' } : { type: 'replaceTextWithDelivery', text, delivery: { type: 'immediate' } });
+		await this.turnApi.editQueued(target, text === undefined ? { type: 'send' } : { type: 'replaceTextWithDelivery', text, delivery: { type: 'immediate' } }, commandInterpretation);
 		if (!active) return;
 		if (this.isDisposed || generation !== this.connectionEpoch) throw canceled();
 		try {

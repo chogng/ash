@@ -5,6 +5,7 @@ use std::fmt;
 
 use crate::SlashCommandArgumentMode;
 use crate::SlashCommandDefinition;
+use crate::TaskSlashCommand;
 
 /// Declares which composition boundary contributed a command to one client catalog.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,7 +63,7 @@ impl Default for SlashCommandCatalog {
                         .into(),
                 ),
             },
-        ])
+        ].into_iter().chain(TaskSlashCommand::ALL.map(TaskSlashCommand::definition)))
         .expect("built-in slash command definitions are valid")
     }
 }

@@ -1009,11 +1009,9 @@ for (const locale of ['en', 'zh-CN']) {
 				page = await workbench.reopenAgentsWindow(application, page);
 				await expect(modelButton()).toHaveAccessibleName(`${primary.display_name} ${copy.high}`);
 				await chooseEffortFixtureProject(client, page, composer(), testWorkspace.directory);
-				await composer().locator('[data-action-id="ash.chat.input.mode"] button').click();
-				await page.getByRole('menuitemradio', { name: /^(Plan|计划)$/u, exact: true }).click();
 				const input = composer().locator('.stanza-editor-input');
 				await input.focus();
-				await page.keyboard.insertText(`defaults-fixture-consult-${locale}: Check the saved defaults.`);
+				await page.keyboard.insertText(`/plan defaults-fixture-consult-${locale}: Check the saved defaults.`);
 				// Code submits from the editor; its composer has no send button.
 				await input.press('Enter');
 				await expect(composer()).toHaveAttribute('data-thread-id', /.+/);
@@ -1026,7 +1024,7 @@ for (const locale of ['en', 'zh-CN']) {
 					model: turn.model,
 					effort: turn.reasoningEffort ?? null,
 					approval: turn.approvalMode,
-					mode: turn.mode,
+					mode: turn.instructions?.taskCommand,
 					advisor: turn.advisor?.model,
 				}).toEqual({
 					model: primary.model,

@@ -292,7 +292,7 @@ fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identi
 }
 
 #[test]
-fn legacy_imported_turns_keep_bytes_without_mode_while_current_turns_expose_it() {
+fn imported_turns_preserve_legacy_mode_bytes_and_omit_the_default_in_new_records() {
     for approval_mode in ash_protocol::ApprovalMode::ALL {
         let turn: ash_protocol::Turn = serde_json::from_value(serde_json::json!({
             "turnId":"old-turn", "status":"completed", "items":[], "approvalMode":approval_mode
@@ -339,8 +339,17 @@ fn legacy_imported_turns_keep_bytes_without_mode_while_current_turns_expose_it()
             let restored: StoredEvent = serde_json::from_str(&legacy).unwrap();
             assert_eq!(serde_json::to_string(&restored).unwrap(), legacy);
             assert!(encoded.contains("\"mode\":\"agent\""));
+            current.schema_version = 37;
+            let encoded = serde_json::to_string(&current).unwrap();
+            assert!(encoded.contains("\"mode\":\"agent\""));
+            assert_eq!(
+                serde_json::to_string(&serde_json::from_str::<StoredEvent>(&encoded).unwrap())
+                    .unwrap(),
+                encoded,
+            );
             current.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION;
             let encoded = serde_json::to_string(&current).unwrap();
+            assert!(!encoded.contains("\"mode\":\"agent\""));
             assert!(encoded.contains(&format!("\"approvalMode\":\"{}\"", approval_mode.id())));
             assert_eq!(
                 serde_json::from_str::<StoredEvent>(&encoded).unwrap(),

@@ -11,6 +11,7 @@ pub use catalog::{
 pub use definition::ProductSlashCommand;
 pub use definition::SlashCommandArgumentMode;
 pub use definition::SlashCommandDefinition;
+pub use definition::TaskSlashCommand;
 pub use input::{
     SlashCommandCompletion, SlashCommandInput, SlashCommandInvocation, SlashCommandQuery,
 };

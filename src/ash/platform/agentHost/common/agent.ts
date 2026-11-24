@@ -58,7 +58,7 @@ interface SessionOperations {
 	readonly startTurn: {
 		readonly threadId: string;
 		readonly expectedSequence: number;
-		readonly mode: SessionMode;
+		readonly mode?: SessionMode;
 		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
@@ -266,7 +266,7 @@ export type AdvisorConfigureResult = TurnInterruptResult;
 export interface QueueEnqueueParams extends SessionMutationParams {
 	readonly commandInterpretation?: CommandInterpretation;
 	readonly threadId: string;
-	readonly mode: SessionMode;
+	readonly mode?: SessionMode;
 	readonly model?: ModelRef | null;
 	readonly modelRouting?: 'auto';
 	readonly reasoningEffort?: ModelReasoningEffort | null;

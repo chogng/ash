@@ -233,6 +233,15 @@ pub struct SessionDeleted {
     pub session_id: SessionId,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RewriteCommandInterpretation {
+    Product,
+    Literal,
+    /// Reuse the source Turn's accepted command semantics.
+    Accepted,
+}
+
 /// A typed request routed through one `session_id` grouping boundary.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -329,6 +338,10 @@ pub enum SessionRequest {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,
         title: String,
+        /// When omitted, the server uses the session's default command interpretation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        command_interpretation: Option<RewriteCommandInterpretation>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,
@@ -347,7 +360,8 @@ pub enum SessionRequest {
         thread_id: ThreadId,
         #[ts(type = "number")]
         expected_sequence: u64,
-        #[serde(default)]
+        /// Compatibility for clients that still submit a separate composer approach.
+        #[serde(default, skip_serializing_if = "AgentMode::is_agent")]
         mode: AgentMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]

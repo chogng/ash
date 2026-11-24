@@ -35,7 +35,7 @@ use crossterm::event::MouseEventKind;
 use ratatui::layout::Rect;
 
 #[test]
-fn agent_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
+fn composer_footer_keeps_input_focus_without_a_mode_picker() {
     use ash_protocol::AgentMode;
     use ratatui::layout::Position;
     for (width, language) in [
@@ -47,29 +47,18 @@ fn agent_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
         settings.set_language(language);
         app.update(crate::config::Event::SettingsReceived(settings));
         app.set_agent_mode(AgentMode::Swarm);
-        let mut status = crate::status::StatusLineSettings::default();
-        status.set(crate::status::StatusLineItem::Mode, true);
-        app.update(crate::status::Event::LineSettingsReceived(status));
         let area = Rect::new(0, 0, width, 20);
         let input = crate::app::fullscreen::layout(&app, area).input;
         let position = Position::new(input.right() - 2, input.bottom() - 1);
         assert_eq!(
             super::target_at(&app, area, position.x, position.y),
-            Some(PointerTarget::ComposerSetting(
-                crate::app::fullscreen::composer::Target::Mode
-            ))
+            Some(PointerTarget::Composer(ChatComposerPointerTarget::Input))
         );
         update_pointer_hover(&mut app, area, position.x, position.y);
         assert_eq!(app.agent_mode(), AgentMode::Swarm);
         assert!(app.command_panel().is_none());
         activate_pointer_item(&mut app, area, position.x, position.y);
-        assert_eq!(
-            app.list_selection().unwrap().selected_visible_index(),
-            Some(3)
-        );
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert_eq!(app.agent_mode(), AgentMode::Ask);
+        assert!(app.command_panel().is_none());
         assert!(app.chat_input_focused());
     }
 }
@@ -619,7 +608,6 @@ fn assert_base_pointer_targets(app: &mut App, area: Rect) {
             ));
             match super::target_at(app, area, column, row) {
                 Some(PointerTarget::Header(_))
-                | Some(PointerTarget::ComposerSetting(super::super::composer::Target::Mode))
                 | Some(PointerTarget::Composer(ChatComposerPointerTarget::Input)) => {}
                 None => assert_eq!(activate_pointer_item(app, area, column, row), None),
                 target => panic!("unexpected base pointer target: {target:?}"),

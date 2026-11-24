@@ -178,7 +178,7 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 		assert.deepEqual(submissions.map(({ sessionId }) => sessionId).sort(), targets);
 		for (const submission of submissions) {
 			assert.equal(submission.text, 'Implement the fix');
-			assert.equal(submission.mode, 'agent');
+			assert.equal(submission.mode, undefined);
 			assert.equal(submission.expectedSequence, 7);
 			assert.equal(submission.commandInterpretation, 'literal');
 			assert.equal(submission.contexts, undefined);
@@ -197,7 +197,8 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	await services.invokeFunction(evaluate);
 	assert.deepEqual(failures, ['Alpha: Error: Pane unavailable']);
 	assert.equal(comparisons.get(group.sectionId)?.judge?.sessionId, 'judge-1');
-	assert.equal(submissions.at(-1)?.mode, 'ask');
+	assert.equal(submissions.at(-1)?.mode, undefined);
+	assert.match(submissions.at(-1)?.text ?? '', /^\/ask /u);
 	assert.deepEqual(submissions.at(-1)?.model, model);
 	assert.match(submissions.at(-1)?.contexts?.[0]?.content ?? '', /Result from Alpha/);
 	assert.match(submissions.at(-1)?.contexts?.[0]?.content ?? '', /src\/Alpha\.ts/);
@@ -216,7 +217,7 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	const saved = services.createInstance(SessionComparisonService).get(group.sectionId);
 	assert.equal(saved?.verdict?.winner, 2);
 	assert.equal(saved?.synthesis?.sessionId, 'synthesis');
-	assert.equal(submissions.at(-1)?.mode, 'agent');
+	assert.equal(submissions.at(-1)?.mode, undefined);
 	assert.deepEqual(submissions.at(-1)?.model, model);
 	assert.match(submissions.at(-1)?.text ?? '', /Preserve the public API/);
 	assert.deepEqual(grouped, ['Alpha', 'Beta', 'judge-1', 'judge-2', 'synthesis']);

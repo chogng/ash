@@ -1474,11 +1474,6 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await page.keyboard.press('Home');
 	await page.keyboard.press('Enter');
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeFocused();
-	const modeButton = composer.getByRole('button', { name: 'Mode: Agent', exact: true });
-	await modeButton.click();
-	const modes = page.locator('.ash-chat-input-mode-menu');
-	await expect(modes.getByRole('menuitemradio', { name: 'Execute', exact: true })).toHaveCount(0);
-	await modes.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Auto', exact: true }).press('ArrowDown');
 	await page.keyboard.press('End');
@@ -1488,13 +1483,11 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(warning.getByRole('button', { name: 'Bypass permissions', exact: true })).toBeVisible();
 	await warning.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
-	await expect(composer.getByRole('button', { name: 'Mode: Plan', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Auto', exact: true }).press('ArrowDown');
 	await page.keyboard.press('End');
 	await page.keyboard.press('Enter');
 	await warning.getByRole('button', { name: 'Bypass permissions', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Bypass permissions', exact: true })).toBeVisible();
-	await expect(composer.getByRole('button', { name: 'Mode: Plan', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Bypass permissions', exact: true }).press('ArrowDown');
 	await page.keyboard.press('ArrowUp');
 	await page.keyboard.press('Enter');
@@ -2077,23 +2070,13 @@ test('Code Sessions mode selection updates its shared composer', async ({ target
 	await page.keyboard.press('Escape');
 	await expect(environmentMenu).toBeHidden();
 	await expect(environment).toBeFocused();
-	const mode = page.locator('[data-action-id="ash.chat.input.mode"] button').first();
-	await mode.click();
+	const agent = page.locator('[data-action-id="ash.chat.input.mode"] button').first();
+	await agent.press('ArrowDown');
 	const menu = page.locator('.ash-chat-input-mode-menu');
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute(
-		'aria-checked',
-		'true',
-	);
-	const plan = menu.getByRole('menuitemradio', { name: 'Plan', exact: true });
-	await plan.click();
-	await expect(mode).toHaveText('Plan');
-	await expect(menu).toBeHidden();
-	await mode.press('ArrowDown');
-	await expect(plan).toHaveAttribute('aria-checked', 'true');
-	await expect(plan.locator('.ash-menu-leading-slot [data-ash-icon-id="plan"]')).toBeVisible();
-	await expect(plan.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
+	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
-	await expect(mode).toBeFocused();
+	await expect(agent).toBeFocused();
 });
 
 test('Sessions navigation retains its own selection and hover skin across navigation positions', async ({

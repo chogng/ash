@@ -320,7 +320,7 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
             TurnToolModeSelection::ConfiguredDefault,
             vec![ash_protocol::UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Coding,
-            TurnInstructionSelection::Agent,
+            TurnInstructionSelection::TaskCommand,
             TurnModelSelection::Current,
             None,
         )?;

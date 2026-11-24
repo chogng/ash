@@ -26,7 +26,6 @@ const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineRuntime {
-    pub(crate) mode: ash_protocol::AgentMode,
     pub(crate) language: crate::nls::Language,
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) subagents: usize,
@@ -99,7 +98,6 @@ pub(super) enum StatusLineSegmentKind {
     Inserted,
     Removed,
     Progress,
-    Mode(ash_protocol::AgentMode),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -194,11 +192,6 @@ impl StatusLineModel {
     pub(crate) fn composer_model_label(&self) -> Option<&str> {
         self.item_enabled(StatusLineItem::Model)
             .then(|| self.model_label())
-    }
-
-    pub(crate) fn mode_label(&self, mode: ash_protocol::AgentMode) -> Option<&'static str> {
-        (self.item_enabled(StatusLineItem::Mode) && mode != ash_protocol::AgentMode::Agent)
-            .then(|| crate::thread::composer::options::mode_label(mode))
     }
 
     pub(crate) fn branch_label(&self) -> Option<&str> {
@@ -470,20 +463,6 @@ impl StatusLineModel {
                 StatusLineItem::Context => values.push(self.context_display()),
                 StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.model.iter().cloned()),
-                StatusLineItem::Mode => {
-                    let Some(label) = self.mode_label(runtime.mode) else {
-                        continue;
-                    };
-                    let segment = StatusLineSegment {
-                        text: crate::nls::localize(runtime.language, label).into_owned(),
-                        kind: StatusLineSegmentKind::Mode(runtime.mode),
-                    };
-                    values.push(DisplayValue {
-                        full: vec![segment.clone()],
-                        compact: vec![segment],
-                        process_resources: None,
-                    });
-                }
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::Memory => values.push(DisplayValue::process_resource(
@@ -499,12 +478,9 @@ impl StatusLineModel {
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes_display().into_iter()),
             }
-            if self.settings.style() == StatusLineStyle::Rich
-                && !matches!(item, StatusLineItem::Context | StatusLineItem::Mode)
-            {
+            if self.settings.style() == StatusLineStyle::Rich && item != StatusLineItem::Context {
                 let icon = match item {
                     StatusLineItem::Model => "🤖",
-                    StatusLineItem::Mode => "",
                     StatusLineItem::CacheHitRate => "⚡",
                     StatusLineItem::ReferenceCost => "💰",
                     StatusLineItem::Memory => "💾",

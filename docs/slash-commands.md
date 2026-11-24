@@ -10,7 +10,7 @@
 
 ## 快速理解
 
-Code 拥有产品和服务端 Slash Command。`/btw <问题>` 由 Workbench 的客户端命令注册表提供，在 Code 和 Cowork 中从当前轮次建立独立 Side Chat；原任务继续运行，问题和回答保留在分支，并可返回来源轮次。Cowork 与 Projects 不加载 Code 的产品或服务端命令目录；除已注册的客户端命令外，斜杠开头的文本按普通消息提交，并以 `commandInterpretation: literal` 避开服务端产品命令解释。该语义随排队请求保存，编辑与出队不重新启用命令。`$name` Skills 和 `@/#` 上下文补全独立保留。
+Code 提供完整的产品和服务端命令目录。Cowork 与 Projects 提供 `/ask`、`/plan`、`/debug`、`/swarm` 和各自注册的客户端命令。其余斜杠文本以 `commandInterpretation: literal` 作为普通消息提交，队列保留该解释规则。`/btw <问题>` 在 Code 和 Cowork 中从当前轮次建立独立分支，原任务继续运行，问题和回答可返回来源轮次查看。`$name` Skills 和 `@/#` 上下文补全独立保留。
 
 Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
 
@@ -70,6 +70,8 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 `/compact` 由 Desktop 直接调用 `SessionRequest::CompactContext`，以独立 Turn 执行并把成功或失败留在
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
 作为普通 `StartTurn.input`。当前 `/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；当前 `/team` 管理的是一次协作任务，持久成员组织另见 [Agent Team](../crates/teams/README.md)。命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Agent 树](core-multi-agent.md)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
+
+`/ask`、`/plan`、`/debug`、`/swarm` 通过普通消息和队列提交，保留附件。App Server 受理时解析任务命令，队列保存命令身份，Core 在 Turn 中冻结指令和权限约束。只读请求不能通过追加消息转为执行。见 [Agent 任务命令](../crates/agent-mode-templates/README.md)。
 Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code

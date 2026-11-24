@@ -467,13 +467,10 @@ fn actual_tui_guardian_setup_saves_project_background_through_the_app_server() {
 }
 
 #[test]
-fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
+fn actual_tui_permission_ids_select_the_shared_menu() {
     let fixture = Fixture::new();
-    fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
-    process.submit("/mode plan");
-    process.wait_for_stable_screen("Automatic model · Plan");
     for (id, label) in [
         ("auto", "Auto"),
         ("manual", "Manual"),
@@ -490,11 +487,10 @@ fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
             "{}",
             process.screen()
         );
-        assert!(process.screen().contains("Automatic model · Plan"));
+        assert!(process.screen().contains("Automatic model"));
         if id == "bypassPermissions" {
             process.send(b"\x1b[C");
             process.wait_for_stable_screen("access limits still apply");
-            process.assert_snapshot("real/03-approval/permission-menu-shared-copy");
         }
         process.send(b"\x1b");
         process.wait_for_screen_to_omit("Permissions");
@@ -503,26 +499,17 @@ fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
 }
 
 #[test]
-fn agent_mode_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
+fn terminal_shortcuts_preserve_the_draft_when_adjusting_effort() {
     let fixture = Fixture::new();
     fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
     process.type_text("BOUND-DRAFT≤≥");
     process.back_tab();
-    process.wait_for_stable_screen("Automatic model · Plan");
-    assert!(process.screen().contains("> BOUND-DRAFT≤≥"));
-    assert!(!process.screen().contains("Next mode:"));
-    process.back_tab();
-    process.wait_for_stable_screen("Automatic model · Debug");
-    assert!(!process.screen().contains("Next mode:"));
-    process.wait_for_stable_screen("⏸ Manual");
-    process.assert_snapshot("real/02-terminal/agent-mode-shortcuts");
-    process.back_tab();
-    process.wait_for_stable_screen("Automatic model · Swarm");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
     assert!(process.screen().contains("> BOUND-DRAFT≤≥"));
+    assert!(!process.screen().contains("Automatic model · Plan"));
     process.quit();
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);

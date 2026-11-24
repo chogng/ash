@@ -18,7 +18,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { modelPickerEffortLabel } from '../../../../workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerModelConfig.js';
-import { IChatService, type ChatAgent, type ChatMode, type ThreadRead, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ChatAgent, type ThreadRead, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
@@ -27,7 +27,7 @@ import { Menus } from '../../../browser/menus.js';
 import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
 import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { comparisonTurn, ISessionComparisonService, parseComparisonVerdict, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
+import { comparisonAttemptTurn, comparisonTurn, ISessionComparisonService, parseComparisonVerdict, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
 import type { ComparisonAttempt, ComparisonParticipantSettings, ComparisonThread, SessionComparison } from '../../../services/sessions/common/sessionComparison.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
@@ -82,9 +82,9 @@ registerAction2(class CompareAgentsAction extends Action2 {
 			label: agent.name, description: agent.sourceId, detail: agent.description, agent,
 		})), localize('sessions.compare.pickAgents', 'Select at least two agents. Press Space to toggle and Enter to continue.'), 2);
 		if (!selected || views.navigationRevision !== revision) return;
-		const modes: readonly (IQuickPickItem & { readonly mode: ChatMode; })[] = [
-			{ label: localize('sessions.compare.answers', 'Compare answers'), detail: localize('sessions.compare.answersDetail', 'Use Ask mode for investigation and answers.'), mode: 'ask' },
-			{ label: localize('sessions.compare.code', 'Compare code changes'), detail: localize('sessions.compare.codeDetail', 'Run each agent in its own Git worktree.'), mode: 'agent' },
+		const modes: readonly (IQuickPickItem & { readonly isolated: boolean; })[] = [
+			{ label: localize('sessions.compare.answers', 'Compare answers'), detail: localize('sessions.compare.answersDetail', 'Investigate and answer without changing files.'), isolated: false },
+			{ label: localize('sessions.compare.code', 'Compare code changes'), detail: localize('sessions.compare.codeDetail', 'Run each agent in its own Git worktree.'), isolated: true },
 		];
 		const execution = (await pickItems(quickInput, modes, localize('sessions.compare.pickMode', 'Choose how the agents should run')))?.[0];
 		if (!execution || views.navigationRevision !== revision) return;
@@ -128,7 +128,7 @@ registerAction2(class CompareAgentsAction extends Action2 {
 
 		const snapshot = await chat.readThread(session.sessionId, threadId);
 		if (views.navigationRevision !== revision || providers.getProvider(provider.id) !== provider || configuration.getValue<boolean>(ChatAIDisabledSettingId)) return;
-		const isolated = execution.mode === 'agent';
+		const isolated = execution.isolated;
 		if (isolated && !snapshot.directory) {
 			notifications.warn(localize('sessions.compare.gitRequired', 'Code comparison requires a conversation with a Git workspace.'));
 			return;
@@ -247,7 +247,8 @@ export async function startSessionComparison(
 				if (!threadService && thread.turns.length) throw new Error(localize('sessions.compare.targetUsed', 'The comparison conversation already has a task.'));
 				await chat.startTurn({
 					sessionId: targetSession, threadId: targetThread, expectedSequence: thread.sequence,
-					...settings, text: task, mode: isolated ? 'agent' : 'ask', contexts, commandInterpretation: 'literal',
+					...settings, text: isolated ? task : `/ask ${task}`, contexts,
+					commandInterpretation: isolated ? 'literal' : undefined,
 				});
 				return { sessionId: targetSession, threadId: targetThread, afterTurn: thread.turns.at(-1)?.turnId, agent: agent.name, number: index + 1, settings };
 			}).catch(error => { report(agent.name, error); return undefined; });
@@ -348,7 +349,7 @@ async function evaluateComparison(dependencies: ComparisonDependencies & {
 	let verdict = comparison.verdict;
 	if (!verdict && comparison.judge) {
 		const judge = await chat.readThread(comparison.judge.sessionId, comparison.judge.threadId);
-		const turn = comparisonTurn(judge.thread, comparison.judge, judgePrompt) ?? comparisonTurn(judge.thread, comparison.judge, legacyJudgePrompt);
+		const turn = comparisonTurn(judge.thread, comparison.judge, `/ask ${judgePrompt}`, judgePrompt, legacyJudgePrompt);
 		if (turn && !isTerminal(turn.status)) {
 			notifications.info(localize('sessions.compare.judgeRunning', 'The comparison Judge is still running.'));
 			return;
@@ -424,10 +425,11 @@ async function submitComparisonParticipant(dependencies: ComparisonDependencies,
 	const settings = configuredAgent?.sourceId === agent.sourceId && configuredAgent?.name === agent.name
 		? role === 'judge' ? comparison.judgeSettings : comparison.synthesisSettings
 		: undefined;
+	const canEdit = role === 'synthesis' && comparison.isolated;
 	await chat.startTurn({
 		...participant, model: settings?.model, reasoningEffort: settings?.reasoningEffort, approvalMode: settings?.approvalMode,
-		expectedSequence: thread.sequence, text: prompt,
-		mode: role === 'synthesis' && comparison.isolated ? 'agent' : 'ask', commandInterpretation: 'literal',
+		expectedSequence: thread.sequence, text: canEdit ? prompt : `/ask ${prompt}`,
+		commandInterpretation: canEdit ? 'literal' : undefined,
 		contexts: [{
 			name: localize('sessions.compare.evidence', 'Comparison evidence'), content: JSON.stringify({
 				schema: 'ash.attempt-comparison.v1', role, task: comparison.task, evidence,
@@ -468,7 +470,7 @@ export async function readComparisonEvidence(chat: IChatService, comparison: Ses
 		const read = reads ? reads[index] : await chat.readThread(attempt.sessionId, attempt.threadId);
 		if (!read) return undefined;
 		const { thread, directory } = read;
-		const turn = comparisonTurn(thread, attempt, comparison.task);
+		const turn = comparisonAttemptTurn(thread, comparison, attempt);
 		return turn && isTerminal(turn.status) ? { attempt, turn, directory } : undefined;
 	}));
 	onProgress?.(results.filter(result => result !== undefined).length, results.length);
@@ -656,7 +658,7 @@ export class SessionComparisonControls extends Disposable {
 						if (comparison.judge) {
 							this.progress.set(comparison.id, localize('sessions.compare.judgeRunning', 'The comparison Judge is still running.'));
 							const { thread } = await this.chat.readThread(comparison.judge.sessionId, comparison.judge.threadId);
-							const turn = comparisonTurn(thread, comparison.judge, judgePrompt) ?? comparisonTurn(thread, comparison.judge, legacyJudgePrompt);
+							const turn = comparisonTurn(thread, comparison.judge, `/ask ${judgePrompt}`, judgePrompt, legacyJudgePrompt);
 							if (!turn || !isTerminal(turn.status) || this.isDisposed) return;
 							const verdict = turn.status === 'completed' ? readJudgeVerdict(turn, comparison) : undefined;
 							await this.comparisons.save({ ...comparison, verdict, judgeFailed: !verdict });

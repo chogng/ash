@@ -92,7 +92,6 @@ fn builtins_follow_enum_presentation_order() {
                 "export",
                 "recap",
                 "model",
-                "mode",
                 "effort",
                 "permission",
                 "guardian",
@@ -114,7 +113,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 40 + usize::from(cfg!(debug_assertions)));
+    assert_eq!(definitions.len(), 39 + usize::from(cfg!(debug_assertions)));
 }
 
 #[test]

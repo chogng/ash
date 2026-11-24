@@ -52,10 +52,7 @@ impl TurnInputContributor for runtime::GoalExtension {
         let Some(goal) = snapshot.goal.as_ref().filter(|goal| {
             goal.status.is_active()
                 && turn.kind != protocol::TurnKind::Review
-                && !matches!(
-                    turn.mode,
-                    protocol::AgentMode::Plan | protocol::AgentMode::Ask
-                )
+                && !turn.execution_approach().is_analysis()
         }) else {
             return Ok(Vec::new());
         };

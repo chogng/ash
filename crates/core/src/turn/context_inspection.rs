@@ -87,7 +87,9 @@ impl TurnExecutor {
         let instructions = crate::context::turn_instruction_fragments(
             &request.instructions,
             request.approval_mode,
-            latest.map(|turn| turn.mode).unwrap_or_default(),
+            latest
+                .map(|turn| turn.execution_approach())
+                .unwrap_or_default(),
             if snapshot
                 .as_ref()
                 .is_some_and(|snapshot| snapshot.parent_thread_id.is_some())

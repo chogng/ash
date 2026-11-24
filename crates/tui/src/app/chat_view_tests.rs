@@ -175,7 +175,6 @@ fn configured_app(mode: ScreenMode) -> App {
     app.update(crate::config::Event::SettingsReceived(terminal));
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::Context, true);
-    settings.set(StatusLineItem::Mode, true);
     app.update(crate::status::Event::LineSettingsReceived(settings));
     app.set_agent_mode(ash_protocol::AgentMode::Plan);
     app.chat_panel
@@ -249,7 +248,7 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
             ScreenMode::Inline => regions.footer.statusline.y,
         };
         assert!(row(&before, model_row).contains("Shared model (high)"));
-        assert!(row(&before, model_row).contains("Plan"));
+        assert!(!row(&before, model_row).contains("Plan"));
         let environment_row = match mode {
             ScreenMode::Fullscreen => crate::app::fullscreen::layout(&app, area).top_statusline.y,
             ScreenMode::Inline => regions.footer.statusline.y,
@@ -268,13 +267,11 @@ fn statusline_items_keep_their_configured_locations_and_switches_in_both_modes()
         }
         for (item, label) in [
             (StatusLineItem::Model, "Shared model (high)"),
-            (StatusLineItem::Mode, "Plan"),
             (StatusLineItem::GitBranch, "branch-layout"),
             (StatusLineItem::Permissions, "Manual"),
         ] {
             let mut settings = StatusLineSettings::default();
             settings.set(StatusLineItem::Context, true);
-            settings.set(StatusLineItem::Mode, true);
             settings.set(item, false);
             app.update(crate::status::Event::LineSettingsReceived(settings));
             assert!(

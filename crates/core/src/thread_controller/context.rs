@@ -344,7 +344,7 @@ impl ThreadController {
             let instruction_fragments = crate::context::turn_instruction_fragments(
                 instructions,
                 turn.approval_mode,
-                turn.mode,
+                turn.execution_approach(),
                 if loaded.snapshot.parent_thread_id.is_some() {
                     crate::context::AgentInstructionRole::Subagent
                 } else {

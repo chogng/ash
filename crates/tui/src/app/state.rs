@@ -489,7 +489,10 @@ impl App {
     ) -> Option<AppCommand> {
         match outcome {
             ChatComposerOutcome::Command(command) => {
-                if !self.starts_new_session() {
+                if !self.starts_new_session()
+                    && ash_slash_commands::TaskSlashCommand::from_name(&command.command.name)
+                        .is_none()
+                {
                     self.thread_presentations.active_mut().queue.finish_edit();
                 }
                 self.handle_slash_command(command)
@@ -775,10 +778,6 @@ impl App {
             CommandPanelOutcome::ComposerOption(option) => {
                 self.close_command_panel();
                 match option {
-                    crate::thread::composer::options::ComposerOption::Mode(mode) => {
-                        self.set_agent_mode(mode);
-                        None
-                    }
                     crate::thread::composer::options::ComposerOption::Policy(policy) => {
                         self.set_next_approval_mode(policy);
                         None
@@ -2265,9 +2264,6 @@ impl App {
         turns: &[Turn],
     ) -> Vec<crate::thread::ActiveTurnUpdate> {
         let updates = self.thread.sync_active_turn(turns);
-        if let Some(turn) = turns.last() {
-            self.input_state_mut().initialize_mode(turn.mode);
-        }
         if let Some(turn_id) = self.thread.active_turn() {
             self.thread_presentations
                 .active_mut()
@@ -2440,12 +2436,7 @@ impl App {
         self.input_state().mode()
     }
 
-    pub(super) fn open_mode_picker(&mut self) {
-        self.open_command_panel(CommandPanel::composer_options(
-            crate::thread::composer::options::mode_choices(self.agent_mode()),
-        ));
-    }
-
+    #[cfg(test)]
     pub(super) fn set_agent_mode(&mut self, mode: ash_protocol::AgentMode) {
         self.input_state_mut().set_mode(mode);
     }
@@ -2531,7 +2522,6 @@ impl App {
             })
             .unwrap_or(0);
         StatusLineRuntime {
-            mode: self.agent_mode(),
             language: self.language(),
             plan,
             subagents,
@@ -3679,12 +3669,6 @@ impl App {
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(ThreadCommand::CycleNextApprovalMode.into()),
-            AppKeymapAction::CycleAgentMode => {
-                self.set_agent_mode(crate::thread::composer::options::next_mode(
-                    self.agent_mode(),
-                ));
-                None
-            }
             AppKeymapAction::DecreaseReasoningEffort => Some(ModelCommand::DecreaseEffort.into()),
             AppKeymapAction::IncreaseReasoningEffort => Some(ModelCommand::IncreaseEffort.into()),
             AppKeymapAction::ScreenEscape => match self.escape_mut().press(now) {
@@ -3781,7 +3765,6 @@ impl App {
             && !matches!(
                 action,
                 TuiSlashCommandAction::Quit
-                    | TuiSlashCommandAction::Mode
                     | TuiSlashCommandAction::Permission
                     | TuiSlashCommandAction::Effort
             )
@@ -3794,10 +3777,7 @@ impl App {
         }
         if invocation.origin == SlashCommandOrigin::Local {
             use crate::thread::composer::options;
-            if matches!(
-                local,
-                Some(TuiSlashCommandAction::Mode | TuiSlashCommandAction::Permission)
-            ) {
+            if local == Some(TuiSlashCommandAction::Permission) {
                 let arguments = match invocation.text_arguments() {
                     Ok(arguments) => arguments,
                     Err(error) => {
@@ -3806,19 +3786,11 @@ impl App {
                     }
                 };
                 if arguments.is_empty() {
-                    let choices = if local == Some(TuiSlashCommandAction::Mode) {
-                        options::mode_choices(self.agent_mode())
-                    } else {
-                        options::policy_choices(self.approval_mode())
-                    };
+                    let choices = options::policy_choices(self.approval_mode());
                     self.open_command_panel(CommandPanel::composer_options(choices));
                 } else {
-                    let result = if local == Some(TuiSlashCommandAction::Mode) {
-                        options::parse_mode(&arguments).map(|mode| self.set_agent_mode(mode))
-                    } else {
-                        options::parse_policy(&arguments)
-                            .map(|policy| self.set_next_approval_mode(policy))
-                    };
+                    let result = options::parse_policy(&arguments)
+                        .map(|policy| self.set_next_approval_mode(policy));
                     if let Err(error) = result {
                         self.report_composer_option_error(error);
                     }
@@ -4006,7 +3978,25 @@ impl App {
                 None
             }
             (SlashCommandOrigin::Server, _) => {
-                let submission = invocation.into_forwarded_submission();
+                let task_command =
+                    ash_slash_commands::TaskSlashCommand::from_name(&invocation.command.name)
+                        .is_some();
+                let mut submission = invocation.into_forwarded_submission();
+                if task_command {
+                    submission.mode = ash_protocol::AgentMode::Agent;
+                    return self.handle_chat_composer_outcome(
+                        if self.chat_panel.is_steering() && !self.starts_new_session() {
+                            ChatComposerOutcome::Queued(
+                                crate::thread::composer::QueuedChatInput::from_submission(
+                                    submission,
+                                ),
+                            )
+                        } else {
+                            ChatComposerOutcome::Submit(submission)
+                        },
+                        Instant::now(),
+                    );
+                }
                 if self.chat_panel.is_steering()
                     && self
                         .thread

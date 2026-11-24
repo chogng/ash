@@ -3790,7 +3790,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
                 "commandId":"turn-second","sessionId":session_id,
-                "request":{"type":"startTurn","mode":"plan","expectedSequence":root_snapshot["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"second"}]}
+                "request":{"type":"startTurn","expectedSequence":root_snapshot["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"/plan second"}]}
             }
         }),
     );
@@ -3805,6 +3805,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
                 "parentThreadId":root_id,
                 "beforeTurnId":second["result"]["value"]["turnId"],
                 "title":"rewritten",
+                "commandInterpretation":"accepted",
                 "input":[{"type":"text","text":"replacement"}]
             }
         }
@@ -3817,7 +3818,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         .unwrap();
     wait_for_latest_turn(&server, child_id, TurnStatus::Completed);
 
-    let mut replay_request = rewrite_request;
+    let mut replay_request = rewrite_request.clone();
     replay_request["id"] = serde_json::json!(8);
     let replayed = call(&server, &mut connection, replay_request);
     assert!(replayed.get("error").is_none(), "{replayed}");
@@ -3844,7 +3845,11 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         first["result"]["value"]["turnId"]
     );
     assert_eq!(child.turns[1].turn_id.as_str(), replacement_turn_id);
-    assert_eq!(child.turns[1].mode, ash_protocol::AgentMode::Plan);
+    assert_eq!(child.turns[1].mode, ash_protocol::AgentMode::Agent);
+    assert_eq!(
+        child.turns[1].execution_approach(),
+        ash_protocol::AgentMode::Plan
+    );
     assert_eq!(
         child
             .commands
@@ -3872,6 +3877,12 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             }
         }),
     );
+    assert_eq!(conflict["error"]["message"], "CommandConflict");
+    let mut changed_interpretation = rewrite_request;
+    changed_interpretation["id"] = serde_json::json!(10);
+    changed_interpretation["params"]["request"]["commandInterpretation"] =
+        serde_json::json!("literal");
+    let conflict = call(&server, &mut connection, changed_interpretation);
     assert_eq!(conflict["error"]["message"], "CommandConflict");
 }
 

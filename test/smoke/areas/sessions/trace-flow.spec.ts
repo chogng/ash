@@ -371,7 +371,7 @@ test('Chat widget reviews and revises a real plan and stages a follow-up from th
 		expect((await read()).thread.turns.at(-1)?.mode).toBe('plan');
 		await review.getByRole('button', { name: 'Approve and continue' }).press('Enter');
 		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');
-		expect((await read()).thread.turns.at(-1)?.mode).toBe('agent');
+		expect((await read()).thread.turns.at(-1)?.mode).toBeUndefined();
 		await expect(page.getByRole('log', { name: 'Chat transcript' }).getByText('The plan review fixture is complete.', { exact: true })).toBeVisible();
 		const suggestion = page.getByRole('group', { name: 'Suggested follow-ups' }).getByRole('button', { name: 'Run the reconnect tests' });
 		await expect(suggestion).toBeVisible();

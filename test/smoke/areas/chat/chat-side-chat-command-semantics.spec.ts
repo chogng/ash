@@ -52,7 +52,7 @@ for (const surface of ['Code', 'native Chat'] as const) {
 			});
 			const { sessionId, threads: [{ threadId }] } = session;
 			const readSource = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;
-			await client.request(methods['session/request'], { sessionId, commandId: 'side-chat-source-turn', request: { type: 'startTurn', threadId, expectedSequence: (await readSource()).sequence, input: [{ type: 'text', text: 'Synthetic source conversation' }], mode: surface === 'Code' ? 'ask' : 'agent', model } });
+			await client.request(methods['session/request'], { sessionId, commandId: 'side-chat-source-turn', request: { type: 'startTurn', threadId, expectedSequence: (await readSource()).sequence, input: [{ type: 'text', text: 'Synthetic source conversation' }], model } });
 			await expect.poll(async () => (await readSource()).turns.at(-1)?.status).toBe('running');
 			const source = await readSource();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -70,7 +70,7 @@ for (const surface of ['Code', 'native Chat'] as const) {
 			const outcomes = [];
 			const expectedThreads = [threadId];
 			const entries = surface === 'Code' ? ['slash'] as const : ['slash', 'menu'] as const;
-			for (const entry of entries) for (const query of ['/init', '/develop synthetic task']) {
+			for (const entry of entries) for (const query of ['/init', '/ask /develop synthetic task', ...(surface === 'native Chat' ? ['/develop synthetic task'] : [])]) {
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
 				await draft.focus();
 				await page.keyboard.insertText(`${entry === 'slash' ? '/btw ' : ''}${query}`);
@@ -107,9 +107,10 @@ for (const surface of ['Code', 'native Chat'] as const) {
 				expect(side.origin).toMatchObject({ type: 'sideChat', parentThreadId: threadId, sourceTurnId: source.turns[0].turnId });
 				expect(turn.items.filter(item => item.type === 'userMessage').map(item => item.text)).toEqual([`${query} `]);
 				expect(turn.items.filter(item => item.type === 'userContext').map(item => ({ name: item.name, content: item.content }))).toContainEqual({ name: 'side-context.txt', content: 'Frozen side question context' });
-				expect(turn.mode).toBe(surface === 'Code' ? 'ask' : 'agent');
+				expect(turn.mode).toBeUndefined();
+				expect(turn.instructions?.taskCommand).toBe(query.startsWith('/ask ') ? 'ask' : undefined);
 				// Persisted instruction identity distinguishes /init Setup from ordinary Agent input.
-				expect(turn.instructions?.id).toBe(surface === 'Code' && query === '/init' ? 'instructions/init' : source.turns[0].instructions?.id);
+				if (!query.startsWith('/ask ')) expect(turn.instructions?.id).toBe(surface === 'Code' && query === '/init' ? 'instructions/init' : source.turns[0].instructions?.id);
 				expect(turn.model).toEqual(model);
 				expect((await readSource()).turns.map(value => ({ id: value.turnId, status: value.status, messages: value.items.filter(item => item.type === 'userMessage').map(item => item.text) }))).toEqual([{ id: source.turns[0].turnId, status: 'running', messages: ['Synthetic source conversation'] }]);
 				outcomes.push({ entry, query, sideThreadId, turn });

@@ -126,10 +126,6 @@ test('A saved environment reaches the Agent process and stays scoped to its Sess
 				await page.locator('[role="menu"]').getByText(project.name, { exact: true }).click();
 				await expect(projectPicker).toHaveText(project.name);
 			}
-			if (!await active().getByRole('button', { name: 'Mode: Agent', exact: true }).count()) {
-				await active().locator('.ash-chat-input-mode-action').click();
-				await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
-			}
 			await active().getByRole('button', { name: /^Permissions:/ }).click();
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();

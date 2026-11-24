@@ -1194,7 +1194,17 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
         ash_protocol::AgentMode::Swarm,
         ash_protocol::AgentMode::Ask,
     ] {
-        for text in ["Inspect the module", "/init"] {
+        let command = ash_slash_commands::TaskSlashCommand::ALL
+            .into_iter()
+            .find(|command| serde_json::to_value(mode).unwrap().as_str() == Some(command.name()));
+        let mut cases = vec![
+            ("Inspect the module".into(), false),
+            ("/init".into(), false),
+        ];
+        if let Some(command) = command {
+            cases.push((format!("/{} Inspect the module", command.name()), true));
+        }
+        for (text, direct) in cases {
             let threads = Arc::new(ThreadController::with_store(Arc::new(
                 InMemoryThreadStore::default(),
             )));
@@ -1218,20 +1228,42 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                 serde_json::json!({"commandId":"mode-root","title":"Modes","kind":"code", "executionTarget":null}),
             );
             let id = created["result"]["session"]["sessionId"].as_str().unwrap();
+            let mut start = serde_json::json!({"type":"startTurn","threadId":id,"expectedSequence":1,
+                "model":selected_model,"input":[{"type":"text","text":text}]});
+            if !direct {
+                start["mode"] = serde_json::to_value(mode).unwrap();
+            }
             let response = call(
                 &server,
                 &mut connection,
                 "session/request",
-                serde_json::json!({"commandId":"mode-turn","sessionId":id,
-                    "request":{"type":"startTurn","threadId":id,"expectedSequence":1,
-                        "mode":mode,"model":selected_model,"input":[{"type":"text","text":text}]}}),
+                serde_json::json!({"commandId":"mode-turn","sessionId":id,"request":start.clone()}),
             );
             assert!(response.get("error").is_none(), "{response}");
             let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
             let root = threads.read_thread(&ThreadId::new(id).unwrap()).unwrap();
             let turn = &root.turns[0];
-            assert_eq!(turn.mode, mode);
+            assert_eq!(
+                turn.mode,
+                if direct {
+                    ash_protocol::AgentMode::Agent
+                } else {
+                    mode
+                }
+            );
+            assert_eq!(turn.execution_approach(), mode);
             let frozen = turn.instructions.as_ref().unwrap();
+            assert_eq!(frozen.task_command(), direct.then_some(mode));
+            if direct {
+                start["commandInterpretation"] = "literal".into();
+                let replay = call(
+                    &server,
+                    &mut connection,
+                    "session/request",
+                    serde_json::json!({"commandId":"mode-turn","sessionId":id,"request":start}),
+                );
+                assert!(replay.get("error").is_some(), "{replay}");
+            }
             assert_eq!(frozen.model_guidance(), Some(&expected));
             let messages = expected.messages().unwrap();
             let body = request.instructions.as_deref().unwrap();
