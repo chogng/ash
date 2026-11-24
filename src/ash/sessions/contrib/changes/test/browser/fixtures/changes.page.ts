@@ -1,6 +1,7 @@
 import { languagePackCatalog as chineseCatalog } from '../../../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
+import { ILanguageFeaturesService } from '../../../../../../editor/common/services/languageFeatures.js';
 import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../../platform/theme/common/iconRegistry.js';
 import '../../../../../../editor/browser/widget/diffEditor/registrations.contribution.js';
@@ -269,7 +270,7 @@ services.registerInstance(IChatService, {
 	readThreadChangeFile: async (sessionId: string, threadId: string, revision: string, repositoryId: string, path: string) => {
 		summaryReads.push({ sessionId, threadId, revision, repositoryId, path });
 		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
-		if (codeReviewMode) return { path, binary: false, truncated: false, before: 'Original\nBefore\nThird', after: reviewCode };
+		if (codeReviewMode) return { path, binary: false, truncated: false, before: reviewOriginal, after: reviewCode };
 		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
 	},
 	readTurnChange: async (sessionId: string, threadId: string, id: string) => {
@@ -284,6 +285,7 @@ services.registerInstance(IChatService, {
 } as unknown as IChatService);
 let opened = 0;
 let codeReviewMode = false;
+let reviewOriginal = 'Original\nBefore\nThird';
 let reviewCode = 'Original\nReviewed\nThird';
 let reviewRepositories: readonly TurnChangeDetails[] | undefined;
 const reviewPane = resources.add(new MutableDisposable<SessionCodeReviewEditor>());
@@ -412,7 +414,7 @@ declare global {
 			fileReadStarted(): boolean;
 			rejectFile(): void;
 			agentRequests(): readonly unknown[];
-			openCodeReview(options?: { multipleRepositories?: boolean; }): Promise<void>;
+			openCodeReview(options?: { multipleRepositories?: boolean; symbols?: boolean; }): Promise<void>;
 			setCommentStyle(style: CommentThreadStyle): Promise<void>;
 			reviewForks(): readonly unknown[];
 			loseReviewAcknowledgement(): void;
@@ -477,6 +479,17 @@ window.ashChangesIntegration = {
 		document.body.append(panes);
 		reviewServices = resources.add(createTestEditorServices(configuration, services));
 		registerCodeEditorServices(reviewServices);
+		if (options?.symbols) {
+			reviewOriginal = 'function previous() {}\nfunction kept() {}';
+			reviewCode = 'function kept() {}\nfunction added() {}';
+			resources.add(reviewServices.get(ILanguageFeaturesService).documentSymbolProvider.register('*', {
+				provideDocumentSymbols: request => request.snapshot.getText().split('\n').flatMap((line, index) => {
+					const name = /^function (\w+)/u.exec(line)?.[1];
+					if (!name) return [];
+					return [{ name, kind: 'function', range: new Range(index + 1, 1, index + 1, line.length + 1), selectionRange: new Range(index + 1, 10, index + 1, 10 + name.length) }];
+				}),
+			}));
+		}
 		reviewServices.registerSingleton(IDiffService, () => reviewServices!.createInstance(DiffService));
 		reviewServices.registerInstance(IDialogService, { error: async (message: string) => { throw new Error(message); } } as unknown as IDialogService);
 		reviewServices.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: reviewServices })));

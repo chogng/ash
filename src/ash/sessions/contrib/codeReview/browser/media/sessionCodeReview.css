@@ -85,6 +85,11 @@
 	list-style: none;
 }
 
+.ash-session-code-review-symbols {
+	margin-block-end: var(--ash-spacing-size160);
+	overflow-wrap: anywhere;
+}
+
 .ash-session-code-review-note {
 	display: grid;
 	gap: var(--ash-spacing-size40);

@@ -279,6 +279,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		if (visible) this.layout(this.dimension);
+		else this.review?.clearSymbolChanges();
 		this.comparison.value?.setVisible(visible);
 		this.review?.refresh();
 		this.revealInitialComment();
@@ -298,7 +299,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 		const notes = this.review.snapshot()?.comments.map(comment => comment.text).join('\n');
 		const files = this.comparisonInput?.items.map(item => localize('sessions.codeReview.comparison', '{0}\nBefore:\n{1}\nAfter:\n{2}',
 			item.label, item.original.initialText ?? '', item.modified.initialText ?? ''));
-		return [this.message.hidden ? undefined : this.message.textContent, notes, ...(files ?? [])].filter(Boolean).join('\n\n');
+		return [this.message.hidden ? undefined : this.message.textContent, this.review.getSymbolChanges(), notes, ...(files ?? [])].filter(Boolean).join('\n\n');
 	}
 
 	private setViewMode(mode: ReviewViewMode): void {

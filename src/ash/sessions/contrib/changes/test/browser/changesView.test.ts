@@ -737,6 +737,22 @@ suite('changes browser component', () => {
 suite('session Code Review', () => {
 	const browserTests = useBrowserTests();
 
+	test('shows localized symbol changes for the focused comparison and clears them when it switches', async function () {
+		const { page } = browserTests;
+		await page.goto('/changes.html?locale=zh-CN');
+		await page.evaluate(() => window.ashChangesIntegration.openCodeReview({ symbols: true }));
+		const review = page.locator('#code-review');
+		await expect(review.locator('.ash-session-code-review-diff')).toContainText('added');
+		await page.evaluate(() => window.ashChangesIntegration.focusReviewLine(2));
+		const heading = review.getByRole('heading', { name: 'main.ts 中的符号更改' });
+		await expect(heading).toBeVisible();
+		await expect(review.getByText('新增 added', { exact: true })).toBeVisible();
+		await expect(review.getByText('删除 previous', { exact: true })).toBeVisible();
+		await review.getByRole('combobox', { name: '比较范围' }).selectOption('lastTurn');
+		await expect(heading).toHaveCount(0);
+		await expect(review.locator('.ash-session-code-review-diff')).toContainText('After');
+	});
+
 	test('keeps Changes independent, batches line drafts and opens the saved comparison from its reply', async function () {
 		const { page } = browserTests;
 		await page.goto('/changes.html?locale=zh-CN');

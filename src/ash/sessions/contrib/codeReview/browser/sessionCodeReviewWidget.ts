@@ -4,11 +4,15 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { posix } from '../../../../base/common/path.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { OutlineModel } from '../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -21,6 +25,7 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import {
 	ISessionCodeReviewService, codeReviewFilePath, codeReviewRepositoryId, codeReviewResource, type CodeReviewComment, type CodeReviewDraft, type CodeReviewTarget, type SessionCodeReviewService,
 } from './sessionCodeReviewService.js';
+import { compareReviewSymbols } from './sessionCodeReviewSymbols.js';
 import './media/sessionCodeReview.css';
 
 export interface CodeReviewComparison {
@@ -37,6 +42,9 @@ export class SessionCodeReviewWidget extends Disposable {
 	private activeThread: DiffCommentThreadWidget | undefined;
 	private readonly sendButton: HTMLButtonElement;
 	private readonly notes: HTMLElement;
+	private readonly symbols: HTMLElement;
+	private readonly symbolRequest = this._register(new MutableDisposable<IDisposable>());
+	private symbolEditor: DiffEditorWidget | undefined;
 	private readonly noteListeners = this._register(new DisposableStore());
 	private noteVersion = '';
 	private readonly status: HTMLElement;
@@ -50,6 +58,7 @@ export class SessionCodeReviewWidget extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
 		const document = element.ownerDocument;
@@ -60,11 +69,13 @@ export class SessionCodeReviewWidget extends Disposable {
 		appendIcon(Lxicon.comment, icon);
 		const heading = h(document, 'header', { className: 'ash-session-code-review-notes-header' },
 			icon, h(document, 'h3', localize('sessions.codeReview.comments', 'Review comments')));
-		this.notes = h(document, 'div', { className: 'ash-session-code-review-notes' });
+		this.notes = h(document, 'div');
+		this.symbols = h(document, 'section', { className: 'ash-session-code-review-note-group ash-session-code-review-symbols', properties: { hidden: true } });
+		const notes = h(document, 'div', { className: 'ash-session-code-review-notes' }, this.symbols, this.notes);
 		this.sendButton = button(document, localize('sessions.bots.sendReview', 'Send to Code Review'), 'secondary');
 		this.status = h(document, 'span', { className: 'ash-session-code-review-status', attributes: { role: 'status' } });
 		const footer = h(document, 'footer', { className: 'ash-session-code-review-footer' }, this.status, this.sendButton);
-		element.append(heading, this.notes, footer);
+		element.append(heading, notes, footer);
 		this._register(addDisposableListener(this.sendButton, 'click', () => {
 			const comparison = this.comparison;
 			if (!comparison) return;
@@ -80,6 +91,7 @@ export class SessionCodeReviewWidget extends Disposable {
 
 	public setComparison(comparison: CodeReviewComparison | undefined): void {
 		this.closeComment();
+		this.clearSymbolChanges();
 		this.edits.clear();
 		this.noteVersion = '';
 		this.comparison = comparison;
@@ -103,6 +115,11 @@ export class SessionCodeReviewWidget extends Disposable {
 		const comparison = this.comparison;
 		if (!comparison || item.binary) return undefined;
 		const resources = new DisposableStore();
+		const updateSymbols = () => { void this.showSymbolChanges(item.label, editor); };
+		resources.add(editor.originalEditor.onDidFocusEditorText(updateSymbols));
+		resources.add(editor.modifiedEditor.onDidFocusEditorText(updateSymbols));
+		resources.add(toDisposable(() => { if (this.symbolEditor === editor) this.clearSymbolChanges(); }));
+		if (editor.originalEditor.hasTextFocus() || editor.modifiedEditor.hasTextFocus()) updateSymbols();
 		const fileKey = multiDiffEditorItemKey(item);
 		const path = codeReviewFilePath(item.modified.resource);
 		const repositoryId = codeReviewRepositoryId(item.modified.resource, turnRepositories);
@@ -182,6 +199,58 @@ export class SessionCodeReviewWidget extends Disposable {
 		this.mounted.set(editor, entry);
 		this.updateMarkers(entry);
 		return toDisposable(() => this.mounted.deleteAndDispose(editor));
+	}
+
+	public clearSymbolChanges(): void {
+		this.symbolRequest.clear();
+		this.symbolEditor = undefined;
+		this.symbols.hidden = true;
+		this.symbols.replaceChildren();
+	}
+
+	public getSymbolChanges(): string | undefined {
+		if (this.symbols.hidden) return undefined;
+		return [...this.symbols.querySelectorAll('h4, li')].map(element => element.textContent).join('\n');
+	}
+
+	private async showSymbolChanges(label: string, editor: DiffEditorWidget): Promise<void> {
+		if (this.symbolEditor === editor) return;
+		this.clearSymbolChanges();
+		const original = editor.originalEditor.getModel();
+		const modified = editor.modifiedEditor.getModel();
+		if (!original || !modified || original.getLanguageId() !== modified.getLanguageId()
+			|| original.getValueLength() + modified.getValueLength() > 256 * 1024) return;
+		const registry = this.languageFeatures.documentSymbolProvider;
+		if (!registry.has(original) || !registry.has(modified)) return;
+		this.symbolEditor = editor;
+		const controller = new AbortController();
+		const request = this.symbolRequest.value = toDisposable(() => controller.abort());
+		const { signal } = controller;
+		const timeout = setTimeout(() => controller.abort(), 500);
+		try {
+			const [before, after] = await raceCancellationError(Promise.all([original, modified].map(model => OutlineModel.create(registry, model, signal, () => { }))), signal);
+			if (signal.aborted || !before || !after || before.version !== original.getVersionId() || after.version !== modified.getVersionId()) return;
+			const common = [...after.children.keys()].find(id => before.children.has(id));
+			if (!common && before.children.size && after.children.size) return;
+			const read = (outline: OutlineModel) => {
+				const group = common === undefined ? outline.children.values().next().value : outline.children.get(common);
+				return [...group?.children.values() ?? []].map(element => element.symbol);
+			};
+			const changes = compareReviewSymbols(read(before), read(after), editor.diff);
+			if (!changes.length) return;
+			const document = this.symbols.ownerDocument;
+			this.symbols.replaceChildren(h(document, 'h4', localize('sessions.codeReview.symbols', 'Symbol changes in {0}', label)),
+				h(document, 'ul', ...changes.map(change => h(document, 'li', change.kind === 'added'
+					? localize('sessions.codeReview.symbolAdded', 'Added {0}', change.name)
+					: change.kind === 'removed' ? localize('sessions.codeReview.symbolRemoved', 'Removed {0}', change.name)
+						: localize('sessions.codeReview.symbolMoved', 'Moved {0}', change.name)))));
+			this.symbols.hidden = false;
+		} catch (error) {
+			if (!isCancellationError(error)) onUnexpectedError(error);
+		} finally {
+			clearTimeout(timeout);
+			if (signal.aborted && this.symbolRequest.value === request) this.clearSymbolChanges();
+		}
 	}
 
 	public show(comment: CodeReviewComment, pane: MultiDiffEditor, comparison: MultiDiffEditorInput): boolean {
