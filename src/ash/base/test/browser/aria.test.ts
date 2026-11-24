@@ -77,6 +77,22 @@ test('AriaLiveRegion announces repeated status and alert messages', async () => 
 	dom.window.close();
 });
 
+test('AriaLiveRegion preserves complete characters at the announcement limit', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
+	try {
+		using region = new AriaLiveRegion(dom.window.document);
+		const prefix = 'x'.repeat(19_999);
+		region.status(`${prefix}😀`);
+		await nextAnimationFrame(dom.window);
+		assert.equal(dom.window.document.querySelector('.ash-aria-live')?.textContent, prefix);
+		region.status(`${prefix.slice(1)}😀x`);
+		await nextAnimationFrame(dom.window);
+		assert.equal(dom.window.document.querySelector('.ash-aria-live')?.textContent, `${prefix.slice(1)}😀`);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('module ARIA owner announces through the configured workbench container', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>', {
 		pretendToBeVisual: true,

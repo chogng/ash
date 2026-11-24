@@ -8,6 +8,7 @@ import {
 } from '../../../common/lifecycle.js';
 import { scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { h } from '../../dom.js';
+import { isHighSurrogate, isLowSurrogate } from '../../../common/strings.js';
 
 export type AriaRole =
 	| 'alert'
@@ -149,7 +150,9 @@ export class AriaLiveRegion extends Disposable {
 			targetWindow,
 			() => {
 				this.pending.clear();
-				target.textContent = message.slice(0, maximumMessageLength);
+				const end = isHighSurrogate(message.charCodeAt(maximumMessageLength - 1)) && isLowSurrogate(message.charCodeAt(maximumMessageLength))
+					? maximumMessageLength - 1 : maximumMessageLength;
+				target.textContent = message.slice(0, end);
 			},
 		);
 	}
