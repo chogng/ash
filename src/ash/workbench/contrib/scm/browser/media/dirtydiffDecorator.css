@@ -32,6 +32,11 @@
 	transform: translateY(-50%);
 }
 
+.stanza-editor-line-decoration.ash-quick-diff-before-first-line::before {
+	top: 0;
+	transform: none;
+}
+
 @media (forced-colors: active) {
 	.stanza-editor-line-decoration.ash-quick-diff-gutter::before {
 		background: CanvasText;

@@ -2,19 +2,20 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { LineDiffKind, LineDiffRows, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
+import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { diffInsertedLineMarker, diffRemovedLineMarker } from '../../../../platform/theme/common/colors/editorColors.js';
-import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
+import { quickDiffDeletionAnchor, type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions, type ITextModel } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
 	readonly kind: LineDiffKind.Added | LineDiffKind.Modified | LineDiffKind.Removed;
 	readonly providerLabels: readonly string[];
+	readonly beforeFirstLine: boolean;
 }
 
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
@@ -44,7 +45,7 @@ export class QuickDiffDecorator extends Disposable {
 			description: 'dirty-diff-decoration',
 			isWholeLine: metadata.kind !== LineDiffKind.Removed,
 			...(gutter ? {
-				linesDecorationsClassName: `ash-quick-diff-gutter ${classNameForKind(metadata.kind)}`,
+				linesDecorationsClassName: `ash-quick-diff-gutter ${classNameForKind(metadata.kind)}${metadata.beforeFirstLine ? ' ash-quick-diff-before-first-line' : ''}`,
 				linesDecorationsTooltip: hoverText(metadata),
 			} : {}),
 			...((setting === 'all' || setting === 'overview') ? {
@@ -63,44 +64,48 @@ export class QuickDiffDecorator extends Disposable {
 			return;
 		}
 		const byLine = new Map<number, QuickDiffDecorationMetadata>();
+		const lineCount = this.model.getLineCount();
 		for (const comparison of comparisons) {
-			const rows = comparison.model.diff?.rows ?? LineDiffRows.empty;
-			for (const [rowIndex, row] of rows.changedEntries()) {
-				const lineIndex = row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.model.getLineCount());
-				const kind = decorationKindForRow(row);
+			const diff = comparison.model.diff;
+			if (!diff) continue;
+			const label = comparison.original.label;
+			const add = (lineIndex: number, kind: QuickDiffDecorationMetadata['kind'], beforeFirstLine = false) => {
 				const current = byLine.get(lineIndex);
 				if (!current || kindPriority(kind) > kindPriority(current.kind)) {
-					byLine.set(lineIndex, Object.freeze({ kind, providerLabels: Object.freeze([comparison.original.label]) }));
-				} else if (!current.providerLabels.includes(comparison.original.label)) {
-					byLine.set(lineIndex, Object.freeze({ ...current, providerLabels: Object.freeze([...current.providerLabels, comparison.original.label]) }));
+					byLine.set(lineIndex, { kind, providerLabels: [label], beforeFirstLine });
+				} else if (beforeFirstLine || !current.providerLabels.includes(label)) {
+					byLine.set(lineIndex, {
+						...current, beforeFirstLine: current.beforeFirstLine || beforeFirstLine,
+						providerLabels: current.providerLabels.includes(label) ? current.providerLabels : [...current.providerLabels, label],
+					});
+				}
+			};
+			for (const hunk of diff.hunks) {
+				let nextLineIndex = hunk.modifiedStartLineIndex;
+				if (hunk.modifiedLineCount === 0) {
+					add(quickDiffDeletionAnchor(nextLineIndex, lineCount), LineDiffKind.Removed, hunk.rowStart === 0);
+					continue;
+				}
+				let inDeletedRun = false;
+				for (let index = hunk.rowStart; index < hunk.rowEnd; index++) {
+					const row = diff.rows.get(index)!;
+					if (row.kind === LineDiffKind.Removed) {
+						if (!inDeletedRun) add(quickDiffDeletionAnchor(nextLineIndex, lineCount), row.kind, index === 0);
+						inDeletedRun = true;
+					} else if (row.kind === LineDiffKind.Added || row.kind === LineDiffKind.Modified) {
+						add(nextLineIndex++, row.kind);
+						inDeletedRun = false;
+					}
 				}
 			}
 		}
-		this.collection.set([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
-			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
-			options: { ...this.resolve(metadata), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
-		})));
-	}
-}
-
-function deletionAnchor(rows: LineDiffRows, rowIndex: number, lineCount: number): number {
-	for (let index = rowIndex + 1; index < rows.length; index += 1) {
-		const lineIndex = rows.get(index)?.modifiedLineIndex;
-		if (lineIndex !== undefined) return lineIndex;
-	}
-	for (let index = rowIndex - 1; index >= 0; index -= 1) {
-		const lineIndex = rows.get(index)?.modifiedLineIndex;
-		if (lineIndex !== undefined) return lineIndex;
-	}
-	return Math.max(0, lineCount - 1);
-}
-
-function decorationKindForRow(row: LineDiffRow): QuickDiffDecorationMetadata['kind'] {
-	switch (row.kind) {
-		case LineDiffKind.Added: return LineDiffKind.Added;
-		case LineDiffKind.Modified: return LineDiffKind.Modified;
-		case LineDiffKind.Removed: return LineDiffKind.Removed;
-		case LineDiffKind.Unchanged: throw new TypeError('Unchanged rows do not create Quick Diff decorations');
+		this.collection.set([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => {
+			const line = lineIndex + 1;
+			return {
+				range: Range.fromPositions(new Position(line, 1), new Position(line, metadata.beforeFirstLine ? 1 : this.model.getLineLength(line) + 1)),
+				options: { ...this.resolve(metadata), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+			};
+		}));
 	}
 }
 

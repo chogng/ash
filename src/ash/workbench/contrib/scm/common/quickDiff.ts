@@ -41,6 +41,11 @@ export interface QuickDiffComparison {
 	readonly model: DiffModel;
 }
 
+/** Anchors deleted lines to the next surviving line, or to the last line at EOF. */
+export function quickDiffDeletionAnchor(nextLineIndex: number, lineCount: number): number {
+	return Math.min(nextLineIndex, Math.max(0, lineCount - 1));
+}
+
 export interface QuickDiffChange {
 	readonly id: string;
 	readonly comparison: QuickDiffComparison;

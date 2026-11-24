@@ -121,6 +121,34 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	fixture.dispose();
 });
 
+test('Quick Diff places one openable marker above the first surviving line of a large deletion', async () => {
+	using quickDiffService = new QuickDiffService();
+	using registration = quickDiffService.addProvider({
+		id: 'first-deletion', label: 'Index',
+		async provideOriginalResource(resource) {
+			return { providerId: 'first-deletion', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'deleted\n'.repeat(4_000) + 'last' };
+		},
+	});
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue('scm.diffDecorations', 'gutter');
+	using models = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
+	using model = new TextModel('last', { resource: URI.file('/workspace/deletions.ts') });
+	using reference = models.createModelReference(model.uri, model);
+	using editor = createTestCodeEditor({ container: document.createElement('main'), model, contributions: [] });
+	await waitFor(() => !!reference.object.state.comparisons[0]?.model.diff);
+	const rows = reference.object.state.comparisons[0]!.model.diff!.rows;
+	const getRow = rows.get.bind(rows);
+	let rowReads = 0;
+	rows.get = index => { rowReads++; return getRow(index); };
+	using decorator = new QuickDiffDecorator(editor, reference, configuration);
+	const [marker, ...rest] = model.getAllDecorations();
+	assert.equal(rest.length, 0);
+	assert.match(marker!.options.linesDecorationsClassName!, /ash-quick-diff-before-first-line/u);
+	assert.deepEqual([marker!.range.startLineNumber, marker!.range.startColumn, marker!.range.endColumn], [1, 1, 1]);
+	assert.equal(reference.object.findChangeAtLine(0)?.originalLineCount, 4_000);
+	assert.equal(rowReads, 0);
+});
+
 test('Quick Diff whitespace option inherits Diff settings without refetching the baseline', async () => {
 	using quickDiffService = new QuickDiffService();
 	let baselineRequests = 0;
