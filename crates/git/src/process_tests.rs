@@ -144,6 +144,7 @@ async fn cancelling_last_discovery_waiter_kills_its_running_descendants() {
         executable: client.executable().unwrap(),
         search_path: None,
         limits: client.limits(),
+        metadata: None,
     };
     let query =
         crate::discovery::coordinator().query(key, async move { client.run(invocation).await });

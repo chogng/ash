@@ -127,6 +127,8 @@ pub struct GitClient {
     askpass: Option<GitAskPass>,
     version: Arc<OnceCell<GitVersion>>,
     process_observer: Option<Arc<dyn GitProcessObserver>>,
+    read_owner: u64,
+    coalesce_metadata: bool,
     index_batch: Arc<tokio::sync::Mutex<Option<BatchReader>>>,
     history_batch: Arc<tokio::sync::Mutex<Option<BatchReader>>>,
     pub(crate) history_cache: Arc<std::sync::Mutex<crate::history::HistoryCache>>,
@@ -321,6 +323,8 @@ impl GitClient {
             askpass: None,
             version: Arc::new(OnceCell::new()),
             process_observer: None,
+            read_owner: next_read_owner(),
+            coalesce_metadata: false,
             content_cache: Arc::default(),
             index_batch: Arc::default(),
             history_batch: Arc::default(),
@@ -354,6 +358,8 @@ impl GitClient {
             askpass: None,
             version: Arc::new(OnceCell::new()),
             process_observer: None,
+            read_owner: next_read_owner(),
+            coalesce_metadata: false,
             content_cache: Arc::default(),
             index_batch: Arc::default(),
             history_batch: Arc::default(),
@@ -392,6 +398,20 @@ impl GitClient {
                 self.index_batch = Arc::clone(&owner.index_batch);
                 self.history_batch = Arc::clone(&owner.history_batch);
             }
+        }
+        self
+    }
+
+    /// Shares only overlapping metadata queries within an already authorized repository owner.
+    /// Use on a short-lived client dedicated to local metadata reads.
+    pub fn with_coalesced_metadata(mut self, owner: &Self) -> Self {
+        if self.uses_system_executable()
+            && owner.uses_system_executable()
+            && self.askpass.is_none()
+            && owner.askpass.is_none()
+        {
+            self.read_owner = owner.read_owner;
+            self.coalesce_metadata = true;
         }
         self
     }
@@ -810,19 +830,7 @@ impl GitClient {
     }
 
     pub(crate) async fn discover_repository(&self, cwd: PathBuf) -> GitResult<GitCommandOutput> {
-        let key = crate::discovery::Key {
-            cwd: cwd.clone(),
-            executable: self.executable()?,
-            search_path: match &self.executable {
-                ExecutableSource::System(system) => Some(
-                    system
-                        .search_path()
-                        .map_err(|source| GitError::io("build system Git PATH", source))?,
-                ),
-                ExecutableSource::Explicit(_) => None,
-            },
-            limits: self.limits,
-        };
+        let key = self.query_key(cwd.clone(), None)?;
         let client = self.clone();
         crate::discovery::coordinator()
             .query(key, async move {
@@ -842,14 +850,45 @@ impl GitClient {
             .await
     }
 
+    fn query_key(
+        &self,
+        cwd: PathBuf,
+        metadata: Option<(u64, Vec<OsString>)>,
+    ) -> GitResult<crate::discovery::Key> {
+        Ok(crate::discovery::Key {
+            cwd,
+            executable: self.executable()?,
+            search_path: match &self.executable {
+                ExecutableSource::System(system) => Some(
+                    system
+                        .search_path()
+                        .map_err(|source| GitError::io("build system Git PATH", source))?,
+                ),
+                ExecutableSource::Explicit(_) => None,
+            },
+            limits: self.limits,
+            metadata,
+        })
+    }
+
     pub(crate) async fn run_query<I, S>(&self, cwd: &Path, args: I) -> GitResult<GitCommandOutput>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        let output = self
-            .run(GitInvocation::query(cwd, args, FsmonitorOverride::Disabled))
-            .await?;
+        let invocation = GitInvocation::query(cwd, args, FsmonitorOverride::Disabled);
+        let output = if self.coalesce_metadata && self.askpass.is_none() {
+            let key = self.query_key(
+                cwd.to_path_buf(),
+                Some((self.read_owner, invocation.args.clone())),
+            )?;
+            let client = self.clone();
+            crate::discovery::coordinator()
+                .query(key, async move { client.run(invocation).await })
+                .await?
+        } else {
+            self.run(invocation).await?
+        };
         output.require_success()
     }
 
@@ -1216,6 +1255,11 @@ impl GitClient {
             stderr: stderr.bytes,
         })
     }
+}
+
+fn next_read_owner() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

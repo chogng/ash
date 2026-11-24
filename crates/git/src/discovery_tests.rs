@@ -15,6 +15,7 @@ fn key(directory: &std::path::Path) -> Key {
         executable: GitClient::system().executable().unwrap(),
         search_path: None,
         limits: GitExecutionLimits::default(),
+        metadata: None,
     }
 }
 

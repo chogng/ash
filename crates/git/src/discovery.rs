@@ -25,6 +25,7 @@ pub(crate) struct Key {
     pub(crate) executable: PathBuf,
     pub(crate) search_path: Option<OsString>,
     pub(crate) limits: GitExecutionLimits,
+    pub(crate) metadata: Option<(u64, Vec<OsString>)>,
 }
 
 struct Entry {
@@ -59,7 +60,7 @@ impl Coordinator {
         // the probe. Another current-thread runtime cannot drive those resources after the
         // first caller returns from block_on, even though it can poll the Shared future.
         let key = (tokio::runtime::Handle::current().id(), key);
-        let mut pending = self.pending.lock().expect("Git discovery registry");
+        let mut pending = self.pending.lock().expect("Git read registry");
         if let Some(future) = pending.get(&key).and_then(|entry| entry.future.upgrade()) {
             return future;
         }
@@ -76,7 +77,7 @@ impl Coordinator {
             let _permit = permits
                 .acquire()
                 .await
-                .expect("Git discovery semaphore remains open");
+                .expect("Git read semaphore remains open");
             probe.await
         }
         .boxed()
@@ -84,7 +85,7 @@ impl Coordinator {
         pending.insert(
             key,
             Entry {
-                future: future.downgrade().expect("unpolled Git discovery"),
+                future: future.downgrade().expect("unpolled Git read"),
                 identity,
             },
         );
@@ -100,7 +101,7 @@ struct Cleanup {
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
-        let mut pending = self.pending.lock().expect("Git discovery registry");
+        let mut pending = self.pending.lock().expect("Git read registry");
         // A cancelled future can finish dropping after another caller has installed its replacement.
         if pending
             .get(&self.key)

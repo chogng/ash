@@ -12,6 +12,42 @@ use crate::GitError;
 use crate::test_support::TestRepository;
 
 #[tokio::test]
+async fn overlapping_metadata_reads_share_only_the_same_owner_and_arguments() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::atomic::AtomicUsize);
+    impl super::GitProcessObserver for Observer {
+        fn observe(&self, timing: super::GitProcessTiming) {
+            if matches!(timing.kind, super::GitProcessKind::ForEachRef) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+    let repository = TestRepository::init();
+    let observer = std::sync::Arc::new(Observer::default());
+    let owner = GitClient::system();
+    let client = owner
+        .clone()
+        .with_process_observer(observer.clone())
+        .with_coalesced_metadata(&owner);
+    let other = client.clone().with_coalesced_metadata(&GitClient::system());
+    let read = |client: &GitClient| client.clone();
+    let root = repository.root();
+    let args = ["for-each-ref", "refs/heads"];
+    let (first, shared, different, separate) = tokio::join!(
+        client.run_query(root, args),
+        client.run_query(root, args),
+        client.run_query(root, ["for-each-ref", "refs/tags"]),
+        other.run_query(root, args),
+    );
+    assert_eq!(first.unwrap().stdout, shared.unwrap().stdout);
+    different.unwrap();
+    separate.unwrap();
+    assert_eq!(observer.0.load(std::sync::atomic::Ordering::Relaxed), 3);
+    read(&client).run_query(root, args).await.unwrap();
+    assert_eq!(observer.0.load(std::sync::atomic::Ordering::Relaxed), 4);
+}
+
+#[tokio::test]
 async fn process_observer_follows_cloned_clients_and_stream_lifetimes() {
     #[derive(Debug, Default)]
     struct Observer(std::sync::Mutex<Vec<super::GitProcessTiming>>);

@@ -397,7 +397,7 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<(ash_git::GitHead, Vec<ash_git::GitRemote>), GitServiceError> {
         self.ensure_readable()?;
-        let client = self.client();
+        let client = self.client().with_coalesced_metadata(&self.client);
         run(&self.runtime, async {
             tokio::select! {
                 biased;
@@ -418,7 +418,7 @@ impl GitService {
     ) -> Result<ash_git::GitReferenceState, GitServiceError> {
         self.ensure_readable()?;
         let runtime = &self.runtime;
-        let client = self.client();
+        let client = self.client().with_coalesced_metadata(&self.client);
         run(runtime, async {
             tokio::select! {
                 biased;

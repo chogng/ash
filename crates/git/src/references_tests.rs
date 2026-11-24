@@ -108,11 +108,12 @@ async fn refs_and_stashes_are_reviewed_by_identity_and_keep_working_files() {
         .unwrap();
     source.write("file.txt", "local edits\n");
     source.write("untracked.txt", "keep me\n");
+    source.git(&["config", "i18n.logOutputEncoding", "EUC-JP"]);
     client
         .execute_command(
             &repository,
             &GitCommand::Stash {
-                message: "review edits".into(),
+                message: "テスト stash".into(),
                 mode: super::GitStashMode::IncludeUntracked,
             },
         )
@@ -122,6 +123,7 @@ async fn refs_and_stashes_are_reviewed_by_identity_and_keep_working_files() {
     assert_eq!(catalog.tags[0].0, "v1");
     assert_eq!(catalog.remotes, ["backup"]);
     assert_eq!(catalog.stashes.len(), 1);
+    assert!(catalog.stashes[0].1.ends_with("テスト stash"));
     let object_id = catalog.stashes[0].0.clone();
     assert_eq!(source.read("file.txt"), "original\n");
     assert!(!source.path("untracked.txt").exists());

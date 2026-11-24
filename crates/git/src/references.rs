@@ -787,6 +787,8 @@ impl GitClient {
             .run_query(
                 repository.worktree_root(),
                 [
+                    "-c",
+                    "i18n.logOutputEncoding=UTF-8",
                     "stash",
                     "list",
                     "-z",
