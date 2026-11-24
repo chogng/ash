@@ -9,7 +9,7 @@ import { rot } from '../../../common/numbers.js';
 import { isMacintosh } from '../../../common/platform.js';
 import { setAriaAttribute } from '../aria/aria.js';
 import type { IKeyboardNavigationLabelProvider, ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from './list.js';
-import { ListView } from './listView.js';
+import { ListView, type ListViewOptions } from './listView.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
 export interface IListStyles {
@@ -28,6 +28,8 @@ export interface ListOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: 'listbox' | 'tree';
 	readonly scrolling?: ListScrolling;
+	readonly sizing?: ListViewOptions<T>['sizing'];
+	readonly scrollbarTabStop?: boolean;
 	readonly smoothScrolling?: boolean;
 	readonly loopNavigation?: boolean;
 	readonly keyboardNavigation?: boolean;
@@ -113,6 +115,8 @@ export class List<T> extends Disposable {
 			ariaLabel: options.ariaLabel,
 			role: options.role,
 			scrolling: options.scrolling,
+			sizing: options.sizing,
+			scrollbarTabStop: options.scrollbarTabStop,
 			smoothScrolling: options.smoothScrolling,
 			domFocusable: options.domFocusable,
 			getId: options.getId,

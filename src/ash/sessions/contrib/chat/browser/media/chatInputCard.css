@@ -4,6 +4,10 @@
 	--ash-chat-input-focus-border: var(--ash-border);
 	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
 	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
+	--stanza-suggest-border-radius: var(--ash-chat-input-radius);
+	--stanza-suggest-function-kind-display: none;
+	--stanza-suggest-row-inset: var(--ash-spacing-size80);
+	--stanza-suggest-row-radius: var(--ash-cornerRadius-medium);
 	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
 }
 

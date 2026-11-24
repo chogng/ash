@@ -123,6 +123,7 @@ export class ScrollableElement extends Disposable {
 		viewport.id = `ash-scrollable-${nextScrollableId++}`;
 		const horizontal = this._register(new HorizontalScrollbar(element, {
 			viewport,
+			tabStop: options.scrollbarTabStop,
 			trackClickBehavior: this.options.trackClickBehavior,
 			getMetrics: () => this.axisMetrics('horizontal'),
 			setPosition: (position) =>
@@ -130,6 +131,7 @@ export class ScrollableElement extends Disposable {
 		}));
 		const vertical = this._register(new VerticalScrollbar(element, {
 			viewport,
+			tabStop: options.scrollbarTabStop,
 			trackClickBehavior: this.options.trackClickBehavior,
 			getMetrics: () => this.axisMetrics('vertical'),
 			setPosition: (position) =>
@@ -155,6 +157,7 @@ export class ScrollableElement extends Disposable {
 			element.setAttribute('aria-label', options.ariaLabel);
 		}
 		viewport.className = 'ash-scrollbar-viewport';
+		if (options.scrollbarTabStop === false) viewport.tabIndex = -1;
 		content.className = 'ash-scrollbar-content';
 		horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
 		vertical.setVisibility(scrollbarVisibility(this.options.vertical));

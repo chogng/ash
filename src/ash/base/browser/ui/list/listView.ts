@@ -24,6 +24,9 @@ export interface ListViewOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: 'listbox' | 'tree' | 'rowgroup';
 	readonly scrolling?: ListScrolling;
+	/** Lets a managed list size to its rows, up to the scroll container's CSS max-height. */
+	readonly sizing?: 'fit-content';
+	readonly scrollbarTabStop?: boolean;
 	readonly smoothScrolling?: boolean;
 	readonly handleMouseWheel?: boolean;
 	/** Mount this many neighboring rows for asynchronously rendered content. Defaults to a 200px buffer. */
@@ -120,10 +123,17 @@ export class ListView<T> extends Disposable {
 		if (options.scrolling === 'managed') {
 			this.element.classList.add('ash-list-managed');
 			if (options.getHeight) this.element.style.position = 'relative';
-			this.scrollable = this._register(new ScrollableElement(container, { direction: options.horizontalScrolling ? 'both' : 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling, handleMouseWheel: options.handleMouseWheel }));
+			this.scrollable = this._register(new ScrollableElement(container, {
+				direction: options.horizontalScrolling ? 'both' : 'vertical',
+				tabIndex: -1,
+				scrollbarTabStop: options.scrollbarTabStop,
+				mouseWheelSmoothScroll: options.smoothScrolling,
+				handleMouseWheel: options.handleMouseWheel,
+			}));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
 			this.domNode.classList.add('ash-list-scrollable');
+			this.domNode.classList.toggle('ash-list-fit-content', options.sizing === 'fit-content');
 		} else {
 			this.scrollable = undefined;
 			this.domNode = this.element;

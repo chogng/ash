@@ -1515,7 +1515,7 @@ function createChatInputServices(
 
 suite('Chat command hint browser behavior', () => {
 	const browser = useBrowserTests();
-	test('Slash completion spans the composer and fits above or below it', async () => {
+	test('Slash completion meets the composer border and uses the Agent Window radius', async () => {
 		const { page } = browser;
 		await page.setViewportSize({ width: 360, height: 240 });
 		await page.goto('/chatInput.html?inlineCode=1&locale=zh-CN&theme=light');
@@ -1525,27 +1525,90 @@ suite('Chat command hint browser behavior', () => {
 		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 		const composer = page.locator('.ash-chat-input-container').filter({ has: message });
 		const popup = page.locator('.stanza-editor-completion.visible');
-		await composer.evaluate(element => Object.assign(element.style, { position: 'fixed', bottom: '12px', left: '4px', width: '340px' }));
+		await composer.evaluate(element => {
+			element.classList.add('ash-sessions-chat-input-card');
+			Object.assign(element.style, { position: 'fixed', bottom: '12.5px', left: '4px', width: '340px' });
+		});
 		await message.pressSequentially('/');
 		await expect(popup).toBeVisible();
-		await expect(message).toHaveAttribute('aria-controls', (await popup.getAttribute('id'))!);
+		await expect(popup).toHaveCSS('border-bottom-left-radius', '12px');
+		await expect(popup).toHaveCSS('border-top-right-radius', '12px');
+		const listbox = popup.getByRole('listbox');
+		await expect(listbox).toHaveClass(/\bash-list-managed\b/);
+		await expect(message).toHaveAttribute('aria-controls', (await listbox.getAttribute('id'))!);
+		const highlightedItem = listbox.getByRole('option', { selected: true }).locator('.stanza-editor-completion-item');
+		const highlightInsets = () => highlightedItem.evaluate(item => {
+			const list = item.closest('.ash-list')!;
+			const viewport = list.getBoundingClientRect();
+			const highlight = item.getBoundingClientRect();
+			const scrollbar = parseFloat(getComputedStyle(list).getPropertyValue('--ash-list-scrollbar-inset'));
+			return { left: highlight.left - viewport.left, right: viewport.right - highlight.right - scrollbar };
+		});
+		await expect(highlightedItem).toHaveCSS('border-radius', '6px');
+		await expect.poll(highlightInsets).toEqual({ left: 8, right: 8 });
+		const firstOption = listbox.getByRole('option').first();
+		await expect(firstOption.locator('.stanza-editor-completion-kind')).toBeHidden();
+		const commandInset = await firstOption.locator('.stanza-editor-completion-label').evaluate(label => {
+			const row = label.parentElement!;
+			return label.getBoundingClientRect().left - row.getBoundingClientRect().left - parseFloat(getComputedStyle(row).paddingLeft);
+		});
+		expect(commandInset).toBe(0);
+		const secondOption = listbox.getByRole('option').nth(1);
+		const secondOptionId = (await secondOption.getAttribute('id'))!;
+		const secondItem = secondOption.locator('.stanza-editor-completion-item');
+		const restingBackground = await secondItem.evaluate(item => getComputedStyle(item).backgroundColor);
+		await secondOption.hover();
+		await expect(listbox.getByRole('option', { selected: true })).toHaveAttribute('id', secondOptionId);
+		await expect(message).toHaveAttribute('aria-activedescendant', secondOptionId);
+		await expect(secondItem).not.toHaveCSS('background-color', restingBackground);
+		await message.press('ArrowDown');
+		const thirdOptionId = (await listbox.getByRole('option').nth(2).getAttribute('id'))!;
+		await expect(listbox.getByRole('option', { selected: true })).toHaveAttribute('id', thirdOptionId);
+		await expect(secondItem).toHaveCSS('background-color', restingBackground);
+		await expect(secondOption).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await page.mouse.move(0, 0);
 
 		const bounds = () => popup.evaluate(element => {
 			const list = element.getBoundingClientRect();
 			const form = element.closest('.ash-chat-input-container')!;
 			const composer = form.getBoundingClientRect();
-			const caret = form.querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect();
+			const viewport = element.querySelector('.ash-scrollbar-viewport')!;
 			return {
 				fits: list.top >= 0 && list.bottom <= innerHeight && list.left >= 0 && list.right <= innerWidth,
 				fillsComposer: Math.abs(list.left - composer.left) < 1 && Math.abs(list.right - composer.right) < 1,
-				above: list.bottom <= caret.top + 1,
-				below: list.top >= caret.bottom - 1,
-				scrollable: element.scrollHeight > element.clientHeight,
+				above: Math.abs(list.bottom - composer.top) < 0.05,
+				below: Math.abs(list.top - composer.bottom) < 0.05,
+				scrollable: viewport.scrollHeight > viewport.clientHeight,
 			};
 		});
 		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, above: true, scrollable: true });
-		await composer.evaluate(element => element.style.width = '245px');
+		await composer.evaluate(element => Object.assign(element.style, { width: '245px', minHeight: '96px' }));
 		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, above: true, scrollable: true });
+		await expect.poll(highlightInsets).toEqual({ left: 8, right: 8 });
+
+		const viewport = popup.locator('.ash-scrollbar-viewport');
+		const scrollbar = popup.locator('.ash-scrollbar-track-vertical');
+		const thumb = scrollbar.locator('.ash-scrollbar-thumb');
+		await expect(viewport).toHaveCSS('scrollbar-width', 'none');
+		await expect(viewport).toHaveAttribute('tabindex', '-1');
+		await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
+		await expect(scrollbar).toHaveJSProperty('tabIndex', -1);
+		await viewport.hover();
+		await page.mouse.wheel(0, 90);
+		const scrollTop = () => viewport.evaluate(element => element.scrollTop);
+		await expect.poll(scrollTop).toBeGreaterThan(0);
+		await thumb.hover();
+		const positionBeforeDrag = await scrollTop();
+		const thumbBounds = (await thumb.boundingBox())!;
+		const thumbX = thumbBounds.x + thumbBounds.width / 2;
+		const thumbY = thumbBounds.y + thumbBounds.height / 2;
+		await page.mouse.move(thumbX, thumbY);
+		await page.mouse.down();
+		await page.mouse.move(thumbX, thumbY + 25, { steps: 6 });
+		await page.mouse.up();
+		await expect.poll(scrollTop).toBeGreaterThan(positionBeforeDrag);
+		await expect(message).toBeFocused();
+
 		for (let count = 0; count < 15; count++) await message.press('ArrowDown');
 		const selected = popup.getByRole('option', { selected: true });
 		await expect(selected).toBeInViewport();
@@ -1556,10 +1619,17 @@ suite('Chat command hint browser behavior', () => {
 		await expect(message).not.toHaveAttribute('aria-controls', /.+/);
 
 		await message.press('Backspace');
-		await composer.evaluate(element => Object.assign(element.style, { bottom: '', top: '12px' }));
+		await composer.evaluate(element => Object.assign(element.style, { bottom: '', top: '12.5px' }));
 		await message.pressSequentially('/');
 		await expect(popup).toBeVisible();
 		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, below: true, scrollable: true });
+		const hoveredCommand = await secondOption.locator('.stanza-editor-completion-label').textContent();
+		await secondOption.hover();
+		await expect(listbox.getByRole('option', { selected: true })).toHaveAttribute('id', secondOptionId);
+		await message.press('Enter');
+		await expect(popup).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(`${hoveredCommand} `);
+		await expect(page.getByRole('status', { name: 'Submission' })).toBeEmpty();
 	});
 
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
@@ -1735,7 +1805,7 @@ suite('Chat context completion browser behavior', () => {
 		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 		await message.pressSequentially(`${prefix}edited`);
 		const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
-		assert.ok(help.help?.includes(locale === 'zh-CN' ? '在词首输入 @ 或 #' : 'Type @ or #'));
+		assert.ok(help.help?.includes(locale === 'zh-CN' ? '输入 @ 查找当前主机上的对话' : 'Type @ to find conversations on the current host'));
 		await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: 'edited.ts' })).toBeVisible();
 		await message.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('edited.ts ');

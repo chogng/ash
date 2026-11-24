@@ -59,7 +59,7 @@ test('Completion widget projects named options, focus and ARIA into the content 
 	assert.equal(widget.element.parentElement?.className, 'stanza-editor-overflowing-content-widgets');
 	assert.equal(input.element.getAttribute('aria-autocomplete'), 'list');
 	assert.equal(input.element.getAttribute('aria-haspopup'), 'true');
-	assert.equal(input.element.getAttribute('aria-controls'), widget.element.id);
+	assert.equal(input.element.getAttribute('aria-controls'), widget.element.querySelector('[role="listbox"]')?.id);
 	assert.equal(input.element.getAttribute('aria-activedescendant'), options[1]!.id);
 	assert.deepEqual(options.map(option => ({
 		selected: option.getAttribute('aria-selected'),
@@ -220,8 +220,9 @@ test('Escape cancels locally while clicking accepts the selected option', () => 
 		fixture.suggest.widget.element,
 		'[data-completion-index="1"]',
 	);
-	option.dispatchEvent(mouseEvent(fixture.dom.window, 'mousedown'));
-	option.dispatchEvent(mouseEvent(fixture.dom.window, 'click'));
+	const label = requiredElement(option, '.stanza-editor-completion-label');
+	label.dispatchEvent(mouseEvent(fixture.dom.window, 'mousedown'));
+	label.dispatchEvent(mouseEvent(fixture.dom.window, 'click'));
 	assert.equal(fixture.model.getText(), 'continue');
 	assert.equal(fixture.suggest.widget.visible, false);
 });

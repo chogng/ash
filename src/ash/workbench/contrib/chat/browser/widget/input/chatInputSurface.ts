@@ -42,7 +42,7 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 		this.form.append(editorHost);
 		this.editor = this._register(options.createEditor(editorHost));
 		if (this.editor.codeEditor) {
-			SuggestController.get(this.editor.codeEditor)?.widget.setHorizontalAnchor(this.form);
+			SuggestController.get(this.editor.codeEditor)?.widget.setAnchorElement(this.form);
 		}
 		this._register(addDisposableListener(this.form, 'mousedown', event => {
 			// Padding belongs to the input; descendants retain their own selection and action handling.

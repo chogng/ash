@@ -5,15 +5,32 @@
 	z-index: 6;
 	box-sizing: border-box;
 	min-width: min(220px, var(--stanza-content-widget-available-width));
-	max-height: min(240px, var(--stanza-suggest-available-height));
-	overflow: auto;
+	overflow: hidden;
 	pointer-events: auto;
 	color: var(--ash-editor-foreground);
 	white-space: normal;
 	background: var(--ash-dialog-background);
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(
+		--stanza-suggest-border-radius,
+		var(--ash-cornerRadius-small)
+	);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
+}
+
+.stanza-editor-completion-list {
+	--ash-list-row-inset-start: var(--stanza-suggest-row-inset, 0px);
+	--ash-list-row-inset-end: var(--stanza-suggest-row-inset, 0px);
+	--ash-list-row-radius: var(--stanza-suggest-row-radius, 0px);
+	--ash-list-row-reserve-scrollbar: 1;
+	--ash-list-style-list-hover-background: transparent;
+	max-height: max(
+		0px,
+		calc(
+			min(240px, var(--stanza-suggest-available-height)) - 2 *
+				var(--ash-strokeThickness)
+		)
+	);
 }
 
 .stanza-editor-completion-group-heading {
@@ -23,10 +40,10 @@
 	line-height: 1.5;
 }
 
-.stanza-editor-completion-option {
+.stanza-editor-completion-item {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
-	gap: 8px;
+	row-gap: var(--ash-spacing-size80);
 	align-items: center;
 	box-sizing: border-box;
 	min-height: var(--ash-list-rowHeight);
@@ -34,15 +51,21 @@
 	cursor: default;
 }
 
-.stanza-editor-completion-option.focused {
+.stanza-editor-completion-option.focused > .stanza-editor-completion-item {
 	color: var(--ash-list-activeSelectionForeground);
 	background: var(--ash-list-activeSelectionBackground);
+	border-radius: inherit;
 }
 
 .stanza-editor-completion-kind {
 	min-width: 64px;
+	margin-inline-end: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
 	font-size: 0.85em;
+}
+
+.stanza-editor-completion-kind.function {
+	display: var(--stanza-suggest-function-kind-display, block);
 }
 
 .stanza-editor-completion-option.focused .stanza-editor-completion-kind {
@@ -54,6 +77,11 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.stanza-editor-completion-label {
+	grid-column: 2;
+	margin-inline-end: var(--ash-spacing-size80);
 }
 
 .stanza-editor-completion-detail {

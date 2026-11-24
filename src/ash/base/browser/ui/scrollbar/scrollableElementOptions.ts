@@ -25,6 +25,8 @@ interface ScrollableElementBaseOptions {
 	readonly ariaLabel?: string;
 	/** Page-level tab order position for the container. Defaults to `0`. */
 	readonly tabIndex?: number;
+	/** Exclude the viewport and scrollbar tracks from sequential focus when the host owns keyboard scrolling. */
+	readonly scrollbarTabStop?: boolean;
 	readonly scrollbarSize?: number;
 	readonly minimumThumbSize?: number;
 	readonly trackClickBehavior?: 'jump' | 'page';

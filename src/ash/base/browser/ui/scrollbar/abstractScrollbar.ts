@@ -11,6 +11,7 @@ export type ScrollbarAxis = 'horizontal' | 'vertical';
 
 export interface AbstractScrollbarOptions {
 	readonly viewport: HTMLElement;
+	readonly tabStop?: boolean;
 	readonly trackClickBehavior: 'jump' | 'page';
 	readonly getMetrics: () => ScrollbarAxisMetrics;
 	readonly setPosition: (position: number) => void;
@@ -110,7 +111,7 @@ export abstract class AbstractScrollbar extends Disposable {
 
 	render(metrics: ScrollbarAxisMetrics, rendered: boolean): void {
 		this.visibility.setIsNeeded(rendered);
-		const tabIndex = rendered && metrics.maximumPosition > 0 ? 0 : -1;
+		const tabIndex = rendered && metrics.maximumPosition > 0 && this.options.tabStop !== false ? 0 : -1;
 		if (this.track.tabIndex !== tabIndex) this.track.tabIndex = tabIndex;
 		this.updateAriaAttribute(
 			'aria-valuemax',

@@ -160,6 +160,7 @@ import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js'
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import '../../../src/ash/sessions/browser/media/style.css';
+import '../../../src/ash/sessions/contrib/chat/browser/media/chatInputCard.css';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';

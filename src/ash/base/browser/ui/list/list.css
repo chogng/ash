@@ -21,6 +21,11 @@
 	--ash-list-scrollbar-inset: var(--ash-scrollbar-vertical-size, 0px);
 }
 
+.ash-list-fit-content > .ash-scrollbar-viewport {
+	position: relative;
+	max-height: inherit;
+}
+
 .ash-list-row {
 	box-sizing: border-box;
 	margin-inline: var(--ash-list-row-inset-start, 0px)

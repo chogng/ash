@@ -331,8 +331,8 @@ export const contentWidgetViewportVerticalPadding = 22;
 export interface IContentWidgetPosition {
 	readonly position: IPosition | null;
 	readonly secondaryPosition?: IPosition | null;
-	/** An overflowing widget can match this element's horizontal bounds while following its text position vertically. */
-	readonly horizontalAnchor?: HTMLElement;
+	/** An overflowing widget can match this element's width and place itself against its top or bottom edge. */
+	readonly anchorElement?: HTMLElement;
 	readonly preference: ContentWidgetPositionPreference[];
 	readonly positionAffinity?: PositionAffinity;
 }

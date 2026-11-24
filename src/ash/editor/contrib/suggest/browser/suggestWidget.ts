@@ -4,14 +4,15 @@ import { URI } from '../../../../base/common/uri.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
 import type { ILanguageService } from '../../../common/languages/language.js';
 import { getIconClasses } from '../../../common/services/getIconClasses.js';
-import { addDisposableListener, fragment as createFragment, getClientArea, getWindow, h, isElement, reset, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, fragment as createFragment, getClientArea, getWindow, h, isElement, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { List } from '../../../../base/browser/ui/list/listWidget.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { applyFontInfo } from '../../../browser/config/domFontInfo.js';
 import { ContentWidgetPositionPreference, contentWidgetViewportVerticalPadding, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, SuggestModel } from './suggestModel.js';
-import { LanguageCompletionItemKind } from '../../../common/languages.js';
+import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, type LanguageCompletionSessionState, SuggestModel } from './suggestModel.js';
+import { LanguageCompletionItemKind, type LanguageCompletionItem } from '../../../common/languages.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { type View } from '../../../browser/view.js';
 
@@ -23,9 +24,11 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 	readonly allowEditorOverflow = true;
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
+	private readonly list: List<LanguageCompletionItem>;
 	private preferAbove = false;
-	private horizontalAnchor: HTMLElement | undefined;
-	private readonly horizontalAnchorResize = this._register(new MutableDisposable<IDisposable>());
+	private revealActiveItem = false;
+	private anchorElement: HTMLElement | undefined;
+	private readonly anchorResize = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -51,15 +54,23 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 		this.element = h(ownerDocument, 'div');
 		this.element.id = this.widgetId;
 		this.element.className = 'stanza-editor-completion';
-		this.element.setAttribute('role', 'listbox');
 		this.element.hidden = true;
+		this.list = this._register(new List<LanguageCompletionItem>(this.element, {
+			scrolling: 'managed',
+			sizing: 'fit-content',
+			// The editor keeps DOM focus and SuggestModel owns navigation and acceptance.
+			mouseSupport: false,
+			scrollbarTabStop: false,
+			renderItem: (item, index, row) => this.renderItem(item, index, row),
+		}));
+		this.list.domNode.classList.add('stanza-editor-completion-list');
 		applyFontInfo(this.element, editor.getOption(EditorOption.fontInfo));
 		this.editor.addContentWidget(this);
 		this._register(toDisposable(() => {
 			this.editor.removeContentWidget(this);
 			this.updateAria(undefined);
 		}));
-		this._register(session.onDidChange(() => this.render()));
+		this._register(session.onDidChange(({ reason }) => this.render(reason)));
 		this._register(viewport.onDidChangeLayout(() => this.layout()));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.fontInfo)) {
@@ -71,6 +82,11 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 		this._register(addDisposableListener(view.element, 'keydown', event => this.handleKeydown(event)));
 		this._register(addDisposableListener(view.element, 'blur', () => session.cancel()));
 		this._register(addDisposableListener(view.element, 'compositionstart', () => session.cancel()));
+		this._register(addDisposableListener<MouseEvent>(this.list.element, 'mousemove', event => {
+			if (event.buttons !== 0) return;
+			const index = this.readOptionIndex(event);
+			if (index !== undefined) session.selectIndex(index);
+		}));
 		this._register(addDisposableListener<MouseEvent>(this.element, 'mousedown', event => {
 			const index = this.readOptionIndex(event);
 			if (index === undefined || event.button !== 0) return;
@@ -99,7 +115,7 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 		const above = this.prefersAbove(this.getAnchor(state)?.top ?? 0);
 		const first = above ? ContentWidgetPositionPreference.ABOVE : ContentWidgetPositionPreference.BELOW;
 		const second = above ? ContentWidgetPositionPreference.BELOW : ContentWidgetPositionPreference.ABOVE;
-		return { position: state.position, preference: [first, second], horizontalAnchor: this.horizontalAnchor };
+		return { position: state.position, preference: [first, second], anchorElement: this.anchorElement };
 	}
 
 	beforeRender(): null {
@@ -116,17 +132,9 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 	}
 
 	afterRender(position: ContentWidgetPositionPreference | null): void {
-		if (position === null) return;
-		const selected = this.element.querySelector<HTMLElement>('.stanza-editor-completion-option.focused');
-		if (!selected) return;
-		const top = selected.offsetTop;
-		const bottom = top + selected.offsetHeight;
-		const scrollTop = this.element.scrollTop;
-		if (top < scrollTop) {
-			this.element.scrollTop = top;
-		} else if (bottom > scrollTop + this.element.clientHeight) {
-			this.element.scrollTop = bottom - this.element.clientHeight;
-		}
+		if (position === null || !this.revealActiveItem) return;
+		this.revealActiveItem = false;
+		this.list.reveal(this.list.activeIndex);
 	}
 
 	forceRenderingAbove(): void {
@@ -135,9 +143,9 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 		this.layout();
 	}
 
-	setHorizontalAnchor(anchor: HTMLElement): void {
-		this.horizontalAnchor = anchor;
-		this.horizontalAnchorResize.value = observeResize(anchor, () => this.layout(), { box: 'border-box' });
+	setAnchorElement(anchor: HTMLElement): void {
+		this.anchorElement = anchor;
+		this.anchorResize.value = observeResize(anchor, () => this.layout(), { box: 'border-box' });
 		this.layout();
 	}
 
@@ -187,85 +195,93 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 		this.viewport.focus();
 	}
 
-	private render(): void {
+	private render(reason?: LanguageCompletionSessionChangeReason): void {
 		const state = this.readState();
 		if (!state) {
-			reset(this.element);
+			if (this.list.items.length) this.list.items = [];
 			this.element.classList.remove('visible');
 			this.element.hidden = true;
 			this.updateAria(undefined);
 			this.editor.layoutContentWidget(this);
 			return;
 		}
-		const ownerDocument = this.element.ownerDocument;
-		const fragment = createFragment(ownerDocument);
-		let group: HTMLElement | undefined;
-		for (let index = 0; index < state.items.length; index += 1) {
-			const item = state.items[index]!;
-			if (item.group?.label !== state.items[index - 1]?.group?.label) {
-				group = undefined;
-				if (item.group) {
-					const heading = h(ownerDocument, 'div', { className: 'stanza-editor-completion-group-heading' });
-					heading.setAttribute('aria-hidden', 'true');
-					heading.textContent = item.group.label;
-					group = h(ownerDocument, 'div', { attributes: { role: 'group', 'aria-label': item.group.label } });
-					group.append(heading);
-					fragment.append(group);
-				}
-			}
-			const option = h(ownerDocument, 'div');
-			const kind = h(ownerDocument, 'span');
-			const label = h(ownerDocument, 'span');
-			const detail = h(ownerDocument, 'span');
-			const documentation = h(ownerDocument, 'span');
-			const focused = index === state.selectedIndex;
-			const resolving = focused && state.detailsStatus === LanguageCompletionDetailsStatus.Loading;
-			option.id = `${this.widgetId}-option-${index}`;
-			option.className = 'stanza-editor-completion-option';
-			option.classList.toggle('focused', focused);
-			option.classList.toggle('resolving', resolving);
-			option.dataset.completionIndex = String(index);
-			option.setAttribute('role', 'option');
-			option.setAttribute('aria-selected', String(focused));
-			if (resolving) option.setAttribute('aria-busy', 'true');
-			kind.className = 'stanza-editor-completion-kind';
-			kind.setAttribute('aria-hidden', 'true');
-			kind.textContent = completionKindLabel(item.kind);
-			if (item.kind === LanguageCompletionItemKind.File || item.kind === LanguageCompletionItemKind.Folder) {
-				const fileKind = item.kind === LanguageCompletionItemKind.File ? FileKind.File : FileKind.Directory;
-				const resource = URI.parse(`fake:///${encodeURIComponent(item.label)}`);
-				const detail = item.detail ? URI.parse(`fake:///${encodeURIComponent(item.detail)}`) : undefined;
-				const labelClasses = getIconClasses(undefined, this.languageService, resource, fileKind);
-				const detailClasses = detail ? getIconClasses(undefined, this.languageService, detail, fileKind) : [];
-				const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length
-					? detailClasses : labelClasses;
-				kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
-			}
-			label.className = 'stanza-editor-completion-label';
-			appendHighlightedText(label, item.label, item.labelMatchIndices);
-			detail.className = 'stanza-editor-completion-detail';
-			const detailText = focused ? state.details.detail ?? '' : item.detail ?? '';
-			appendHighlightedText(detail, detailText, detailText === item.detail ? item.detailMatchIndices : undefined);
-			option.append(kind, label, detail);
-			if (focused && state.details.documentation !== undefined) {
-				documentation.className = 'stanza-editor-completion-documentation';
-				documentation.textContent = state.details.documentation;
-				option.append(documentation);
-			}
-			(group ?? fragment).append(option);
+		const previousIndex = this.list.activeIndex;
+		if (reason !== LanguageCompletionSessionChangeReason.Focus && reason !== LanguageCompletionSessionChangeReason.Details) {
+			this.list.items = state.items;
 		}
-		reset(this.element, fragment);
+		this.list.setActiveIndex(state.selectedIndex, undefined, { reveal: false });
+		this.list.setSelection(state.selectedIndex < 0 ? [] : [state.selectedIndex]);
+		if (reason === LanguageCompletionSessionChangeReason.Focus) this.list.rerender(previousIndex);
+		if (reason === LanguageCompletionSessionChangeReason.Focus || reason === LanguageCompletionSessionChangeReason.Details) {
+			this.list.rerender(state.selectedIndex);
+		}
 		this.element.hidden = false;
 		this.element.classList.add('visible');
 		this.updateAria(state);
 		this.layout();
 	}
 
+	private renderItem(item: LanguageCompletionItem, index: number, row: HTMLDivElement): DocumentFragment {
+		const state = this.readState();
+		const ownerDocument = row.ownerDocument;
+		const fragment = createFragment(ownerDocument);
+		const group = item.group?.label;
+		if (group && group !== state?.items[index - 1]?.group?.label) {
+			const heading = h(ownerDocument, 'div', {
+				className: 'stanza-editor-completion-group-heading',
+				attributes: { 'aria-hidden': 'true' },
+			});
+			heading.textContent = group;
+			fragment.append(heading);
+		}
+		row.classList.add('stanza-editor-completion-option');
+		row.dataset.completionIndex = String(index);
+		if (group) row.setAttribute('aria-description', group);
+		else row.removeAttribute('aria-description');
+		const details = index === state?.selectedIndex ? state.details : undefined;
+		const resolving = !!details && state?.detailsStatus === LanguageCompletionDetailsStatus.Loading;
+		row.classList.toggle('resolving', resolving);
+		if (resolving) row.setAttribute('aria-busy', 'true');
+		else row.removeAttribute('aria-busy');
+
+		const contents = h(ownerDocument, 'div', { className: 'stanza-editor-completion-item' });
+		const kind = h(ownerDocument, 'span', { className: 'stanza-editor-completion-kind', attributes: { 'aria-hidden': 'true' } });
+		kind.classList.toggle('function', item.kind === LanguageCompletionItemKind.Function);
+		kind.textContent = completionKindLabel(item.kind);
+		if (item.kind === LanguageCompletionItemKind.File || item.kind === LanguageCompletionItemKind.Folder) {
+			const fileKind = item.kind === LanguageCompletionItemKind.File ? FileKind.File : FileKind.Directory;
+			const resource = URI.parse(`fake:///${encodeURIComponent(item.label)}`);
+			const detail = item.detail ? URI.parse(`fake:///${encodeURIComponent(item.detail)}`) : undefined;
+			const labelClasses = getIconClasses(undefined, this.languageService, resource, fileKind);
+			const detailClasses = detail ? getIconClasses(undefined, this.languageService, detail, fileKind) : [];
+			const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length
+				? detailClasses : labelClasses;
+			kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
+		}
+		const label = h(ownerDocument, 'span', { className: 'stanza-editor-completion-label' });
+		appendHighlightedText(label, item.label, item.labelMatchIndices);
+		const detail = h(ownerDocument, 'span', { className: 'stanza-editor-completion-detail' });
+		const detailText = (details ? details.detail : item.detail) ?? '';
+		appendHighlightedText(detail, detailText, detailText === item.detail ? item.detailMatchIndices : undefined);
+		contents.append(kind, label, detail);
+		if (details?.documentation !== undefined) {
+			const documentation = h(ownerDocument, 'span', { className: 'stanza-editor-completion-documentation' });
+			documentation.textContent = details.documentation;
+			contents.append(documentation);
+		}
+		fragment.append(contents);
+		return fragment;
+	}
+
 	private layout(): void {
-		if (this.visible) this.editor.layoutContentWidget(this);
+		if (!this.visible) return;
+		// Background editor renders must not pull the list back while it is scrolled by hand.
+		this.revealActiveItem = true;
+		this.editor.layoutContentWidget(this);
 	}
 
 	private getAnchor(state: LanguageCompletionSessionState): { top: number; height: number; } | undefined {
+		if (this.anchorElement) return this.anchorElement.getBoundingClientRect();
 		const caret = this.editor.getScrolledVisiblePosition(state.position);
 		if (!caret) return undefined;
 		const editorTop = this.viewport.domNode.domNode.getBoundingClientRect().top;
@@ -277,12 +293,13 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 	}
 
 	private updateAria(state: LanguageCompletionSessionState | undefined): void {
+		const listId = this.list.element.id;
 		if (state) {
-			this.view.element.setAttribute('aria-controls', this.widgetId);
-		} else if (this.view.element.getAttribute('aria-controls') === this.widgetId) {
+			this.view.element.setAttribute('aria-controls', listId);
+		} else if (this.view.element.getAttribute('aria-controls') === listId) {
 			this.view.element.removeAttribute('aria-controls');
 		}
-		const activeDescendant = state && state.selectedIndex >= 0 ? `${this.widgetId}-option-${state.selectedIndex}` : undefined;
+		const activeDescendant = state ? this.list.row(state.selectedIndex)?.id : undefined;
 		this.viewport.setAriaOptions({ activeDescendant });
 	}
 
@@ -298,8 +315,8 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 	private readOptionIndex(event: MouseEvent): number | undefined {
 		const target = event.target;
 		if (!isElement(target)) return undefined;
-		const option = target.closest<HTMLElement>('.stanza-editor-completion-option');
-		if (!option || !this.element.contains(option)) return undefined;
+		const option = target.closest('.stanza-editor-completion-item')?.parentElement;
+		if (!option || option.parentElement !== this.list.element) return undefined;
 		const index = Number(option.dataset.completionIndex);
 		return Number.isSafeInteger(index) ? index : undefined;
 	}
