@@ -43,7 +43,12 @@ export type EditorCloseReason = 'close' | 'move' | 'replace' | 'previewReplace' 
 export type EditorGroupChangeEvent =
 	| { readonly kind: 'editorOpened'; readonly editor: EditorInstanceState; }
 	| { readonly kind: 'editorClosed'; readonly editor: EditorInstanceState; readonly reason: EditorCloseReason; }
-	| { readonly kind: 'activeEditorChanged'; readonly editor: EditorInstanceState | undefined; }
+	| {
+		readonly kind: 'activeEditorChanged';
+		readonly editor: EditorInstanceState | undefined;
+		/** The tab selection can change while another editor part remains active. */
+		readonly preserveFocus?: true;
+	}
 	| { readonly kind: 'editorMoved'; readonly editor: EditorInstanceState; readonly previousIndex: number; }
 	| { readonly kind: 'editorStateChanged'; readonly editor: EditorInstanceState; };
 

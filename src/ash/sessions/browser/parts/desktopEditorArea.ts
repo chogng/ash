@@ -141,6 +141,7 @@ export class DesktopEditorArea extends Part {
 	private readonly views = new Map<DesktopEditorTool, ToolPartView>();
 	private dimension: IDimension = new Dimension(0, 0);
 	private desired = new Set<DesktopEditorTool>();
+	private contentAvailable = false;
 	private maximized: { readonly tool: DesktopEditorTool; readonly layout: SerializedGridDescriptor; } | undefined;
 	private readonly maximizedContext;
 	private dragging: DesktopEditorTool | undefined;
@@ -280,6 +281,7 @@ export class DesktopEditorArea extends Part {
 	}
 
 	public get hasTools(): boolean { return this.desired.size > 0; }
+	public get hasContent(): boolean { return this.contentAvailable; }
 	public get hasProductPage(): boolean { return this.domNode.classList.contains('has-product-page'); }
 
 	/** Moves the existing rows before the titlebar can hide the previous host. */
@@ -386,7 +388,7 @@ export class DesktopEditorArea extends Part {
 		this.applyVisibility();
 	}
 
-	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean): void {
+	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean, hasContent: boolean): void {
 		const files = this.views.get('files')!;
 		const frameChanged = this.hasProductPage !== productPage;
 		files.element.classList.toggle('ash-product-page-host', productPage);
@@ -399,7 +401,8 @@ export class DesktopEditorArea extends Part {
 			&& tools.some(tool => previous.has(tool));
 		const restoring = this.restoringPlacement;
 		this.restoringPlacement = undefined;
-		const changed = frameChanged || active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
+		const changed = frameChanged || hasContent !== this.contentAvailable || active !== this.active
+			|| tools.length !== previous.size || tools.some(tool => !previous.has(tool));
 		if (!restoring && place) {
 			const layout = this.withDesiredVisibility(this.saveLayout());
 			for (const tool of previous) {
@@ -418,6 +421,7 @@ export class DesktopEditorArea extends Part {
 		}
 		this.active = active;
 		this.desired = new Set(tools);
+		this.contentAvailable = hasContent;
 		if (!tools.length) {
 			this.firstTool = undefined;
 			this.toolWidthWeight = undefined;

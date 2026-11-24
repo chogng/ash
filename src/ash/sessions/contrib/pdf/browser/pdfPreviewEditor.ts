@@ -1189,6 +1189,11 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.updateControls();
 	}
 	public override focus(): void { this.surface.focus(); }
+	public override setVisible(visible: boolean): void {
+		if (!visible) this.continuous?.retainViewport();
+		super.setVisible(visible);
+		if (visible) this.continuous?.layout(this.zoom);
+	}
 	public override layout(dimension: IDimension): void {
 		this.flushWheelZoom();
 		this.element.classList.toggle('narrow', dimension.width < 640);

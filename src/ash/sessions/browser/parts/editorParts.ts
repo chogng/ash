@@ -224,6 +224,7 @@ export class EditorParts extends WorkbenchEditorParts {
 				}
 				this.syncArea();
 			}));
+			this._register(filesPart.onDidChangeDetailsVisibility(() => this.syncArea()));
 			this.syncArea();
 		} catch (error) {
 			this.dispose();
@@ -259,9 +260,9 @@ export class EditorParts extends WorkbenchEditorParts {
 		return this.filesPart.fileGroups.some(group => this.filesPart.isGroupVisible(group.id));
 	}
 
-	public setGroupScope(contains: (id: number) => boolean): IDisposable {
+	public setGroupScope(contains: (id: number) => boolean, supportsFilesDetails: () => boolean = () => true): IDisposable {
 		this.inWorkingSet = contains;
-		const filesScope = this.filesPart.setGroupScope(contains);
+		const filesScope = this.filesPart.setGroupScope(contains, supportsFilesDetails);
 		for (const part of this.hosts.values()) {
 			if (part instanceof DesktopToolEditorPart) { part.setGroupScope(contains); }
 		}
@@ -283,9 +284,19 @@ export class EditorParts extends WorkbenchEditorParts {
 	private syncArea(): void {
 		if (this.applying) { return; }
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
-		this.area.syncVisible([...this.hosts]
-			.filter(([tool, part]) => (!productPage || tool === 'files') && part.groups.some(group => part.isGroupVisible(group.id)))
-			.map(([tool]) => tool), this.isWindowEditorPart(this.activePart) ? undefined : this.toolForGroup(this.activeGroup.id), productPage);
+		const tools: DesktopEditorTool[] = [];
+		// A group is made visible before opening its editor pane. It can prepare
+		// the pane without reserving space in the outer Grid.
+		let hasContent = productPage || this.filesPart.hasDetailsContent;
+		for (const [tool, part] of this.hosts) {
+			if (productPage && tool !== 'files') continue;
+			const groups = part.groups.filter(group => part.isGroupVisible(group.id));
+			if (!groups.length) continue;
+			tools.push(tool);
+			hasContent ||= groups.some(group => group.inputs.length > 0);
+		}
+		const active = this.isWindowEditorPart(this.activePart) ? undefined : this.toolForGroup(this.activeGroup.id);
+		this.area.syncVisible(tools, active, productPage, hasContent);
 	}
 
 	private toolForGroup(groupId: number): DesktopEditorTool {

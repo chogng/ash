@@ -220,8 +220,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.titleActions = options.titleActions;
 		const showBreadcrumbPicker = options.showBreadcrumbPicker;
 		const titleDelegate: EditorTabsDelegate = {
-			activate: input => this.activateEntry(this.requireEntry(input), true),
-			preview: input => this.activateEntry(this.requireEntry(input), false),
+			activate: input => this.activateEntry(this.requireEntry(input), { focus: true }),
+			preview: input => this.activateEntry(this.requireEntry(input)),
 			select: (input, modifiers) => this.selectTab(input, modifiers),
 			close: input => {
 				void this.closeEditor(input).catch(reportEditorCloseError);
@@ -647,7 +647,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			if (options.inactive && this.activeInput) {
 				this.renderChrome();
 			} else {
-				this.activateEntry(existing, false);
+				this.activateEntry(existing, { preserveFocus: options.preserveFocus });
 			}
 			applyEditorOpenOptions(existing.paneInstance.pane, options);
 			if (wasPreview !== existing.preview) this.publishEditorState(existing);
@@ -778,7 +778,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.renderContent();
 			this.renderChrome();
 		} else {
-			this.activateEntry(entry, false);
+			this.activateEntry(entry, { preserveFocus: options.preserveFocus });
 		}
 		applyEditorOpenOptions(pane, options);
 		return pane;
@@ -790,7 +790,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		// Failed reopens must not release the only owner of unsaved content. Keep its
 		// pane (and normal close confirmation) alive while reporting the open error.
 		if (existing && (getEditorWorkingCopies(existing.paneInstance.pane).some(copy => copy.isDirty) || !await this.confirmCloseEditor(existing.input))) {
-			if (!options.inactive) this.activateEntry(existing, false);
+			if (!options.inactive) this.activateEntry(existing, { preserveFocus: options.preserveFocus });
 			await this.onOpenError?.(displayError, input, options);
 			const current = this.entry(input)?.paneInstance.pane;
 			if (!current) throw new CancellationError('The failed editor was closed');
@@ -813,7 +813,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	activateEditor(input: IResourceEditorInput): IEditorPane {
 		const entry = this.requireEntry(input);
-		this.activateEntry(entry, false);
+		this.activateEntry(entry);
 		return entry.paneInstance.pane;
 	}
 
@@ -870,7 +870,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorClosed', editor: closedState, reason }));
 		if (wasActive) {
 			const next = nextInput ? this.entry(nextInput) : undefined;
-			if (next) this.activateEntry(next, restoreFocus);
+			if (next) this.activateEntry(next, { focus: restoreFocus });
 			else {
 				this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeEditorChanged', editor: undefined }));
 			}
@@ -1034,12 +1034,16 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	setSelection(active: IResourceEditorInput, inactiveSelection: readonly IResourceEditorInput[] = []): void {
-		this.activateEntry(this.requireEntry(active), false, inactiveSelection);
+		this.activateEntry(this.requireEntry(active), { inactiveSelection });
 	}
 
-	private activateEntry(entry: EditorGroupEntry, focus: boolean, inactiveSelection: readonly IResourceEditorInput[] = []): void {
+	private activateEntry(entry: EditorGroupEntry, options: {
+		readonly focus?: boolean;
+		readonly inactiveSelection?: readonly IResourceEditorInput[];
+		readonly preserveFocus?: boolean;
+	} = {}): void {
 		const changed = this.model.setActive(entry.input);
-		for (const input of inactiveSelection) {
+		for (const input of options.inactiveSelection ?? []) {
 			if (input !== entry.input) this.model.setSelection(input, { toggle: true, range: false });
 		}
 		this.ordinaryContent = undefined;
@@ -1049,10 +1053,14 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			entry.paneInstance.setVisible(false);
 		}
 		if (changed) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeEditorChanged', editor: this.editorState(entry) }));
+			this.editorChangeEmitter.fire(Object.freeze({
+				kind: 'activeEditorChanged',
+				editor: this.editorState(entry),
+				...(options.preserveFocus ? { preserveFocus: true as const } : {}),
+			}));
 		}
 		this.renderChrome();
-		if (focus) this.panes.focus();
+		if (options.focus) this.panes.focus();
 	}
 
 	private renderContent(): void {

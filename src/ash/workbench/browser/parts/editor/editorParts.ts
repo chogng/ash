@@ -369,17 +369,19 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			}
 		}
 		const embedded = [...this.embedded].find(([, registration]) => registration.accepts(input));
-		if (embedded) {
-			const [part, registration] = embedded;
-			const destination = typeof target === 'object' && !part.groups.some(group => group.id === target.groupId) ? undefined : target;
-			const pane = await part.openEditor(input, options, destination);
-			registration.reveal();
-			return pane;
+		const part = embedded?.[0] ?? (typeof target === 'object'
+			? this.parts.find(part => part.groups.some(group => group.id === target.groupId))!
+			: this.embedded.has(this._activePart) ? this.mainPart : this._activePart);
+		const destination = embedded && typeof target === 'object' && !part.groups.some(group => group.id === target.groupId) ? undefined : target;
+		const previousPart = this._activePart;
+		const pane = await part.openEditor(input, options, destination);
+		embedded?.[1].reveal();
+		// An explicit open can target a tab already selected by a background open.
+		if (!options?.preserveFocus && !options?.inactive
+			&& this._activePart === previousPart && this.parts.includes(part) && part.activePane === pane) {
+			this.setActivePart(part);
 		}
-		if (typeof target === 'object') {
-			return this.parts.find(part => part.groups.some(group => group.id === target.groupId))!.openEditor(input, options, target);
-		}
-		return (this.embedded.has(this._activePart) ? this.mainPart : this._activePart).openEditor(input, options, target);
+		return pane;
 	}
 
 	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
@@ -573,7 +575,8 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 }
 
 function isActivationEvent(event: EditorPartChangeEvent): boolean {
-	return event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.event.kind === 'activeEditorChanged');
+	return event.kind === 'activeGroupChanged'
+		|| (event.kind === 'groupChanged' && event.event.kind === 'activeEditorChanged' && !event.event.preserveFocus);
 }
 
 function uniqueEditors(editors: readonly EditorIdentifier[]): readonly EditorIdentifier[] {

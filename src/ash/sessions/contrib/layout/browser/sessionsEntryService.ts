@@ -412,18 +412,18 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					documents: documents ? this.controller.hasDocumentEditors : this.hasConversationEditors,
 				};
 				const detailsContainerId = !documents && state.details ? entry.detailsContainerId : undefined;
-				this.controller.setDocumentGroupsVisible(documents);
-				for (const groupId of this.conversationGroups.values()) {
-					const group = this.editor.groups.find(candidate => candidate.id === groupId);
-					if (group) this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && group.inputs.length > 0);
-				}
-				this.editor.setGroupVisible(this.pageGroupId, productEditor);
-				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
-				if (!productEditor && this.editor.activeGroup.id === this.pageGroupId) {
-					const group = this.editor.groups.find(group => group.id !== this.pageGroupId && this.editor.isGroupVisible(group.id));
-					if (group) this.editor.activateGroup(group.id);
-				}
 				this.layout.updateParts(() => {
+					this.controller.setDocumentGroupsVisible(documents);
+					for (const groupId of this.conversationGroups.values()) {
+						const group = this.editor.groups.find(candidate => candidate.id === groupId);
+						if (group) this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && group.inputs.length > 0);
+					}
+					this.editor.setGroupVisible(this.pageGroupId, productEditor);
+					this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
+					if (!productEditor && this.editor.activeGroup.id === this.pageGroupId) {
+						const group = this.editor.groups.find(group => group.id !== this.pageGroupId && this.editor.isGroupVisible(group.id));
+						if (group) this.editor.activateGroup(group.id);
+					}
 					// Hide an outgoing conversation before separating editor details so transient minimum widths cannot shrink navigation.
 					if (!productEditor) { this.layout.setPrimaryPart('sessions'); }
 					this.layout.setPartAvailable('sessions', !productEditor || entry.conversation === 'visible');

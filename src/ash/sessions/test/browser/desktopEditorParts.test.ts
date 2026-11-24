@@ -13,7 +13,7 @@ import { IAccessibilityService } from '../../../platform/accessibility/common/ac
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
-import { EditorPane } from '../../../workbench/browser/parts/editor/editorPane.js';
+import { EditorPane, EditorPaneMatch } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
@@ -28,7 +28,7 @@ function fixture() {
 	const registry = resources.add(new EditorPaneRegistry());
 	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID]) {
 		resources.add(registry.registerEditorPane({
-			id, name: 'Tool fixture', canOpen: () => 1,
+			id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional,
 			create: () => new class extends EditorPane {
 				readonly id = id;
 				async setInput(): Promise<void> { }
@@ -289,20 +289,28 @@ suite('Desktop tool EditorParts', () => {
 	test('reveals Files when opening a result in the foreground from maximized Search', async () => {
 		using hosts = fixture();
 		const { editor, area, files } = hosts;
+		await editor.openEditor({ resource: URI.file('/fixture/previous.txt') }, { pinned: true });
 		const result = { resource: URI.file('/fixture/result.txt') };
-		await editor.openEditor(result, { pinned: true });
 		const search = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
 		await editor.openEditor(search, { pinned: true });
 		const searchGroup = editor.activeGroup;
 		editor.toggleMaximizeTool();
 		assert.equal(area.isToolVisible('search'), true);
 		assert.equal(area.isToolVisible('files'), false);
+		const searchTab = searchGroup.domNode.querySelector<HTMLElement>('[role="tab"]');
+		assert.ok(searchTab);
+		searchTab.focus();
+		assert.equal(searchTab.ownerDocument.activeElement, searchTab);
 
-		await editor.openEditor(result, { pinned: true, preserveFocus: true });
+		const preview = await editor.openEditor(result, { pinned: true, preserveFocus: true });
+		assert.equal(preview.id, 'test.tool');
+		assert.equal(files.activeGroup.activePane, preview);
 		assert.equal(area.isToolVisible('files'), false);
 		assert.equal(editor.activeGroup, searchGroup);
+		assert.equal(searchTab.ownerDocument.activeElement, searchTab);
 
 		const pane = await editor.openEditor(result, { pinned: true });
+		assert.equal(pane, preview);
 		assert.equal(area.isToolVisible('files'), true);
 		assert.equal(area.isToolVisible('search'), true);
 		assert.equal(editor.activeGroup, files.activeGroup);

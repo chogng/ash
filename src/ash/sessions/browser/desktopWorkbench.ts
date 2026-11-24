@@ -550,7 +550,6 @@ export class DesktopWorkbenchLayout
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
 			const editorVisible = this.isPartVisible('editor');
 			const pageHeader = editorVisible && editor.hasProductPage ? mainEditor?.pageTitlebarContent : undefined;
-			// An empty editor area still owns its side of the split titlebar.
 			const browser = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code' && this.primaryPart === 'sessions' && editorVisible && !editor.hasProductPage;
 			const dockTools = editorVisible && !editor.hasProductPage && (this.isPartVisible('sessions') || browser);
 			const left = pageHeader || dockTools ? editor.domNode.getBoundingClientRect().left : undefined;
@@ -692,7 +691,8 @@ export class DesktopWorkbenchLayout
 		if (this.partUpdateDepth > 0) return;
 		this.publishPartVisibility();
 		const sidebarLostFocus = this.sidebarSuppressed && focused && this.view('sidebar').part.domNode.contains(focused);
-		if (sidebarLostFocus && this.isPartVisible('sessions')) {
+		const editorLostFocus = !this.isPartVisible('editor') && focused && this.view('editor').frame.contains(focused);
+		if ((sidebarLostFocus || editorLostFocus) && this.isPartVisible('sessions')) {
 			this.focus();
 		} else if (sidebarLostFocus || (this.compactTools || this.auxiliaryBarDocked) && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
 			const area = this.view('editor').part;
@@ -750,7 +750,8 @@ export class DesktopWorkbenchLayout
 
 	/** The outer Grid budgets the workspace before giving the tool Grid a width. */
 	private layoutTools(dimension: IDimension): void {
-		const area = this.view('editor').part;
+		const editorView = this.view('editor');
+		const area = editorView.part;
 		if (!(area instanceof DesktopEditorArea)) {
 			if (this.customViewVisible) this.applyCustomViewVisibility();
 			return;
@@ -761,10 +762,12 @@ export class DesktopWorkbenchLayout
 		const details = !this.auxiliaryBarDocked && wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
 		const conversationView = this.view('sessions');
 		const workspaceWidth = dimension.width;
-		const eligible = !this.customViewVisible && wanted('editor') && area.hasTools;
+		// Retain the requested split while its companion conversation can fill an empty editor's space.
+		const showEditor = wanted('editor') && (area.hasContent || this.primaryPart === 'editor' || !wanted('sessions'));
+		const eligible = !this.customViewVisible && showEditor && area.hasTools;
 		// Product editors also borrow width from their companion conversation so
 		// opening navigation does not immediately hide it again beside a document.
-		const overflow = wanted('editor') && (this.primaryPart === 'editor' || eligible && conversationView.part instanceof SessionsPart);
+		const overflow = showEditor && (this.primaryPart === 'editor' || eligible && conversationView.part instanceof SessionsPart);
 		const conversation = wanted('sessions')
 			? overflow ? conversationSlotMinimumWidth : conversationView.part.minimumWidth
 			: 0;
@@ -790,8 +793,8 @@ export class DesktopWorkbenchLayout
 			this.setViewVisible(this.view('sidebar'), wanted('sidebar') && (!this.compactTools || workspaceWidth >= sidebar + centerWidth));
 			this.setViewVisible(this.view('auxiliarybar'), wanted('auxiliarybar') && !this.compactTools);
 			this.setViewVisible(this.view('sessions'), wanted('sessions') && (!single || this.narrowConversation));
-			this.setViewVisible(this.view('editor'), wanted('editor') && (!single || !this.narrowConversation));
 		}
+		if (!this.customViewVisible) this.setViewVisible(editorView, showEditor && (!single || !this.narrowConversation));
 		// A body wider than the window must not widen the titlebar above it.
 		conversationView.setConversationOverflow((overflow && this.isPartVisible('editor'))
 			|| (wanted('sessions') && dimension.width < conversationView.part.minimumWidth));
@@ -1045,8 +1048,7 @@ export class DesktopWorkbenchLayout
 
 	private updateContentCorners(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
 		const sidebarVisible = this.grid ? this.isPartVisible('sidebar') : this.isPartRequested('sidebar');
-		const editorVisible =
-			!this.customViewVisible && (this.compactTools ? this.isPartVisible('editor') : this.desiredVisibility.editor && !this.unavailableParts.has('editor'));
+		const editorVisible = this.grid ? this.isPartVisible('editor') : this.isPartRequested('editor');
 		const sessionsVisible = !this.customViewVisible && (this.compactTools ? this.isPartVisible('sessions') : !this.unavailableParts.has('sessions'));
 		const mainPart: SessionsPartId = this.customViewVisible
 			? 'customview'

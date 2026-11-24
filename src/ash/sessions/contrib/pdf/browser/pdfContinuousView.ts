@@ -46,6 +46,7 @@ export class PdfContinuousView extends Disposable {
 	private documentWidth = 0;
 	private notifiedPage = 0;
 	private notifiedTop = -1;
+	private hiddenScrollTop: number | undefined;
 	private revealing: { readonly number: number; readonly restoreTop: number; } | undefined;
 	private revealedPage: { readonly number: number; readonly top: number; } | undefined;
 	private readonly inset: number;
@@ -106,6 +107,12 @@ export class PdfContinuousView extends Disposable {
 
 	/** Schedule from the current viewport after each load. Fast scrolling can skip intermediate pages. */
 	private updateViewport(): void {
+		if (this.hiddenScrollTop !== undefined) {
+			if (this.container.clientWidth === 0 || this.container.clientHeight === 0) return;
+			const top = this.hiddenScrollTop;
+			this.hiddenScrollTop = undefined;
+			this.layoutViewport(this.zoom, undefined, undefined, top);
+		}
 		const top = this.list.scrollTop;
 		const bottom = top + this.list.renderHeight;
 		const first = this.list.indexAt(top) + 1;
@@ -195,17 +202,42 @@ export class PdfContinuousView extends Disposable {
 		return { width: page.width * scale, height: page.height * scale };
 	}
 
+	public retainViewport(): void {
+		// A hidden DOM viewport reports zero even though the reader is still open.
+		this.hiddenScrollTop ??= this.list.scrollTop;
+	}
+
 	public layout(zoom: PdfZoom, point?: { readonly x: number; readonly y: number; }, measured?: { number: number; geometry: PageSize; }): void {
+		if (this.hiddenScrollTop !== undefined) {
+			if (measured) this.dimensions.set(measured.number, measured.geometry);
+			// Group visibility can change several times before the outer grid commits.
+			this.notify.schedule();
+			return;
+		}
+		this.layoutViewport(zoom, point, measured);
+	}
+
+	private layoutViewport(
+		zoom: PdfZoom,
+		point?: { readonly x: number; readonly y: number; },
+		measured?: { number: number; geometry: PageSize; },
+		hiddenScrollTop?: number,
+	): void {
 		const width = this.container.clientWidth;
 		const height = this.container.clientHeight;
-		if (zoom === this.zoom && width === this.width && height === this.height && !measured) { return; }
+		if (width === 0 || height === 0) {
+			if (measured) this.dimensions.set(measured.number, measured.geometry);
+			return;
+		}
+		if (zoom === this.zoom && width === this.width && height === this.height && !measured && hiddenScrollTop === undefined) { return; }
 		const viewport = this.viewport;
 		const bounds = viewport.getBoundingClientRect();
 		const x = point ? point.x - bounds.left : bounds.width / 2;
 		const y = point ? point.y - bounds.top : 0;
-		const index = Math.max(0, this.list.indexAt(viewport.scrollTop + y));
+		const scrollTop = hiddenScrollTop ?? viewport.scrollTop;
+		const index = Math.max(0, this.list.indexAt(scrollTop + y));
 		const oldSize = this.size(index + 1);
-		const fractionY = (viewport.scrollTop + y - this.list.getElementTop(index) - this.inset) / oldSize.height;
+		const fractionY = (scrollTop + y - this.list.getElementTop(index) - this.inset) / oldSize.height;
 		const fractionX = (viewport.scrollLeft + x - (this.documentWidth - oldSize.width) / 2) / oldSize.width;
 		const resize = this.height !== height;
 		this.zoom = zoom;
@@ -235,6 +267,9 @@ export class PdfContinuousView extends Disposable {
 			offset: this.inset + fractionY * size.height - y,
 			left: (this.documentWidth - size.width) / 2 + fractionX * size.width - x,
 		});
+		if (hiddenScrollTop !== undefined && this.revealedPage?.top === hiddenScrollTop) {
+			this.revealedPage = { ...this.revealedPage, top: this.list.scrollTop };
+		}
 	}
 
 	public async reveal(number: number, top?: number, thumbnail?: PdfThumbnail, signal?: AbortSignal): Promise<PdfPageView> {

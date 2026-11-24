@@ -3716,7 +3716,11 @@ test('embedded editor cards route reviews separately and retain document tabs in
 	const nextReview = { resource: URI.parse('ash-session-changes:/next-review.ts') };
 	await review.openEditor(nextReview, { pinned: true, preserveFocus: true });
 	assert.deepEqual(review.activeGroup.inputs, [nextReview]);
+	assert.equal(parts.activePart, main);
 	assert.equal(reveals, 2, 'a background selection update does not reveal a closed card');
+	await parts.openEditor(nextReview, { pinned: true });
+	assert.equal(parts.activePart, review);
+	assert.equal(reveals, 3);
 	assert.equal(parts.savePartsState().parts.length, 1, 'embedded cards do not restore as auxiliary windows');
 	assert.equal(main.getTabsHeight(), titleHeight);
 	assert.equal(group.domNode.querySelectorAll('[role="tab"]').length, 2);

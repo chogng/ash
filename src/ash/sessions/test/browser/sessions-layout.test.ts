@@ -131,6 +131,15 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 	await editor.openFiles();
 	assert.equal(created, 1);
 	assert.equal(auxiliary.domNode.closest('.ash-editor-group'), null);
+	let supportsFilesDetails = false;
+	using scope = editor.setGroupScope(() => true, () => supportsFilesDetails);
+	editor.layout(new Dimension(800, 600));
+	assert.equal(editor.detailsOpen, true);
+	assert.equal(auxiliary.domNode.hidden, true);
+	supportsFilesDetails = true;
+	editor.setGroupVisible(group.id, false);
+	editor.setGroupVisible(group.id, true);
+	assert.equal(auxiliary.domNode.hidden, false);
 	const saved = editor.saveWorkingSet('legacy-files', [editor.pageGroupId]);
 	await editor.applyWorkingSet({
 		...saved, groups: saved.groups.map(group => ({
@@ -147,14 +156,14 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 test('Desktop editor retains one tab-and-actions row above editor-only breadcrumbs', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
-	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
 	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
 	const configuration = services.get(IConfigurationService);
 	using registry = new EditorPaneRegistry();
 	registry.registerEditorPane({
 		id: 'test.header', name: 'Header fixture',
-		canOpen: () => 1,
+		canOpen: () => EditorPaneMatch.Optional,
 		create: () => new class extends EditorPane {
 			readonly id = 'test.header';
 			async setInput(): Promise<void> { }
@@ -240,14 +249,14 @@ test('Sessions Grid follows viewport resize synchronously and retains fractional
 test('Code tools own independent EditorParts and tool movement and hiding retain every pane', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
-	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
 	const { TerminalEditorInput } = await import('../../../workbench/contrib/terminal/browser/terminalEditorInput.js');
 	const { GroupDirection } = await import('../../../workbench/services/editor/common/editorGroupsService.js');
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
 	using registry = new EditorPaneRegistry();
 	let created = 0;
 	for (const id of ['test.tools', TerminalEditorInput.ID]) registry.registerEditorPane({
-		id, name: 'Tool fixture', canOpen: () => 1, create: () => {
+		id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional, create: () => {
 			created++;
 			return new class extends EditorPane {
 				readonly id = id;
@@ -362,17 +371,72 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	}
 });
 
+test('An empty companion editor releases its split and restores the retained Browser at the previous width', async () => {
+	const { URI } = await import('../../../base/common/uri.js');
+	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const document = browserEnvironment.window.document;
+	using services = registerTestComponentServices(createTestEditorServices(), document);
+	using registry = new EditorPaneRegistry();
+	using pane = registry.registerEditorPane({
+		id: 'test.retained-browser', name: 'Browser fixture',
+		canOpen: () => EditorPaneMatch.Optional,
+		create: () => new class extends EditorPane {
+			readonly id = 'test.retained-browser';
+			async setInput(): Promise<void> { }
+			clearInput(): void { }
+			layout(): void { }
+			focus(): void { }
+		}('test.retained-browser', services.get(IThemeService), services.get(IStorageService)),
+	});
+	using hosts = createDesktopEditorTestServices(services, { registry }, document);
+	const { editor, area } = hosts;
+	const parts = createParts(document);
+	parts.get('editor')!.dispose();
+	parts.set('editor', area);
+	const wide = new Dimension(1_600, 890);
+	try {
+		using layout = createLayout(document.body, parts, { initialDimension: wide });
+		layout.hidePart('auxiliarybar');
+		await editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
+		const browserGroup = editor.activeGroup;
+		const browserPane = browserGroup.activePane;
+		assert.ok(browserPane);
+		layout.showPart('editor');
+		layout.resizePart('editor', new Dimension(520, wide.height));
+		const browserWidth = layout.getPartSize('editor').width;
+		const emptyFiles = editor.createRetainedGroup('files');
+		layout.updateParts(() => {
+			editor.setGroupVisible(browserGroup.id, false);
+			editor.setGroupVisible(emptyFiles.id, true);
+		});
+		assert.equal(layout.isPartRequested('editor'), true);
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.getPartSize('sessions').width, wide.width - layout.getPartSize('sidebar').width);
+
+		layout.updateParts(() => {
+			editor.setGroupVisible(emptyFiles.id, false);
+			editor.setGroupVisible(browserGroup.id, true);
+		});
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(layout.getPartSize('editor').width, browserWidth);
+		assert.equal(browserGroup.activePane, browserPane);
+	} finally {
+		for (const part of parts.values()) if (part !== area) part.dispose();
+	}
+});
+
 test('opening a Code tool keeps the hidden active tool hidden', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { BrowserViewUri } = await import('../../../platform/browserView/common/browserViewUri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
-	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
 	const { TerminalEditorInput } = await import('../../../workbench/contrib/terminal/browser/terminalEditorInput.js');
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
 	using registry = new EditorPaneRegistry();
 	let created = 0;
 	for (const id of ['test.independent-tools', TerminalEditorInput.ID]) registry.registerEditorPane({
-		id, name: 'Tool fixture', canOpen: () => 1, create: () => {
+		id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional, create: () => {
 			created++;
 			return new class extends EditorPane {
 				readonly id = id;
@@ -1154,7 +1218,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	const { URI } = await import('../../../base/common/uri.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
-	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
 	const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 	const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
 	const { ISessionsService } = await import('../../services/sessions/browser/sessionsService.js');
@@ -1172,7 +1236,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	using registry = new EditorPaneRegistry();
 	let created = 0;
 	registry.registerEditorPane({
-		id: 'test.cached', name: 'Cached fixture', canOpen: () => 1, create: () => {
+		id: 'test.cached', name: 'Cached fixture', canOpen: () => EditorPaneMatch.Optional, create: () => {
 			created++;
 			return new class extends EditorPane { readonly id = 'test.cached'; async setInput(): Promise<void> { } clearInput(): void { } layout(): void { } focus(): void { } }('test.cached', services.get(IThemeService), services.get(IStorageService));
 		}

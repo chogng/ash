@@ -67,8 +67,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ISessionEditorWorkingSetService editorWorkingSets: ISessionEditorWorkingSetService,
 	) {
 		super(sessions, management, editor, editors, workspace, layout, storage, notifications, logService, lifecycle, instantiation, editorWorkingSets);
-		this._register((editor as EditorParts).setGroupScope(id => this.context.isConversationEditorGroup(id)
-			? this.context.isActiveConversationEditorGroup(id) : this.documentGroups.some(group => group.id === id)));
+		this._register((editor as EditorParts).setGroupScope(
+			id => this.context.isConversationEditorGroup(id)
+				? this.context.isActiveConversationEditorGroup(id) : this.documentGroups.some(group => group.id === id),
+			() => this.context.isDocumentContent,
+		));
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		this.existingSession = instantiation.createInstance(DesktopExistingSessionStrategy);
@@ -144,7 +147,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.whenSettled();
 		if (this.isDisposed) { return; }
 		if (!this.documentGroups.includes(this.editor.activeGroup)) this.editor.activateGroup(this.documentGroups[0]!.id);
-		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails, this.documentGroups); }
 		if (this.isDisposed) { return; }
@@ -312,9 +314,13 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this.setDocumentsVisible(false);
 			this.layout.focus();
 		} else {
-			this.setDocumentsVisible(true);
-			this.editor.activateGroup(this.documentGroups[0]!.id);
-			if (this.closedProfile.details) await this.detailPanel.openFiles();
+			const group = this.documentGroups.find(group => this.editor.isGroupVisible(group.id) && group.inputs.length > 0);
+			if (this.closedProfile.details || !group) {
+				await this.detailPanel.openFiles();
+			} else {
+				this.editor.activateGroup(group.id);
+				this.setDocumentsVisible(true);
+			}
 			this.focus();
 		}
 	}

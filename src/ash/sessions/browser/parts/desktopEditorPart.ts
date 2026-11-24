@@ -29,6 +29,7 @@ const MINIMUM_NARROW_EDITOR_WIDTH = 160;
 export class DesktopMainEditorPart extends EditorPart {
 	private readonly auxiliary = this._register(new MutableDisposable<DesktopAuxiliaryBarPart>());
 	private inWorkingSet: (groupId: number) => boolean = () => true;
+	private supportsFilesDetails: () => boolean = () => true;
 	private detailsDimension: IDimension = { width: 0, height: 0 };
 	private detailsRequested = false;
 	private showEditors = true;
@@ -139,7 +140,11 @@ export class DesktopMainEditorPart extends EditorPart {
 	}
 
 	public get detailsVisible(): boolean {
-		return this.detailsRequested && this.hostVisible && !this.isGroupVisible(this.pageGroupId)
+		return this.hostVisible && this.hasDetailsContent;
+	}
+
+	public get hasDetailsContent(): boolean {
+		return this.supportsFilesDetails() && this.detailsRequested && !this.isGroupVisible(this.pageGroupId)
 			&& this.fileGroups.some(group => this.isGroupVisible(group.id));
 	}
 	public get isEditorVisible(): boolean { return this.showEditors; }
@@ -147,9 +152,13 @@ export class DesktopMainEditorPart extends EditorPart {
 		return this.groups.filter(group => this.inWorkingSet(group.id) && group.id !== this.pageGroupId);
 	}
 
-	public setGroupScope(contains: (groupId: number) => boolean): IDisposable {
+	public setGroupScope(contains: (groupId: number) => boolean, supportsFilesDetails: () => boolean): IDisposable {
 		this.inWorkingSet = contains;
-		return toDisposable(() => { this.inWorkingSet = () => true; });
+		this.supportsFilesDetails = supportsFilesDetails;
+		return toDisposable(() => {
+			this.inWorkingSet = () => true;
+			this.supportsFilesDetails = () => true;
+		});
 	}
 
 	public showDetails(): void {
