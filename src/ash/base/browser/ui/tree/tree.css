@@ -121,7 +121,16 @@
 	);
 }
 
-.ash-tree-selection-active .ash-tree-row.selected {
+/* Render the menu target on the row that owns the marked content, including its indentation. */
+.ash-tree-selection-active
+	.ash-tree-row:is(
+		.selected,
+		:has(
+			> :where(.ash-tree-row-inner)
+				> :where(.ash-tree-contents)
+				> .ash-context-menu-target
+		)
+	) {
 	background: var(
 		--ash-list-style-list-inactive-selection-background,
 		var(--ash-list-inactiveSelectionBackground)
@@ -129,6 +138,14 @@
 	outline: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	outline-offset: -1px;
+
+	/* Menus take hover from the row. Keep its background when that happens. */
+	&:not(.selected) {
+		background: var(
+			--ash-list-style-list-hover-background,
+			var(--ash-list-hoverBackground)
+		);
+	}
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
@@ -152,7 +169,15 @@
 	outline-offset: -1px;
 }
 
-.ash-tree-selection-active .ash-tree-row.selected::after,
+.ash-tree-selection-active
+	.ash-tree-row:is(
+		.selected,
+		:has(
+			> :where(.ash-tree-row-inner)
+				> :where(.ash-tree-contents)
+				> .ash-context-menu-target
+		)
+	)::after,
 .ash-tree:focus-visible .ash-tree-row.focused::after,
 .ash-tree-row.drag-over::after {
 	/* Paint above row contents, including floating toolbars, without blocking input. */

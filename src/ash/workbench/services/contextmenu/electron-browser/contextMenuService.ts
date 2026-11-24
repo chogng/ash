@@ -30,9 +30,10 @@ import {
 	type INativeContextMenuRequest,
 	type NativeContextMenuItem,
 } from '../../../../base/parts/contextmenu/common/contextmenu.js';
-import type {
-	ContextMenuAnchor,
-	IContextMenuDelegate,
+import {
+	showContextMenuTarget,
+	type ContextMenuAnchor,
+	type IContextMenuDelegate,
 } from '../../../../base/browser/contextmenu.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { transformContextMenuDelegate } from '../../../../platform/contextview/browser/contextMenuService.js';
@@ -117,6 +118,7 @@ export class NativeContextMenuService extends Disposable
 		const lifetime = new DisposableStore();
 		this.popupLifetimes.set(popup, lifetime);
 		if (resolved.cancellationToken) { lifetime.add(resolved.cancellationToken.onCancellationRequested(() => this.requestClose(popup))); }
+		if (resolved.menuTarget) lifetime.add(showContextMenuTarget(resolved.menuTarget));
 		void this.popup(request, popup);
 		if (!popup.closed) {
 			popup.wasShown = true;

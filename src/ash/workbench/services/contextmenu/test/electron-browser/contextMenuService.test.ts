@@ -34,6 +34,7 @@ import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { toElectronAccelerator } from '../../../../../platform/keybinding/common/electronAccelerator.js';
 import { ModifierKeyEmitter } from '../../../../../base/browser/dom.js';
+import { contextMenuTargetClass, type IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 
 test('system menus retain scoped shortcut hints, chord labels and delegate overrides', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
@@ -416,10 +417,11 @@ class SystemMenuFixture extends Disposable {
 		return ended.promise;
 	}
 
-	showBrowser(label: string): void {
+	showBrowser(label: string, menuTarget?: IContextMenuDelegate['menuTarget']): void {
 		this.menus.showContextMenu({
 			getAnchor: () => this.document.querySelector<HTMLButtonElement>('#origin')!,
 			getActions: () => [menuAction(label)],
+			menuTarget,
 			anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 			onHide: cancelled => this.hidden.push({ label, cancelled }),
 		});
@@ -515,25 +517,46 @@ test('an IPC close acknowledgment cannot free a system slot before the popup cal
 	}
 });
 
-test('canceling a system menu preserves its replacement before the popup result returns', async () => {
-	using fixture = new SystemMenuFixture({ delayClose: true });
-	using source = new CancellationTokenSource();
-	let runs = 0;
-	const old = fixture.show('Old', source.token, { ...menuAction('Old'), run: () => { runs++; } });
-	fixture.showBrowser('Replacement');
-	source.cancel();
-	fixture.closeAcknowledged.resolve();
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(fixture.hidden, []);
-	fixture.popups[0].finish({ selectedId: 'action-1' });
-	await old;
-	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
-	assert.deepEqual({ visible: !view.hidden, label: fixture.document.querySelector('[role="menuitem"]')?.textContent, hidden: fixture.hidden, events: fixture.events, runs }, {
-		visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0,
+for (const fromButton of [true, false]) {
+	test(`canceling a system menu preserves its replacement ${fromButton ? 'from the same button' : 'from the row'}`, async () => {
+		using fixture = new SystemMenuFixture({ delayClose: true });
+		using source = new CancellationTokenSource();
+		const button = fixture.document.querySelector<HTMLButtonElement>('#origin')!;
+		const menuTarget = { element: button, getExpandedTrigger: () => button };
+		const marked = () => button.classList.contains(contextMenuTargetClass);
+		let runs = 0;
+		const old = promiseWithResolvers<void>();
+		fixture.menus.showContextMenu({
+			getAnchor: () => ({ x: 10, y: 20, targetWindow: fixture.document.defaultView! }),
+			getActions: () => [{ ...menuAction('Old'), run: () => { runs++; } }],
+			cancellationToken: source.token,
+			menuTarget,
+			onHide: cancelled => {
+				fixture.hidden.push({ label: 'Old', cancelled });
+				old.resolve();
+			},
+		});
+		assert.equal(marked(), true);
+		assert.equal(button.getAttribute('aria-expanded'), 'true');
+		fixture.showBrowser('Replacement', fromButton ? menuTarget : { element: button });
+		source.cancel();
+		fixture.closeAcknowledged.resolve();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(fixture.hidden, []);
+		fixture.popups[0].finish({ selectedId: 'action-1' });
+		await old.promise;
+		const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
+		assert.deepEqual({ visible: !view.hidden, label: fixture.document.querySelector('[role="menuitem"]')?.textContent, hidden: fixture.hidden, events: fixture.events, runs }, {
+			visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0,
+		});
+		assert.equal(marked(), true);
+		assert.equal(button.getAttribute('aria-expanded'), String(fromButton));
+		fixture.menus.hideContextMenu();
+		assert.equal(view.hidden, true);
+		assert.equal(marked(), false);
+		assert.equal(button.getAttribute('aria-expanded'), 'false');
 	});
-	fixture.menus.hideContextMenu();
-	assert.equal(view.hidden, true);
-});
+}
 
 test('a system request canceled by the show event never executes a late selection', async () => {
 	using fixture = new SystemMenuFixture();

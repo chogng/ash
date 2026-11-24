@@ -10,7 +10,7 @@ import { ISessionGroupsService, type SessionGroup } from '../../../../services/s
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
-import { status } from '../../../../../base/browser/ui/aria/aria.js';
+import { setAriaAttribute, status } from '../../../../../base/browser/ui/aria/aria.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
@@ -59,7 +59,7 @@ import { defaultButtonStyles, defaultListStyles } from '../../../../../platform/
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
+import { isContextMenuTriggerExpanded, type ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProject, SessionsCatalogProjectFile, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { cancelOnDispose, CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -89,7 +89,7 @@ const attentionSection = 'attention';
 const codeFolderProjectMigrationKey = 'sessions.code.folderProjectsMigrated';
 const createCodeProjectAction = 'sessions.list.createCodeProject';
 
-type ProjectMenuRow = Pick<SessionListItem, 'domNode' | 'button' | 'getMenuTrigger' | 'setMenuVisible'>;
+type ProjectMenuRow = Pick<SessionListItem, 'domNode' | 'button' | 'getMenuTrigger' | 'moreButton'>;
 
 interface SessionBucket {
 	readonly id: string;
@@ -787,21 +787,18 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,
-		delegate: Omit<IContextMenuMenuDelegate, 'getAnchor' | 'autoSelectFirstItem'>): void {
+		delegate: Omit<IContextMenuMenuDelegate, 'getAnchor' | 'menuTarget' | 'autoSelectFirstItem'>): void {
 		const trigger = item.getMenuTrigger(anchor);
 		this.contextMenus.showContextMenu({
 			...delegate,
 			getAnchor: () => anchor,
+			menuTarget: { element: item.domNode, getExpandedTrigger: trigger === item.moreButton ? () => item.moreButton : undefined },
 			autoSelectFirstItem: anchor === trigger || !!trigger?.matches(':focus-visible'),
-			getActions: () => {
-				item.setMenuVisible(true);
-				return (delegate.getActions?.() ?? []).map(action => action.id === 'agentSession.archive' ? {
-					...action,
-					run: () => this.feedback.archive(item.domNode, () => action.run()),
-				} : action);
-			},
+			getActions: () => (delegate.getActions?.() ?? []).map(action => action.id === 'agentSession.archive' ? {
+				...action,
+				run: () => this.feedback.archive(item.domNode, () => action.run()),
+			} : action),
 			onHide: (cancelled, reason) => {
-				item.setMenuVisible(false);
 				delegate.onHide?.(cancelled, reason);
 				if (reason === ContextViewHideReason.OutsidePointer) {
 					item.dismissMenuFromPointer();
@@ -915,11 +912,8 @@ export class SessionsList extends DomWidget {
 				}),
 			},
 		}, {
-			getAnchor: () => {
-				row.setMenuVisible(true);
-				return anchor;
-			},
-			onHide: () => row.setMenuVisible(false),
+			getAnchor: () => anchor,
+			menuTarget: { element: row.domNode, getExpandedTrigger: trigger === row.moreButton ? () => row.moreButton : undefined },
 		});
 	}
 
@@ -1809,7 +1803,13 @@ class SessionListItem extends AbstractDisposable {
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
 			event.preventDefault(); event.stopPropagation();
-			this.contextMenu(event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: getWindow(this.domNode) } : this.button);
+			if (event.type === 'contextmenu') {
+				const { clientX: x, clientY: y } = event as MouseEvent;
+				this.contextMenu({ x, y, targetWindow: getWindow(this.domNode) });
+			} else {
+				const more = this.moreButton;
+				this.contextMenu(more && event.target === more ? more : this.button);
+			}
 		};
 		this.contextListeners = [
 			addDisposableListener(this.domNode, 'contextmenu', showMenu),
@@ -1834,17 +1834,13 @@ class SessionListItem extends AbstractDisposable {
 			return;
 		}
 		if (!this.moreButton) this.actions.setActions([this.moreAction]);
-		this.moreButton?.setAttribute('aria-haspopup', 'menu');
-		if ((this.domNode.dataset.projectId || this.kind === 'file') && !this.domNode.classList.contains('menu-visible')) {
-			this.moreButton?.setAttribute('aria-expanded', 'false');
+		const more = this.moreButton;
+		if (more) {
+			setAriaAttribute(more, 'haspopup', 'menu');
+			setAriaAttribute(more, 'expanded', isContextMenuTriggerExpanded(this.domNode, more));
 		}
 		this.actions.element.hidden = false;
 		if (this.catalogRow) this.setDisabled(!!this.catalogRow.disabled, !!this.catalogRow.actionsDisabled);
-	}
-
-	setMenuVisible(visible: boolean): void {
-		this.domNode.classList.toggle('menu-visible', visible);
-		this.moreButton?.setAttribute('aria-expanded', String(visible));
 	}
 
 	dismissMenuFromPointer(): void {
@@ -1859,7 +1855,7 @@ class SessionListItem extends AbstractDisposable {
 	getMenuTrigger(anchor: ContextMenuAnchor): HTMLButtonElement | undefined {
 		if (anchor === this.button) return this.button;
 		const more = this.moreButton;
-		return more && (more.matches(':focus') || !!this.domNode.dataset.projectId && anchor === this.actions.element) ? more : undefined;
+		return more && (anchor === more || anchor === this.actions.element) ? more : undefined;
 	}
 
 	setDisabled(disabled: boolean, actionsDisabled: boolean): void {
@@ -2058,8 +2054,6 @@ class SessionListSection extends Disposable {
 			this.label.observeActions(this.actions.element);
 			// The toolbar owns activation. A tree click would return focus to the row and dismiss the menu.
 			this._register(addDisposableListener(this.actions.element, 'click', event => event.stopPropagation()));
-			this.moreButton?.setAttribute('aria-haspopup', 'menu');
-			this.moreButton?.setAttribute('aria-expanded', 'false');
 		}
 		this._register(addDisposableListener(this.button, 'click', event => {
 			event.stopPropagation();
@@ -2095,23 +2089,22 @@ class SessionListSection extends Disposable {
 	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
 		if (this.actions) this.actions.element.hidden = !menu;
-		if (menu) this.button.setAttribute('aria-haspopup', 'menu');
-		else this.button.removeAttribute('aria-haspopup');
+		setAriaAttribute(this.button, 'haspopup', menu ? 'menu' : undefined);
+		const more = this.moreButton;
+		if (menu && more) {
+			setAriaAttribute(more, 'haspopup', 'menu');
+			setAriaAttribute(more, 'expanded', isContextMenuTriggerExpanded(this.domNode, more));
+		}
 	}
 
-	private get moreButton(): HTMLButtonElement | null | undefined {
-		return this.actions?.element.querySelector('[data-action-id="sessions.list.more"] button');
+	get moreButton(): HTMLButtonElement | null {
+		return this.actions?.element.querySelector('[data-action-id="sessions.list.more"] button') ?? null;
 	}
 
 	getMenuTrigger(anchor: ContextMenuAnchor): HTMLButtonElement | undefined {
 		if (anchor === this.button) return this.button;
 		const more = this.moreButton;
-		return more && (anchor === more || more.matches(':focus')) ? more : undefined;
-	}
-
-	setMenuVisible(visible: boolean): void {
-		this.domNode.classList.toggle('menu-visible', visible);
-		this.moreButton?.setAttribute('aria-expanded', String(visible));
+		return more && anchor === more ? more : undefined;
 	}
 
 	setLoading(loading: boolean): void {

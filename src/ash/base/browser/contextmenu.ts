@@ -1,6 +1,7 @@
 import type { IAction, IActionRunner } from '../common/actions.js';
 import type { CancellationToken } from '../common/cancellation.js';
 import type { ResolvedKeybinding } from '../common/keybindings.js';
+import { toDisposable, type IDisposable } from '../common/lifecycle.js';
 import type {
 	AnchorAlignment,
 	AnchorAxisAlignment,
@@ -30,6 +31,12 @@ export interface IContextMenuEvent {
 export interface IContextMenuDelegate {
 	getAnchor(): ContextMenuAnchor;
 	getActions(): readonly IAction[];
+	/** The UI element the menu acts on, independent of the anchor used for positioning. */
+	readonly menuTarget?: {
+		readonly element: HTMLElement;
+		/** Resolves the initiating control, if it presents this menu with aria-expanded. */
+		readonly getExpandedTrigger?: () => HTMLElement | null | undefined;
+	};
 	/** Desktop can place a non-modal menu above an embedded native view. */
 	readonly useNativeWindow?: boolean;
 	/** Host may measure and present its native surface before the menu takes focus. */
@@ -74,4 +81,45 @@ export interface IContextMenuDelegate {
  */
 export interface IContextMenuProvider {
 	showContextMenu(delegate: IContextMenuDelegate): void;
+}
+
+export const contextMenuTargetClass = 'ash-context-menu-target';
+type MenuTrigger = () => HTMLElement | null | undefined;
+const targetReferences = new WeakMap<HTMLElement, Set<MenuTrigger>>();
+
+/** Reads the menu state when its initiating control is rendered again. */
+export function isContextMenuTriggerExpanded(element: HTMLElement, trigger: HTMLElement): boolean {
+	const references = targetReferences.get(element);
+	if (!references) return false;
+	for (const getTrigger of references) {
+		if (getTrigger() === trigger) return true;
+	}
+	return false;
+}
+
+/** Owns the visual target and expanded state for one menu presentation. */
+export function showContextMenuTarget(target: NonNullable<IContextMenuDelegate['menuTarget']>): IDisposable {
+	const { element, getExpandedTrigger } = target;
+	const getTrigger = () => getExpandedTrigger?.();
+	const trigger = getTrigger();
+	const references = targetReferences.get(element) ?? new Set<MenuTrigger>();
+	references.add(getTrigger);
+	targetReferences.set(element, references);
+	element.classList.add(contextMenuTargetClass);
+	trigger?.setAttribute('aria-expanded', 'true');
+	return toDisposable(() => {
+		// An asynchronous native close can arrive after a successor marks the same target.
+		references.delete(getTrigger);
+		if (references.size === 0) {
+			targetReferences.delete(element);
+			element.classList.remove(contextMenuTargetClass);
+		}
+		const currentTrigger = getTrigger();
+		if (trigger && trigger !== currentTrigger) {
+			trigger.setAttribute('aria-expanded', String(isContextMenuTriggerExpanded(element, trigger)));
+		}
+		if (currentTrigger) {
+			currentTrigger.setAttribute('aria-expanded', String(isContextMenuTriggerExpanded(element, currentTrigger)));
+		}
+	});
 }

@@ -1370,6 +1370,95 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Code sidebar highlights the project while its menu is open (${locale})`, async ({ page }) => {
+		await page.goto(`/sessions.html?multiHost&sidebarGroups&projectPicker&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const chinese = locale === 'zh-CN';
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		const list = page.locator('.ash-sessions-list:visible');
+		const project = list.getByRole('button', { name: 'Code project fixture', exact: true });
+		const projectRow = list.getByRole('treeitem', { name: 'Code project fixture', exact: true });
+		const more = projectRow.getByRole('button', { name: chinese ? '更多项目操作' : 'More project actions', exact: true });
+		const conversation = list.getByRole('button', { name: 'Task from Host A', exact: true });
+		const conversationRow = list.getByRole('treeitem', { name: 'Task from Host A', exact: true });
+		const conversationMore = conversationRow.getByRole('button', { name: chinese ? '更多操作' : 'More actions', exact: true });
+		const pin = page.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true });
+		const transparent = 'rgba(0, 0, 0, 0)';
+
+		await conversation.click();
+		await expect(conversationRow).toHaveAttribute('aria-selected', 'true');
+		await expect(projectRow).toHaveCSS('background-color', transparent);
+		const selectionBackground = await conversationRow.evaluate(row => getComputedStyle(row).backgroundColor);
+		expect(selectionBackground).not.toBe(transparent);
+		await project.hover();
+		const hoverBackground = await projectRow.evaluate(row => getComputedStyle(row).backgroundColor);
+		expect(hoverBackground).not.toBe(transparent);
+		expect(hoverBackground).not.toBe(selectionBackground);
+		await project.click({ button: 'right' });
+		await pin.hover();
+		expect(await projectRow.evaluate(row => row.matches(':hover'))).toBe(false);
+		await expect(projectRow).toHaveCSS('background-color', hoverBackground);
+		await expect(projectRow).toHaveAttribute('aria-selected', 'false');
+		await expect(more).toHaveAttribute('aria-expanded', 'false');
+		await expect(more).toHaveCSS('background-color', transparent);
+		await expect(conversationRow).toHaveAttribute('aria-selected', 'true');
+		await page.keyboard.press('Escape');
+		await expect(pin).toHaveCount(0);
+		await expect(more).toHaveAttribute('aria-expanded', 'false');
+		await expect(projectRow).toHaveCSS('background-color', transparent);
+
+		await project.hover();
+		await more.hover();
+		const buttonHover = await more.evaluate(button => getComputedStyle(button).backgroundColor);
+		expect(buttonHover).not.toBe(transparent);
+		await more.click();
+		await pin.hover();
+		await expect(projectRow).toHaveCSS('background-color', hoverBackground);
+		await expect(more).toHaveAttribute('aria-expanded', 'true');
+		await expect(more).toHaveCSS('background-color', buttonHover);
+		await page.mouse.click(640, 200);
+		await expect(pin).toHaveCount(0);
+		await expect(more).toHaveAttribute('aria-expanded', 'false');
+		await expect(projectRow).toHaveCSS('background-color', transparent);
+
+		await conversation.click({ button: 'right' });
+		await pin.hover();
+		await expect(conversationRow).toHaveCSS('background-color', selectionBackground);
+		await expect(conversationMore).toHaveAttribute('aria-expanded', 'false');
+		await expect(conversationMore).toHaveCSS('background-color', transparent);
+		await page.keyboard.press('Escape');
+		await expect(pin).toHaveCount(0);
+		await conversation.hover();
+		await conversationMore.press('Shift+F10');
+		await expect(pin).toBeVisible();
+		await expect(conversationMore).toHaveAttribute('aria-expanded', 'true');
+		await page.keyboard.press('Escape');
+		await expect(conversationMore).toBeFocused();
+		await expect(conversationMore).toHaveAttribute('aria-expanded', 'false');
+
+		for (const theme of ['ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await project.hover();
+			const themedHover = await projectRow.evaluate(row => getComputedStyle(row).backgroundColor);
+			expect(themedHover).not.toBe(transparent);
+			await page.mouse.move(0, 0);
+			await project.press('Shift+F10');
+			await expect(pin).toBeVisible();
+			await expect(projectRow).toHaveCSS('background-color', themedHover);
+			await expect(more).toHaveAttribute('aria-expanded', 'false');
+			await expect(more).toHaveCSS('background-color', transparent);
+			if (theme.includes('high-contrast')) {
+				const outline = await projectRow.evaluate(row => getComputedStyle(row, '::after').outlineColor);
+				expect(outline).not.toBe(transparent);
+			}
+			await page.keyboard.press('Escape');
+			await expect(project).toBeFocused();
+			await expect(projectRow).toHaveCSS('background-color', transparent);
+		}
+	});
+}
+
 for (const locale of ['en', 'zh-CN'])
 	test(`Sidebar groups retain pins and separate Chat and Code expansion (${locale})`, async ({ page }, testInfo) => {
 		await page.goto(`/sessions.html?multiHost&sidebarGroups&projectPicker&locale=${locale}`);

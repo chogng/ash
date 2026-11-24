@@ -4,6 +4,7 @@ import {
 	defaultKeybindingLabelStyles,
 } from '../../theme/browser/defaultStyles.js';
 import {
+	showContextMenuTarget,
 	type ContextMenuAnchor,
 	type IContextMenuDelegate,
 } from '../../../base/browser/contextmenu.js';
@@ -192,7 +193,14 @@ export class ContextMenuHandler extends Disposable {
 		}
 		if (didHide || this.activeMenu !== request) { return false; }
 
-		const rendered = delegate.onDidRenderMenu?.(view instanceof ContextView ? view.element : menu.getContainer());
+		let rendered: void | Promise<void>;
+		try {
+			if (delegate.menuTarget) disposables.add(showContextMenuTarget(delegate.menuTarget));
+			rendered = delegate.onDidRenderMenu?.(view instanceof ContextView ? view.element : menu.getContainer());
+		} catch (error) {
+			request.hide();
+			throw error;
+		}
 		const focus = (): void => {
 			if (!didHide && this.activeMenu === request) menu.focus(delegate.autoSelectFirstItem === true);
 		};

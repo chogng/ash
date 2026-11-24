@@ -270,7 +270,7 @@
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
 	:is(.ash-sessions-list-row, .ash-sessions-list-project-row):hover:not(
-			.menu-visible,
+			.ash-context-menu-target,
 			.ash-reduce-motion *,
 			.ash-high-contrast *
 		)
@@ -335,7 +335,7 @@
 	.ash-sessions-list-row:where(
 		:hover,
 		:focus-within,
-		.menu-visible,
+		.ash-context-menu-target,
 		.selected
 	) {
 	background: var(--sessions-row-background);
@@ -526,7 +526,7 @@
 
 .ash-sessions-list-row:hover,
 .ash-sessions-list-row:focus-within,
-.ash-sessions-list-row.menu-visible {
+.ash-sessions-list-row.ash-context-menu-target {
 	--sessions-row-background: var(--ash-sessions-sidebar-hover-background);
 }
 
@@ -653,7 +653,7 @@
 	:is(.ash-sessions-list-row, .ash-sessions-list-project-row),
 .ash-sessions-list
 	:is(.ash-sessions-list-row, .ash-sessions-list-project-row):is(
-		.menu-visible,
+		.ash-context-menu-target,
 		:focus-within:not(.menu-dismissed-by-pointer)
 	) {
 	--sessions-row-actions-visible: 1;

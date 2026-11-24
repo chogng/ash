@@ -55,7 +55,7 @@ registerSidebarProjectActions(Menus.SidebarChatProjectContext, localize('project
 registerSidebarProjectActions(Menus.SidebarCodeProjectContext, localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit'));
 
 export function showSidebarProjectMenu(contextMenus: IContextMenuService, context: IContextKeyService,
-	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, presentation: Pick<IContextMenuMenuDelegate, 'getAnchor' | 'onHide'>): void {
+	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, presentation: Pick<IContextMenuMenuDelegate, 'getAnchor' | 'menuTarget'>): void {
 	context.bufferChangeEvents(() => {
 		for (const { key } of sidebarProjectActions) context.setContext(`sidebarProject.${key}`, !!target.actions[key]);
 	});

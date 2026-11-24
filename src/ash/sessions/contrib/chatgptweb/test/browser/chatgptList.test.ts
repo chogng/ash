@@ -248,6 +248,9 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 		await project('Writing').click({ button: 'right' });
 		const deleteAction = action('删除');
+		const writingMore = sidebar.locator('[data-project-id="g-p-sidebar-1"]').getByRole('button', { name: '更多项目操作', exact: true });
+		await expect(writingMore).toHaveAttribute('aria-expanded', 'false');
+		await expect(writingMore).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		const dangerColor = 'rgb(244, 135, 113)';
 		await expect(deleteAction.getByText('删除', { exact: true })).toHaveCSS('color', dangerColor);
 		await expect(deleteAction.locator('[data-ash-icon-id="trash"]')).toHaveCSS('color', dangerColor);

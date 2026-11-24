@@ -20,6 +20,7 @@ import { INotificationService } from '../../../notification/common/notification.
 import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { errorHandler } from '../../../../base/common/errors.js';
+import { contextMenuTargetClass } from '../../../../base/browser/contextmenu.js';
 
 test('menu delegates prepend explicit actions and use their context-key scope', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
@@ -133,6 +134,43 @@ test('an already canceled browser request leaves the existing menu alone', () =>
 	fixture.show('Existing');
 	fixture.show('Canceled', CancellationToken.Cancelled, cancelled => hidden.push(cancelled));
 	assert.deepEqual({ label: fixture.visibleLabel, hidden }, { label: 'Existing', hidden: [true] });
+});
+
+test('a mounted browser menu owns its target and resets the current trigger on close', () => {
+	using fixture = new BrowserMenuFixture();
+	const target = h(fixture.document, 'div');
+	fixture.document.body.append(target);
+	target.append(fixture.origin, fixture.outside);
+	let trigger = fixture.origin;
+	const request = {
+		getAnchor: () => ({ x: 10, y: 20, targetWindow: fixture.document.defaultView! }),
+		getActions: () => [action('Run')],
+		menuTarget: { element: target, getExpandedTrigger: () => trigger },
+	};
+	const isMarked = () => target.classList.contains(contextMenuTargetClass);
+	fixture.menus.showContextMenu({ ...request, getActions: () => [] });
+	assert.equal(isMarked(), false);
+	assert.equal(trigger.hasAttribute('aria-expanded'), false);
+
+	using source = new CancellationTokenSource();
+	fixture.menus.showContextMenu({ ...request, cancellationToken: source.token });
+	assert.equal(isMarked(), true);
+	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+	fixture.origin.remove();
+	trigger = fixture.outside;
+	trigger.setAttribute('aria-expanded', 'true');
+	source.cancel();
+	assert.equal(isMarked(), false);
+	assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+	const renderError = new Error('Menu render failed');
+	assert.throws(() => fixture.menus.showContextMenu({
+		...request,
+		onDidRenderMenu: () => { throw renderError; },
+	}), renderError);
+	assert.equal(fixture.visibleLabel, undefined);
+	assert.equal(isMarked(), false);
+	assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 });
 
 test('browser cancellation closes once and returns focus to its valid origin', () => {
