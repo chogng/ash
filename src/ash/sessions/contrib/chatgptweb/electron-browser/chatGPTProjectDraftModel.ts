@@ -96,7 +96,7 @@ export class ChatGPTProjectDraftModel extends Disposable implements IChatWidgetM
 				canAttachFiles: !blocked,
 				files: this.files.map(({ id, file }) => ({ id, name: file.name, size: file.size, status: 'ready' })),
 			},
-			mode: 'ask', phase: this.pending ? 'submitting' : 'ready', queuedMessages: 0, approvalMode: 'manual',
+			phase: this.pending ? 'submitting' : 'ready', queuedMessages: 0, approvalMode: 'manual',
 			inputBlocked: blocked || !selectedModel || !state.connected || !state.networkAvailable || state.busy || state.sending || state.managing || state.voice !== 'idle',
 			canInterrupt: this.pending && state.sending && state.localConversationId === this.id,
 			interruptKind: 'reply',
@@ -125,7 +125,7 @@ export class ChatGPTProjectDraftModel extends Disposable implements IChatWidgetM
 		}
 	}
 
-	async send(text: string, _mode?: unknown, _skills?: unknown, _contexts?: unknown, options?: Parameters<IChatWidgetModel['send']>[4]): Promise<void> {
+	async send(text: string, _skills?: unknown, _contexts?: unknown, options?: Parameters<IChatWidgetModel['send']>[3]): Promise<void> {
 		const state = this.inputState;
 		if (state.inputBlocked || !state.selectedModel) throw canceled();
 		const signal = options?.signal ? AbortSignal.any([this.lifetime.signal, options.signal]) : this.lifetime.signal;

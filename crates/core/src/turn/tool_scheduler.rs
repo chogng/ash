@@ -988,7 +988,7 @@ impl ToolScheduler {
 
 fn constrain_analysis_review(
     request: ash_action_policy::ActionReviewRequest,
-    mode: ash_protocol::AgentMode,
+    mode: ash_protocol::TaskExecution,
 ) -> Result<ash_action_policy::ActionReviewRequest, CoreError> {
     use ash_action_policy::SandboxCompatibility;
     use ash_protocol::ActionKind;

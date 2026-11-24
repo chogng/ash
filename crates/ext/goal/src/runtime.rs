@@ -66,7 +66,7 @@ impl GoalExtension {
             thread_id,
             StartGoalTurnRequest {
                 context_policy: snapshot.context_policy(&completed_turn.turn_id),
-                mode: completed_turn.mode,
+
                 advisor: snapshot.advisor.resolve(completed_turn.advisor.as_ref()),
                 command_id,
                 model: completed_turn.model.clone(),

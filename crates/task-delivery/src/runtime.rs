@@ -295,7 +295,6 @@ impl Runtime {
                         text: package.instructions.clone(),
                     },
                 ],
-                mode: Default::default(),
                 model: None,
                 model_routing: None,
                 reasoning_effort: None,

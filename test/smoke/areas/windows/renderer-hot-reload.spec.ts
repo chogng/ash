@@ -180,7 +180,7 @@ for (const chatSurface of ['code', 'chat'] as const) {
 					untitledSessionId: `draft-${index}`, kind: 'code', title: `Draft ${index}`, model: undefined, agent: undefined, workspace: { type: 'current' },
 				}));
 				for (const draft of drafts) {
-					writeNewChatDraftState(storage, { mode: 'agent', text: draft.title, contexts: [] }, `untitled:${draft.untitledSessionId}`);
+					writeNewChatDraftState(storage, { text: draft.title, contexts: [] }, `untitled:${draft.untitledSessionId}`);
 				}
 				const selection = { kind: 'untitled', session: drafts[3]! };
 				services.registerInstance(ISessionsManagementService, { onDidChange: changes.event, sessions: [], untitledSessions: drafts, state: 'ready' });

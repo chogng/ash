@@ -214,10 +214,9 @@ for (const scenario of [
 						type: 'startTurn',
 						threadId,
 						expectedSequence: before.thread.sequence,
-						mode: 'ask',
 						approvalMode: 'bypassPermissions',
 						model,
-						input: [{ type: 'text', text: 'Return the fixture answer without using tools.' }],
+						input: [{ type: 'text', text: '/ask Return the fixture answer without using tools.' }],
 					},
 				});
 				await expect
@@ -871,7 +870,7 @@ defaultsTest('Effective effort reaches direct and queued model requests', { tag:
 		expect(defaultsEndpoint.requests.at(-1)).toMatchObject({ model: model.model, reasoning: { effort: 'high' } });
 
 		await client.request(APP_SERVER_METHODS['queue/enqueue'], {
-			commandId: 'stale-queued-effort', sessionId, threadId, mode: 'agent', approvalMode: 'manual',
+			commandId: 'stale-queued-effort', sessionId, threadId, approvalMode: 'manual',
 			model, reasoningEffort: 'none', input: [{ type: 'text', text: 'Verify fallback from an unsupported queued effort.' }],
 		});
 		await expect.poll(completed).toBe(2);

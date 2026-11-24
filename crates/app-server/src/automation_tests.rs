@@ -977,7 +977,6 @@ fn queued_pr_workflows_from_before_admission_guards_recover_only_with_original_a
         .unwrap();
         let request = ash_core::StartTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

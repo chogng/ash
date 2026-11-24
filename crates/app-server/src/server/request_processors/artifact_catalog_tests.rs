@@ -476,7 +476,6 @@ fn stage_turns(database: &Path, context: Option<&str>) -> ThreadController {
                     reasoning_effort: None,
                     advisor: None,
                     kind: Default::default(),
-                    mode: Default::default(),
                     instructions: TurnInstructions::new("test", "docs", "1", "Write a document")
                         .unwrap(),
                     policy_revision: "test".into(),

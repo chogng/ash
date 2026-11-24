@@ -25,7 +25,7 @@ function capture(target: typeof original): TurnChangeSetSummary {
 
 function turn(turnId: string, text: string, status: Turn['status'] = 'completed'): Turn {
 	return {
-		turnId, status, mode: 'agent', kind: 'coding', approvalMode: 'manual', usage,
+		turnId, status, execution: 'agent', kind: 'coding', approvalMode: 'manual', usage,
 		items: [{ type: 'userMessage', itemId: `${turnId}-message`, turnId, text, clientId: `${turnId}-submit` }],
 	};
 }

@@ -65,7 +65,6 @@ fn attachment_resource_open_reads_only_selected_thread_media_and_keeps_connectio
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

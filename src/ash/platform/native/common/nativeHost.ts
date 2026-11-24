@@ -2,7 +2,6 @@ export const NATIVE_HOST_DESKTOP_SCREENSHOT_CHANNEL = 'ash:native-host:desktop-s
 import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../terminal/common/terminal.js';
 import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowInitialization, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
-import type { SessionMode } from '../../agentHost/common/agent.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
@@ -148,7 +147,6 @@ export interface INativeWindowTheme {
 export interface IOpenAgentsWindowOptions {
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	readonly draft?: {
-		readonly mode: SessionMode;
 		readonly text: string;
 		/** Optional resource is the original source URI; content is a snapshot or an instruction catalog path. */
 		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; readonly chatReference?: true; readonly terminalSnapshot?: ITerminalOutputSnapshot; readonly reference?: { readonly start: number; readonly end: number; }; }[];
@@ -301,7 +299,7 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		const draft = options.draft;
 		if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new TypeError('Invalid Agents Window draft');
 		const fields = draft as Record<string, unknown>;
-		if (!['agent', 'plan', 'debug', 'swarm', 'ask'].includes(fields.mode as string) || Object.keys(fields).sort().join(',') !== 'contexts,mode,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
+		if (Object.keys(fields).sort().join(',') !== 'contexts,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
 		for (const context of fields.contexts) {
 			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;

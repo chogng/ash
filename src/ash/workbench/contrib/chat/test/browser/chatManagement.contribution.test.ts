@@ -290,7 +290,7 @@ test('Models settings catalog uses Chinese accessibility content and restores se
 		assert.match(helpProvider.provideContent(), /切换开关、搜索、展开或收起列表时，顺序保持不变/);
 		assert.match(helpProvider.provideContent(), /模型开关控制单个模型是否显示/);
 		assert.match(helpProvider.provideContent(), /支持上下文切换的模型会在名称旁显示容量文字按钮/);
-		assert.match(helpProvider.provideContent(), /独立的订阅账号卡片管理账号登录/);
+		assert.match(helpProvider.provideContent(), /账号管理用于订阅账号的登录与退出/);
 		assert.doesNotMatch(helpProvider.provideContent(), /勾选|选择全部结果|所选模型|折叠|供应商开关|查看所有模型|搜索筛选条件/);
 		helpProvider.dispose();
 	} finally { resetNlsResolver(); }
@@ -441,14 +441,14 @@ test('Management rows omit capability labels and Accessible View retains transla
 		await nextTurn();
 		const rows = [...root.querySelectorAll<HTMLElement>('.ash-models-settings-model-row')];
 		assert.equal(rows.length, 3);
-		for (const row of rows) { assert.doesNotMatch(row.textContent ?? '', /工具调用|图像输入|Agent 模式/); }
+		for (const row of rows) { assert.doesNotMatch(row.textContent ?? '', /工具调用|图像输入|多步 Agent 工作流/); }
 		assert.equal(root.querySelector('.ash-models-settings-model-metadata'), null);
 		widget.focusSearch();
 		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View)!;
 		const provider = services.invokeFunction(implementation.getProvider.bind(implementation))!;
 		const details = provider.provideContent();
 		for (const fact of [
-			'工具调用：支持；Agent 模式：不支持', '工具调用：未知；Agent 模式：未知', '图像输入',
+			'工具调用：支持；多步 Agent 工作流：不支持', '工具调用：未知；多步 Agent 工作流：未知', '图像输入',
 			'供应商实时目录', '连接：api', '参考价格', '每百万 token，USD', '输入 0',
 			'2026-09-04', 'fixture', 'https://example.test/prices',
 		]) {

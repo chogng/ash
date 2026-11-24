@@ -131,7 +131,7 @@ for (const operation of ['start', 'steer', 'enqueue', 'rewrite'] as const) {
 			if (operation === 'rewrite') { return { type: 'rewrite', value: { session: { sessionId: 'session' }, threadId: 'replacement' } }; }
 			return { type: operation === 'steer' ? 'turnSteer' : 'turn', value: { turnId: 'turn', sequence: 1 } };
 		};
-		const base = { sessionId: 'session', commandId: operation, threadId: 'thread', expectedSequence: 0, mode: 'agent' as const, input };
+		const base = { sessionId: 'session', commandId: operation, threadId: 'thread', expectedSequence: 0, input };
 		const turns = createAppServerAgentTurnService(owner.client, snapshots);
 		if (operation === 'start') { await turns.start(base); }
 		else if (operation === 'steer') { await turns.steer({ ...base, turnId: 'turn' }); }
@@ -146,7 +146,7 @@ test('Renderer resource transfer retains inline compatibility and retires failed
 	using owner = new SnapshotClient();
 	using snapshots = new AgentHostResourceService();
 	using host = registerAgentHostResourceHost(owner.client, snapshots);
-	const params = { sessionId: 'session', commandId: 'start', threadId: 'thread', expectedSequence: 0, mode: 'agent' as const, input: [{ type: 'context' as const, name: 'selected', content: 'snapshot' }] };
+	const params = { sessionId: 'session', commandId: 'start', threadId: 'thread', expectedSequence: 0, input: [{ type: 'context' as const, name: 'selected', content: 'snapshot' }] };
 	const turns = createAppServerAgentTurnService(owner.client, snapshots);
 	owner.capabilities.contracts.hostResources.version = 0;
 	owner.onRequest = async (_method, wire) => {
@@ -195,7 +195,7 @@ for (const operation of ['start', 'steer', 'enqueue', 'rewrite'] as const) {
 		let calls = 0;
 		owner.onRequest = async () => { calls++; assert.fail('a retired submission must not reach the backend'); };
 		const controller = new AbortController();
-		const params = { sessionId: 'session', commandId: operation, threadId: 'thread', expectedSequence: 0, mode: 'agent' as const, input: [{ type: 'context' as const, name: 'selected.ts', content: 'captured content' }] };
+		const params = { sessionId: 'session', commandId: operation, threadId: 'thread', expectedSequence: 0, input: [{ type: 'context' as const, name: 'selected.ts', content: 'captured content' }] };
 		const turns = createAppServerAgentTurnService(owner.client, snapshots);
 		const pending = operation === 'start' ? turns.start(params, controller.signal)
 			: operation === 'steer' ? turns.steer({ ...params, turnId: 'turn' }, controller.signal)
@@ -220,6 +220,6 @@ test('pre-canceled context submissions cannot dispatch through the inline compat
 	const controller = new AbortController();
 	controller.abort();
 	const turns = createAppServerAgentTurnService(owner.client);
-	await assert.rejects(turns.start({ sessionId: 'session', commandId: 'inline', threadId: 'thread', expectedSequence: 0, mode: 'agent', input: [{ type: 'context', name: 'selected.ts', content: 'captured content' }] }, controller.signal), isCancellationError);
+	await assert.rejects(turns.start({ sessionId: 'session', commandId: 'inline', threadId: 'thread', expectedSequence: 0, input: [{ type: 'context', name: 'selected.ts', content: 'captured content' }] }, controller.signal), isCancellationError);
 	assert.equal(calls, 0);
 });

@@ -616,7 +616,7 @@ test('list and subscription retain each root model independently of child and gl
 				thread: {
 					...detail.thread,
 					turns: [{
-						turnId: 'turn', status: 'completed', mode: 'agent', kind: 'coding', toolMode: 'direct', approvalMode: 'manual',
+						turnId: 'turn', status: 'completed', execution: 'agent', kind: 'coding', toolMode: 'direct', approvalMode: 'manual',
 						usage: emptyUsage(), items: [], model: detail.thread.threadId === 'child' ? childModel : rootModel,
 					}],
 				},

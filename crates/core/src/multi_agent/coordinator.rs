@@ -44,7 +44,6 @@ use ash_protocol::StableTurnErrorCode;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadSequenceRange;
 use ash_protocol::TurnId;
-use ash_protocol::TurnInstructions;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 use core_api::HookEventRequest;
@@ -731,21 +730,13 @@ impl MultiAgentCoordinator {
             .map_err(|_| CoreError::Execution("Agent Turn submission lock poisoned".into()))?
             .clone();
         let approach = parent_turn.execution_approach().delegated();
-        let parent_command = parent_turn
-            .instructions
-            .as_ref()
-            .and_then(TurnInstructions::task_command);
         let instructions = seed
             .agent
             .base_instructions
             .clone()
             .or_else(|| parent_turn.instructions.clone())
             .ok_or_else(|| CoreError::Context("Agent has no recorded base instructions".into()))?
-            .with_task_command(
-                parent_command
-                    .map(|_| approach)
-                    .filter(|approach| !approach.is_agent()),
-            );
+            .with_task_command((!approach.is_default()).then_some(approach));
         let initial_turn = submission.submit(
             &seed.parent_thread_id,
             &seed.parent_turn_id,
@@ -763,7 +754,6 @@ impl MultiAgentCoordinator {
                     .or_else(|| parent_turn.model.clone()),
                 reasoning_effort: None,
                 kind: ash_protocol::TurnKind::Coding,
-                mode: parent_turn.mode.delegated(),
                 instructions,
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
                 approval_mode: parent_turn.approval_mode,

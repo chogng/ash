@@ -139,7 +139,7 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 		const copied = target.getCopiedInlinePrompt(ranges, textValue);
 		if (!copied || copied.references.length === 0 || copied.references.length > 1000) return undefined;
 		try {
-			const draft = await captureChatDraft(copied.text, 'agent', copied.references.map(({ attachment, reference }) => ({
+			const draft = await captureChatDraft(copied.text, copied.references.map(({ attachment, reference }) => ({
 				...attachment, reference,
 			})));
 			const raw = JSON.stringify({ version: 1, draft });
@@ -392,7 +392,7 @@ function parseCopiedCode(raw: string | undefined, clipboardText: string | undefi
 			: localize('chat.context.selectionLines', '{0} ({1}-{2})', label, selection.startLineNumber, lastLine);
 		const resource = withSelection(source, selection).toString();
 		return {
-			mode: 'agent', text: name,
+			text: name,
 			contexts: [{
 				id: createUuid(),
 				kind: 'codeSelection',

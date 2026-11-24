@@ -221,7 +221,7 @@ suite('chatContextActions browser component', () => {
 			transfer.setData('text/plain', text);
 			transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 				version: 1, draft: {
-					mode: 'agent', text, contexts: sources.map(source => ({ ...source, reference: { start: text.indexOf(source.name), end: text.indexOf(source.name) + source.name.length } })),
+					text, contexts: sources.map(source => ({ ...source, reference: { start: text.indexOf(source.name), end: text.indexOf(source.name) + source.name.length } })),
 				}
 			}));
 			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
@@ -786,7 +786,7 @@ suite('chatContextActions browser component', () => {
 				await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).press('Enter');
 				await page.getByRole('dialog').getByRole('option', { name, exact: true }).click();
 				if (name === 'Screenshot…' || name === '截图…') {
-					const capture = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture' });
+					const capture = page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
 					await capture.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
 					await capture.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
 				}
@@ -1239,7 +1239,7 @@ suite('chatContextActions browser component', () => {
 				transfer.setData('text/plain', draft.text);
 				transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({ version: 1, draft }));
 				element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
-			}, { mode: 'agent', text, contexts });
+			}, { text, contexts });
 			const sourceLabels = chinese ? ['打开 Captured element 的来源页面', '打开 abc123 · Captured commit 的提交更改', '打开 src/历史.ts 的历史版本文件'] : ['Open source page for Captured element', 'Open commit changes for abc123 · Captured commit', 'Open revision file for src/历史.ts'];
 			for (const [index, name] of names.entries()) {
 				const open = page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} ${name}`, exact: true });
@@ -1378,7 +1378,7 @@ suite('chatContextActions browser component', () => {
 				transfer.setData('text/plain', draft.text);
 				transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({ version: 1, draft }));
 				element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
-			}, { mode: 'agent', text, contexts });
+			}, { text, contexts });
 			for (const [index, name] of names.entries()) {
 				const open = page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} ${name}`, exact: true });
 				await open.hover();

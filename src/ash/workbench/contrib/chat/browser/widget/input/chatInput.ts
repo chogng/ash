@@ -1,6 +1,6 @@
 import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import type { ChatRequestQueueKind, ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from '../../../../../services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from '../../../../../services/chat/common/chatService.js';
 import type { TurnChangeSetSummary } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
@@ -47,7 +47,6 @@ export interface ChatInputState {
 	readonly followups?: { readonly responseId: string; readonly prompts: readonly string[]; };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
-	readonly mode: ChatMode;
 	readonly queuedMessages: number;
 	readonly phase: ChatInputPhase;
 	/** Keeps the draft editable when history or the window's AI preference prevents sending. */
@@ -101,8 +100,8 @@ export interface ChatInputDelegate {
 	};
 	readonly voiceConversation?: { readonly isAvailable: boolean; readonly isActive: boolean; readonly isConnecting?: boolean; readonly isConnected: boolean; readonly connectedPlaceholder?: string; toggle(): Promise<void>; interrupt(): Promise<void>; };
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void>;
-	sendInBackground?(text: string, mode: ChatMode, skills: readonly SkillReference[] | undefined, contexts: readonly ChatContextAttachment[], submissionSignal: AbortSignal): Promise<void>;
+	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void>;
+	sendInBackground?(text: string, skills: readonly SkillReference[] | undefined, contexts: readonly ChatContextAttachment[], submissionSignal: AbortSignal): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	/** Code supplies this capability; other hosts keep slash text literal and install no command UI. */
 	executeServerCommand?(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
@@ -115,7 +114,6 @@ export interface ChatInputDelegate {
 	selectAutomaticModel?(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
-	selectMode(mode: ChatMode): void;
 	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
 	resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;

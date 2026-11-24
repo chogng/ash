@@ -74,18 +74,18 @@ export class OpenModelPickerAction extends Action2 {
 	}
 }
 
-export class OpenModePickerAction extends Action2 {
-	public static readonly ID = 'workbench.action.chat.openModePicker';
+export class OpenAgentPickerAction extends Action2 {
+	public static readonly ID = 'workbench.action.chat.openAgentPicker';
 	constructor() {
 		super({
-			id: OpenModePickerAction.ID, title: localize2('chat.execute.modePicker', 'Chat: Open Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
+			id: OpenAgentPickerAction.ID, title: localize2('chat.execute.agentPicker', 'Chat: Open Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
 				primary: Keybinding.single(physicalKey('Period', { primaryKey: true })), weight: KeybindingWeight.WorkbenchContrib, when: ChatContextKeys.inChatInput.isEqualTo(true),
 			}
 		});
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible && !widget.input.replyOnly) widget.input.openModePicker();
+		if (widget?.visible && !widget.input.replyOnly) widget.input.openAgentPicker();
 	}
 }
 
@@ -160,7 +160,7 @@ export function registerChatExecuteActions(): DisposableStore {
 		}
 	}));
 	store.add(registerAction2(OpenModelPickerAction));
-	store.add(registerAction2(OpenModePickerAction));
+	store.add(registerAction2(OpenAgentPickerAction));
 	store.add(registerAction2(OpenPermissionPickerAction));
 	store.add(registerAction2(OpenWorkspacePickerAction));
 	store.add(registerAction2(class ResendRequestAction extends Action2 {

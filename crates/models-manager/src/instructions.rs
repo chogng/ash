@@ -48,8 +48,8 @@ impl ModelInstructionProfile {
                         )
                     })
                     .collect(),
-                agent_modes: messages
-                    .agent_modes
+                task_commands: messages
+                    .task_commands
                     .iter()
                     .map(|(mode, text)| {
                         let name = serde_json::to_value(mode).expect("mode serializes");
@@ -201,8 +201,8 @@ impl ModelInstructionCatalog {
         for asset in base.shared() {
             frozen = frozen.with_shared(&selected(asset));
         }
-        if let Some(mode) = base.mode_instructions() {
-            frozen = frozen.with_mode(&freeze(mode));
+        if let Some(mode) = base.task_instructions() {
+            frozen = frozen.with_task_instructions(&freeze(mode));
         }
         frozen.with_model_guidance(selection)
     }

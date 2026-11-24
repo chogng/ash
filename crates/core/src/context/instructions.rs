@@ -234,7 +234,7 @@ pub(crate) enum AgentInstructionRole {
 pub(crate) fn turn_instruction_fragments(
     instructions: &ash_protocol::TurnInstructions,
     approval_mode: ash_protocol::ApprovalMode,
-    mode: ash_protocol::AgentMode,
+    mode: ash_protocol::TaskExecution,
     agent_role: AgentInstructionRole,
     additional: Vec<InstructionFragment>,
 ) -> Vec<InstructionFragment> {
@@ -288,7 +288,7 @@ pub(crate) fn turn_instruction_fragments(
         ));
     }
     instruction_fragments.extend(additional);
-    if let Some(asset) = instructions.mode_instructions() {
+    if let Some(asset) = instructions.task_instructions() {
         instruction_fragments.push(crate::context::InstructionFragment::new(
             crate::context::InstructionSource::new(
                 asset.owner.clone(),
@@ -308,7 +308,7 @@ pub(crate) fn turn_instruction_fragments(
             AgentInstructionRole::Root => messages.root.as_ref(),
             AgentInstructionRole::Subagent => messages.subagent.as_ref(),
         };
-        for asset in messages.agent_modes.get(&mode).into_iter().chain(role) {
+        for asset in messages.task_commands.get(&mode).into_iter().chain(role) {
             instruction_fragments.push(InstructionFragment::new(
                 InstructionSource::new(&asset.owner, &asset.id, &asset.revision),
                 InstructionPlacement::System,

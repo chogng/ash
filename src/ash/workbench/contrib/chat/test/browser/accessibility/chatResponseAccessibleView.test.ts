@@ -70,7 +70,7 @@ suite('ChatResponseAccessibleView', () => {
 				}];
 				const total = { reported: 0, complete: true };
 				const turn: Turn = {
-					turnId: 'turn', status: 'running', mode: 'agent', approvalMode: 'manual', items: [],
+					turnId: 'turn', status: 'running', execution: 'agent', approvalMode: 'manual', items: [],
 					usage: { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total },
 				};
 				let turns: readonly Turn[] = [turn];

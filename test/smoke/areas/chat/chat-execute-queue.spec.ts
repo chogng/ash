@@ -49,15 +49,15 @@ test('Agents Code reorders durable queued messages with the keyboard and by drag
 		await expect(chat).toHaveAttribute('data-thread-id', threadId);
 		await client.request(methods['session/request'], {
 			commandId: 'reorder-queue-active', sessionId, request: {
-				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'ask', model,
-				input: [{ type: 'text', text: 'Wait for pending queue fixtures.' }],
+				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, model,
+				input: [{ type: 'text', text: '/ask Wait for pending queue fixtures.' }],
 			},
 		});
 		await expect(chat).toContainText('Queue fixture is running.');
 		for (const [commandId, text] of [['queue-first', 'First queued fixture'], ['queue-second', 'Second queued fixture']]) {
 			await client.request(methods['queue/enqueue'], {
-				commandId, sessionId, threadId, mode: 'ask', model,
-				input: [{ type: 'text', text }, { type: 'context', name: 'Frozen context', content: 'Keep these bytes.' }],
+				commandId, sessionId, threadId, model,
+				input: [{ type: 'text', text: `/ask ${text}` }, { type: 'context', name: 'Frozen context', content: 'Keep these bytes.' }],
 			});
 		}
 		const original = await queue();
@@ -330,7 +330,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			const beforeManagement = await read();
 			await client.request(methods['session/request'], {
 				sessionId, commandId: 'managed-active', request: {
-					type: 'startTurn', threadId, expectedSequence: beforeManagement.sequence, mode: initialTurn.mode, approvalMode: 'manual', model,
+					type: 'startTurn', threadId, expectedSequence: beforeManagement.sequence, approvalMode: 'manual', model,
 					input: [{ type: 'text', text: 'execution-queued-fixture management-active' }],
 				}
 			});
@@ -338,7 +338,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			const managedTurn = (await read()).turns.at(-1)!;
 			for (const [commandId, text] of [['managed-edit', 'queue-edit-fixture\noriginal'], ['managed-remove', 'queue-remove-fixture'], ['managed-now', 'execution-queued-fixture immediate'], ['managed-steer-edit', 'queue-switch-fixture']] as const) {
 				await client.request(methods['queue/enqueue'], {
-					sessionId, threadId, commandId, mode: initialTurn.mode, approvalMode: 'manual', model,
+					sessionId, threadId, commandId, approvalMode: 'manual', model,
 					input: [{ type: 'text', text }, { type: 'context', name: 'Frozen queue context', content: 'Original captured bytes' }, ...(commandId === 'managed-steer-edit' ? [] : [{ type: 'toolSelection' as const, disabled: [] }])],
 				});
 			}

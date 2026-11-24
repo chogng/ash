@@ -69,7 +69,7 @@ readline.createInterface({input: process.stdin}).on('line', line => {
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Rich presentation source' }).click();
 		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
-		await client.request(methods['session/request'], { commandId: 'presentation-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'agent', approvalMode: 'manual', model, input: [{ type: 'text', text: 'Review the five fixture actions.' }] } });
+		await client.request(methods['session/request'], { commandId: 'presentation-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, approvalMode: 'manual', model, input: [{ type: 'text', text: 'Review the five fixture actions.' }] } });
 		await expect(chat.locator('.ash-chat-tool-invocation > summary').filter({ hasText: 'Receiving arguments' })).toHaveCount(5);
 		const first = await chat.locator('.ash-chat-tool-invocation').first().elementHandle();
 		expect((await read()).turns.at(-1)?.startedToolCallIds ?? []).toHaveLength(0);

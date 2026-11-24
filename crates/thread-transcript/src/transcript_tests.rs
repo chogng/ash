@@ -100,7 +100,6 @@ fn skill_load_notification_matches_its_historical_position() {
         goal: None,
         hook_runs: Vec::new(),
         turns: vec![ash_protocol::Turn {
-            mode: ash_protocol::AgentMode::Agent,
             advisor: None,
             turn_id: turn_id(),
             status: ash_protocol::TurnStatus::Completed,
@@ -820,7 +819,7 @@ fn thread_with_turn(id: TurnId, status: ash_protocol::TurnStatus) -> Thread {
     thread.turns.push(ash_protocol::Turn {
         turn_id: id,
         status,
-        mode: ash_protocol::AgentMode::Agent,
+
         advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: None,

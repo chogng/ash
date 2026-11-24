@@ -17,7 +17,7 @@
 
 # Embed identical shared prompt assets on every platform.
 /crates/prompts/templates/** text eol=lf
-/crates/agent-mode-templates/templates/** text eol=lf
+/crates/task-command-templates/templates/** text eol=lf
 /crates/agent-roles/assets/** text eol=lf
 /crates/model-provider-info/models/*.json text eol=lf
 

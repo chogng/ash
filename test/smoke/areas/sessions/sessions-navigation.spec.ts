@@ -40,7 +40,7 @@ test('Chat and Code scope the command palette and user shortcuts to the active m
 		'ash.sessions.toggleSessionActivityBar',
 		'workbench.files.action.refreshFilesExplorer',
 		'workbench.action.files.newUntitledFile',
-		'workbench.action.chat.openModePicker',
+		'workbench.action.chat.openAgentPicker',
 		'workbench.action.chat.openPermissionPicker',
 		'workbench.action.chat.sendPendingImmediately',
 	];
@@ -281,7 +281,7 @@ test('Artifacts creation cards select a Chat draft type without creating an arti
 	const mode = page.locator('.ash-window-mode-control');
 	await mode.getByRole('button', { name: 'Code', exact: true }).click();
 	const code = sessions.locator('.ash-sessions-chat-slot.active:visible .chat-composer');
-	await expect(code.locator('.ash-chat-input-mode-action')).toBeVisible();
+	await expect(code.locator('.ash-chat-input-agent-action')).toBeVisible();
 	await expect(code.locator('.ash-chat-input-artifact-pill')).toHaveCount(0);
 	await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(pill).toHaveAttribute('data-artifact-kind', 'docs');

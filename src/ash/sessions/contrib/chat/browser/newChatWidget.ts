@@ -80,9 +80,9 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, editors, undefined,
 			(inputContainer, delegate) => {
-				const sendInBackground: NonNullable<ChatInputDelegate['sendInBackground']> = async (text, mode, skills, contexts, signal) => {
+				const sendInBackground: NonNullable<ChatInputDelegate['sendInBackground']> = async (text, skills, contexts, signal) => {
 					const resolved = await Promise.all(contexts.map(resolveChatContextAttachment));
-					const active = await model.sendInBackground(text, mode, skills, resolved, signal);
+					const active = await model.sendInBackground(text, skills, resolved, signal);
 					if (!active || this.isDisposed) return;
 					notifications.notify({
 						severity: Severity.Info,
@@ -102,7 +102,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 					...delegate,
 					get sendInBackground() { return model.untitledSessionId && !model.isNestedDraft ? sendInBackground : undefined; },
 					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
-						const submissionSignal = args[4];
+						const submissionSignal = args[3];
 						if (this.isDisposed || submissionSignal?.aborted) {
 							return;
 						}

@@ -1,4 +1,3 @@
-import type { SessionMode } from '../../../../platform/agentHost/common/agent.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
@@ -75,7 +74,7 @@ export interface IChatContextTarget {
 }
 
 /** Serializes attachments for drafts, clipboard and window handoff. */
-export async function captureChatDraft(text: string, mode: SessionMode, attachments: readonly ChatContextAttachment[]): Promise<NonNullable<IOpenAgentsWindowOptions['draft']>> {
+export async function captureChatDraft(text: string, attachments: readonly ChatContextAttachment[]): Promise<NonNullable<IOpenAgentsWindowOptions['draft']>> {
 	const contexts = await Promise.all(attachments.map(async attachment => {
 		const resolved = await attachment.resolve();
 		return {
@@ -89,5 +88,5 @@ export async function captureChatDraft(text: string, mode: SessionMode, attachme
 			...(attachment.reference ? { reference: attachment.reference } : {}),
 		};
 	}));
-	return { mode, text, contexts };
+	return { text, contexts };
 }

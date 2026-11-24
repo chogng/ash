@@ -47,7 +47,7 @@ export async function createAndOpenPullRequestSession(
 
 	// The first message uses the existing draft path, including reload and failed sends.
 	writeNewChatDraftState(storage, {
-		mode: 'agent', text: '', contexts: [{
+		text: '', contexts: [{
 			id: 'initial-pr:' + active.threadId, kind: 'transcriptContext', name: label, content: snapshot.content, resource: snapshot.url,
 		}]
 	}, active.threadId);

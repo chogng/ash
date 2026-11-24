@@ -2070,9 +2070,9 @@ test('Code Sessions mode selection updates its shared composer', async ({ target
 	await page.keyboard.press('Escape');
 	await expect(environmentMenu).toBeHidden();
 	await expect(environment).toBeFocused();
-	const agent = page.locator('[data-action-id="ash.chat.input.mode"] button').first();
+	const agent = page.locator('[data-action-id="ash.chat.input.agent"] button').first();
 	await agent.press('ArrowDown');
-	const menu = page.locator('.ash-chat-input-mode-menu');
+	const menu = page.locator('.ash-chat-input-agent-menu');
 	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
 	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
@@ -4035,12 +4035,12 @@ test(
 							key: 'ctrl+alt+shift+f24',
 							command: 'workbench.action.openAgentsWindow',
 							systemWide: true,
-							args: { draft: { mode: 'agent', text: 'From the system shortcut', contexts: [] } },
+							args: { draft: { text: 'From the system shortcut', contexts: [] } },
 						},
 						{
 							key: 'ctrl+shift+y',
 							command: 'workbench.action.openAgentsWindow',
-							args: { draft: { mode: 'agent', text: 'From the Agents command', contexts: [] } },
+							args: { draft: { text: 'From the Agents command', contexts: [] } },
 						},
 					]),
 				);

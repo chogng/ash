@@ -158,7 +158,7 @@ test('Chat exposes task slash commands in the composer', async ({ workbench }) =
 	await input.focus();
 	await page.keyboard.insertText('/plan ');
 	await expect(chat.locator('.view-lines')).toContainText('/plan');
-	await expect(chat.locator('.ash-chat-input-mode-menu')).toHaveCount(0);
+	await expect(chat.locator('.ash-chat-input-agent-menu')).toHaveCount(0);
 	await expect(chat.locator('.ash-chat-welcome').getByRole('heading', { name: 'Build with Agent' })).toBeVisible();
 });
 

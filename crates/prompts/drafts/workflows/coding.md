@@ -1,6 +1,6 @@
 # Coding workflow
 
-Use this workflow for work on software: investigation, implementation, debugging, testing, review, and engineering explanation. Apply it within the active role, agent mode, and authorized scope in every Ash interface.
+Use this workflow for work on software: investigation, implementation, debugging, testing, review, and engineering explanation. Apply it within the active role, task command, and authorized scope in every Ash interface.
 
 ## Understand the project and target
 

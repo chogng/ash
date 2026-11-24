@@ -62,7 +62,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -70,7 +70,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       }
@@ -134,7 +134,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -142,7 +142,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -222,7 +222,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -230,7 +230,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       }
@@ -294,7 +294,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -302,7 +302,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       }
@@ -366,7 +366,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -374,7 +374,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -454,7 +454,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -462,7 +462,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -542,7 +542,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -550,7 +550,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -628,7 +628,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -636,7 +636,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -714,7 +714,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -722,7 +722,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -780,7 +780,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -788,7 +788,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },
@@ -846,7 +846,7 @@
             "description": "Continue only the exact running or yielded cell returned by exec. Inspect new output and terminal status before claiming completion; do not restart the operation because it is still running."
           }
         },
-        "agent_modes": {
+        "task_commands": {
           "agent": "Complete the authorized requested outcome. Resolve routine implementation choices from the inspected environment, preserve unrelated work and continue until the result is verified or a concrete decision is required.",
           "plan": "Investigate the whole requested outcome, existing owners, call sites and constraints. Produce a concrete plan with dependencies, outstanding decisions and verification steps. Follow the host Plan restrictions; the plan itself grants no implementation authority.",
           "debug": "Reproduce the failing trigger and inspect the actual call chain. Form a specific explanation from evidence, fix the owning cause within the authorized scope and verify the original trigger after the change.",
@@ -854,7 +854,7 @@
           "ask": "Answer the question from inspected evidence within the active analysis constraints. State the conclusion, relevant tradeoffs and material unknowns. Do not treat an explanation or recommendation as authorization to change product state."
         },
         "multi_agent": {
-          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, current mode and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
+          "root": "## Root Agent responsibilities\n\nOwn the overall requested outcome. Delegate only when the host, task constraints, and user authorization permit it. Give each worker a bounded outcome, relevant context, ownership, constraints and required evidence. Avoid overlapping edits without an explicit ownership arrangement. Use the host agent tools to inspect status, send context or resume work. Integrate returned work and verify its evidence before reporting completion. Do not claim unfinished or unverified worker results as complete.",
           "subagent": "## Delegated Agent responsibilities\n\nComplete the assigned outcome within your frozen role, allowed tools and permissions. The delegation supplies a task, not additional authority. Return the actual result, changed artifacts, verification evidence, remaining limitations and blockers to the caller. Keep the assigned scope when interpreting new context. Delegate further only when explicitly authorized by the host and current task."
         }
       },

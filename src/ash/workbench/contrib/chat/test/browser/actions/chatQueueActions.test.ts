@@ -85,7 +85,7 @@ function queueFixture() {
 	const changed = lifetime.add(new Emitter<void>());
 	const hidden = lifetime.add(new Emitter<void>());
 	const calls: unknown[] = [];
-	const original: QueuedMessage = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 5, mode: 'agent', text: 'Original\nmessage', contextCount: 3, status: 'pending' };
+	const original: QueuedMessage = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 5, execution: 'agent', text: 'Original\nmessage', contextCount: 3, status: 'pending' };
 	let message = original;
 	let focus = 0;
 	let editor: ChatQueueEditor | undefined;

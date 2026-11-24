@@ -7,7 +7,7 @@ ash_rust_crate(
         "//:resources/extension-recommendations.json", "//sdk/rust:src/terminal.rs", "//extensions/git:package.json", "//extensions/git:src/lib.rs", "//extensions/git:src/api.rs", "//extensions/git:src/blame.rs",
         "//extensions/git:src/interaction.rs", "//extensions/git:src/model.rs", "//extensions/git:src/paths.rs", "//extensions/git:src/commands.rs", "//extensions/git:src/scm.rs", "//extensions/git:src/history.rs", "//extensions/git:src/changes.rs", "//extensions/markdown-language-features:package.json", "//extensions/markdown-language-features:src/lib.rs", "//extensions/markdown-language-features:src/language.rs", "//extensions/markdown-language-features:package.nls.json", "//extensions/markdown-language-features:package.nls.zh-CN.json", "//extensions/markdown-language-features:media/markdown.css", "//sdk/rust:src/editors.rs", "//sdk/rust:src/languages.rs"],
     extra_aliases = {
-        "//crates/agent-mode-templates": "agent_mode_templates",
+        "//crates/task-command-templates": "task_command_templates",
         "//crates/screen-capture": "screen_capture",
     },
 )

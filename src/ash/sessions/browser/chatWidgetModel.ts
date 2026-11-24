@@ -1,6 +1,6 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
-import { ChatHistoryAnchorError, ChatRequestQueueKind, isTaskSlashCommand } from '../../workbench/services/chat/common/chatService.js';
+import { applyDefaultTaskCommand, ChatHistoryAnchorError, ChatRequestQueueKind, isTaskSlashCommand } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
@@ -13,7 +13,7 @@ import { ILanguageModelsService } from '../../workbench/contrib/chat/common/lang
 import { Emitter, Event } from '../../base/common/event.js';
 import { canceled, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
-import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ChatAgent, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
@@ -123,7 +123,6 @@ export class ChatWidgetModel extends Disposable {
 	private modelAvailabilityRequest: { readonly model: ModelRef; readonly promise: Promise<void>; } | undefined;
 	private modelAvailabilityGeneration = 0;
 	private defaults: AgentModelDefaults | undefined;
-	private readonly selectedModes = new Map<string, ChatMode>();
 	private queue: Awaited<ReturnType<IChatService['readQueue']>> = [];
 	private readonly historyRedo: ChatHistoryRedoModel;
 	private queueGeneration = 0;
@@ -255,7 +254,6 @@ export class ChatWidgetModel extends Disposable {
 		const modelUnavailableMessage = this.modelUnavailableMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
-			mode: this.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
 			inputBlocked: this._thread?.status === 'archived' || modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
@@ -441,17 +439,6 @@ export class ChatWidgetModel extends Disposable {
 
 	get skillSelectors(): readonly SkillSelectorDefinition[] {
 		return this._skillSelectors;
-	}
-
-	get mode(): ChatMode {
-		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
-		return this.selectedModes.get(key) ?? 'agent';
-	}
-
-	selectMode(mode: ChatMode): void {
-		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
-		this.selectedModes.set(key, mode);
-		this._onDidChange.fire();
 	}
 
 	get selectedModel(): ModelRef | undefined {
@@ -798,28 +785,17 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		await this.submitMessage(text, mode, skills, contexts, options);
+	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
+		await this.submitMessage(text, skills, contexts, options);
 	}
 
-	sendInBackground(text: string, mode: ChatMode, skills: readonly SkillReference[] | undefined, contexts: readonly ResolvedChatContext[], signal?: AbortSignal): Promise<IActiveSessionThread | undefined> {
+	sendInBackground(text: string, skills: readonly SkillReference[] | undefined, contexts: readonly ResolvedChatContext[], signal?: AbortSignal): Promise<IActiveSessionThread | undefined> {
 		if (this.selection.kind !== 'untitled' || this.selection.session.forkSource) throw canceled();
-		return this.submitMessage(text, mode, skills, contexts, { signal }, this.selection.session.untitledSessionId);
+		return this.submitMessage(text, skills, contexts, { signal }, this.selection.session.untitledSessionId);
 	}
 
-	private async submitMessage(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions, backgroundDraftId?: string): Promise<IActiveSessionThread | undefined> {
+	private async submitMessage(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions, backgroundDraftId?: string): Promise<IActiveSessionThread | undefined> {
 		if (!text.trim() && !contexts?.length) return;
-		const explicitTaskCommand = isTaskSlashCommand(text);
-		// Older embedded composers can still supply an approach. Submit it as a task command
-		// and preserve the positions of context references in the resulting text.
-		if (mode !== 'agent' && !explicitTaskCommand) {
-			const prefix = `/${mode} `;
-			text = `${prefix}${text}`;
-			contexts = contexts?.map(context => context.reference ? {
-				...context,
-				reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
-			} : context);
-		}
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
@@ -898,8 +874,8 @@ export class ChatWidgetModel extends Disposable {
 				if (this.isCurrentTarget(operation)) this.setState('ready');
 				return active;
 			}
-			const needsNewTurn = !!turn && (taskCommand || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
-			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn && !explicitTaskCommand) {
+			const needsNewTurn = !!turn && (taskCommand || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.execution !== 'agent' || !!skills?.length);
+			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn && !taskCommand) {
 				throw new Error(localize('chat.steer.incompatible', 'The current request has a different task command, Skill or task type. Add this message to the queue instead.'));
 			}
 			if (turn && (options?.queue === ChatRequestQueueKind.Queued || needsNewTurn)) {
@@ -963,13 +939,9 @@ export class ChatWidgetModel extends Disposable {
 		return this.chatService.setRecapPresence?.(sessionId, threadId, surface, focused) ?? Promise.resolve();
 	}
 
-	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string> {
+	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal, defaultTaskCommand?: 'ask'): Promise<void | string> {
 		this.assertAIEnabled();
-		if (this.commandInterpretation === 'literal') {
-			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ''}`, this.mode, undefined, undefined, { signal: submissionSignal });
-			return;
-		}
-		if (name === 'recap') {
+		if (this.commandInterpretation !== 'literal' && name === 'recap') {
 			const operation = this.captureOperation({ signal: submissionSignal });
 			const active = this.activeSession;
 			if (!active || !this.chatService.generateRecap) throw new Error(localize('chat.recap.needsConversation', 'Finish a conversation turn before using /recap.'));
@@ -977,8 +949,9 @@ export class ChatWidgetModel extends Disposable {
 			this.requireCurrentOperation(operation);
 			return recap;
 		}
-		if (name !== 'compact' && name !== 'advisor') {
-			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ''}`, this.mode, undefined, undefined, { signal: submissionSignal });
+		if (this.commandInterpretation === 'literal' || (name !== 'compact' && name !== 'advisor')) {
+			const text = `/${name}${argumentsText ? ` ${argumentsText}` : ''}`;
+			await this.send(applyDefaultTaskCommand(text, defaultTaskCommand).text, undefined, undefined, { signal: submissionSignal });
 			return;
 		}
 		const operation = this.captureOperation({ signal: submissionSignal });
@@ -1069,8 +1042,8 @@ export class ChatWidgetModel extends Disposable {
 		if (turn?.turnId !== turnId || turn.status !== 'failed' || turn.error?.retryable !== true || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') {
 			throw new Error('Only the latest retryable failed Turn can be retried');
 		}
-		const command = turn.mode === 'agent' ? '' : `/${turn.mode} `;
-		await this.send(`${command}Try again.`, 'agent');
+		const command = turn.execution === 'agent' ? '' : `/${turn.execution} `;
+		await this.send(`${command}Try again.`);
 	}
 
 	async interrupt(): Promise<void> {
@@ -1858,9 +1831,6 @@ export class ChatWidgetModel extends Disposable {
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
 		void this.loadSkillSelectors();
-		const mode = this.selectedModes.get(untitledSession.untitledSessionId);
-		if (mode) this.selectedModes.set(created.threadId, mode);
-		this.selectedModes.delete(untitledSession.untitledSessionId);
 		const approvalModes = new Map(this.selectedApprovalModes.get());
 		const approvalMode = approvalModes.get(untitledSession.untitledSessionId);
 		if (approvalMode) approvalModes.set(created.threadId, approvalMode);

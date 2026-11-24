@@ -424,7 +424,6 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
                 &thread.thread_id,
                 ash_core::StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(id).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,

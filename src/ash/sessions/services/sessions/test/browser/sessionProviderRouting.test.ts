@@ -154,7 +154,7 @@ test('Chat send unwraps the source address and never sends a removed remote Sess
 	context.remoteChat.startTurn = async options => { calls.push(options); };
 	context.primaryChat.startTurn = async () => { assert.fail('primary cannot receive remote sends'); };
 	using chat = new SessionsChatService(context.scopes);
-	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, text: 'hello', mode: 'agent' as const, source: { sessionId: context.sessionId, threadId: context.threadId } };
+	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, text: 'hello', source: { sessionId: context.sessionId, threadId: context.threadId } };
 	await chat.startTurn(options);
 	assert.deepEqual(calls, [{ ...options, sessionId: 'same', threadId: 'thread', source: { sessionId: 'same', threadId: 'thread' } }]);
 	context.registration.dispose();
@@ -166,7 +166,7 @@ test('conversation attachments stay on the destination host and unwrap the exact
 	const calls: unknown[] = [];
 	context.remoteChat.queueTurn = async options => { calls.push(options.contexts); };
 	using chat = new SessionsChatService(context.scopes);
-	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, text: '', mode: 'agent' as const };
+	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, text: '' };
 	const attachment = { name: 'Design', content: '', chatReference: { sessionId: context.sessionId, threadId: sessionIdentity('remote', 'source', 'primary') } };
 	await chat.queueTurn({ ...options, contexts: [attachment] });
 	await assert.rejects(chat.queueTurn({ ...options, contexts: [{ ...attachment, chatReference: { sessionId: 'same', threadId: 'source' } }] }), isCancellationError);
@@ -214,7 +214,7 @@ test('the editor link opener selects the remote conversation and sends its follo
 	const conversation = navigation.getActiveConversation();
 	assert.deepEqual(conversation, { sessionId: context.sessionId, threadId: context.threadId });
 	assert.equal(focused, 1);
-	const followUp = { ...conversation!, expectedSequence: 1, text: 'Continue', mode: 'agent' as const };
+	const followUp = { ...conversation!, expectedSequence: 1, text: 'Continue' };
 	await chat.startTurn(followUp);
 	assert.deepEqual(sent, [{ sessionId: 'same', threadId: 'thread', text: 'Continue' }]);
 	context.registration.dispose();
@@ -552,7 +552,7 @@ test('Queue snapshots and revisioned operations retain the originating provider 
 	using f = fixture();
 	using chat = new SessionsChatService(f.scopes);
 	const calls: unknown[] = [];
-	const message = { sessionId: 'same', threadId: 'thread', commandId: 'stable-command', revision: 12, status: 'paused' as const, mode: 'agent' as const, text: 'Retained input', contextCount: 2 };
+	const message = { sessionId: 'same', threadId: 'thread', commandId: 'stable-command', revision: 12, status: 'paused' as const, execution: 'agent' as const, text: 'Retained input', contextCount: 2 };
 	f.remoteChat.getPendingRequests = async (...args) => { calls.push(['list', ...args]); return [message]; };
 	for (const method of ['pausePendingRequest', 'resumePendingRequest', 'editPendingRequest', 'removePendingRequest'] as const) {
 		Object.assign(f.remoteChat, { [method]: async (...args: unknown[]) => { calls.push([method, ...args]); return message; } });

@@ -144,21 +144,21 @@ fn home_shift_tab_preserves_the_default_approach_and_moves_focus() {
         app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
         None
     );
-    assert_eq!(app.agent_mode(), ash_protocol::AgentMode::Agent);
+    assert_eq!(app.task_execution(), ash_protocol::TaskExecution::Agent);
     assert!(app.fullscreen.input_focused());
     assert_eq!(app.fullscreen.home.selected, None);
     crate::tui_assert_snapshot!(app = &app; "home_after_shift_tab", text(&render(&app, 80, 24)));
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(app.fullscreen.home.selected, Some(0));
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(app.agent_mode(), ash_protocol::AgentMode::Agent);
+    assert_eq!(app.task_execution(), ash_protocol::TaskExecution::Agent);
     assert!(app.fullscreen.input_focused());
     assert_eq!(app.fullscreen.home.selected, None);
     app.handle_key(key(KeyCode::Esc));
     app.handle_key(key(KeyCode::F(6)));
     assert!(app.fullscreen.header.selected().is_some());
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(app.agent_mode(), ash_protocol::AgentMode::Agent);
+    assert_eq!(app.task_execution(), ash_protocol::TaskExecution::Agent);
 }
 
 #[test]

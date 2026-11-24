@@ -527,7 +527,7 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		const { sessions, commands, provider, storage, services, quickInput } = current;
 		const draft = sessions.createUntitledSession('Unsent target');
 		const other = sessions.createUntitledSession('Foreground draft');
-		const text = { mode: 'plan' as const, text: 'Do not send this', contexts: [{ id: 'attachment', kind: 'file', name: 'note.txt', content: 'Synthetic attachment' }] };
+		const text = { text: '/plan Do not send this', contexts: [{ id: 'attachment', kind: 'file', name: 'note.txt', content: 'Synthetic attachment' }] };
 		writeNewChatDraftState(storage, text, `untitled:${draft.untitledSessionId}`);
 		services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
 		quickInput.input = async () => 'Named before sending';

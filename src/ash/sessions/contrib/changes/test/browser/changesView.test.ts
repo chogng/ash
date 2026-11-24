@@ -524,7 +524,7 @@ suite('changes browser component', () => {
 		await page.getByRole('menuitemcheckbox', { name: 'Ask agent to create', exact: true }).click();
 		await expect(form).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.agentRequests())).toEqual([{
-			action: 'start', request: expect.objectContaining({ sessionId: 'session', threadId: 'thread', expectedSequence: 7, mode: 'agent', text: expect.stringContaining('Title: Agent reviewed PR\nDescription:\nChanges to review') }),
+			action: 'start', request: expect.objectContaining({ sessionId: 'session', threadId: 'thread', expectedSequence: 7, text: expect.stringContaining('Title: Agent reviewed PR\nDescription:\nChanges to review') }),
 		}]);
 		expect(await page.evaluate(() => window.ashChangesIntegration.created())).toEqual([]);
 		await create.click();

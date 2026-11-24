@@ -21,7 +21,6 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
                 .expect("test ID is non-empty"),
             command: ThreadCommand::StartTurn {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -127,7 +126,6 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
     let second_turn_id = TurnId::new("turn_2").unwrap();
     let active_turn_id = TurnId::new("turn_3").unwrap();
     let accepted = |turn_id: TurnId| ThreadEvent::TurnAccepted {
-        mode: Default::default(),
         advisor: None,
         thread_id: thread_id.clone(),
         turn_id,
@@ -244,7 +242,6 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -317,7 +314,6 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -375,7 +371,6 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
     let mut accepted = envelope(
         2,
         ThreadEvent::TurnAccepted {
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
@@ -395,7 +390,6 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         command_id: CommandId::new("command_2").unwrap(),
         command: ThreadCommand::StartTurn {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
@@ -509,7 +503,6 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -811,7 +804,6 @@ fn empty_fork_completion_preserves_the_source_thread_identity() {
 
 fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
     Turn {
-        mode: Default::default(),
         advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: None,
@@ -854,7 +846,6 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -1012,7 +1003,6 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
             &envelope(
                 3,
                 ThreadEvent::TurnAccepted {
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: None,
@@ -1037,7 +1027,6 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -1075,7 +1064,6 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
     let mut accepted = envelope(
         2,
         ThreadEvent::TurnAccepted {
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
@@ -1095,7 +1083,6 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         command_id: CommandId::new("command_1").expect("test ID is non-empty"),
         command: ThreadCommand::StartTurn {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
@@ -1252,7 +1239,6 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
@@ -1375,7 +1361,6 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,

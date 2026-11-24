@@ -66,7 +66,7 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	let released = 0;
 	let chatPartVisible = false;
 	let chatCloseCount = 0;
-	const draft = { mode: 'plan' as const, text: 'Review the selected project', contexts: [{ id: 'context', kind: 'file', name: 'notes.txt', content: 'Captured notes', reference: undefined }] };
+	const draft = { text: '/plan Review the selected project', contexts: [{ id: 'context', kind: 'file', name: 'notes.txt', content: 'Captured notes', reference: undefined }] };
 	const view = Object.create(ChatViewPane.prototype) as ChatViewPane;
 	view.createEmbeddedChat = (container, _title, value) => {
 		options = value;
@@ -111,7 +111,7 @@ test('Welcome exposes only trusted targets and opens a chosen workspace with its
 	const delegate = f.options.workspacePickerDelegate!;
 	assert.deepEqual(delegate.getWorkspaces().map(item => item.uri.path), ['/trusted']);
 	delegate.setSelectedWorkspace(delegate.getWorkspaces()[0]);
-	assert.equal(await f.options.submitHandler?.(f.draft.text, 'plan', f.attachments), true);
+	assert.equal(await f.options.submitHandler?.(f.draft.text, f.attachments), true);
 	const key = getAgentSessionsWelcomePrefillKey({ id: 'target', folders: [{ id: 'root', name: 'trusted', index: 0, uri: URI.file('/trusted') }] })!;
 	assert.deepEqual(JSON.parse(f.storage.get(key, StorageScope.APPLICATION)!).payload.draft, JSON.parse(JSON.stringify(f.draft)));
 	assert.equal(f.requests.length, 1);
@@ -121,12 +121,12 @@ test('Failed Welcome handoff rejects instead of falling through to a local send,
 	using f = fixture();
 	await f.open();
 	const delegate = f.options.workspacePickerDelegate!;
-	assert.equal(await f.options.submitHandler?.('query', 'agent', []), false);
+	assert.equal(await f.options.submitHandler?.('query', []), false);
 	delegate.setSelectedWorkspace(delegate.getWorkspaces()[0]);
 	f.fail();
-	await assert.rejects(f.options.submitHandler!(f.draft.text, 'agent', f.attachments), /Cannot open target/);
+	await assert.rejects(f.options.submitHandler!(f.draft.text, f.attachments), /Cannot open target/);
 	assert.deepEqual(f.storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE).filter(key => key.startsWith('chat.welcomeViewPrefill:')), []);
-	assert.equal(f.draft.text, 'Review the selected project');
+	assert.equal(f.draft.text, '/plan Review the selected project');
 });
 
 for (const trusted of [true, false]) {

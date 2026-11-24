@@ -888,7 +888,7 @@ test.describe('Unified Chat sidebar', () => {
 		const palette = new QuickAccess(page);
 		await palette.open('>workbench.action.chat.openModelPicker');
 		await expect(palette.items.filter({ hasText: '聊天：打开模型选择器' })).toBeVisible();
-		for (const command of ['openModePicker', 'openPermissionPicker', 'openWorkspacePicker', 'configureTools', 'steerWithMessage']) {
+		for (const command of ['openAgentPicker', 'openPermissionPicker', 'openWorkspacePicker', 'configureTools', 'steerWithMessage']) {
 			await palette.search(`>workbench.action.chat.${command}`);
 			await expect(palette.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(`workbench.action.chat.${command}`, { exact: true }) })).toHaveCount(0);
 		}
@@ -1504,7 +1504,7 @@ test.describe('Unified Chat sidebar', () => {
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: 'shared-code-card-turn', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence,
-					model: ashFixtureModel, mode: 'agent', approvalMode: 'manual',
+					model: ashFixtureModel, approvalMode: 'manual',
 					input: [{ type: 'text', text: 'Show a TypeScript example' }],
 				},
 			});
@@ -1612,7 +1612,7 @@ test.describe('Unified Chat sidebar', () => {
 				await client.request(APP_SERVER_METHODS['session/request'], {
 					commandId: `native-edit-seed-${index}`, sessionId, request: {
 						type: 'startTurn', threadId, expectedSequence: (await read()).sequence,
-						model: ashFixtureModel, mode: 'agent', approvalMode: 'manual',
+						model: ashFixtureModel, approvalMode: 'manual',
 						input: [{ type: 'text', text }],
 					},
 				});
@@ -1676,7 +1676,7 @@ test.describe('Unified Chat sidebar', () => {
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: 'native-reply-queue-active', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await read()).sequence, model: ashFixtureModel,
-					mode: 'agent', approvalMode: 'manual', input: [{ type: 'text', text: 'First Chat message' }],
+					approvalMode: 'manual', input: [{ type: 'text', text: 'First Chat message' }],
 				},
 			});
 			await expect.poll(() => modelRequests.length).toBe(1);
@@ -1725,7 +1725,7 @@ test.describe('Unified Chat sidebar', () => {
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: 'first-native-chat-turn', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence, model: ashFixtureModel,
-					mode: 'agent', approvalMode: 'manual', input: [
+					approvalMode: 'manual', input: [
 						{ type: 'text', text: 'Original Chat message' },
 						{ type: 'context', name: 'ash.creation.docs', content: 'Write Markdown.' },
 					],
@@ -2102,7 +2102,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(ash.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
 		await expect(codeEditor).toBeHidden();
 		await expect(ash.getByRole('heading', { level: 2 })).toHaveText(welcome);
-		const codeTools = ash.locator(':is(.ash-sessions-environment, .ash-chat-input-mode-selector, .ash-chat-input-permission-picker, .ash-chat-input-context-toolbar):visible');
+		const codeTools = ash.locator(':is(.ash-sessions-environment, .ash-chat-input-agent-selector, .ash-chat-input-permission-picker, .ash-chat-input-context-toolbar):visible');
 		await expect(codeTools).toHaveCount(0);
 		await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(picker.locator('.ash-chat-model-slider-widget')).toBeVisible();

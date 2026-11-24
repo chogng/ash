@@ -75,7 +75,7 @@ pub(crate) enum ChatInputItem {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatSubmission {
-    pub(crate) mode: ash_protocol::AgentMode,
+    pub(crate) mode: ash_protocol::TaskExecution,
     // Created before the local row is shown; materialization and RPC retries keep this identity.
     pub(crate) command_id: ash_protocol::CommandId,
     pub(crate) display_text: String,
@@ -175,7 +175,7 @@ impl QueuedChatInput {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatInputDraft {
-    mode: Option<ash_protocol::AgentMode>,
+    mode: Option<ash_protocol::TaskExecution>,
     textarea: TextArea,
     vim: VimState,
     slash_command_element: Option<TextElementId>,
@@ -200,7 +200,7 @@ enum DictationDraft {
 #[derive(Debug)]
 pub(crate) struct ChatInput {
     // None initializes once from Thread history; user selections survive later refreshes.
-    mode: Option<ash_protocol::AgentMode>,
+    mode: Option<ash_protocol::TaskExecution>,
     generation: u64,
     pub(super) textarea: TextArea,
     pub(super) completion: CompletionState,
@@ -494,11 +494,11 @@ impl ChatInput {
         self.input_mode == ChatInputMode::Standard || self.vim.accepts_submission_key()
     }
 
-    pub(crate) fn mode(&self) -> ash_protocol::AgentMode {
+    pub(crate) fn mode(&self) -> ash_protocol::TaskExecution {
         self.mode.unwrap_or_default()
     }
 
-    pub(crate) fn set_mode(&mut self, mode: ash_protocol::AgentMode) {
+    pub(crate) fn set_mode(&mut self, mode: ash_protocol::TaskExecution) {
         self.mode = Some(mode);
     }
 

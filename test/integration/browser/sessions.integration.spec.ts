@@ -844,7 +844,7 @@ for (const locale of ['en', 'zh-CN'])
 			.toBeUndefined();
 	});
 
-test('a corrupt legacy draft reports its failure while other drafts and startup survive', async ({ page }) => {
+test('startup ignores retired draft keys and preserves a current draft', async ({ page }) => {
 	await page.addInitScript(target => {
 		localStorage.setItem(
 			'ash.storage.workspace.sessions',
@@ -852,8 +852,12 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 				version: 1,
 				entries: {
 					'sessions.draftState:broken': { value: '{broken', target },
-					'sessions.codeDraftState:untitled:saved': {
-						value: JSON.stringify({ mode: 'agent', text: 'synthetic preserved draft', contexts: [] }),
+					'sessions.codeDraftState:untitled:legacy': {
+						value: JSON.stringify({ mode: 'agent', text: 'retired draft', contexts: [] }),
+						target,
+					},
+					'sessions.inputDraft:untitled:saved': {
+						value: JSON.stringify({ state: JSON.stringify({ text: '/swarm Review this project', contexts: [] }) }),
 						target,
 					},
 				},
@@ -867,7 +871,7 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 		page
 			.getByRole('region', { name: 'Notifications', exact: true })
 			.getByText(/^Could not restore the Chat draft:/u),
-	).toBeVisible();
+	).toHaveCount(0);
 	const feedback = page.locator('.ash-sessions-window > .ash-feedback-host');
 	await expect(feedback).toHaveCSS('position', 'absolute');
 	await expect(feedback).toHaveAttribute('data-notification-position', 'bottom-right');
@@ -884,12 +888,11 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 		() => JSON.parse(localStorage.getItem('ash.storage.workspace.sessions')!).entries,
 	);
 	expect(entries['sessions.draftState:broken'].value).toBe('{broken');
-	expect(entries['sessions.codeDraftState:untitled:saved']).toBeUndefined();
+	expect(entries['sessions.inputDraft:untitled:legacy']).toBeUndefined();
 	const input = JSON.parse(entries['sessions.inputDraft:untitled:saved'].value);
 	expect(input.attachments).toBeUndefined();
 	expect(JSON.parse(input.state)).toEqual({
-		mode: 'agent',
-		text: 'synthetic preserved draft',
+		text: '/swarm Review this project',
 		contexts: [],
 	});
 });
@@ -1270,7 +1273,7 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await page.keyboard.press('Tab');
 	await expect(workspace).toBeFocused();
 	await page.keyboard.press('Tab');
-	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-agent-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
 	await expect(voice).toHaveCount(0);
@@ -1317,7 +1320,7 @@ for (const locale of ['en', 'zh-CN']) {
 		))).toEqual([true, true]);
 		const footer = active.locator('.ash-sessions-chat-input-footer');
 		const controls = footer.locator(
-			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-mode-action, .ash-chat-input-permission-picker',
+			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-agent-action, .ash-chat-input-permission-picker',
 		);
 		await expect(controls).toHaveCount(4);
 		for (const control of await controls.all()) {

@@ -67,7 +67,7 @@ pub struct TurnView {
     pub started_at_unix_ms: Option<u64>,
     pub duration_ms: Option<u64>,
     pub kind: TurnKind,
-    pub mode: ash_protocol::AgentMode,
+
     pub instructions: Option<TurnInstructions>,
     pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub model: Option<ModelRef>,
@@ -88,11 +88,11 @@ pub struct TurnView {
 }
 
 impl TurnView {
-    pub fn execution_approach(&self) -> ash_protocol::AgentMode {
+    pub fn execution_approach(&self) -> ash_protocol::TaskExecution {
         self.instructions
             .as_ref()
             .and_then(TurnInstructions::task_command)
-            .unwrap_or(self.mode)
+            .unwrap_or_default()
     }
 }
 
@@ -123,7 +123,7 @@ impl ThreadView {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     kind: turn.kind,
-                    mode: turn.mode,
+
                     instructions: turn.instructions.clone(),
                     directory: turn.directory.clone(),
                     model: turn.model.clone(),

@@ -97,7 +97,6 @@ mod identity;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
-mod mode;
 mod restore;
 mod steering;
 mod turn_resources;
@@ -107,9 +106,6 @@ pub(crate) use user_input::chat_reference_source;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
-pub use mode::ChangeTurnModeRequest;
-pub use mode::ChangeTurnModeResult;
-pub use mode::ModeChangeAuthority;
 pub(crate) use turn_resources::TurnExecutionPlan;
 pub(crate) use turn_resources::TurnModelServices;
 use turn_resources::TurnResources;
@@ -127,7 +123,7 @@ pub struct StartTurnRequest {
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
-    pub mode: ash_protocol::AgentMode,
+
     pub instructions: TurnInstructions,
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
@@ -145,7 +141,7 @@ pub struct StartTurnRequest {
 /// message that was never sent.
 pub struct StartGoalTurnRequest {
     pub context_policy: ash_protocol::ContextCompactionPolicy,
-    pub mode: ash_protocol::AgentMode,
+
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
@@ -1314,18 +1310,6 @@ impl ThreadController {
             crate::tool_profile::validate_tool_profile_snapshot(profile)
                 .map_err(CoreError::InvalidInput)?;
         }
-        if request.mode.is_agent()
-            && let Some(profile) = request.tool_profile.as_mut()
-        {
-            // Keep the service available to frozen historical profiles. New requests select their
-            // approach at admission and cannot change it through a model tool.
-            let tool = ToolName::new("switch_mode").expect("built-in tool name is valid");
-            if profile.tool_names.contains(&tool) && !profile.disabled_tools.contains(&tool) {
-                profile.disabled_tools.push(tool);
-                crate::tool_profile::validate_tool_profile_snapshot(profile)
-                    .map_err(CoreError::InvalidInput)?;
-            }
-        }
         request
             .instructions
             .validate()
@@ -1353,7 +1337,6 @@ impl ThreadController {
         {
             let ThreadCommand::StartTurn {
                 kind,
-                mode,
                 instructions,
                 model,
                 model_routing: accepted_routing,
@@ -1370,7 +1353,6 @@ impl ThreadController {
                 return Err(CoreError::CommandConflict);
             };
             if kind != &request.kind
-                || mode != &request.mode
                 || instructions.as_ref() != Some(&request.instructions)
                 || model != &request.model
                 || accepted_routing.is_some() != model_routing.is_some()
@@ -1450,7 +1432,7 @@ impl ThreadController {
         let command = ThreadCommand::StartTurn {
             context_policy: request.context_policy.clone(),
             kind: request.kind,
-            mode: request.mode,
+
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             model_routing,
@@ -1504,7 +1486,7 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 kind: request.kind,
-                mode: request.mode,
+
                 instructions: Some(request.instructions.clone()),
                 directory: directory.or_else(|| snapshot.execution_target.clone()),
                 policy_revision: request.policy_revision.clone(),
@@ -1581,7 +1563,7 @@ impl ThreadController {
         let command = ThreadCommand::StartTurn {
             context_policy: request.context_policy.clone(),
             kind: TurnKind::Coding,
-            mode: request.mode,
+
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             model_routing: None,
@@ -1645,7 +1627,7 @@ impl ThreadController {
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                         kind: TurnKind::Coding,
-                        mode: request.mode,
+
                         instructions: Some(request.instructions.clone()),
                         directory: None,
                         policy_revision: request.policy_revision.clone(),
@@ -2140,7 +2122,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind: TurnKind::ContextCompaction,
-                    mode: ash_protocol::AgentMode::Agent,
+
                     instructions: None,
                     directory: None,
                     policy_revision: request.policy_revision.clone(),
@@ -2295,7 +2277,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind,
-                    mode: ash_protocol::AgentMode::Agent,
+
                     instructions: None,
                     directory: None,
                     policy_revision: request.policy_revision.clone(),

@@ -119,10 +119,10 @@ export class AgentSessionsWelcomePage extends EditorPane {
 			} : undefined;
 			this.mount.value = view.createEmbeddedChat(this.chatHost, 'ash-agent-sessions-welcome-title', {
 				workspacePickerDelegate: delegate,
-				submitHandler: async (query, mode, contexts, submissionSignal) => {
+				submitHandler: async (query, contexts, submissionSignal) => {
 					const target = this.selectedWorkspace;
 					if (!target || !(await this.trust.getUriTrustInfo(target.uri)).trusted) { return false; }
-					const draft = await captureChatDraft(query, mode, contexts);
+					const draft = await captureChatDraft(query, contexts);
 					if (this.isDisposed || submissionSignal?.aborted || this.selectedWorkspace !== target) { throw canceled(); }
 					const key = `chat.welcomeViewPrefill:${target.uri.toString()}`;
 					const value = JSON.stringify({ timestamp: Date.now(), payload: { draft } });

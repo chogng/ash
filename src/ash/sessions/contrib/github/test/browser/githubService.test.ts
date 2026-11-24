@@ -1078,7 +1078,7 @@ suite('sessionGitHub browser component', () => {
 			await row.getByRole('button', { name: zh ? '请 Agent 修复 CI' : 'Ask agent to fix CI', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.submissions.length)).toBe(1);
 			const submission = await page.evaluate(() => window.ashSessionGitHub.submissions[0]!);
-			expect(submission).toMatchObject({ sessionId: 'session', threadId: 'thread', expectedSequence: 3, mode: 'agent' });
+			expect(submission).toMatchObject({ sessionId: 'session', threadId: 'thread', expectedSequence: 3 });
 			expect(submission.text).toContain('Error page 2');
 			expect(submission.text).not.toContain('sig=fixture');
 			const rerun = await page.evaluate(() => window.ashSessionGitHub.requests.find(request => request.method === 'github/check/rerun')!);

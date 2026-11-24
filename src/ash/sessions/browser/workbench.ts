@@ -213,7 +213,7 @@ import { NativeChatPaneFactory } from '../contrib/chat/browser/nativeChatPaneFac
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
 import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
-import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
+import { readNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
@@ -488,8 +488,6 @@ export abstract class Workbench extends Disposable {
 		const accountMenu = services.createInstance(SessionsAccountMenu, preferences);
 		const { titlebar, sidebar, flatLayout } = this.createNavigationParts(services, options);
 		const notifications = services.get(INotificationService);
-		const recoveredDrafts = migrateNewChatDraftState(storage,
-			error => notifications.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this.registerConversationCommands(services);
 		const commandService = services.get(ICommandService);
 		this.showChat = () => commandService.executeCommand<void>('sessions.open.chat');
@@ -510,7 +508,7 @@ export abstract class Workbench extends Disposable {
 		const { contributions, terminalContribution } = this.startContributions(services, options, editor);
 		this.layoutService.layout();
 		this._whenRestored = this.restore(services, options, editor, {
-			contributions, terminalContribution, recoveredDrafts, workspaceProjectionReady,
+			contributions, terminalContribution, workspaceProjectionReady,
 			hasBrowser: !!browsers,
 			ready: [keybindingsReady, editorDeclarationsReady, ...serviceContributionReady, options.initialWorkspaceReady],
 		});
@@ -1667,13 +1665,13 @@ export abstract class Workbench extends Disposable {
 		startup: {
 			contributions: WorkbenchContributionHost;
 			terminalContribution: ReturnType<typeof registerSessionsTerminalContribution>;
-			recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>;
+
 			workspaceProjectionReady: DeferredPromise<void>;
 			hasBrowser: boolean;
 			ready: readonly (Promise<void> | undefined)[];
 		},
 	): Promise<void> {
-		const { contributions, terminalContribution, recoveredDrafts, workspaceProjectionReady, hasBrowser, ready } = startup;
+		const { contributions, terminalContribution, workspaceProjectionReady, hasBrowser, ready } = startup;
 		const view = this.sessionsView;
 		const storage = services.get(IStorageService);
 		const sessions = services.get(ISessionsManagementService);
@@ -1685,7 +1683,7 @@ export abstract class Workbench extends Disposable {
 		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
 		const whenRestored = Promise.all(ready).then(async () => {
 			if (!this.isDisposed && options.initialWorkspaceReady) this.configurationService.updateWorkspace(options.workspace());
-			await this.restoreSession(entryLayout, contributions, storage, recoveredDrafts, () => {
+			await this.restoreSession(entryLayout, contributions, () => {
 				// Terminal editors can wait on PTY recovery during layout restore. Publish the
 				// selected execution directory first, including when the catalog is still hydrating.
 				const selection = view.activeSelection;
@@ -1747,8 +1745,7 @@ export abstract class Workbench extends Disposable {
 	private async restoreSession(
 		entryLayout: ISessionsEntryService,
 		contributions: WorkbenchContributionHost,
-		storage: IStorageService,
-		recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>,
+
 		publishWorkspaceReady: () => void,
 	): Promise<void> {
 		const view = this.sessionsView;
@@ -1756,14 +1753,6 @@ export abstract class Workbench extends Disposable {
 		await view.initialize();
 		if (this.isDisposed) return;
 		if (!view.activeSelection) view.openNewSession(undefined, { source: 'restore' });
-		const selected = view.activeSelection!;
-		for (const recovered of recoveredDrafts) {
-			const session = view.openNewSession(undefined, { sideBySide: true, source: 'restore' });
-			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`);
-			this.sessionsPart.restoreDraft(recovered.draft);
-			storage.remove(recovered.key, StorageScope.WORKSPACE);
-		}
-		view.activateSelection(selected, { source: 'restore' });
 		publishWorkspaceReady();
 		await entryLayout.restore();
 		if (this.isDisposed) return;

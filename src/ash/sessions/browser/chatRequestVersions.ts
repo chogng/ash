@@ -35,7 +35,7 @@ export async function readChatRequestVersions(chat: IChatService, session: ISess
 		if (originalTurn?.status !== 'completed') return undefined;
 		const inherited = new Set(original.turns.map(turn => turn.turnId));
 		const alternateTurn = alternate.turns.find(turn => !inherited.has(turn.turnId));
-		if (alternateTurn?.status !== 'completed' || alternateTurn.mode !== originalTurn.mode) return undefined;
+		if (alternateTurn?.status !== 'completed' || alternateTurn.execution !== originalTurn.execution) return undefined;
 		const accepted = getAcceptedChatRequest(originalTurn);
 		if (!accepted || !equals(accepted.input, getAcceptedChatRequest(alternateTurn)?.input)) return undefined;
 		const pair = {

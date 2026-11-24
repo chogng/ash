@@ -275,7 +275,6 @@ fn input(id: &str) -> QueueInput {
     QueueInput {
         window: None,
         command_interpretation: protocol::CommandInterpretation::Product,
-        mode: Default::default(),
         task_command: None,
         model: None,
         model_routing: None,
@@ -470,7 +469,7 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
     let mut request = input("mode-choice");
-    request.mode = protocol::AgentMode::Swarm;
+    request.mode = protocol::TaskExecution::Swarm;
     request.model = Some(protocol::ModelRef::new(
         protocol::ProviderId::new("test").unwrap(),
         protocol::ModelId::new("model").unwrap(),
@@ -483,7 +482,7 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
         Some(accepted.clone())
     );
     assert_eq!(reopened.enqueue(&request).unwrap(), accepted);
-    request.mode = protocol::AgentMode::Agent;
+    request.mode = protocol::TaskExecution::Agent;
     assert!(matches!(
         reopened.enqueue(&request),
         Err(QueueError::Conflict)

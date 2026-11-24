@@ -1443,11 +1443,11 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
+				return { queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, ...(hasConversationChanges ? conversationChanges : {}) };
 			},
-			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
+			send: async (text, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
-			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
+			listAgents: async () => [], selectAgent() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
 		};
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
@@ -1518,7 +1518,7 @@ window.ashChatTranscriptIntegration = {
 				return { type: 'agentMessage' as const, itemId: `history-answer-${number}`, turnId: `history-turn-${number}`, text: `Answer ${number}: ` + 'x'.repeat(textBytes) };
 			});
 			const result: SessionThreadReadResult = {
-				thread: { sessionId: 'history-session', threadId: 'history-thread', agentId: 'history-agent', origin: { type: 'root' }, title: 'Controlled history', status: 'active', sequence: turns, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: items.map(item => ({ turnId: item.turnId, status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] })) },
+				thread: { sessionId: 'history-session', threadId: 'history-thread', agentId: 'history-agent', origin: { type: 'root' }, title: 'Controlled history', status: 'active', sequence: turns, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: items.map(item => ({ turnId: item.turnId, status: 'completed', kind: 'coding', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] })) },
 				transcript: { sessionId: 'history-session', threadId: 'history-thread', durableSequence: turns, revision: turns, entries: items.map(item => ({ type: 'item', entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false })) },
 				...(bounded ? { history: { hasOlderTurns: first > 0, oldestTurnId: items[0]?.turnId } } : {}),
 			};

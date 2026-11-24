@@ -212,7 +212,6 @@ impl Fixture {
     fn submit(&self, text: &str) -> SubmitTurnRequest {
         SubmitTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             command_id: CommandId::new("start").unwrap(),
             expected_sequence: SequenceExpectation::Exact(1),
@@ -312,25 +311,29 @@ fn submitted_turn_replays_one_receipt_and_rejects_changed_input() {
 }
 
 #[test]
-fn submitted_turn_rejects_replay_with_a_different_agent_mode() {
+fn submitted_turn_rejects_replay_with_a_different_task_execution() {
     let fixture = Fixture::new(Failure::None);
     let runtime = fixture.runtime();
     let mut first_request = fixture.submit("hello");
-    first_request.mode = ash_protocol::AgentMode::Plan;
+    first_request.instructions = first_request
+        .instructions
+        .with_task_command(Some(ash_protocol::TaskExecution::Plan));
     runtime
         .submit_turn(&fixture.thread_id, first_request)
         .unwrap();
 
     let mut retry = fixture.submit("hello");
-    retry.mode = ash_protocol::AgentMode::Debug;
+    retry.instructions = retry
+        .instructions
+        .with_task_command(Some(ash_protocol::TaskExecution::Debug));
     assert!(matches!(
         runtime.submit_turn(&fixture.thread_id, retry),
         Err(CoreError::CommandConflict)
     ));
     assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 1);
     assert_eq!(
-        runtime.read_thread(&fixture.thread_id).unwrap().turns[0].mode,
-        ash_protocol::AgentMode::Plan
+        runtime.read_thread(&fixture.thread_id).unwrap().turns[0].execution_approach(),
+        ash_protocol::TaskExecution::Plan
     );
 }
 

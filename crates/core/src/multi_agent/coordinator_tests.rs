@@ -541,7 +541,6 @@ fn terminal_child_summary_does_not_reuse_an_earlier_turn_answer() {
             &spawned.child_thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -710,7 +709,6 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
             &spawned.child_thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -756,7 +754,6 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
         &spawned.child_thread_id,
         StartTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: crate::test_turn_instructions(),
@@ -1254,7 +1251,6 @@ fn fixture_with_profile(
             &parent.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

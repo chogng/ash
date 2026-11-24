@@ -59,7 +59,7 @@ class Fixture extends Disposable {
 		} as IChatService);
 		this.services.registerInstance(IChatSessionNavigationService, {
 			getActiveConversation: () => this.active,
-			captureActiveDraft: async () => ({ draft: { mode: 'agent', text: 'Unsent draft', contexts: [] }, clear: () => { this.cleared++; } }),
+			captureActiveDraft: async () => ({ draft: { text: 'Unsent draft', contexts: [] }, clear: () => { this.cleared++; } }),
 		} as unknown as IChatSessionNavigationService);
 		const owner = this;
 		this.services.registerInstance(IHostService, { get hasFocus() { return owner.focused; }, onDidChangeFocus: this.focus.event } as IHostService);
@@ -104,7 +104,7 @@ suite('Desktop Agents invitation', () => {
 					const acknowledged = new DeferredPromise<void>(); fixture.handoff = acknowledged.p;
 					const opening = notification.actions!.primary![0]!.run() as Promise<void>;
 					await setImmediate();
-					assert.deepEqual(fixture.opened, [{ conversation: { sessionId: 'session', threadId: 'thread' }, draft: { mode: 'agent', text: 'Unsent draft', contexts: [] } }]);
+					assert.deepEqual(fixture.opened, [{ conversation: { sessionId: 'session', threadId: 'thread' }, draft: { text: 'Unsent draft', contexts: [] } }]);
 					assert.equal(fixture.cleared, 0);
 					if (action === 'ack') { await acknowledged.complete(); await opening; assert.equal(fixture.cleared, 1); }
 					else { const rejection = assert.rejects(opening, /Controlled handoff failure/); await acknowledged.error(new Error('Controlled handoff failure')); await rejection; assert.equal(fixture.cleared, 0); assert.equal(fixture.notifications.model.getNotifications().length, 1); return; }

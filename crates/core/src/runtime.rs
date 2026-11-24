@@ -109,7 +109,7 @@ impl<'a> Runtime<'a> {
                 kind: request.kind,
                 input: &request.input,
                 tool_mode: request.tool_mode,
-                mode: request.mode,
+
                 task_command,
                 automatic_model,
             },
@@ -126,7 +126,7 @@ impl<'a> Runtime<'a> {
         let input = request.input.clone();
         let tool_mode = request.tool_mode;
         let kind = request.kind;
-        let mode = request.mode;
+
         let start = admit(
             thread_id,
             crate::StartTurnRequest {
@@ -137,7 +137,6 @@ impl<'a> Runtime<'a> {
                 reasoning_effort: request.reasoning_effort,
                 advisor: request.advisor,
                 kind: request.kind,
-                mode,
                 instructions: request.instructions,
                 policy_revision: self.executor.policy_revision(),
                 approval_mode: request.approval_mode,
@@ -157,7 +156,6 @@ impl<'a> Runtime<'a> {
                         kind,
                         input: &input,
                         tool_mode,
-                        mode,
                         task_command,
                         automatic_model,
                     },
@@ -392,7 +390,6 @@ impl AgentRuntime for Runtime<'_> {
             (
                 ThreadCommand::StartTurn {
                     input,
-                    mode,
                     tool_mode,
                     kind,
                     model_routing,
@@ -403,7 +400,7 @@ impl AgentRuntime for Runtime<'_> {
                     kind: wanted_kind,
                     input: wanted,
                     tool_mode: wanted_tool_mode,
-                    mode: wanted_mode,
+
                     task_command,
                     automatic_model,
                 },
@@ -411,7 +408,6 @@ impl AgentRuntime for Runtime<'_> {
                 input == wanted
                     && *tool_mode == wanted_tool_mode
                     && *kind == wanted_kind
-                    && *mode == wanted_mode
                     && instructions
                         .as_ref()
                         .and_then(ash_protocol::TurnInstructions::task_command)
@@ -469,7 +465,6 @@ impl AgentRuntime for Runtime<'_> {
             (
                 ThreadCommand::StartTurn {
                     input,
-                    mode,
                     tool_mode,
                     approval_mode,
                     model_routing,
@@ -477,7 +472,6 @@ impl AgentRuntime for Runtime<'_> {
                     ..
                 },
                 AcceptedCommand::Turn {
-                    mode: wanted_mode,
                     task_command,
                     input: wanted,
                     tool_mode: mode_tool,
@@ -486,7 +480,6 @@ impl AgentRuntime for Runtime<'_> {
                 },
             ) => {
                 input == wanted
-                    && *mode == wanted_mode
                     && instructions
                         .as_ref()
                         .and_then(ash_protocol::TurnInstructions::task_command)

@@ -43,7 +43,6 @@ fn task(server: &crate::AppServer, name: &str) -> (ThreadId, TurnId) {
             &created.thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

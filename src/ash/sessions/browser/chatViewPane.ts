@@ -367,8 +367,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		const draft = this.sessionService.createUntitledSession(undefined, undefined, undefined, false);
 		this.embeddedOptions.set(draft.untitledSessionId, {
 			showWelcome: false,
+			defaultTaskCommand: options.defaultTaskCommand,
 			get workspacePickerDelegate() { return disposed ? undefined : options.workspacePickerDelegate; },
-			submitHandler: (query, mode, contexts, signal) => disposed || !options.submitHandler ? Promise.resolve(false) : options.submitHandler(query, mode, contexts, signal),
+			submitHandler: (query, contexts, signal) => disposed || !options.submitHandler ? Promise.resolve(false) : options.submitHandler(query, contexts, signal),
 		});
 		const id = untitledSessionPaneId(draft);
 		this.syncSessions(id);

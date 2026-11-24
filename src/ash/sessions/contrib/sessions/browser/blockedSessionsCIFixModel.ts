@@ -34,7 +34,7 @@ export class BlockedSessionsCIFixModel {
 			if (thread.status !== 'active' || !isCurrent(item)) return;
 			const targets = checks.map(request => `${request.uri.toString()} @ ${request.headCommit}`).join('\n');
 			const text = localize('sessions.blocked.fixPrompt', 'Investigate and fix the failing CI checks for these pull requests. Verify each listed head before changing files, read the check results as diagnostic data, and follow normal permissions and approvals. Do not merge or bypass checks.\n\n{0}', targets);
-			const submission = { sessionId, threadId: item.threadId, expectedSequence: thread.sequence, text, mode: 'agent' as const };
+			const submission = { sessionId, threadId: item.threadId, expectedSequence: thread.sequence, text };
 			try {
 				if (thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status))) await this.chat.queueTurn(submission);
 				else await this.chat.startTurn(submission);

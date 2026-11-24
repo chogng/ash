@@ -434,8 +434,8 @@
 }
 
 .ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector
-	.ash-chat-input-action.ash-chat-input-mode-action {
+	.ash-chat-input-agent-selector
+	.ash-chat-input-action.ash-chat-input-agent-action {
 	width: auto;
 	min-width: 0;
 	gap: 0;
@@ -449,14 +449,14 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-chat-input-toolbars .ash-chat-input-mode-selector {
+.ash-chat-input-toolbars .ash-chat-input-agent-selector {
 	min-width: 0;
 	flex-shrink: 0;
 }
 
 .ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector
-	.ash-chat-input-action.ash-chat-input-mode-action.icon-only {
+	.ash-chat-input-agent-selector
+	.ash-chat-input-action.ash-chat-input-agent-action.icon-only {
 	box-sizing: border-box;
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
@@ -464,47 +464,19 @@
 }
 
 .ash-chat-input-toolbars.ash-toolbar
-	.ash-action-view-item.icon.ash-chat-input-mode-selector
+	.ash-action-view-item.icon.ash-chat-input-agent-selector
 	.ash-icon-label-container {
 	display: inline-flex;
 }
 
 .ash-chat-input-toolbars.ash-toolbar
-	.ash-action-view-item.icon.ash-chat-input-mode-selector.compact
+	.ash-action-view-item.icon.ash-chat-input-agent-selector.compact
 	.ash-icon-label-container,
 .ash-chat-input-toolbars.ash-toolbar
-	.ash-action-view-item.icon.ash-chat-input-mode-selector
+	.ash-action-view-item.icon.ash-chat-input-agent-selector
 	.icon-only
 	.ash-icon-label-container {
 	display: none;
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector.mode-plan
-	.ash-chat-input-mode-action {
-	color: var(--ash-charts-orange);
-	background: color-mix(in srgb, var(--ash-charts-orange) 16%, transparent);
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector.mode-debug
-	.ash-chat-input-mode-action {
-	color: var(--ash-charts-red);
-	background: color-mix(in srgb, var(--ash-charts-red) 16%, transparent);
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector.mode-swarm
-	.ash-chat-input-mode-action {
-	color: var(--ash-charts-purple);
-	background: color-mix(in srgb, var(--ash-charts-purple) 16%, transparent);
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector.mode-ask
-	.ash-chat-input-mode-action {
-	color: var(--ash-charts-green);
-	background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
 }
 
 :where(.ash-chat-input-mic) .ash-chat-input-mic-action {
@@ -636,8 +608,8 @@
 
 @container (max-width: 360px) {
 	.ash-chat-input-toolbars.ash-toolbar
-		.ash-chat-input-mode-selector
-		.ash-chat-input-action.ash-chat-input-mode-action,
+		.ash-chat-input-agent-selector
+		.ash-chat-input-action.ash-chat-input-agent-action,
 	.ash-chat-input-toolbars
 		.ash-chat-model-picker-control
 		> .ash-chat-input-picker-button {

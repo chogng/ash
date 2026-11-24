@@ -78,7 +78,7 @@ test('Agents Window handoff preserves optional context sources and rejects malfo
 	let opened: unknown;
 	const route = nativeHostIpcRoutes({ openAgentsWindow: async options => { opened = options; } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	const context = { id: 'file', kind: 'file', name: 'brief.ts', content: 'Snapshot', resource: 'file:///workspace/brief.ts' };
-	const options = { draft: { mode: 'agent', text: '', contexts: [context, { id: 'text', kind: 'file', name: 'upload.txt', content: 'Upload' }] } };
+	const options = { draft: { text: '', contexts: [context, { id: 'text', kind: 'file', name: 'upload.txt', content: 'Upload' }] } };
 	await route.invoke(route.validate(options));
 	assert.deepEqual(opened, options);
 	for (const attachment of [{ ...context, resource: 42 }, { ...context, unexpected: true }, { resource: context.resource }]) {
@@ -89,7 +89,7 @@ test('Agents Window handoff preserves optional context sources and rejects malfo
 test('Agents Window handoff validates inline code reference positions against the message', async () => {
 	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	const context = { id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', content: 'Selected code', reference: { start: 8, end: 21 } };
-	const options = { draft: { mode: 'agent', text: 'Explain file.ts (6-9)', contexts: [context] } };
+	const options = { draft: { text: 'Explain file.ts (6-9)', contexts: [context] } };
 	assert.deepEqual(route.validate(options), options);
 	assert.deepEqual(route.validate({ draft: { ...options.draft, contexts: [{ ...context, kind: 'file' }] } }), { draft: { ...options.draft, contexts: [{ ...context, kind: 'file' }] } });
 	assert.deepEqual(route.validate({ draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] } }), { draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] } });
@@ -102,7 +102,7 @@ test('Agents Window handoff accepts validated inline references for folders, ses
 	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	for (const kind of ['directory', 'session', 'toolSelection', 'instruction', 'registeredSource']) {
 		const context = { id: kind, kind, name: 'context', content: 'snapshot', reference: { start: 7, end: 14 } };
-		assert.doesNotThrow(() => route.validate({ draft: { mode: 'agent', text: 'Review context please', contexts: [context] } }));
+		assert.doesNotThrow(() => route.validate({ draft: { text: 'Review context please', contexts: [context] } }));
 	}
 });
 
@@ -249,7 +249,7 @@ test('dialog boundaries reject legacy requests, non-transferable signals, and ma
 
 test('Agents Window handoff keeps terminal snapshots and inline positions in the same validated context', () => {
 	const context = { id: 'terminal', kind: 'terminal', name: 'Terminal: Shell', content: 'Captured output', terminalSnapshot: { text: 'captured', columns: 80 }, reference: { start: 7, end: 22 } };
-	const options = { draft: { mode: 'agent', text: 'Review Terminal: Shell ', contexts: [context] } };
+	const options = { draft: { text: 'Review Terminal: Shell ', contexts: [context] } };
 	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => { } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	assert.deepEqual(route.validate(options), options);
 	assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, terminalSnapshot: { text: 'captured', columns: 0 } }] } }), /Invalid terminal snapshot/);

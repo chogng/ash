@@ -16,7 +16,7 @@ suite('Chat Agent hover', () => {
 				window.ashChatInputIntegration.setAgent(agent);
 				window.ashChatInputIntegration.appendToDraft('Unsent draft');
 			}, agent);
-			const picker = page.locator('[data-action-id="ash.chat.input.mode"] button');
+			const picker = page.locator('[data-action-id="ash.chat.input.agent"] button');
 			await expect(picker).toContainText(agent.name);
 			await picker.hover();
 			const card = page.locator('.ash-hover .ash-chat-agent-hover');
@@ -50,11 +50,11 @@ suite('Chat Agent hover', () => {
 		});
 	}
 
-	test('changing Agent, switching mode and disposing the input retire the old hover', async () => {
+	test('changing or clearing the Agent and disposing the input retire the old hover', async () => {
 		const { page } = browser;
 		await page.goto('/chatInput.html?inlineCode');
 		await page.evaluate(agent => window.ashChatInputIntegration.setAgent(agent), agent);
-		const picker = page.locator('[data-action-id="ash.chat.input.mode"] button');
+		const picker = page.locator('[data-action-id="ash.chat.input.agent"] button');
 		await picker.hover();
 		await expect(page.locator('.ash-chat-agent-hover')).toContainText('Reviewer');
 		await page.evaluate(() => window.ashChatInputIntegration.setAgent({ name: 'Writer', description: '<img src=x onerror=alert(1)>', sourceId: 'user' }));
@@ -63,7 +63,7 @@ suite('Chat Agent hover', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.showAgentHover());
 		await expect(page.locator('.ash-chat-agent-hover')).toContainText('<img src=x onerror=alert(1)>');
 		await expect(page.locator('.ash-chat-agent-hover img')).toHaveCount(0);
-		await page.evaluate(() => window.ashChatInputIntegration.setAgent(undefined, 'ask'));
+		await page.evaluate(() => window.ashChatInputIntegration.setAgent(undefined));
 		await expect(page.locator('.ash-chat-agent-hover')).toHaveCount(0);
 		await page.evaluate(agent => window.ashChatInputIntegration.setAgent(agent), agent);
 		await picker.focus();
@@ -87,7 +87,7 @@ suite('Chat Agent hover', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.setAgent({
 			name: 'LongAgentName'.repeat(8), description: '描述'.repeat(120), sourceId: 'internal-directory-id',
 		}));
-		await page.locator('[data-action-id="ash.chat.input.mode"] button').focus();
+		await page.locator('[data-action-id="ash.chat.input.agent"] button').focus();
 		await page.evaluate(() => window.ashChatInputIntegration.showAgentHover());
 		const card = page.locator('.ash-chat-agent-hover');
 		await expect(card).toBeVisible();

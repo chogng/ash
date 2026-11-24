@@ -64,20 +64,6 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 					return;
 				}
 				const results = body.input.filter(item => item.type === 'function_call_output');
-				if (prompt.includes('chat-widget-plan-review-fixture')) {
-					if (results.length === 0) {
-						respond(response, [call('fixture-plan', 'switch_mode', { mode: 'agent', reason: 'Review the proposed coverage.', plan: '# Proposed plan\n\n1. Add a reconnect test.' })]);
-					} else if (results.length === 1) {
-						const declined = fixtureToolOutput(results[0].output);
-						if (!declined.rejected || declined.feedback !== 'Also cover a failed reconnect.\n\n[L1] Describe the retry limit.') throw new Error('Expected overall and line-level plan feedback');
-						respond(response, [call('fixture-revised-plan', 'switch_mode', { mode: 'agent', reason: 'Review the revised coverage.', plan: '# Revised plan\n\n1. Cover successful and failed reconnects.' })]);
-					} else {
-						const approved = fixtureToolOutput(results.at(-1)!.output);
-						if (!approved.changed || approved.mode !== 'agent') throw new Error('Expected the approved execution mode');
-						respond(response, message('The plan review fixture is complete.\n\n- [Run the reconnect tests](#ash-followup)'));
-					}
-					return;
-				}
 				if (prompt.includes('hook-trace-fixture')) {
 					respond(response, results.length ? message('hook-trace-fixture-final') : [call('fixture-hook-tool', 'shell-command', { program: process.execPath, arguments: ['-e', 'console.log("hook-trace-tool-executed")'], working_directory: '.' })]);
 					return;
@@ -166,7 +152,7 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 		expect(created.session.threads).toHaveLength(1);
 		const threadId = created.session.threads[0].threadId;
 		const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'fixture-start', sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'trace-fixture-parent-task: run the controlled demonstration.' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
+		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'fixture-start', sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'trace-fixture-parent-task: run the controlled demonstration.' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, approvalMode: 'bypassPermissions', toolMode: 'direct' } });
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Trace controlled execution' }).click();
 		await new QuickAccess(page).runCommand('sessions.trace.open');
 		const viewer = page.locator('.ash-agent-trace');
@@ -289,7 +275,7 @@ test('Chat widget updates delegated agents in place and opens the child beside t
 		await client.request(APP_SERVER_METHODS['session/request'], {
 			commandId: 'chat-widget-agents-start', sessionId, request: {
 				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'trace-fixture-parent-task: inspect delegated activity.' }],
-				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct',
+				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, approvalMode: 'bypassPermissions', toolMode: 'direct',
 			}
 		});
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Delegated activity fixture' }).click();
@@ -313,75 +299,6 @@ test('Chat widget updates delegated agents in place and opens the child beside t
 	} finally { await connection.close(); }
 });
 
-test('Chat widget reviews and revises a real plan and stages a follow-up from the completed reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }, testInfo) => {
-	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
-	const { client } = connection;
-	try {
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'plan-review-session', kind: 'code', title: 'Plan review fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
-		const { sessionId } = created.session;
-		const { threadId } = created.session.threads[0];
-		const read = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-		const thread = await read();
-		await client.request(APP_SERVER_METHODS['session/request'], {
-			commandId: 'plan-review-start', sessionId, request: {
-				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'chat-widget-plan-review-fixture' }],
-				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'plan', approvalMode: 'bypassPermissions', toolMode: 'direct',
-			}
-		});
-		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Plan review fixture' }).click();
-		const review = page.locator('.ash-chat-plan-review');
-		await expect(review.getByRole('heading', { name: 'Proposed plan' })).toBeVisible();
-		await review.getByRole('button', { name: 'Open plan in editor', exact: true }).press('Enter');
-		const comments = page.getByRole('group', { name: 'Agent comments', exact: true });
-		await expect(comments).toBeVisible();
-		const planEditor = page.getByRole('tabpanel', { name: 'Review proposed plan', exact: true });
-		const editorInput = planEditor.getByRole('textbox', { name: 'Review proposed plan', exact: true });
-		await expect(editorInput).toBeVisible();
-		await expect(planEditor.locator('.view-lines')).toContainText('Add a reconnect test.');
-		const addComment = comments.getByRole('button', { name: 'Add comment', exact: true });
-		const popup = planEditor.getByRole('dialog', { name: /^Comments on line \d+$/ });
-		const commentInput = popup.getByRole('textbox', { name: 'Comment for the agent' });
-		const planText = planEditor.getByText('Add a reconnect test.', { exact: true }).first();
-		const before = await planText.boundingBox();
-		await addComment.press('Enter');
-		await expect(commentInput).toBeFocused();
-		await expect(popup).toBeInViewport();
-		expect(await planText.boundingBox()).toEqual(before);
-		await planEditor.screenshot({ path: testInfo.outputPath('floating-plan-comment.png') });
-		await commentInput.fill('Describe the retry limit.');
-		await commentInput.press('Escape');
-		await expect(popup).toBeHidden();
-		await expect(editorInput).toBeFocused();
-		await editorInput.press('ControlOrMeta+Alt+m');
-		await expect(commentInput).toHaveValue('Describe the retry limit.');
-		await popup.getByRole('button', { name: 'Save comment', exact: true }).press('Enter');
-		await expect(review.getByRole('button', { name: 'Open plan in editor (Comments: 1)', exact: true })).toBeVisible();
-		const marker = planEditor.getByRole('button', { name: /^Open comments on line \d+$/ });
-		await expect(marker).toHaveAttribute('aria-expanded', 'true');
-		await marker.click();
-		await expect(popup).toBeHidden();
-		await marker.click();
-		await expect(popup.getByText('Describe the retry limit.', { exact: true })).toBeVisible();
-		await review.getByRole('textbox', { name: 'Changes to the plan (optional)' }).fill('Also cover a failed reconnect.');
-		await review.getByRole('button', { name: 'Keep planning' }).press('Enter');
-		await expect(review.getByRole('heading', { name: 'Revised plan' })).toBeVisible();
-		await expect(comments).toHaveCount(0);
-		expect((await read()).thread.turns.at(-1)?.mode).toBe('plan');
-		await review.getByRole('button', { name: 'Approve and continue' }).press('Enter');
-		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');
-		expect((await read()).thread.turns.at(-1)?.mode).toBeUndefined();
-		await expect(page.getByRole('log', { name: 'Chat transcript' }).getByText('The plan review fixture is complete.', { exact: true })).toBeVisible();
-		const suggestion = page.getByRole('group', { name: 'Suggested follow-ups' }).getByRole('button', { name: 'Run the reconnect tests' });
-		await expect(suggestion).toBeVisible();
-		await suggestion.click();
-		await expect(page.locator('.ash-chat-input-part .stanza-editor-input:visible')).toBeFocused();
-		await expect(page.locator('.ash-chat-input-part').getByRole('region', { name: 'Chat message', exact: true })).toContainText('Run the reconnect tests');
-		expect((await read()).thread.turns).toHaveLength(1);
-	} finally { await connection.close(); }
-});
-
 test('Chat widget routes a real provider usage limit to the model picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, testWorkspace }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -396,7 +313,7 @@ test('Chat widget routes a real provider usage limit to the model picker', { tag
 		await client.request(APP_SERVER_METHODS['session/request'], {
 			commandId: 'usage-limit-start', sessionId, request: {
 				type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'chat-widget-usage-limit-fixture' }],
-				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct',
+				model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, approvalMode: 'bypassPermissions', toolMode: 'direct',
 			}
 		});
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Usage limit fixture' }).click();
@@ -421,7 +338,7 @@ test('Execution Trace retains real model failure and cancellation during concurr
 			if (result.type !== 'thread') { throw new Error('Expected fixture Thread'); }
 			const threadId = result.value.threadId;
 			const read = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `start-${kind}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: read.thread.sequence, input: [{ type: 'text', text: `trace-fixture-${kind}` }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `start-${kind}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: read.thread.sequence, input: [{ type: 'text', text: `trace-fixture-${kind}` }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, approvalMode: 'bypassPermissions', toolMode: 'direct' } });
 			return threadId;
 		};
 		const cancelThread = await start('cancel');
@@ -483,7 +400,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, approvalMode: 'bypassPermissions', toolMode: 'direct' } });
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
 			await expect.poll(() => readFile(marker, 'utf8').catch(error => {

@@ -176,7 +176,7 @@ fn configured_app(mode: ScreenMode) -> App {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::Context, true);
     app.update(crate::status::Event::LineSettingsReceived(settings));
-    app.set_agent_mode(ash_protocol::AgentMode::Plan);
+    app.set_task_execution(ash_protocol::TaskExecution::Plan);
     app.chat_panel
         .status_line_mut()
         .apply_model_label("Shared model (high)");

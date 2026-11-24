@@ -274,7 +274,6 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
             input: vec![ash_protocol::UserInput::Text {
                 text: "queued task".into(),
             }],
-            mode: Default::default(),
             model: None,
             model_routing: None,
             reasoning_effort: None,
@@ -328,7 +327,6 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
             &sibling,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

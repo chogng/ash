@@ -3,9 +3,9 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
-import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../common/newChatDraftState.js';
 
-const draft = { mode: 'plan' as const, text: 'Recover this task', contexts: [{ id: 'source', kind: 'file', name: 'task.ts', content: 'selected snapshot', resource: 'file:///project/task.ts' }] };
+const draft = { text: 'Recover this task', contexts: [{ id: 'source', kind: 'file', name: 'task.ts', content: 'selected snapshot', resource: 'file:///project/task.ts' }] };
 
 function createStorage() {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
@@ -15,85 +15,22 @@ function createStorage() {
 
 test('stored drafts retain code reference positions and reject references to different text', () => {
 	using fixture = createStorage();
-	const selected = { mode: 'agent' as const, text: 'Explain task.ts (6-9)', contexts: [{ id: 'selection', kind: 'codeSelection', name: 'task.ts (6-9)', content: 'Unsaved code', resource: 'file:///project/task.ts#6,1-9,2', reference: { start: 8, end: 21 } }] };
+	const selected = { text: 'Explain task.ts (6-9)', contexts: [{ id: 'selection', kind: 'codeSelection', name: 'task.ts (6-9)', content: 'Unsaved code', resource: 'file:///project/task.ts#6,1-9,2', reference: { start: 8, end: 21 } }] };
 	writeNewChatDraftState(fixture.storage, selected, 'selection');
 	assert.deepEqual(readNewChatDraftState(fixture.storage, 'selection'), selected);
-	fixture.storage.store('sessions.inputDraft:selection', JSON.stringify({ ...selected, text: 'Explain other.ts (6-9)' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const stored = JSON.parse(fixture.storage.get('sessions.inputDraft:selection', StorageScope.WORKSPACE)!);
+	stored.state = JSON.stringify({ text: 'Explain other.ts (6-9)', contexts: [] });
+	fixture.storage.store('sessions.inputDraft:selection', JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.throws(() => readNewChatDraftState(fixture.storage, 'selection'), /Invalid Agents Window context reference/);
 });
 
-test('malformed legacy drafts preserve their raw entries while valid drafts still migrate', () => {
-	using fixture = createStorage();
-	const storage = fixture.storage;
-	const malformed = '{unfinished';
-	storage.store('sessions.draftState:broken', malformed, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.codeDraftState:valid', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const errors: unknown[] = [];
-	assert.deepEqual(migrateNewChatDraftState(storage, error => errors.push(error)), []);
-	assert.equal(errors.length, 1);
-	assert.ok(errors[0] instanceof SyntaxError);
-	assert.equal(storage.get('sessions.draftState:broken', StorageScope.WORKSPACE), malformed);
-	assert.equal(storage.get('sessions.codeDraftState:valid', StorageScope.WORKSPACE), undefined);
-	assert.deepEqual(readNewChatDraftState(storage, 'valid'), draft);
-});
-
-test('migration deduplicates a Swarm draft in the old storage layout', () => {
+test('stored drafts reject the retired mode field', () => {
 	using fixture = createStorage();
 	const { storage } = fixture;
-	const swarmDraft = { ...draft, mode: 'swarm' as const };
-	writeNewChatDraftState(storage, swarmDraft, 'same');
-	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: 'swarm' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-
-	assert.deepEqual(migrateNewChatDraftState(storage), []);
-	assert.equal(storage.get('sessions.draftState:same', StorageScope.WORKSPACE), undefined);
-	assert.deepEqual(readNewChatDraftState(storage, 'same'), swarmDraft);
-});
-
-test('stored Multitask drafts are rejected during restore and migration', () => {
-	using fixture = createStorage();
-	const { storage } = fixture;
-	const retiredDraft = JSON.stringify({ ...draft, mode: 'multitask' });
-	storage.store('sessions.inputDraft:retired', retiredDraft, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.draftState:retired-migration', retiredDraft, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-
-	assert.throws(() => readNewChatDraftState(storage, 'retired'), /Invalid stored Chat draft/);
-	const errors: unknown[] = [];
-	assert.deepEqual(migrateNewChatDraftState(storage, error => errors.push(error)), []);
-	assert.equal(errors.length, 1);
-	assert.ok(errors[0] instanceof TypeError);
-	assert.equal(readNewChatDraftState(storage, 'retired-migration'), undefined);
-	assert.equal(storage.get('sessions.inputDraft:retired', StorageScope.WORKSPACE), retiredDraft);
-	assert.equal(storage.get('sessions.draftState:retired-migration', StorageScope.WORKSPACE), retiredDraft);
-});
-
-test('a corrupt destination preserves both copies and does not block another draft', () => {
-	using fixture = createStorage();
-	const storage = fixture.storage;
-	const invalid = JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], resource: 42 }] });
-	storage.store('sessions.inputDraft:conflict', invalid, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.draftState:conflict', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.draftState:valid', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const errors: unknown[] = [];
-	migrateNewChatDraftState(storage, error => errors.push(error));
-	assert.equal(errors.length, 1);
-	assert.ok(errors[0] instanceof TypeError);
-	assert.equal(storage.get('sessions.inputDraft:conflict', StorageScope.WORKSPACE), invalid);
-	assert.equal(storage.get('sessions.draftState:conflict', StorageScope.WORKSPACE), JSON.stringify(draft));
-	assert.deepEqual(readNewChatDraftState(storage, 'valid'), draft);
-});
-
-test('migration keeps a legacy entry when writing its replacement fails', () => {
-	using fixture = createStorage();
-	const storage = fixture.storage;
-	const failure = new Error('Storage write failed');
-	storage.store('sessions.draftState:source', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const originalStore = storage.store;
-	storage.store = () => { throw failure; };
-	const errors: unknown[] = [];
-	try { migrateNewChatDraftState(storage, error => errors.push(error)); } finally { storage.store = originalStore; }
-	assert.deepEqual(errors, [failure]);
-	assert.equal(storage.get('sessions.draftState:source', StorageScope.WORKSPACE), JSON.stringify(draft));
-	assert.equal(readNewChatDraftState(storage, 'source'), undefined);
+	const retired = JSON.stringify({ state: JSON.stringify({ ...draft, mode: 'swarm', contexts: [] }) });
+	storage.store('sessions.inputDraft:retired', retired, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.throws(() => readNewChatDraftState(storage, 'retired'), /Invalid Agents Window draft/);
+	assert.equal(storage.get('sessions.inputDraft:retired', StorageScope.WORKSPACE), retired);
 });
 
 test('a stored Swarm draft keeps its separate attachment after editing', () => {
@@ -102,7 +39,7 @@ test('a stored Swarm draft keeps its separate attachment after editing', () => {
 	const attachments = '34d83c82-ca55-4745-ae31-94faf41b034f';
 	const draftKey = 'sessions.inputDraft:untitled:upgrade';
 	const attachmentKey = `sessions.inputDraftAttachments:untitled:upgrade:${attachments}`;
-	const swarmDraft = { ...draft, mode: 'swarm' as const };
+	const swarmDraft = { ...draft, text: '/swarm Recover this task' };
 	const state = JSON.stringify({ ...swarmDraft, contexts: [] });
 	const record = JSON.stringify({ state, attachments });
 	const payload = JSON.stringify(draft.contexts);
@@ -112,7 +49,7 @@ test('a stored Swarm draft keeps its separate attachment after editing', () => {
 	assert.deepEqual(readNewChatDraftState(storage, 'untitled:upgrade'), swarmDraft);
 	assert.equal(storage.get(draftKey, StorageScope.WORKSPACE), record);
 
-	const edited = { ...swarmDraft, text: 'Updated task' };
+	const edited = { ...swarmDraft, text: '/swarm Updated task' };
 	writeNewChatDraftState(storage, edited, 'untitled:upgrade');
 	assert.deepEqual(JSON.parse(storage.get(draftKey, StorageScope.WORKSPACE)!), {
 		state: JSON.stringify({ ...edited, contexts: [] }), attachments,
@@ -130,11 +67,11 @@ test('editing text reuses the image payload while the input record stays small',
 	using listener = storage.onDidChangeValue(event => changed.push(event.key));
 	writeNewChatDraftState(storage, saved, 'image');
 	const first = storage.get('sessions.inputDraft:image', StorageScope.WORKSPACE)!;
-	writeNewChatDraftState(storage, { ...saved, text: 'Updated question', mode: 'ask' }, 'image');
+	writeNewChatDraftState(storage, { ...saved, text: '/ask Updated question' }, 'image');
 	const second = storage.get('sessions.inputDraft:image', StorageScope.WORKSPACE)!;
 	assert.ok(first.length < 1024 && second.length < 1024);
 	assert.equal(changed.filter(key => key.startsWith('sessions.inputDraftAttachments:')).length, 1);
-	assert.deepEqual(readNewChatDraftState(storage, 'image'), { ...saved, text: 'Updated question', mode: 'ask' });
+	assert.deepEqual(readNewChatDraftState(storage, 'image'), { ...saved, text: '/ask Updated question' });
 });
 
 test('attachment replacement and draft removal release only their owned payloads', () => {
@@ -154,19 +91,6 @@ test('attachment replacement and draft removal release only their owned payloads
 	assert.deepEqual(readNewChatDraftState(storage, 'two'), draft);
 	writeNewChatDraftState(storage, undefined, 'two');
 	assert.deepEqual(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE), []);
-});
-
-test('reading an existing combined draft migrates it once without changing its content', () => {
-	using fixture = createStorage();
-	const storage = fixture.storage;
-	storage.store('sessions.inputDraft:existing', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.deepEqual(readNewChatDraftState(storage, 'existing'), draft);
-	const keys = storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const stored = storage.get('sessions.inputDraft:existing', StorageScope.WORKSPACE)!;
-	assert.equal(stored.includes('selected snapshot'), false);
-	assert.deepEqual(readNewChatDraftState(storage, 'existing'), draft);
-	assert.deepEqual(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE), keys);
-	assert.equal(storage.get('sessions.inputDraft:existing', StorageScope.WORKSPACE), stored);
 });
 
 test('a failed state publication retains the previous attachment and removes the unpublished payload', () => {
@@ -200,17 +124,4 @@ test('missing or invalid attachment payloads fail restoration without rewriting 
 	storage.remove(key, StorageScope.WORKSPACE);
 	assert.throws(() => readNewChatDraftState(storage, 'broken'), /Missing stored Chat draft attachments/);
 	assert.equal(storage.get('sessions.inputDraft:broken', StorageScope.WORKSPACE), stored);
-});
-
-test('a conflicting legacy migration leaves a valid combined destination unchanged', () => {
-	using fixture = createStorage();
-	const storage = fixture.storage;
-	const destination = JSON.stringify({ ...draft, text: 'The destination draft' });
-	const source = JSON.stringify(draft);
-	storage.store('sessions.inputDraft:conflict', destination, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.draftState:conflict', source, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.deepEqual(migrateNewChatDraftState(storage), [{ draft, key: 'sessions.draftState:conflict' }]);
-	assert.equal(storage.get('sessions.inputDraft:conflict', StorageScope.WORKSPACE), destination);
-	assert.equal(storage.get('sessions.draftState:conflict', StorageScope.WORKSPACE), source);
-	assert.equal(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).length, 2);
 });

@@ -118,7 +118,6 @@ fn context_read_routes_initial_and_thread_inspections_and_checks_session_members
                 reasoning_effort: None,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
-                mode: Default::default(),
                 instructions: ash_protocol::TurnInstructions::new(
                     "test",
                     "context-frozen",

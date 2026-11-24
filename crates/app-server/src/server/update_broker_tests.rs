@@ -609,7 +609,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             turn_id: TurnId::new("turn_1").unwrap(),
             status: ash_protocol::TurnStatus::Running,
             kind: ash_protocol::TurnKind::Coding,
-            mode: ash_protocol::AgentMode::Agent,
+
             instructions: None,
             directory: None,
             model: None,

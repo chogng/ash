@@ -56,7 +56,7 @@ fn composer_focus_keeps_mode_color_and_changes_placeholder_without_moving_the_in
     assert_eq!(cursor, Position::new(4, input.y + 1));
     assert_eq!(
         focused[(2, input.y)].fg,
-        app.render_context().mode_color(app.agent_mode())
+        app.render_context().mode_color(app.task_execution())
     );
     assert!(!text(&focused).contains("Build anything"));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -65,7 +65,7 @@ fn composer_focus_keeps_mode_color_and_changes_placeholder_without_moving_the_in
     assert_eq!(super::super::layout(&app, area).input, input);
     assert_eq!(
         blurred[(2, input.y)].fg,
-        app.render_context().mode_color(app.agent_mode())
+        app.render_context().mode_color(app.task_execution())
     );
     assert_eq!(blurred[(2, input.y + 1)].symbol(), ">");
     assert_eq!(blurred[(4, input.y + 1)].symbol(), "B");

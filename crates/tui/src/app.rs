@@ -1,6 +1,3 @@
-#[cfg(test)]
-#[path = "app/agent_modes_tests.rs"]
-mod agent_modes_tests;
 mod announcement;
 mod chat_panel;
 #[cfg(test)]
@@ -50,6 +47,9 @@ mod state;
 #[cfg(test)]
 #[path = "app/status_tests.rs"]
 mod status_tests;
+#[cfg(test)]
+#[path = "app/task_commands_tests.rs"]
+mod task_commands_tests;
 mod top_tip;
 #[cfg(test)]
 #[path = "app/usage_tests.rs"]

@@ -18,9 +18,9 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
             ),
         ]
         .into(),
-        agent_modes: [
-            (ash_protocol::AgentMode::Plan, asset("MODEL_PLAN")),
-            (ash_protocol::AgentMode::Swarm, asset("MODEL_SWARM")),
+        task_commands: [
+            (ash_protocol::TaskExecution::Plan, asset("MODEL_PLAN")),
+            (ash_protocol::TaskExecution::Swarm, asset("MODEL_SWARM")),
         ]
         .into(),
         root: Some(asset("MODEL_ROOT")),
@@ -44,7 +44,7 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
         serde_json::from_value(serde_json::to_value(&base).unwrap()).unwrap();
     for (mode, role, selected_mode, selected_role, absent_mode, absent_role) in [
         (
-            ash_protocol::AgentMode::Plan,
+            ash_protocol::TaskExecution::Plan,
             AgentInstructionRole::Root,
             "MODEL_PLAN",
             "MODEL_ROOT",
@@ -52,7 +52,7 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
             "MODEL_WORKER",
         ),
         (
-            ash_protocol::AgentMode::Swarm,
+            ash_protocol::TaskExecution::Swarm,
             AgentInstructionRole::Subagent,
             "MODEL_SWARM",
             "MODEL_WORKER",
@@ -240,9 +240,9 @@ fn frozen_bases_and_distinct_guidance_render_once_with_runtime_instructions() {
         ),
     ] {
         let fragments = turn_instruction_fragments(
-            &base.with_mode(&mode),
+            &base.with_task_instructions(&mode),
             ash_protocol::ApprovalMode::Manual,
-            ash_protocol::AgentMode::Agent,
+            ash_protocol::TaskExecution::Agent,
             AgentInstructionRole::Root,
             Vec::new(),
         );

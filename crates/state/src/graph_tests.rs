@@ -289,7 +289,6 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
             &root.thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,

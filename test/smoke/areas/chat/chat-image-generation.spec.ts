@@ -87,7 +87,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Generated image test' }).click();
 		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		await expect(chat).toHaveAttribute('data-thread-id', threadId);
-		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'image-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'agent', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: 'Generate a synthetic image using the configured imagegen tool.' }] } });
+		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'image-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: 'Generate a synthetic image using the configured imagegen tool.' }] } });
 		await expect.poll(() => !!imageResponse).toBe(true);
 		await expect(chat.locator('.ash-chat-image-generation-placeholder')).toBeVisible();
 		await capture(page, 'image-generating.png');

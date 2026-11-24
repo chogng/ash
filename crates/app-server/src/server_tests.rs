@@ -3480,7 +3480,7 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
                 "commandId":"first-turn","sessionId":session_id,
                 "request":{
                     "type":"startTurn","expectedSequence":1,"threadId":first_id,
-                    "mode":"plan","model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"first"}]
+                    "model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"/plan first"}]
                 }
             }
         }),
@@ -3507,13 +3507,13 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        first_snapshot.turns.last().unwrap().mode,
-        ash_protocol::AgentMode::Plan
+        first_snapshot.turns.last().unwrap().execution_approach(),
+        ash_protocol::TaskExecution::Plan
     );
     assert_eq!(first_instructions.owner(), "prompts");
     assert_eq!(
-        first_instructions.mode_instructions().unwrap().id,
-        "agent-mode/plan"
+        first_instructions.task_instructions().unwrap().id,
+        "task-command/plan"
     );
     assert!(first_instructions.shared().is_empty());
 
@@ -3531,7 +3531,7 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
             }
         }),
     );
-    assert!(mode_conflict.get("error").is_some(), "{mode_conflict}");
+    assert_eq!(mode_conflict["error"]["code"], -32602, "{mode_conflict}");
 
     let second_turn = call(
         &server,
@@ -3845,10 +3845,9 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         first["result"]["value"]["turnId"]
     );
     assert_eq!(child.turns[1].turn_id.as_str(), replacement_turn_id);
-    assert_eq!(child.turns[1].mode, ash_protocol::AgentMode::Agent);
     assert_eq!(
         child.turns[1].execution_approach(),
-        ash_protocol::AgentMode::Plan
+        ash_protocol::TaskExecution::Plan
     );
     assert_eq!(
         child
@@ -6329,7 +6328,6 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -6744,7 +6742,6 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -6840,7 +6837,6 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -7021,7 +7017,6 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -9646,7 +9641,6 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
                 &source,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: ash_protocol::CommandId::new(command).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,

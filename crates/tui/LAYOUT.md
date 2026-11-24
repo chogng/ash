@@ -453,7 +453,7 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 ### 任务模式选择与显示
 
-输入 `/` 查看 `/ask`、`/plan`、`/debug`、`/swarm`。命令与任务一起发送。并行或只读命令在新 Turn 执行，运行中的会话可以先将它加入队列。见 [Agent 任务命令](../agent-mode-templates/README.md)。
+输入 `/` 查看 `/ask`、`/plan`、`/debug`、`/swarm`。命令与任务一起发送。并行或只读命令在新 Turn 执行，运行中的会话可以先将它加入队列。见 [Agent 任务命令](../task-command-templates/README.md)。
 
 ## 终端生命周期
 

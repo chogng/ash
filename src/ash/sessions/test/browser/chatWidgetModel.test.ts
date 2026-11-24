@@ -45,7 +45,7 @@ ensureNoDisposablesAreLeakedInTestSuite();
 
 function snapshot(threadId: string, sequence = 1, waiting = false): ThreadRead {
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
-	return { thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId: 'session', threadId, title: `Sequence ${sequence}`, status: 'active', sequence, usage, turns: waiting ? [{ turnId: `turn-${threadId}`, status: 'waitingForApproval', mode: 'agent', kind: 'coding', approvalMode: 'manual', usage, items: [] }] : [] }, transcript: { sessionId: 'session', threadId, durableSequence: sequence, revision: sequence, entries: [] } };
+	return { thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId: 'session', threadId, title: `Sequence ${sequence}`, status: 'active', sequence, usage, turns: waiting ? [{ turnId: `turn-${threadId}`, status: 'waitingForApproval', execution: 'agent', kind: 'coding', approvalMode: 'manual', usage, items: [] }] : [] }, transcript: { sessionId: 'session', threadId, durableSequence: sequence, revision: sequence, entries: [] } };
 }
 
 function messageHistory(threadId: string, sequence: number, text: string): ThreadRead {
@@ -87,7 +87,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const turnApi = {
 		onDidChangeQueue: Event.None,
 		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
-		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { sessionId: input.sessionId, threadId: input.threadId, commandId: input.commandId, revision: 1, mode: input.mode ?? 'agent', text: '', contextCount: 0, status: 'pending' as const }; }, editQueued: async () => { throw new Error('Unexpected queue edit'); }, cancelQueued: async () => { throw new Error('Unexpected queue cancel'); }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
+		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { sessionId: input.sessionId, threadId: input.threadId, commandId: input.commandId, revision: 1, execution: 'agent', text: '', contextCount: 0, status: 'pending' as const }; }, editQueued: async () => { throw new Error('Unexpected queue edit'); }, cancelQueued: async () => { throw new Error('Unexpected queue cancel'); }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
 	} as IAgentTurnService;
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } };
 	const appServer = { isAvailable: true, get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
@@ -176,8 +176,8 @@ test('context estimates coalesce submission snapshots and retire pending work wi
 			return threadId === 'A' ? pending.p : { context: { estimatedTokens: 50, categories: [] } };
 		};
 		await f.model.initialize();
-		await f.model.send('First input', 'agent');
-		await f.model.send('Second input', 'agent');
+		await f.model.send('First input');
+		await f.model.send('Second input');
 		assert.deepEqual(requests, []);
 		mock.timers.tick(100);
 		assert.deepEqual(requests, ['A']);
@@ -189,7 +189,7 @@ test('context estimates coalesce submission snapshots and retire pending work wi
 		await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
 		assert.deepEqual(requests, ['A', 'B']);
 		assert.equal(usage()?.estimatedTokens, 50);
-		await f.model.send('Pending estimate', 'agent');
+		await f.model.send('Pending estimate');
 		resources.dispose();
 		mock.timers.tick(200);
 		assert.deepEqual(requests, ['A', 'B']);
@@ -269,8 +269,8 @@ for (const background of [false, true]) {
 		const f = creationDraftFixture(); using resources = f.resources;
 		await f.model.initialize();
 		const context = { name: 'Source', content: 'Captured source' };
-		if (background) await f.model.sendInBackground('Write a guide', 'agent', undefined, [context]);
-		else await f.model.send('Write a guide', 'agent', undefined, [context]);
+		if (background) await f.model.sendInBackground('Write a guide', undefined, [context]);
+		else await f.model.send('Write a guide', undefined, [context]);
 		assert.deepEqual(f.starts[0].input, [
 			{ type: 'context', ...context }, { type: 'context', ...getChatCreationContext('docs') }, { type: 'text', text: 'Write a guide' },
 		]);
@@ -283,7 +283,7 @@ for (const background of [false, true]) {
 		await f.model.initialize();
 		let fail = true;
 		f.turnApi.start = async input => { f.starts.push(input); if (fail) throw new Error('First send failed'); return { turnId: 'accepted', sequence: 2 }; };
-		const send = () => background ? f.model.sendInBackground('Write a guide', 'agent', undefined, []) : f.model.send('Write a guide');
+		const send = () => background ? f.model.sendInBackground('Write a guide', undefined, []) : f.model.send('Write a guide');
 		await assert.rejects(send(), /First send failed/);
 		if (!background) assert.equal(f.sessions.untitledSessions.length, 0, 'Promotion has already removed the draft');
 		fail = false;
@@ -521,7 +521,7 @@ test('Code reconnect restores recap presence for open surfaces', async () => {
 for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind} renders backend queue revisions and a redo checkpoint independently of committed rows`, async () => {
 		const f = fixture(kind); using resources = f.resources;
-		const base = { sessionId: 'session', threadId: 'A', revision: 5, mode: 'agent', text: 'Queued input', contextCount: 2 } as const;
+		const base = { sessionId: 'session', threadId: 'A', revision: 5, execution: 'agent', text: 'Queued input', contextCount: 2 } as const;
 		const messages: QueuedMessage[] = [
 			{ ...base, commandId: 'first', status: 'pending' },
 			{ ...base, commandId: 'delivering', status: 'delivering' },
@@ -547,7 +547,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			const f = fixture(kind, undefined, route !== 'start');
 			using resources = f.resources;
 			await f.model.initialize();
-			const text = ' \nBefore🙂 log.txt\nBetween image.png\nAfter log.txt\nDone  \n';
+			const text = (route === 'queue' ? '/plan ' : '') + ' \nBefore🙂 log.txt\nBetween image.png\nAfter log.txt\nDone  \n';
 			const first = text.indexOf('log.txt');
 			const image = text.indexOf('image.png');
 			const last = text.lastIndexOf('log.txt');
@@ -556,7 +556,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 				{ name: 'image.png', content: 'data:image/png;base64,captured', kind: 'image' as const, reference: { start: image, end: image + 9 } },
 				{ name: 'log.txt', content: 'First captured version', reference: { start: first, end: first + 7 } },
 			];
-			await f.model.send(text, route === 'queue' ? 'plan' : 'agent', undefined, contexts);
+			await f.model.send(text, undefined, contexts);
 			const requests = route === 'start' ? f.starts : route === 'queue' ? f.queues : f.steers;
 			assert.equal(requests.length, 1);
 			assert.deepEqual(requests[0].input, [
@@ -594,7 +594,7 @@ test('legacy contexts retain prefix placement and adjacent inline attachments om
 	const f = fixture('Code');
 	using resources = f.resources;
 	await f.chat.startTurn({
-		sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'a b ', contexts: [
+		sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'a b ', contexts: [
 			{ name: 'b', content: 'B', reference: { start: 2, end: 3 } },
 			{ name: 'legacy', content: 'Without a position' },
 			{ name: 'a', content: 'A', reference: { start: 0, end: 1 } },
@@ -611,13 +611,13 @@ test('invalid attachment spans fail before start queue or steering can dispatch'
 	const f = fixture('Code');
 	using resources = f.resources;
 	for (const reference of [{ start: -1, end: 2 }, { start: 0.5, end: 2 }, { start: 0, end: 4 }, { start: 1, end: 1 }, { start: NaN, end: 2 }]) {
-		const options = { sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent' as const, approvalMode: 'manual' as const, text: 'abc', contexts: [{ name: 'bad', content: 'Captured', reference }] };
+		const options = { sessionId: 'session', threadId: 'A', expectedSequence: 1, approvalMode: 'manual' as const, text: 'abc', contexts: [{ name: 'bad', content: 'Captured', reference }] };
 		await assert.rejects(f.chat.startTurn(options), /attachment position/);
 		await assert.rejects(f.chat.queueTurn(options), /attachment position/);
 		await assert.rejects(f.chat.steerTurn({ ...options, turnId: 'turn-A' }), /attachment position/);
 	}
 	await assert.rejects(f.chat.startTurn({
-		sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'abc', contexts: [
+		sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'abc', contexts: [
 			{ name: 'a', content: 'A', reference: { start: 0, end: 2 } },
 			{ name: 'b', content: 'B', reference: { start: 1, end: 3 } },
 		]
@@ -632,7 +632,7 @@ test('invalid attachment positions explain recovery in Chinese', async () => {
 	setNlsMessages('zh-CN', messages);
 	try {
 		await assert.rejects(f.chat.startTurn({
-			sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'abc', contexts: [
+			sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'abc', contexts: [
 				{ name: 'bad', content: 'Captured', reference: { start: 0, end: 4 } },
 			]
 		}), { message: '附件位置已与这条消息不匹配。请移除附件后重新添加。' });
@@ -904,9 +904,9 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind} captured submission rejects cancellation and preserves its supplied identity`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		const signal = new AbortController(); signal.abort();
-		await assert.rejects(Reflect.apply(f.model.send, f.model, ['Retired speech', 'agent', undefined, undefined, { commandId: 'voice-task', source: { sessionId: 'session', threadId: 'A' }, signal: signal.signal }]), isCancellationError);
+		await assert.rejects(f.model.send('Retired speech', undefined, undefined, { commandId: 'voice-task', source: { sessionId: 'session', threadId: 'A' }, signal: signal.signal }), isCancellationError);
 		assert.equal(f.starts.length, 0);
-		await Reflect.apply(f.model.send, f.model, ['Owned speech', 'agent', undefined, undefined, { commandId: 'voice-task', source: { sessionId: 'session', threadId: 'A' } }]);
+		await f.model.send('Owned speech', undefined, undefined, { commandId: 'voice-task', source: { sessionId: 'session', threadId: 'A' } });
 		assert.equal(f.starts.length, 1); assert.equal(f.starts[0]!.commandId, 'voice-task'); assert.equal('source' in f.starts[0]!, false); assert.equal('signal' in f.starts[0]!, false);
 	});
 	for (const failed of [false, true]) {
@@ -979,13 +979,13 @@ for (const kind of ['Code', 'Cowork'] as const) {
 test('queued submission cannot dispatch with an already cancelled owner', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
 	const signal = new AbortController(); signal.abort();
-	await assert.rejects(f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Old queue', mode: 'agent', signal: signal.signal }), isCancellationError);
+	await assert.rejects(f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Old queue', signal: signal.signal }), isCancellationError);
 	assert.equal(f.queues.length, 0);
 });
 
 test('queue and steering preserve the source-owned idempotency key', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
-	await f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Queue', mode: 'agent', approvalMode: 'manual', commandId: 'owned-queue' });
+	await f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Queue', approvalMode: 'manual', commandId: 'owned-queue' });
 	await f.chat.steerTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, turnId: 'turn-A', text: 'Steer', commandId: 'owned-steer' });
 	assert.equal(f.queues[0]!.commandId, 'owned-queue'); assert.equal(f.steers[0]!.commandId, 'owned-steer');
 });
@@ -1053,7 +1053,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 	test(`${kind} submission cannot borrow a different Thread source identity`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
-		await assert.rejects(Reflect.apply(f.model.send, f.model, ['A request', 'agent', undefined, undefined, { source: { sessionId: 'session', threadId: 'B' }, commandId: 'foreign-source' }]), isCancellationError);
+		await assert.rejects(f.model.send('A request', undefined, undefined, { source: { sessionId: 'session', threadId: 'B' }, commandId: 'foreign-source' }), isCancellationError);
 		assert.equal(f.starts.length, 0); assert.equal(f.model.threadId, 'A'); assert.equal(f.model.state, 'ready'); assert.equal(f.model.error, undefined);
 	});
 }
@@ -1065,7 +1065,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			const pending: DeferredPromise<{ turnId: string; sequence: number; }>[] = [];
 			f.turnApi.start = () => { const request = new DeferredPromise<{ turnId: string; sequence: number; }>(); pending.push(request); return request.p; };
 			const controller = new AbortController();
-			const sending = Reflect.apply(f.model.send, f.model, ['Cancelled request', 'agent', undefined, undefined, { signal: controller.signal }]).then(() => undefined, (error: unknown) => error);
+			const sending = f.model.send('Cancelled request', undefined, undefined, { signal: controller.signal }).then(() => undefined, (error: unknown) => error);
 			await waitFor(() => pending.length === 1); controller.abort();
 			const next = newer ? f.model.send('New request') : undefined;
 			if (newer) await waitFor(() => pending.length === 2);
@@ -1380,9 +1380,9 @@ test('Chat preserves the composer cancellation signal through start, queue and s
 	const controller = new AbortController();
 	const signals: (AbortSignal | undefined)[] = [];
 	f.turnApi.start = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
-	f.turnApi.enqueue = async (params, signal) => { signals.push(signal); return { sessionId: params.sessionId, threadId: params.threadId, commandId: params.commandId, revision: 1, mode: params.mode ?? 'agent', text: '', contextCount: 0, status: 'pending' }; };
+	f.turnApi.enqueue = async (params, signal) => { signals.push(signal); return { sessionId: params.sessionId, threadId: params.threadId, commandId: params.commandId, revision: 1, execution: 'agent', text: '', contextCount: 0, status: 'pending' }; };
 	f.turnApi.steer = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
-	const options = { sessionId: 'session', threadId: 'A', text: 'Captured context', mode: 'agent' as const, expectedSequence: 1, signal: controller.signal };
+	const options = { sessionId: 'session', threadId: 'A', text: 'Captured context', expectedSequence: 1, signal: controller.signal };
 	await f.chat.startTurn(options);
 	await f.chat.queueTurn(options);
 	await f.chat.steerTurn({ ...options, turnId: 'started' });
@@ -1402,7 +1402,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)
 			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
 		await model.initialize();
-		model.selectMode('plan');
+
 		model.selectApprovalMode('auto');
 		const generation = model.composerGeneration;
 		await assert.rejects(model.selectThread({ session: f.session, threadId: 'A' }), /another Session/);
@@ -1410,7 +1410,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await model.selectThread({ session: f.session, threadId: 'A' });
 		assert.equal(model.sessionId, f.session.sessionId);
 		assert.equal(model.composerGeneration, generation);
-		assert.equal(model.inputState.mode, 'plan');
+
 		assert.equal(model.inputState.approvalMode, 'auto');
 		assert.equal(f.starts.length, 0, 'Giving a chat a durable identity must never start a Turn');
 		await model.send('Send after organizing');
@@ -1466,7 +1466,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			const f = fixture(kind, undefined, true);
 			using resources = f.resources;
 			await f.model.initialize();
-			await f.model.send('Before note After', 'agent', undefined, [{ name: 'note', content: 'Captured context', reference: { start: 7, end: 11 } }], { queue });
+			await f.model.send('Before note After', undefined, [{ name: 'note', content: 'Captured context', reference: { start: 7, end: 11 } }], { queue });
 			assert.equal(f.starts.length, 0);
 			assert.equal(f.queues.length, queue === ChatRequestQueueKind.Queued ? 1 : 0);
 			assert.equal(f.steers.length, queue === ChatRequestQueueKind.Steering ? 1 : 0);
@@ -1476,16 +1476,19 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			const f = fixture(kind);
 			using resources = f.resources;
 			await f.model.initialize();
-			await f.model.send('First message', 'agent', undefined, undefined, { queue });
+			await f.model.send('First message', undefined, undefined, { queue });
 			assert.equal(f.starts.length, 1);
 			assert.equal(f.queues.length + f.steers.length, 0);
 		});
 	}
-	test(`${kind} explicit steering refuses a changed mode instead of silently queueing`, async () => {
-		const f = fixture(kind, undefined, true);
+	test(`${kind} explicit steering preserves the active task command`, async () => {
+		const f = fixture(kind, async threadId => {
+			const value = snapshot(threadId, 1, true);
+			return { ...value, thread: { ...value.thread, turns: value.thread.turns.map(turn => ({ ...turn, execution: 'plan' as const })) }, updates: [] };
+		}, true);
 		using resources = f.resources;
 		await f.model.initialize();
-		await assert.rejects(f.model.send('Changed approach', 'plan', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
+		await assert.rejects(f.model.send('Changed approach', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
 		assert.equal(f.starts.length + f.queues.length + f.steers.length, 0);
 	});
 	test(`${kind} special task kinds queue automatic input and reject explicit steering`, async () => {
@@ -1495,9 +1498,9 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		}, true);
 		using resources = f.resources;
 		await f.model.initialize();
-		await assert.rejects(f.model.send('Cannot steer advisor', 'agent', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
+		await assert.rejects(f.model.send('Cannot steer advisor', undefined, undefined, { queue: ChatRequestQueueKind.Steering }), /different task command, Skill or task type/);
 		assert.equal(f.steers.length + f.queues.length, 0);
-		await f.model.send('Next task', 'agent');
+		await f.model.send('Next task');
 		assert.equal(f.queues.length, 1);
 		assert.equal(f.steers.length, 0);
 	});
@@ -1523,7 +1526,7 @@ for (const racedCompletion of [false, true]) test(`Immediate queue send promotes
 	const calls: unknown[] = [];
 	f.threadApi.read = async threadId => snapshot(threadId.threadId, 4, true);
 	const target = { sessionId: 'session', threadId: 'A', commandId: 'queued', expectedRevision: 7 };
-	const message = { ...target, revision: 8, mode: 'agent' as const, status: 'pending' as const, text: 'Original', contextCount: 2 };
+	const message = { ...target, revision: 8, execution: 'agent' as const, status: 'pending' as const, text: 'Original', contextCount: 2 };
 	f.turnApi.editQueued = async (value, action) => { calls.push(['edit', value, action]); return message; };
 	f.turnApi.interrupt = async value => {
 		calls.push(['interrupt', value]);
@@ -1564,11 +1567,11 @@ test('Cancelling a queue editor restores already admitted input after AI is disa
 	const calls: unknown[] = [];
 	f.turnApi.editQueued = async (value, action) => {
 		calls.push([value, action]);
-		return { ...value, revision: 4, status: 'pending', mode: 'agent', text: 'Already queued', contextCount: 1 };
+		return { ...value, revision: 4, status: 'pending', execution: 'agent', text: 'Already queued', contextCount: 1 };
 	};
 	await f.configuration.write(JSON.stringify({ [ChatAIDisabledSettingId]: true }));
 	await f.chat.resumePendingRequest(target);
-	await assert.rejects(f.chat.startTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'New work', mode: 'agent' }), /AI features are disabled/);
+	await assert.rejects(f.chat.startTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'New work' }), /AI features are disabled/);
 	assert.deepEqual(calls, [[target, { type: 'resume' }]]);
 });
 
@@ -1578,11 +1581,11 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} submits a task com
 		const f = fixture(kind, undefined, running);
 		using resources = f.resources;
 		await f.model.initialize();
-		await f.model.send('/plan Inspect task.ts', 'agent', undefined, undefined, running ? { queue: ChatRequestQueueKind.Steering } : undefined);
+		await f.model.send('/plan Inspect task.ts', undefined, undefined, running ? { queue: ChatRequestQueueKind.Steering } : undefined);
 		const requests = running ? f.queues : f.starts;
 		assert.equal(requests.length, 1);
 		assert.deepEqual(requests[0].input, [{ type: 'text', text: '/plan Inspect task.ts' }]);
-		assert.equal(requests[0].mode, undefined);
+		assert.ok(!('mode' in requests[0]));
 		assert.equal(requests[0].commandInterpretation, undefined);
 		assert.equal(f.steers.length, 0);
 	}
@@ -1594,7 +1597,7 @@ test('Cowork submits slash text literally for start and queue', async () => {
 		using resources = f.resources;
 		await f.model.initialize();
 		assert.deepEqual(f.model.inputState.slashCommands, []);
-		await f.model.send('/develop Keep this as a message', 'agent', undefined, undefined, route === 'queue' ? { queue: ChatRequestQueueKind.Queued } : undefined);
+		await f.model.send('/develop Keep this as a message', undefined, undefined, route === 'queue' ? { queue: ChatRequestQueueKind.Queued } : undefined);
 		const request = route === 'start' ? f.starts[0]! : f.queues[0]!;
 		assert.equal(request.commandInterpretation, 'literal');
 		assert.deepEqual(request.input, [{ type: 'text', text: '/develop Keep this as a message' }]);

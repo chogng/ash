@@ -89,7 +89,7 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
-import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../../workbench/contrib/sessions/common/newChatDraftState.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
@@ -531,7 +531,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
-	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft chat.txt Tool selection: 1 disabled ', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', reference: { start: 21, end: 29 } }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]', reference: { start: 30, end: 56 } }] };
+	const draft = { text: '/plan Keep this Chat draft chat.txt Tool selection: 1 disabled ', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', reference: { start: 27, end: 35 } }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]', reference: { start: 36, end: 62 } }] };
 	part.restoreDraft(draft);
 	const selected = viewService.activeSelection!;
 	assert.equal(selected.kind, 'untitled');
@@ -558,7 +558,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(services.get(IChatTipService).getWelcomeTip()?.id, 'plan');
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
-	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };
+	const separateDraft = { text: '/plan Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 29, end: 36 } }] };
 	part.restoreDraft(separateDraft);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
@@ -577,7 +577,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.equal(workspaceChangesReads, 0, 'The Chat composer must not ask Git for the window workspace');
 	assert.equal(coworkView.querySelector('.ash-chat-changes-pill:not([hidden])'), null);
-	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
+	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.agent"]'), null);
 	assert.ok(coworkView.querySelector('.ash-chat-input-model-action'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
@@ -698,37 +698,18 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
-	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
+	const draft = { text: '/debug Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
 	writeNewChatDraftState(storage, draft, 'untitled:first');
-	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
+	writeNewChatDraftState(storage, { text: '/plan Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
 	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first'), draft);
-	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { text: '/plan Thread draft', contexts: [] });
 	assert.equal(readNewChatDraftState(restored, 'thread-2'), undefined);
 	restored.switchWorkspace('workspace-b');
 	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
 	restored.switchWorkspace('workspace-a');
 	writeNewChatDraftState(restored, undefined, 'untitled:first');
 	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
-	assert.equal(readNewChatDraftState(restored, 'thread-1')?.text, 'Thread draft');
-});
-
-test('legacy drafts merge by session identity and conflicting content survives until recovery', async () => {
-	const ownerWindow = browserEnvironment.window as unknown as Window;
-	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
-	const chatDraft = { mode: 'agent' as const, text: 'Chat text', contexts: [] };
-	const codeDraft = { mode: 'plan' as const, text: 'Code text', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
-	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const recovered = migrateNewChatDraftState(storage);
-	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1'), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
-	assert.equal(storage.get(recovered[0]!.key, StorageScope.WORKSPACE), JSON.stringify(chatDraft));
-	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered');
-	storage.remove(recovered[0]!.key, StorageScope.WORKSPACE);
-	assert.deepEqual(migrateNewChatDraftState(storage), []);
-	await storage.flush();
-	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
-	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
+	assert.equal(readNewChatDraftState(restored, 'thread-1')?.text, '/plan Thread draft');
 });

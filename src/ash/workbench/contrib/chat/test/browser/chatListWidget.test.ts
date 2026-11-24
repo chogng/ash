@@ -240,7 +240,7 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 		] as const;
 		const zero = { reported: 0, complete: true };
 		const history: Turn[] = turns.map(turn => ({
-			...turn, status: 'completed', mode: 'agent', approvalMode: 'manual', items: [],
+			...turn, status: 'completed', execution: 'agent', approvalMode: 'manual', items: [],
 			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, cacheReadInputTokens: zero, reasoningTokens: zero },
 		}));
 		const replies = chatTranscriptListItems(entries, 'two', history, {
@@ -936,7 +936,7 @@ test('message editing uses the accepted backend request identity and excludes st
 	];
 	const total = { reported: 0, complete: true };
 	const turn: import('../../../../services/chat/common/chatService.js').Turn = {
-		turnId: 'turn', kind: 'coding', status: 'completed', mode: 'agent', approvalMode: 'manual', items: [initial, steering],
+		turnId: 'turn', kind: 'coding', status: 'completed', execution: 'agent', approvalMode: 'manual', items: [initial, steering],
 		usage: { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total },
 	};
 	const items = chatTranscriptListItems(entries, 'turn', [turn], { sessionId: 'session', threadId: 'thread' });
@@ -976,7 +976,7 @@ suite('chatRenderer browser component', () => {
 		}));
 		const zero = { reported: 0, complete: true };
 		const turn: Turn = {
-			turnId: 'skill-turn', status: 'running', mode: 'agent', approvalMode: 'manual', items: [],
+			turnId: 'skill-turn', status: 'running', execution: 'agent', approvalMode: 'manual', items: [],
 			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, reasoningTokens: zero },
 		};
 		const source = { sessionId: 'session', threadId: 'thread' };

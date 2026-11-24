@@ -26,7 +26,7 @@ test('system-wide selection rejects chords, duplicates, and disabled OS override
 });
 
 test('system-wide selection resolves conflicts across commands and preserves arguments', () => {
-	const args = { draft: { mode: 'agent', text: 'Review this', contexts: [] } };
+	const args = { draft: { text: 'Review this', contexts: [] } };
 	assert.deepEqual(selectSystemWideKeybindings([
 		binding('ctrl+shift+a', { command: 'other.command' }),
 		binding('ctrl+shift+a'),

@@ -11,6 +11,7 @@ use crate::protocol::registry::CLIENT_METHODS;
 use crate::protocol::registry::HOST_METHODS;
 use crate::protocol::registry::SERVER_NOTIFICATIONS;
 use crate::protocol::session::SessionRequest;
+use crate::protocol::session::SessionStartTurnParams;
 use crate::protocol::slash_commands::SlashCommandArgumentModeDto;
 use crate::protocol::slash_commands::SlashCommandDefinition;
 use crate::protocol::text_document::{
@@ -121,7 +122,6 @@ fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile
         "type": "startTurn",
         "threadId": "thread-1",
         "expectedSequence": 1,
-        "mode": "plan",
         "model": { "provider": "openai", "model": "gpt-6-astra" },
         "reasoningEffort": "high",
         "input": [{ "type": "text", "text": "hello" }]
@@ -129,46 +129,46 @@ fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile
     let parsed: SessionRequest = serde_json::from_value(request.clone()).unwrap();
     assert!(matches!(
         &parsed,
-        SessionRequest::StartTurn {
-            mode: ash_protocol::AgentMode::Plan,
+        SessionRequest::StartTurn(SessionStartTurnParams {
             approval_mode: None,
             reasoning_effort: Some(ReasoningEffort::High),
             ..
-        }
+        })
     ));
     assert_eq!(serde_json::to_value(parsed).unwrap(), request);
+    let mut retired = request.clone();
+    retired["mode"] = serde_json::json!("plan");
+    assert!(serde_json::from_value::<SessionRequest>(retired).is_err());
     let mut explicit = request.clone();
     explicit["approvalMode"] = serde_json::json!("auto");
     let parsed: SessionRequest = serde_json::from_value(explicit.clone()).unwrap();
     assert!(matches!(
         &parsed,
-        SessionRequest::StartTurn {
+        SessionRequest::StartTurn(SessionStartTurnParams {
             approval_mode: Some(ash_protocol::ApprovalMode::Auto),
             ..
-        }
+        })
     ));
     assert_eq!(serde_json::to_value(parsed).unwrap(), explicit);
     let mut legacy = request;
     legacy.as_object_mut().unwrap().remove("reasoningEffort");
-    legacy.as_object_mut().unwrap().remove("mode");
     let mut no_reasoning = legacy.clone();
     no_reasoning["reasoningEffort"] = serde_json::json!("none");
     let parsed: SessionRequest = serde_json::from_value(no_reasoning).unwrap();
     assert!(matches!(
         parsed,
-        SessionRequest::StartTurn {
+        SessionRequest::StartTurn(SessionStartTurnParams {
             reasoning_effort: Some(ReasoningEffort::None),
             ..
-        }
+        })
     ));
     let parsed: SessionRequest = serde_json::from_value(legacy).unwrap();
     assert!(matches!(
         parsed,
-        SessionRequest::StartTurn {
-            mode: ash_protocol::AgentMode::Agent,
+        SessionRequest::StartTurn(SessionStartTurnParams {
             reasoning_effort: None,
             ..
-        }
+        })
     ));
 }
 
@@ -1246,15 +1246,17 @@ fn audio_upload_and_turn_input_round_trip_without_image_fields() {
 }
 
 #[test]
-fn queued_mode_model_and_effort_round_trip_and_omitted_tool_mode_is_explicitly_unselected() {
+fn queued_model_and_effort_round_trip_without_the_retired_mode_field() {
     let value = serde_json::json!({"commandId":"queued", "sessionId":"session", "threadId":"thread",
-        "input":[{"type":"text","text":"Explain the module"}], "mode":"ask",
+        "input":[{"type":"text","text":"/ask Explain the module"}],
         "model":{"provider":"test", "model":"model"}, "reasoningEffort":"high", "approvalMode":"manual"});
     let request: crate::protocol::queue::QueueEnqueueParams =
         serde_json::from_value(value.clone()).unwrap();
-    assert_eq!(request.mode, ash_protocol::AgentMode::Ask);
     assert_eq!(request.tool_mode, None);
     assert_eq!(serde_json::to_value(request).unwrap(), value);
+    let mut retired = value;
+    retired["mode"] = serde_json::json!("ask");
+    assert!(serde_json::from_value::<crate::protocol::queue::QueueEnqueueParams>(retired).is_err());
 }
 
 #[test]
@@ -1353,7 +1355,7 @@ fn git_default_reference_is_optional_and_publication_carries_the_reviewed_head()
 #[test]
 fn literal_command_interpretation_round_trips_without_changing_legacy_turn_requests() {
     let legacy = serde_json::json!({"type":"startTurn", "threadId":"thread", "expectedSequence":0,
-        "mode":"agent", "input":[{"type":"text", "text":"/develop ordinary message"}]});
+        "input":[{"type":"text", "text":"/develop ordinary message"}]});
     let request: SessionRequest = serde_json::from_value(legacy.clone()).unwrap();
     assert_eq!(serde_json::to_value(request).unwrap(), legacy);
     let mut literal = legacy;
@@ -1361,10 +1363,10 @@ fn literal_command_interpretation_round_trips_without_changing_legacy_turn_reque
     let request: SessionRequest = serde_json::from_value(literal.clone()).unwrap();
     assert!(matches!(
         &request,
-        SessionRequest::StartTurn {
+        SessionRequest::StartTurn(SessionStartTurnParams {
             command_interpretation: Some(ash_protocol::CommandInterpretation::Literal),
             ..
-        }
+        })
     ));
     assert_eq!(serde_json::to_value(request).unwrap(), literal);
     literal["commandInterpretation"] = serde_json::json!("unknown");

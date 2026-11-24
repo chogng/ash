@@ -2441,6 +2441,8 @@ use crate::protocol::session::SessionRuntimeCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionRuntimeParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionStartTurnParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionSubscribeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionSubscribeResult;
@@ -6663,7 +6665,7 @@ macro_rules! typescript_bindings {
 
 typescript_bindings! {
     serde_json::Value,
-    ash_protocol::AgentMode,
+    ash_protocol::TaskExecution,
     ash_protocol::WorkbenchWindow,
     ash_protocol::CommandInterpretation,
     ash_protocol::AgentConfiguration,
@@ -7517,6 +7519,7 @@ typescript_bindings! {
     RewriteCommandInterpretation,
     SessionRequest,
     SessionRequestParams,
+    SessionStartTurnParams,
     SessionRequestResult,
     AdvisorConfig,
     AdvisorSelection,

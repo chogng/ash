@@ -2533,7 +2533,7 @@ suite('sessions browser component', () => {
 		try {
 			await ide.goto('/chatInput.html?inlineCode=1');
 			await expect(ide.locator('.ash-chat-input-editor .stanza-editor')).toHaveCSS('font-size', '13px');
-			await expect(ide.locator('.ash-chat-input-mode-action')).toHaveCSS('font-size', '12px');
+			await expect(ide.locator('.ash-chat-input-agent-action')).toHaveCSS('font-size', '12px');
 		} finally {
 			await ide.close();
 		}

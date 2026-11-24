@@ -132,7 +132,7 @@ import { findModelForChatInput, sameModel } from './chatInputModelUtils.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
 import { PermissionPickerActionItem } from './permissionPickerActionItem.js';
 import type { IActionWidgetDropdownActionProvider } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
-import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
+import { AgentPickerActionItem } from './agentPickerActionItem.js';
 import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
 import { IChatWidgetService } from '../../chat.js';
@@ -154,7 +154,6 @@ interface ChatInputToolbarState {
 	readonly voiceConnecting: boolean;
 	readonly voiceConnected: boolean;
 	readonly voiceConnectedPlaceholder?: string;
-	readonly mode: ChatInputMode;
 	readonly canSubmit: boolean;
 	readonly hasInput: boolean;
 	readonly canInterrupt: boolean;
@@ -179,7 +178,7 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 
 /** Picker composition is selected by the host; input state and operations keep one owner. */
 export interface ChatInputPartOptions {
-	readonly modePicker: 'visible' | 'hidden';
+	readonly agentPicker: 'visible' | 'hidden';
 	/** A reply composer sends messages without local execution controls or client commands. */
 	readonly replyOnly?: true;
 	readonly modelPickerPosition: 'leading' | 'trailing';
@@ -255,7 +254,7 @@ export interface IChatInputPart extends IDisposable {
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void>;
 	openModelPicker(): void;
-	openModePicker(): void;
+	openAgentPicker(): void;
 	openPermissionPicker(): void;
 	openWorkspacePicker(): void;
 	openAttachMenu(anchor?: HTMLElement): void;
@@ -273,7 +272,6 @@ export interface IChatInputPart extends IDisposable {
 }
 
 interface IChatComposerDraft {
-	readonly mode: ChatInputMode;
 	readonly text: string;
 	readonly contexts: readonly ChatContextAttachment[];
 }
@@ -308,7 +306,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private ownsDraftStorage = true;
 	private retireDraftWrite?: () => void;
 	private draftIdentity: ChatInputState['draftIdentity'];
-	private readonly conversationDrafts = new Map<string, InputHistoryDraft & { readonly mode: ChatInputMode; }>();
+	private readonly conversationDrafts = new Map<string, InputHistoryDraft>();
 	private readonly inputChanges = this._register(new PauseableEmitter<void>({ merge: () => undefined }));
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
@@ -365,18 +363,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly modelSelection = this._register(new ChatInputModelSelectionController());
 	// The toolbar owns the retained item; commands open it without synthesizing DOM events.
 	private modelPickerActionItem!: ModelPickerActionItem;
-	private modePickerActionItem: ModePickerActionItem | undefined;
+	private agentPickerActionItem: AgentPickerActionItem | undefined;
 	private readonly inputDecorations: InputEditorDecorations | undefined;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands: SlashCommandCatalog;
 	private readonly skills = new SkillSelectorCatalog();
-	private state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnecting: false, voiceConnected: false, mode: 'agent', canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
+	private state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnecting: false, voiceConnected: false, canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
 	private draftPlaceholder: string | undefined;
 	private placeholderPreview: string | undefined;
 	private serverSlashCommands: ChatInputState['slashCommands'] = [];
 	private skillSelectors: ChatInputState['skillSelectors'] = [];
-	private get mode(): ChatInputMode { return this.state.mode; }
 	private readonly dictationSession: DictationInput;
 	private readonly dictationWaveform = this._register(new Action('ash.chat.input.dictationWaveform', '', '', false));
 	private dictationSample: { text: string; backend: string; } | undefined;
@@ -579,7 +576,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		if (this.input.codeEditor) {
 			this.inputDecorations = this._register(new InputEditorDecorations(this.input.codeEditor,
-				() => this.visible && this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined));
+				() => this.visible && !this.state.aiDisabled ? this.state.selectedAgent : undefined));
 			if (!delegate.draft) this._register(instantiationService.createInstance(BuiltinDynamicCompletions, this.input, {
 				getAttachments: () => this.contexts,
 				getSessionId: () => this.state.conversation?.sessionId,
@@ -1020,8 +1017,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.inputFooter) return;
 		this.pickerResponsiveLayout.setFooter(this.inputFooter, () => [
 			getLeadingPickers(),
-			[this.modePickerActionItem, this.modelPickerActionItem, this.permissionWidget].flatMap(item => item && !item.isDisposed ? [item] : []),
-		], () => this.options.modePicker === 'visible');
+			[this.agentPickerActionItem, this.modelPickerActionItem, this.permissionWidget].flatMap(item => item && !item.isDisposed ? [item] : []),
+		], () => this.options.agentPicker === 'visible');
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -1213,16 +1210,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		if (this.isDisposed || lifecycle.aborted) return undefined;
 		const { text, contexts: attachments } = this.snapshotDraftReferences();
-		const mode = this.mode;
+
 		if (!text.trim() && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
-		const draft = await captureChatDraft(text, mode, attachments);
+		const draft = await captureChatDraft(text, attachments);
 		if (this.isDisposed || lifecycle.aborted) return undefined;
-		if (this.draftRevision !== revision || this.mode !== mode) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
+		if (this.draftRevision !== revision) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
 		return {
 			draft,
 			clear: () => {
-				if (this.isDisposed || lifecycle.aborted || this.draftRevision !== revision || this.mode !== mode) return;
+				if (this.isDisposed || lifecycle.aborted || this.draftRevision !== revision) return;
 				this.setInputValue('');
 				this.attachmentModel.cancelPendingContext();
 				this.setReferenceState([]);
@@ -1267,11 +1264,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	moveDraftTo(target: Pick<IChatInputPart, 'replaceDraft'>): void {
-		target.replaceDraft({ mode: this.mode, ...this.snapshotDraftReferences() });
+		target.replaceDraft(this.snapshotDraftReferences());
 		this.ownsDraftStorage = false;
 		this.retireDraftWrite?.();
 		// Clearing the retained composer must never erase the active composer's saved draft.
-		this.applyDraft({ mode: this.mode, text: '', contexts: [] });
+		this.applyDraft({ text: '', contexts: [] });
 	}
 
 	replaceDraft(draft: IChatComposerDraft): void {
@@ -1282,18 +1279,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private applyDraft(draft: IChatComposerDraft): void {
 		this.inputChanges.pause();
 		try {
-			const prefix = draft.mode !== 'agent' && (draft.text.trim() || draft.contexts.length) && !isTaskSlashCommand(draft.text)
-				? `/${draft.mode} ` : '';
-			const draftText = `${prefix}${draft.text}`;
-			const draftContexts = prefix ? draft.contexts.map(context => context.reference ? {
-				...context,
-				reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
-			} : context) : draft.contexts;
-			this.delegate.selectMode('agent');
 			const { text, contexts } = this.options.stageImages
-				? projectChatDraftReferences(draftText, draftContexts, true)
-				: { text: draftText, contexts: draftContexts };
-			this.setInputValue(text !== draftText && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
+				? projectChatDraftReferences(draft.text, draft.contexts, true)
+				: draft;
+			this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
 			const references: ChatContextAttachment[] = [];
 			const legacyReferences: ChatContextAttachment[] = [];
 			for (const attachment of contexts) {
@@ -1349,7 +1338,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			const draft = this.captureHistoryDraft();
 			const textRevision = this.textRevision;
-			const mode = this.mode;
+
 			const input = this.parseInput(this.commandText(draft.text, draft.attachments));
 			if (sendInBackground && input.kind !== 'message') return;
 			// Speech and prepared context can change the parsed input after initial admission.
@@ -1401,8 +1390,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					if (this.isDisposed || lifecycle.aborted || !this.visible) throw new CancellationError();
 				}
 				const skills = draft.skills.length > 0 ? draft.skills : undefined;
-				if (sendInBackground) await sendInBackground(draft.text, mode, skills, requestContexts, lifecycle);
-				else await this.delegate.send(draft.text, mode, skills, requestContexts, lifecycle, queue);
+				if (sendInBackground) await sendInBackground(draft.text, skills, requestContexts, lifecycle);
+				else await this.delegate.send(draft.text, skills, requestContexts, lifecycle, queue);
 				if (!this.isDisposed && !lifecycle.aborted) this.inputNotifications.handleMessageSent({ inputUri: this.notificationUri });
 			});
 		} finally {
@@ -1416,7 +1405,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	invalidatePendingInput(): void {
-		this.modePickerActionItem?.hide();
+		this.agentPickerActionItem?.hide();
 		this.permissionWidget?.hide();
 		this.modelPickerActionItem?.hide();
 		if (this.input.codeEditor) CopyPasteController.get(this.input.codeEditor)?.clearWidgets();
@@ -1439,10 +1428,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.modelPickerActionItem.openModelPicker();
 	}
 
-	openModePicker(): void {
-		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.options.modePicker === 'hidden' || this.toolbarState.inputKind === 'command') return;
-		this.modePickerActionItem?.focus();
-		this.modePickerActionItem?.show();
+	openAgentPicker(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.options.agentPicker === 'hidden' || this.toolbarState.inputKind === 'command') return;
+		this.agentPickerActionItem?.focus();
+		this.agentPickerActionItem?.show();
 	}
 
 	openPermissionPicker(): void {
@@ -1624,9 +1613,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.renderedInteraction = undefined;
 			this.questionDraft = undefined;
 		}
-		const draftMode = this.selectDraft(state.draftIdentity);
-		const restoreMode = draftMode !== undefined && draftMode !== state.mode;
-		if (restoreMode) state = { ...state, mode: draftMode };
+		this.selectDraft(state.draftIdentity);
 		if (this.serverSlashCommands !== state.slashCommands) {
 			this.slashCommands.setServerCommands(this.delegate.executeServerCommand ? state.slashCommands : []);
 			this.serverSlashCommands = state.slashCommands;
@@ -1660,7 +1647,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderFollowups();
 		this.renderToolbar();
 		// Publish only after installing the new identity and state: the owner can render synchronously.
-		if (restoreMode) this.delegate.selectMode(draftMode);
 	}
 
 	private renderSessionWorkingSet(): void {
@@ -1702,9 +1688,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const revision = (revisions.get(draftId) ?? 0) + 1;
 			revisions.set(draftId, revision);
 			const { text, contexts: attachments } = this.snapshotDraftReferences();
-			const mode = this.mode;
-			if (attachments.length === 0) { storage.write(draftId, { mode, text, contexts: [] }); return; }
-			const draft = await captureChatDraft(text, mode, attachments).catch(error => {
+
+			if (attachments.length === 0) { storage.write(draftId, { text, contexts: [] }); return; }
+			const draft = await captureChatDraft(text, attachments).catch(error => {
 				if (revision !== revisions.get(draftId)) return undefined;
 				throw error;
 			});
@@ -1777,14 +1763,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					continue;
 				}
 				const revision = this.draftRevision;
-				const mode = this.mode;
+
 				await save(false);
-				if (this.draftRevision === revision && this.mode === mode && !this.attachmentModel.hasPendingContext) return;
+				if (this.draftRevision === revision && !this.attachmentModel.hasPendingContext) return;
 			}
 		};
 	}
 
-	private selectDraft(identity: ChatInputState['draftIdentity']): ChatInputMode | undefined {
+	private selectDraft(identity: ChatInputState['draftIdentity']): void {
 		if (!identity || this.persistentDrafts || this.options.draftStorage === 'host') return;
 		const previous = this.draftIdentity;
 		this.draftIdentity = identity;
@@ -1793,7 +1779,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Park user-owned references with their draft; live App context never follows navigation.
 		const snapshot = this.snapshotDraftReferences();
 		if (snapshot.text || snapshot.contexts.length) {
-			this.conversationDrafts.set(previous.id, { ...this.captureHistoryDraft(), mode: this.mode, text: snapshot.text, attachments: snapshot.contexts });
+			this.conversationDrafts.set(previous.id, { ...this.captureHistoryDraft(), text: snapshot.text, attachments: snapshot.contexts });
 		} else {
 			this.conversationDrafts.delete(previous.id);
 		}
@@ -1804,7 +1790,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.applyHistoryDraft(draft ?? { text: '', selection: { anchor: 0, active: 0 }, attachments: [], skills: [] });
 		this.draftRevision++;
 		this.inputChanges.fire();
-		return draft?.mode;
 	}
 
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
@@ -1839,7 +1824,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			voiceConnecting: this.delegate.voiceConversation?.isConnecting === true,
 			voiceConnected: this.delegate.voiceConversation?.isConnected === true,
 			voiceConnectedPlaceholder: this.delegate.voiceConversation?.connectedPlaceholder,
-			mode: this.mode,
 			canSubmit: canSubmitIntent && !this.submitting && !this.isSubmissionBlocked(localCommand) && !(input.kind === 'command' && input.binding.origin === 'client' && this.state.canInterrupt && !input.binding.executeDuringRequest),
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
@@ -1861,7 +1845,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.voiceConnecting === this.toolbarState.voiceConnecting &&
 			state.voiceConnected === this.toolbarState.voiceConnected &&
 			state.voiceConnectedPlaceholder === this.toolbarState.voiceConnectedPlaceholder &&
-			state.mode === this.toolbarState.mode &&
 			state.canSubmit === this.toolbarState.canSubmit &&
 			state.hasInput === this.toolbarState.hasInput &&
 			state.canInterrupt === this.toolbarState.canInterrupt &&
@@ -1912,12 +1895,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private renderToolbarActions(): void {
 		const agentName = this.state.selectedAgent?.name ?? this.state.agentName;
 		const agentLabel = agentName ?? localize('chat.agentPicker.select', 'Select Agent');
-		const modeAction = this.options.modePicker === 'hidden' || (!this.state.canSelectAgent && !agentName) || this.toolbarState.inputKind === 'command'
+		const agentAction = this.options.agentPicker === 'hidden' || (!this.state.canSelectAgent && !agentName) || this.toolbarState.inputKind === 'command'
 			? undefined
 			: new SelectorAction(
-				'ash.chat.input.mode',
+				'ash.chat.input.agent',
 				agentLabel,
-				agentName ? localize('chat.agentPicker.mode', 'Agent: {0}', agentName) : agentLabel,
+				agentName ? localize('chat.agentPicker.selected', 'Agent: {0}', agentName) : agentLabel,
 				Lxicon.unlimited,
 				'mode',
 				async () => {
@@ -2006,7 +1989,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
 		if (!this.secondaryToolbarContainer && !this.attachmentToolbar) additionalActions.unshift(this.attachAction);
 		const commandInput = this.toolbarState.inputKind === 'command';
-		const pickerActions: IAction[] = modeAction ? [modeAction] : [];
+		const pickerActions: IAction[] = agentAction ? [agentAction] : [];
 		if (!commandInput) pickerActions.push(this.modelAction);
 		if (this.options.primaryPermissionPicker) pickerActions.push(this.options.primaryPermissionPicker.action);
 		const dictationActions: IAction[] = [];
@@ -2326,12 +2309,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			});
 		}
 		if (action instanceof SelectorAction) {
-			return this.modePickerActionItem = this.instantiationService.createInstance(ModePickerActionItem, action, this.mode, () => {
+			return this.agentPickerActionItem = this.instantiationService.createInstance(AgentPickerActionItem, action, () => {
 				const lifetime = this.inputLifecycle.signal;
 				return () => !this.isDisposed && !lifetime.aborted && !this.state.aiDisabled;
 			}, () => {
 				this.renderToolbarActions();
-			}, () => this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined);
+			}, () => !this.state.aiDisabled ? this.state.selectedAgent : undefined);
 		}
 		return undefined;
 	}

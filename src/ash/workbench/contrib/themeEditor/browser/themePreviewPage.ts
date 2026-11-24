@@ -140,7 +140,7 @@ class ChatPreviewPane extends ChatViewPane {
 					{ id: 'response', type: 'agentMessage', text: localize('themeEditor.previewChatResponse', 'In Tabs mode, the conversation shares the selected tab’s editor background. In List mode, it uses the background of its host panel.\n\nTry changing the background, text and input colors. This sample never sends messages.'), transient: false },
 				] : [],
 				inputState: {
-					mode: 'agent', queuedMessages: 0, phase: 'ready', inputBlocked: true,
+					queuedMessages: 0, phase: 'ready', inputBlocked: true,
 					canInterrupt: false, approvalMode: 'manual', models: [], isAutomaticModel: false,
 					slashCommands: [], skillSelectors: [], canSelectAgent: false,
 				} satisfies ChatInputState,
@@ -152,7 +152,6 @@ class ChatPreviewPane extends ChatViewPane {
 				selectAutomaticModel: async () => { throw chatUnavailable(); },
 				listAgents: async () => [],
 				selectAgent: () => { throw chatUnavailable(); },
-				selectMode: () => { throw chatUnavailable(); },
 				selectApprovalMode: () => { throw chatUnavailable(); },
 				resolveInteraction: async () => { throw chatUnavailable(); },
 				retryFailedTurn: async () => { throw chatUnavailable(); },

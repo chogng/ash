@@ -676,7 +676,7 @@ impl App {
         match outcome {
             CommandPanelOutcome::ExtensionTab(tab) => Some(
                 ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
-                    mode: self.agent_mode(),
+                    mode: self.task_execution(),
                     command: tab.command().definition(),
                     origin: ash_slash_commands::SlashCommandOrigin::Local,
                     display_arguments: String::new(),
@@ -2432,12 +2432,12 @@ impl App {
         Some(ThreadCommand::RefreshQueue.into())
     }
 
-    pub(crate) fn agent_mode(&self) -> ash_protocol::AgentMode {
+    pub(crate) fn task_execution(&self) -> ash_protocol::TaskExecution {
         self.input_state().mode()
     }
 
     #[cfg(test)]
-    pub(super) fn set_agent_mode(&mut self, mode: ash_protocol::AgentMode) {
+    pub(super) fn set_task_execution(&mut self, mode: ash_protocol::TaskExecution) {
         self.input_state_mut().set_mode(mode);
     }
 
@@ -3824,7 +3824,7 @@ impl App {
                     self.close_transient_surfaces();
                     let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
                     let submission = crate::thread::composer::ChatSubmission {
-                        mode: self.agent_mode(),
+                        mode: self.task_execution(),
                         command_id: crate::client::new_command_id("input"),
                         display_text: text.clone(),
                         input: vec![crate::thread::composer::ChatInputItem::Text(text)],
@@ -3983,7 +3983,7 @@ impl App {
                         .is_some();
                 let mut submission = invocation.into_forwarded_submission();
                 if task_command {
-                    submission.mode = ash_protocol::AgentMode::Agent;
+                    submission.mode = ash_protocol::TaskExecution::Agent;
                     return self.handle_chat_composer_outcome(
                         if self.chat_panel.is_steering() && !self.starts_new_session() {
                             ChatComposerOutcome::Queued(

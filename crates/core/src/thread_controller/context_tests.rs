@@ -68,7 +68,6 @@ impl Fixture {
                 &self.thread,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(key).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
@@ -349,7 +348,7 @@ fn checkpoint_continuation_keeps_its_boundary_and_does_not_reinsert_a_covered_re
 }
 
 #[test]
-fn frozen_mode_is_present_in_model_input_after_reload() {
+fn frozen_task_command_is_present_in_model_input_after_reload() {
     let mut fixture = Fixture::new();
     let approach = ash_protocol::TurnInstructions::new(
         "modes",
@@ -366,14 +365,14 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
                 context_policy: Default::default(),
                 command_id: CommandId::new("ask-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
-                mode: ash_protocol::AgentMode::Ask,
                 kind: TurnKind::Coding,
                 model: None,
                 reasoning_effort: None,
                 advisor: None,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS
                     .freeze()
-                    .with_mode(&approach),
+                    .with_task_instructions(&approach)
+                    .with_task_command(Some(ash_protocol::TaskExecution::Ask)),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ApprovalMode::Manual,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -405,7 +404,7 @@ fn frozen_mode_is_present_in_model_input_after_reload() {
             .unwrap()
             .public_thread()
             .turns[0]
-            .mode,
-        ash_protocol::AgentMode::Ask
+            .execution_approach(),
+        ash_protocol::TaskExecution::Ask
     );
 }

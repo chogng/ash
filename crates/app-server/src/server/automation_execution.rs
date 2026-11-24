@@ -293,7 +293,6 @@ impl AppServer {
                         },
                         snapshot.thread_id.clone(),
                         (!chat).then(ash_protocol::ApprovalMode::default),
-                        ash_protocol::AgentMode::Agent,
                         TurnModelSelection::Current,
                         None,
                         None,

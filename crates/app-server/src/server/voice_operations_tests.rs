@@ -426,7 +426,6 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
                     text: "Handle the request I just spoke.".into(),
                 },
             ],
-            mode: Default::default(),
             model: None,
             model_routing: None,
             reasoning_effort: None,

@@ -325,7 +325,6 @@ name = "ash-agent"
 version = "0.1.0"
 dependencies = [
  "ash-action-policy",
- "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-async-utils",
  "ash-core",
@@ -336,6 +335,7 @@ dependencies = [
  "ash-prompts",
  "ash-protocol",
  "ash-skills-extension",
+ "ash-task-command-templates",
  "ash-teams",
  "futures",
  "pollster 1.0.1",
@@ -417,13 +417,6 @@ dependencies = [
  "log",
  "pollster 1.0.1",
  "serde_json",
-]
-
-[[package]]
-name = "ash-agent-mode-templates"
-version = "0.1.0"
-dependencies = [
- "ash-protocol",
 ]
 
 [[package]]
@@ -645,7 +638,6 @@ dependencies = [
  "ash-agent",
  "ash-agent-environment",
  "ash-agent-message-board-host",
- "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-analytics",
  "ash-app-server-daemon",
@@ -756,6 +748,7 @@ dependencies = [
  "ash-supergrok",
  "ash-symphony",
  "ash-syntax",
+ "ash-task-command-templates",
  "ash-task-delivery",
  "ash-teams",
  "ash-testing",
@@ -3397,6 +3390,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-task-command-templates"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+]
+
+[[package]]
 name = "ash-task-delivery"
 version = "0.1.0"
 dependencies = [
@@ -4019,13 +4019,13 @@ name = "ash-workflows"
 version = "0.1.0"
 dependencies = [
  "ash-agent",
- "ash-agent-mode-templates",
  "ash-agent-roles",
  "ash-core",
  "ash-core-api",
  "ash-prompts",
  "ash-protocol",
  "ash-state",
+ "ash-task-command-templates",
  "rusqlite",
  "serde",
  "serde_json",

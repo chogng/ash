@@ -71,7 +71,7 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
 作为普通 `StartTurn.input`。当前 `/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；当前 `/team` 管理的是一次协作任务，持久成员组织另见 [Agent Team](../crates/teams/README.md)。命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Agent 树](core-multi-agent.md)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 
-`/ask`、`/plan`、`/debug`、`/swarm` 通过普通消息和队列提交，保留附件。App Server 受理时解析任务命令，队列保存命令身份，Core 在 Turn 中冻结指令和权限约束。只读请求不能通过追加消息转为执行。见 [Agent 任务命令](../crates/agent-mode-templates/README.md)。
+`/ask`、`/plan`、`/debug`、`/swarm` 通过普通消息和队列提交，保留附件。App Server 受理时解析任务命令，队列保存命令身份，Core 在 Turn 中冻结指令和权限约束。只读请求不能通过追加消息转为执行。见 [Agent 任务命令](../crates/task-command-templates/README.md)。
 Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code

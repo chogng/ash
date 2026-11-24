@@ -103,23 +103,23 @@ ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原�
 
 ## 运行基础设施
 
-| Method                                                            | 参数与结果                                                                                      | 行为                                                                                                       |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `diagnostics/read`                                                | 空参数 → `DiagnosticSnapshot`                                                                   | 有界诊断、构建身份、使用计数及累计业务指标（不含请求/错误正文）                                            |
-| `mcp/server/status`                                               | 空参数 → `McpServerStatusResult`                                                                | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
-| `feedback/prepare`                                                | HTTPS endpoint → `PreparedFeedback`                                                             | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效                                                       |
-| `feedback/upload`                                                 | operationId、digest → 空结果                                                                    | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation                          |
-| `queue/enqueue`                                                   | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；后端保存执行目录及解析后的工具和审批模式。无工作区的会话由 profile 宿主投递        |
-| `queue/list`                                                      | Session/Thread → messages                                                                       | 返回队列状态和输入；窗口关闭不删除队列                                                                     |
-| `queue/cancel`                                                    | Session/Thread、commandId → QueuedMessage                                                       | 取消未交付消息；交付中或已开始使用 Turn 中断                                                               |
-| `queue/edit`                                                      | Session/Thread、commandId、expectedRevision、action → QueuedMessage                             | pause、replace、move、send；冲突直接报错                                                                   |
-| `extension/items/list`                                            | Session/Thread → items                                                                          | 返回扩展自有文本展示项；校验身份和大小                                                                     |
-| `memory/add` / `memory/update` / `memory/delete`                  | commandId、作用域、Memory 身份与 revision → mutation result                                     | 用户显式新增、按 revision 更新或删除；命令可重放，删除立即移除正文                                         |
-| `memory/scopes`                                                   | 可选 Thread → scope 标签和 policy                                                               | 返回 Profile、当前关联 Project 与已授权 Dir                                                                |
-| `memory/list` / `memory/read` / `memory/search`                   | 精确作用域、分页或 Memory 身份 → 有界结果                                                       | 只允许产品 host；cursor 绑定 catalog revision 和查询                                                       |
-| `memory/citation/read`                                            | Memory ID、作用域、revision、UTF-8 范围 → 引用正文                                              | 引用不授予权限；已删除或版本不符明确报错                                                                   |
-| `memory/policy/read` / `memory/policy/update`                     | 作用域、commandId、policy revision、automaticRead、modelWrite → 读取与模型保存授权              | 默认关闭；修改与重放沿用 Memory 通知和冲突契约                                                             |
-| `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource                                                                  | 进程内存诊断，不读取长期 Memory                                                                            |
+| Method                                                            | 参数与结果                                                                                | 行为                                                                                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `diagnostics/read`                                                | 空参数 → `DiagnosticSnapshot`                                                             | 有界诊断、构建身份、使用计数及累计业务指标（不含请求/错误正文）                                            |
+| `mcp/server/status`                                               | 空参数 → `McpServerStatusResult`                                                          | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
+| `feedback/prepare`                                                | HTTPS endpoint → `PreparedFeedback`                                                       | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效                                                       |
+| `feedback/upload`                                                 | operationId、digest → 空结果                                                              | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation                          |
+| `queue/enqueue`                                                   | commandId、Session/Thread、输入、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；后端保存执行目录及解析后的工具和审批模式。无工作区的会话由 profile 宿主投递        |
+| `queue/list`                                                      | Session/Thread → messages                                                                 | 返回队列状态和输入；窗口关闭不删除队列                                                                     |
+| `queue/cancel`                                                    | Session/Thread、commandId → QueuedMessage                                                 | 取消未交付消息；交付中或已开始使用 Turn 中断                                                               |
+| `queue/edit`                                                      | Session/Thread、commandId、expectedRevision、action → QueuedMessage                       | pause、replace、move、send；冲突直接报错                                                                   |
+| `extension/items/list`                                            | Session/Thread → items                                                                    | 返回扩展自有文本展示项；校验身份和大小                                                                     |
+| `memory/add` / `memory/update` / `memory/delete`                  | commandId、作用域、Memory 身份与 revision → mutation result                               | 用户显式新增、按 revision 更新或删除；命令可重放，删除立即移除正文                                         |
+| `memory/scopes`                                                   | 可选 Thread → scope 标签和 policy                                                         | 返回 Profile、当前关联 Project 与已授权 Dir                                                                |
+| `memory/list` / `memory/read` / `memory/search`                   | 精确作用域、分页或 Memory 身份 → 有界结果                                                 | 只允许产品 host；cursor 绑定 catalog revision 和查询                                                       |
+| `memory/citation/read`                                            | Memory ID、作用域、revision、UTF-8 范围 → 引用正文                                        | 引用不授予权限；已删除或版本不符明确报错                                                                   |
+| `memory/policy/read` / `memory/policy/update`                     | 作用域、commandId、policy revision、automaticRead、modelWrite → 读取与模型保存授权        | 默认关闭；修改与重放沿用 Memory 通知和冲突契约                                                             |
+| `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource                                                            | 进程内存诊断，不读取长期 Memory                                                                            |
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
 
@@ -188,7 +188,7 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 ## Agent 任务命令
 
-在 `session/request.startTurn` 或 `queue/enqueue` 的用户文本中提交 `/ask`、`/plan`、`/debug`、`/swarm`。App Server 在受理时解析任务命令，冻结 `TurnInstructions.taskCommand` 和对应指令。命令占用新的 Turn。旧请求与历史保留 `mode` 读取兼容。见 [Agent 任务命令](../agent-mode-templates/README.md)。
+在 `session/request.startTurn` 或 `queue/enqueue` 的用户文本中提交 `/ask`、`/plan`、`/debug`、`/swarm`。App Server 在受理时解析任务命令，冻结 `TurnInstructions.taskCommand` 和对应指令。命令占用新的 Turn。见 [Agent 任务命令](../task-command-templates/README.md)。
 
 `queue/edit` 替换消息时可提供 `commandInterpretation`。App Server 在同一修订中更新解释规则、任务命令和消息内容。省略该字段时沿用已保存的解释规则。
 

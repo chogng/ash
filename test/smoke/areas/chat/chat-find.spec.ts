@@ -54,7 +54,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) {
 				const thread = await read();
 				await client.request(methods['session/request'], {
 					sessionId, commandId: `find-turn-${index}`, request: {
-						type: 'startTurn', threadId, expectedSequence: thread.sequence, mode: 'ask', approvalMode: 'manual', model,
+						type: 'startTurn', threadId, expectedSequence: thread.sequence, approvalMode: 'manual', model,
 						input: [{ type: 'text', text: index === 0 ? 'Needle request' : `Ordinary request ${index}` }],
 					}
 				});

@@ -104,7 +104,7 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 				type: 'startTurn', threadId, expectedSequence: (await read()).thread.sequence,
 				input: [{ type: 'text', text: 'Source-only prompt' }],
 				model: { provider: 'custom-bots-fixture', model: 'gpt-6.1-sol' },
-				mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct',
+				approvalMode: 'bypassPermissions', toolMode: 'direct',
 			},
 		});
 		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');

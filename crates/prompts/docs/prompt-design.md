@@ -34,17 +34,17 @@ IDE 与 TUI 共享编码流程。TUI 的呈现方式和编辑器上下文通常�
 | Design             | [design.md](../drafts/workflows/design.md)                 | 将设计要求变成合适的视觉或交互成果并核验                     |
 | 个人助手           | [assistant.md](../drafts/workflows/assistant.md)           | 个人上下文、承诺、记忆、外部行动与受托的主动工作             |
 
-这里的工作类型是写作与评测单元，不是新增的协议枚举、Role 或产品菜单。识别任务类型不会选择一个拥有更多权限的 Agent，也不会自动切换 Agent 模式。
+这里的工作类型是写作与评测单元，不是新增的协议枚举、Role 或产品菜单。识别任务类型不会选择一个拥有更多权限的 Agent，也不会自动切换 任务命令。
 
 语义上的组合示例：
 
 ```text
-IDE 修复代码：       core + ide + coding + 当前 Agent 模式/Role/实际工具与上下文
-TUI 修复同一问题：   core + tui + coding + 当前 Agent 模式/Role/实际工具与上下文
-Agents 整理报告：    core + agents-window + cowork + 当前 Agent 模式/Role/实际工具与上下文
-Agents 讨论架构：    core + agents-window + chat + 当前 Agent 模式/Role/实际工具与上下文
+IDE 修复代码：       core + ide + coding + 当前 任务命令/Role/实际工具与上下文
+TUI 修复同一问题：   core + tui + coding + 当前 任务命令/Role/实际工具与上下文
+Agents 整理报告：    core + agents-window + cowork + 当前 任务命令/Role/实际工具与上下文
+Agents 讨论架构：    core + agents-window + chat + 当前 任务命令/Role/实际工具与上下文
 Agents 制作交互页：  core + agents-window + design + coding（确有实现工作时）+ 既有运行约束
-Agents 安排日程：    core + agents-window + assistant + 当前 Agent 模式/Role/实际工具与上下文
+Agents 安排日程：    core + agents-window + assistant + 当前 任务命令/Role/实际工具与上下文
 ```
 
 这是正文职责的组合图，不是新的指令优先级或已实现的加载器。以主要成果选择流程，只加入完成该成果所需的支撑流程。制作网页需要编码，讨论设计概念通常不需要；写报告中的计算代码属于内部制作手段，不会把整个任务转为软件工程。
@@ -55,12 +55,12 @@ Agents 安排日程：    core + agents-window + assistant + 当前 Agent 模式
 | ---------- | ------------------------------------------ | --------------------------------------- |
 | 界面       | 上下文来源、用户如何看到和操作结果         | 工具授权、任务身份、完成与否            |
 | 任务流程   | 当前目标所需的调查、制作与核验             | 宿主能力、持久 Role、自动后台工作       |
-| Agent 模式 | 当前 Turn 的工作方式                       | 产品窗口、用户成果的种类、额外权限      |
+| 任务命令   | 当前 Turn 的工作方式                       | 产品窗口、用户成果的种类、额外权限      |
 | Role       | 根或子 Agent 的职责、报告关系和能力上限    | 用户意图、已撤销权限、其他 Agent 的职责 |
 | 模型指导   | 为准确模型选择合适的完整基础正文及专用表达 | 产品身份、工具协议、用户授权            |
 | 工具与环境 | 实际可调用操作、执行位置、来源与运行限制   | 模型可以凭文字自行扩充的能力            |
 
-这些边界延续 [Agent 指令组合](agent-instructions.md)、[Agent 模式](../../agent-mode-templates/README.md) 和 [Role](../../agent-roles/README.md) 的现有契约。例如，在 Ask 模式下识别到 coding 任务，仍然只能在该模式允许的范围内回答；切到 Code 布局也不会自动获得实施授权。
+这些边界延续 [Agent 指令组合](agent-instructions.md)、[任务命令](../../task-command-templates/README.md) 和 [Role](../../agent-roles/README.md) 的现有契约。例如，在 Ask 模式下识别到 coding 任务，仍然只能在该模式允许的范围内回答；切到 Code 布局也不会自动获得实施授权。
 
 ## 共同核心为什么这样写
 
@@ -127,7 +127,7 @@ Dot 参考中的 Dreamer 是后台研究角色，负责向主助手报告。它�
 
 ## 当前实现与后续接入边界
 
-Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文。已登记模型使用 `model-provider-info/models/<provider>.json` 的正文，未登记模型使用 `prompts/templates/agent/base_prompt.md`；命中模型正文时不会再叠加默认基础。Role、Agent 模式、授权、工具与上下文独立组合，正文和来源按现有契约冻结。
+Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文。已登记模型使用 `model-provider-info/models/<provider>.json` 的正文，未登记模型使用 `prompts/templates/agent/base_prompt.md`；命中模型正文时不会再叠加默认基础。Role、任务命令、授权、工具与上下文独立组合，正文和来源按现有契约冻结。
 
 因此，`core.md` 首先是共同规则的写作与评测基线，不能直接再叠到所有已有完整基础正文上。首轮接入应按这份基线修订适用模型的完整正文和默认正文，保留有证据的模型表达差异；界面与任务说明的选择、归属和预算需进入真实组装链路的验证。若以后改为共同核心加精简模型指导，需要单独修改组合契约并评测，不通过文本草案暗中完成迁移。
 

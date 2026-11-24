@@ -431,12 +431,10 @@ fn queue_request(
             submission,
             ..
         } => {
-            let mode = submission.mode;
             let input = super::request::materialize_submission(client, submission)?;
             let tool_mode = client.read_config()?.tool_mode;
             client.enqueue_message(QueueEnqueueParams {
                 command_interpretation: None,
-                mode,
                 model: None,
                 model_routing: None,
                 reasoning_effort: None,

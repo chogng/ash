@@ -1,5 +1,4 @@
 import type { ChatResponseFileChangesPresentation } from './chatResponseFileChangesService.js';
-import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatInputDelegate } from './widget/input/chatInput.js';
 import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
@@ -199,7 +198,9 @@ export interface IChatWidgetViewOptions {
 	readonly messageActionSurface?: 'chat' | 'code';
 	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
-	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
+	/** Embedded chat can set a default slash command for plain input. */
+	readonly defaultTaskCommand?: 'ask';
+	readonly submitHandler?: (query: string, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
 
 export interface ChatMessagePresentation {
@@ -221,6 +222,7 @@ export interface IChatWidget {
 	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
 	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
 	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'commandInterpretation' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
+	readonly defaultTaskCommand?: IChatWidgetViewOptions['defaultTaskCommand'];
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;

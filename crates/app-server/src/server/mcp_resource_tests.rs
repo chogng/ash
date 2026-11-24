@@ -121,7 +121,6 @@ fn linked_resource_rpc_uses_canonical_coordinates_frozen_bindings_and_connection
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -474,7 +473,6 @@ fn app_tool_rpc_uses_the_original_thread_approval_result_and_cancellation() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

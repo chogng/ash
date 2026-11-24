@@ -137,7 +137,7 @@ fn effort_completion_preserves_the_running_turn_and_draft() {
     app.update(crate::thread::Event::TurnActivityChanged(
         crate::thread::TurnActivity::Working,
     ));
-    app.set_agent_mode(ash_protocol::AgentMode::Plan);
+    app.set_task_execution(ash_protocol::TaskExecution::Plan);
     app.insert_text("next task draft");
     let rows = app.messages().len();
     let config = crate::test_support::empty_config_snapshot();
@@ -169,7 +169,7 @@ fn effort_completion_preserves_the_running_turn_and_draft() {
     );
     assert_eq!(app.status(), &Status::Working);
     assert!(app.steers_active_turn());
-    assert_eq!(app.agent_mode(), ash_protocol::AgentMode::Plan);
+    assert_eq!(app.task_execution(), ash_protocol::TaskExecution::Plan);
     assert_eq!(app.input(), "next task draft");
     assert_eq!(app.messages().len(), rows);
     assert_eq!(app.status_line().model_label(), "test-model (high)");
@@ -271,7 +271,6 @@ fn status_line_context_follows_thread_snapshots() {
         goal: None,
         hook_runs: Vec::new(),
         turns: vec![ash_protocol::Turn {
-            mode: Default::default(),
             advisor: None,
             turn_id: TurnId::new("turn").unwrap(),
             status: ash_protocol::TurnStatus::Completed,

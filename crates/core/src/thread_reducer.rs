@@ -259,7 +259,7 @@ impl ThreadSnapshot {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     kind: turn.kind,
-                    mode: turn.mode,
+
                     instructions: turn.instructions.clone(),
                     directory: turn.directory.clone(),
                     model: turn.model.clone(),
@@ -353,7 +353,7 @@ pub struct TurnSnapshot {
     pub started_at_unix_ms: Option<u64>,
     pub duration_ms: Option<u64>,
     pub kind: TurnKind,
-    pub mode: ash_protocol::AgentMode,
+
     pub instructions: Option<TurnInstructions>,
     pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub model: Option<ModelRef>,
@@ -377,11 +377,11 @@ pub struct TurnSnapshot {
 }
 
 impl TurnSnapshot {
-    pub fn execution_approach(&self) -> ash_protocol::AgentMode {
+    pub fn execution_approach(&self) -> ash_protocol::TaskExecution {
         self.instructions
             .as_ref()
             .and_then(ash_protocol::TurnInstructions::task_command)
-            .unwrap_or(self.mode)
+            .unwrap_or_default()
     }
 }
 
@@ -1474,7 +1474,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
             advisor,
             turn_id,
             kind,
-            mode,
             instructions,
             directory,
             model,
@@ -1540,7 +1539,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     started_at_unix_ms: None,
                     duration_ms: None,
                     kind: *kind,
-                    mode: *mode,
                     instructions: instructions.clone(),
                     directory: directory.clone(),
                     model: model.clone(),
@@ -1565,7 +1563,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     kind: command_kind,
-                    mode: command_mode,
                     instructions: command_instructions,
                     model: command_model,
                     reasoning_effort: command_reasoning_effort,
@@ -1578,7 +1575,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     ..
                 } => {
                     command_kind == kind
-                        && command_mode == mode
                         && command_instructions == instructions
                         && command_model == model
                         && command_reasoning_effort == reasoning_effort
@@ -1897,45 +1893,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot
                 .item_sequences
                 .insert(item.item_id().clone(), envelope.sequence);
-        }
-        ThreadEvent::TurnModeChanged {
-            turn_id,
-            from_mode,
-            mode,
-            instructions,
-            ..
-        } => {
-            require_no_command(envelope)?;
-            instructions
-                .validate()
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
-            let turn = find_turn_mut(&mut snapshot, turn_id)?;
-            if turn.status != TurnStatus::Running
-                || turn.kind != ash_protocol::TurnKind::Coding
-                || turn.mode != *from_mode
-                || turn.mode == *mode
-            {
-                return Err(CoreError::Journal(
-                    "mode changes require a running Turn and a different mode".into(),
-                ));
-            }
-            let original = turn.instructions.as_ref().ok_or_else(|| {
-                CoreError::Journal("mode changes require frozen Turn instructions".into())
-            })?;
-            if instructions.mode_instructions().is_none()
-                || original.owner() != instructions.owner()
-                || original.id() != instructions.id()
-                || original.revision() != instructions.revision()
-                || original.body() != instructions.body()
-                || original.shared() != instructions.shared()
-                || original.model_guidance() != instructions.model_guidance()
-            {
-                return Err(CoreError::Journal(
-                    "mode changes must preserve shared instructions and model guidance".into(),
-                ));
-            }
-            turn.mode = *mode;
-            turn.instructions = Some(instructions.clone());
         }
         ThreadEvent::TurnPermissionPolicyChanged {
             turn_id,
@@ -3052,7 +3009,7 @@ fn import_history(
             started_at_unix_ms: None,
             duration_ms: None,
             kind: turn.kind,
-            mode: turn.mode,
+
             instructions: turn.instructions.clone(),
             directory: turn.directory.clone(),
             model: turn.model.clone(),
@@ -3164,7 +3121,7 @@ fn append_imported_turn(
         started_at_unix_ms: None,
         duration_ms: None,
         kind: turn.kind,
-        mode: turn.mode,
+
         instructions: turn.instructions.clone(),
         directory: turn.directory.clone(),
         model: turn.model.clone(),

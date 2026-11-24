@@ -410,7 +410,6 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
                 &thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(format!("catalog-turn-{stage}")).unwrap(),
                     expected_sequence: SequenceExpectation::Any,

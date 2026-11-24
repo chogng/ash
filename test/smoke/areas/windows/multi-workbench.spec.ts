@@ -128,7 +128,7 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		const draftText = 'Unsent draft from the second workspace';
 		await secondPage.evaluate(async draft => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, options?: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
-			await ipc.invoke('ash:native-host:open-agents-window', draft ? { draft: { mode: 'agent', text: draft, contexts: [] } } : undefined);
+			await ipc.invoke('ash:native-host:open-agents-window', draft ? { draft: { text: draft, contexts: [] } } : undefined);
 		}, target.appServerMode === 'required' ? draftText : undefined);
 
 		await waitForElectronWindowState(application, agentsPage, { focused: true });

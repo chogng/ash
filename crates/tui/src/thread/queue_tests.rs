@@ -43,14 +43,13 @@ fn queue_preserves_backend_identity_and_reconciles_terminal_delivery() {
 #[test]
 fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     let mut queue = Queue::default();
-    let (id, mut message) = pending(&mut queue, "first");
+    let (id, mut message) = pending(&mut queue, "/debug first");
     message.status = ::queue::QueueStatus::Paused;
-    message.request.mode = ash_protocol::AgentMode::Debug;
+    message.request.task_command = Some(ash_protocol::TaskExecution::Debug);
     queue.apply(vec![message.clone()]).unwrap();
     let mut input = ChatInput::new();
     queue.restore(id, &mut input).unwrap();
-    assert_eq!(input.text(), "first");
-    assert_eq!(input.mode(), ash_protocol::AgentMode::Debug);
+    assert_eq!(input.text(), "/debug first");
     input.insert_text(" updated");
     let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
     else {
@@ -65,8 +64,7 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
         panic!("expected replacement")
     };
     assert_eq!(target.command_id, message.request.command_id);
-    assert_eq!(submission.display_text, "first updated");
-    assert_eq!(submission.mode, ash_protocol::AgentMode::Debug);
+    assert_eq!(submission.display_text, "/debug first updated");
 }
 
 #[test]

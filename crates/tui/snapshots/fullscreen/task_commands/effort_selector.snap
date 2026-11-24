@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/task_commands_tests.rs
+expression: render_effort(&app)
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Thinking effort ──────────────────────────────────────────────────────────────
+
+                        Faster                  Smarter
+                        ───────────────▲───────────────
+                          low        high         max
+
+           More reasoning for complex tasks and careful verification.
+
+  ←/→ choose  ·  Enter apply  ·  Esc cancel

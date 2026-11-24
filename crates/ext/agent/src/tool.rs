@@ -184,8 +184,8 @@ impl MultiAgentToolService {
                         },
                         role: selection.role.clone(),
                         base_instructions: self.model_instructions.for_turn(
-                            prompts::AGENT_INSTRUCTIONS.freeze().with_mode(
-                                &agent_mode_templates::instructions(
+                            prompts::AGENT_INSTRUCTIONS.freeze().with_task_instructions(
+                                &task_command_templates::instructions(
                                     parent
                                         .turns
                                         .iter()

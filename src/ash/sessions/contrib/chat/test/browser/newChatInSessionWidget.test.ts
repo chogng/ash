@@ -18,10 +18,10 @@ suite('New Chat in Current Session', () => {
 		});
 		const active = page.locator('.ash-sessions-chat-slot.active');
 		await expect(active.getByText('使用当前对话的 Agent、代码和历史开始一条并行对话。')).toBeVisible();
-		const agent = active.locator('.ash-chat-input-mode-action');
+		const agent = active.locator('.ash-chat-input-agent-action');
 		await expect(agent).toHaveText('Agent A');
 		await agent.press('ArrowDown');
-		const agentMenu = page.locator('.ash-chat-input-mode-menu');
+		const agentMenu = page.locator('.ash-chat-input-agent-menu');
 		await expect(agentMenu.getByRole('menuitemradio', { name: 'Agent A', exact: true })).toBeDisabled();
 		await expect(agentMenu.getByText('Agent B', { exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
@@ -63,7 +63,7 @@ suite('New Chat in Current Session', () => {
 		await page.reload();
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(active.locator('.ash-chat-input-editor .view-lines')).toHaveText('Resume this draft');
-		await expect(active.locator('.ash-chat-input-mode-action')).toHaveText('Agent A');
+		await expect(active.locator('.ash-chat-input-agent-action')).toHaveText('Agent A');
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'fork' || call.method === 'send'))).toEqual([
 			{ host: 'Host B', method: 'fork', sessionId: 'same', threadId: 'same' },

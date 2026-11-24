@@ -18,16 +18,16 @@ import { IChatSideChatService, ChatSideChatService, type IChatSideChatOrigin, ty
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 
-function fixture(openToSide = false, commandInterpretation?: 'literal') {
+function fixture(openToSide = false, commandInterpretation?: 'literal', defaultTaskCommand?: 'ask') {
 	const lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const changed = lifetime.add(new Emitter<void>());
 	const domNode = browserEnvironment.window.document.createElement('div');
 	domNode.innerHTML = '<div class="ash-chat-transcript-viewport"><div class="ash-chat-list-widget"><p>Source selection</p></div></div><div class="outside">Unrelated editor</div>';
 	browserEnvironment.window.document.body.append(domNode);
-	const state = { mode: 'ask', isAutomaticModel: false, selectedModel: { provider: 'test', model: 'model' }, selectedReasoningEffort: 'high', approvalMode: 'manual' };
+	const state = { isAutomaticModel: false, selectedModel: { provider: 'test', model: 'model' }, selectedReasoningEffort: 'high', approvalMode: 'manual' };
 	const model = { commandInterpretation, composerGeneration: 1, onDidChange: changed.event, sessionId: 'session', threadId: 'source', thread: { origin: { type: 'root' }, turns: [{ turnId: 'turn-source', status: 'running' }] }, inputState: state, items: [] };
-	const widget = { sessionId: 'session', threadId: 'source', visible: true, domNode, model, isTranscriptProgressActive: false } as unknown as IChatWidget;
+	const widget = { defaultTaskCommand, sessionId: 'session', threadId: 'source', visible: true, domNode, model, isTranscriptProgressActive: false } as unknown as IChatWidget;
 	const widgets = [widget];
 	const calls: { create: unknown[]; start: unknown[]; navigate: unknown[]; } = { create: [], start: [], navigate: [] };
 	const threads = { canCreateSideChat: () => true, createSideChat: async (options: unknown) => { calls.create.push(options); return { sessionId: 'session', threadId: 'side' }; } };
@@ -50,7 +50,7 @@ function fixture(openToSide = false, commandInterpretation?: 'literal') {
 }
 
 test('/btw is a registered client command and submits to the captured source with its model and attachments', async () => {
-	using f = fixture();
+	using f = fixture(false, undefined, 'ask');
 	// Agents keeps a hidden Code widget alongside the visible Cowork widget for the same Thread.
 	f.widgets.unshift({ ...f.widget, visible: false } as IChatWidget);
 	assert.deepEqual(f.commands.getCommands().map(command => [command.command, command.executeDuringRequest]), [['btw', true]]);
@@ -65,18 +65,17 @@ test('/btw is a registered client command and submits to the captured source wit
 });
 
 for (const commandInterpretation of [undefined, 'literal'] as const) {
-	for (const mode of ['ask', 'plan', 'agent']) {
+	for (const command of [undefined, 'ask'] as const) {
 		for (const query of ['/init', '/develop synthetic task', '/debug Reproduce the failure']) {
-			test(`Side Chat preserves ${commandInterpretation ?? 'product'} input semantics for ${mode} ${query}`, async () => {
-				using f = fixture(false, commandInterpretation);
-				f.state.mode = mode;
+			test(`Side Chat preserves ${commandInterpretation ?? 'product'} input semantics for ${command ?? 'plain'} ${query}`, async () => {
+				using f = fixture(false, commandInterpretation, command);
 				// A native Chat pane can present the same Code Thread as a retained hidden Code widget.
 				f.widgets.unshift({ ...f.widget, visible: false, model: { ...f.model, commandInterpretation: commandInterpretation ? undefined : 'literal' } } as unknown as IChatWidget);
 				await f.commands.executeCommand('btw', query, f.resource, { attachedContext: [{ id: 'attachment', kind: 'context', name: 'frozen', resolve: async () => ({ name: 'frozen', content: 'attachment bytes' }) }] });
 				const submission = f.calls.start[0] as Record<string, unknown>;
 				const explicitTask = query.startsWith('/debug ');
-				assert.equal(submission.commandInterpretation, !explicitTask && mode === 'agent' ? commandInterpretation : undefined);
-				assert.equal(submission.text, explicitTask || mode === 'agent' ? query : `/${mode} ${query}`);
+				assert.equal(submission.commandInterpretation, !explicitTask && !command ? commandInterpretation : undefined);
+				assert.equal(submission.text, explicitTask || !command ? query : `/${command} ${query}`);
 				assert.equal(submission.mode, undefined);
 				assert.deepEqual(submission.contexts, [{ name: 'frozen', content: 'attachment bytes' }]);
 				assert.deepEqual(f.calls.navigate, [['session', 'side']]);
@@ -87,7 +86,6 @@ for (const commandInterpretation of [undefined, 'literal'] as const) {
 
 test('Side Chat retains literal semantics after a failed submission is retried', async () => {
 	using f = fixture(false, 'literal');
-	f.state.mode = 'agent';
 	let attempts = 0;
 	const start = f.chat.startTurn;
 	f.chat.startTurn = async options => {
@@ -121,7 +119,6 @@ for (const retirement of ['abort', 'composer', 'hide'] as const) test(`Side Chat
 
 test('Side Chat ignores another registered conversation and keeps its source policy', async () => {
 	using f = fixture(false, 'literal');
-	f.state.mode = 'agent';
 	f.widgets.unshift({ ...f.widget, sessionId: 'other-host-session', model: { ...f.model, commandInterpretation: undefined } } as unknown as IChatWidget);
 	await f.commands.executeCommand('btw', '/init', f.resource);
 	assert.equal((f.calls.create[0] as { sessionId: string; }).sessionId, 'session');

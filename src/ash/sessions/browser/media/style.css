@@ -400,7 +400,7 @@
 
 .ash-sessions-window
 	:is(.ash-button-quiet, .ash-chat-input-picker-button):where(
-		:not(.ash-sessions-chat-input .ash-chat-input-mode-action)
+		:not(.ash-sessions-chat-input .ash-chat-input-agent-action)
 	)[aria-haspopup]:is(:hover, [aria-expanded="true"]):not(
 		:disabled,
 		[aria-disabled="true"],

@@ -1176,7 +1176,6 @@ fn start_catalog_model_turn(
             thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 command_id: ash_protocol::CommandId::new(command).unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,

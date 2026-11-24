@@ -90,27 +90,29 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
 }
 
 #[test]
-fn history_accepts_swarm_and_rejects_multitask_mode_ids() {
+fn history_accepts_swarm_and_rejects_retired_agent_mode_fields() {
     let base =
         ash_protocol::TurnInstructions::new("modes", "swarm", "v1", "Coordinate workers.").unwrap();
-    let instructions =
-        base.clone()
-            .with_model_guidance(ash_protocol::ModelInstructionSelection::Specialized {
-                model: ash_protocol::ModelRef::new(
-                    ash_protocol::ProviderId::new("test").unwrap(),
-                    ash_protocol::ModelId::new("model").unwrap(),
-                ),
-                instructions: base.as_text(),
-                digest: ash_protocol::ContentDigest::sha256(base.body().as_bytes()),
-                messages: Some(ash_protocol::ModelInstructionMessages {
-                    agent_modes: [(ash_protocol::AgentMode::Swarm, base.as_text())].into(),
-                    ..Default::default()
-                }),
-            });
+    let instructions = base
+        .clone()
+        .with_task_instructions(&base)
+        .with_task_command(Some(ash_protocol::TaskExecution::Swarm))
+        .with_model_guidance(ash_protocol::ModelInstructionSelection::Specialized {
+            model: ash_protocol::ModelRef::new(
+                ash_protocol::ProviderId::new("test").unwrap(),
+                ash_protocol::ModelId::new("model").unwrap(),
+            ),
+            instructions: base.as_text(),
+            digest: ash_protocol::ContentDigest::sha256(base.body().as_bytes()),
+            messages: Some(ash_protocol::ModelInstructionMessages {
+                task_commands: [(ash_protocol::TaskExecution::Swarm, base.as_text())].into(),
+                ..Default::default()
+            }),
+        });
     let turn = serde_json::json!({
         "turnId": "turn",
         "status": "completed",
-        "mode": "swarm",
+        "instructions": &instructions,
         "directory": { "type": "local", "root": "/repo" },
         "items": [],
         "startedToolCallIds": ["tool"]
@@ -126,7 +128,7 @@ fn history_accepts_swarm_and_rejects_multitask_mode_ids() {
             "command": {
                 "commandId": "start",
                 "command": {
-                    "type": "startTurn", "kind": "coding", "mode": "swarm",
+                    "type": "startTurn", "kind": "coding", "instructions": &instructions,
                     "contextPolicy": { "mode": "summary", "contextWindowAsToolOutput": true },
                     "input": [{ "type": "text", "text": "Coordinate the updates" }]
                 }
@@ -134,16 +136,6 @@ fn history_accepts_swarm_and_rejects_multitask_mode_ids() {
             "event": {
                 "type": "turnAccepted", "threadId": "old", "turnId": "turn",
                 "directory": { "type": "local", "root": "/repo" }
-            }
-        }),
-        serde_json::json!({
-            "event": { "type": "turnAccepted", "threadId": "old", "turnId": "turn", "mode": "swarm" }
-        }),
-        serde_json::json!({
-            "event": {
-                "type": "turnModeChanged", "threadId": "old", "turnId": "turn",
-                "fromMode": "swarm", "mode": "plan",
-                "instructions": &instructions
             }
         }),
         serde_json::json!({
@@ -184,16 +176,32 @@ fn history_accepts_swarm_and_rejects_multitask_mode_ids() {
             let encoded = serde_json::to_string(&record).unwrap();
             let restored: StoredEvent = serde_json::from_str(&encoded).unwrap();
             assert_eq!(serde_json::to_string(&restored).unwrap(), encoded);
-            let retired = encoded
-                .replace(r#""mode":"swarm""#, r#""mode":"multitask""#)
-                .replace(r#""fromMode":"swarm""#, r#""fromMode":"multitask""#)
-                .replace(r#""agentModes":{"swarm":"#, r#""agentModes":{"multitask":"#);
-            assert_ne!(retired, encoded);
-            let error = serde_json::from_str::<StoredEvent>(&retired).unwrap_err();
-            assert!(
-                error.to_string().contains("unknown variant `multitask`"),
-                "{error}"
-            );
+            assert!(encoded.contains(r#""taskCommand":"swarm""#));
+            assert!(encoded.contains(r#""taskInstructions":"#));
+            assert!(encoded.contains(r#""taskCommands":"#));
+            assert!(!encoded.contains(r#""mode":"swarm""#));
+            for retired in [
+                encoded.replace(r#""taskCommand":"swarm""#, r#""taskCommand":"multitask""#),
+                encoded.replace(r#""taskInstructions":"#, r#""modeInstructions":"#),
+                encoded.replace(r#""taskCommands":"#, r#""agentModes":"#),
+            ] {
+                assert_ne!(retired, encoded);
+                assert!(serde_json::from_str::<StoredEvent>(&retired).is_err());
+            }
+            for path in [
+                "/event",
+                "/command/command",
+                "/event/turn",
+                "/event/turns/0",
+            ] {
+                let mut retired = value.clone();
+                if let Some(object) = retired.pointer_mut(path)
+                    && let Some(object) = object.as_object_mut()
+                {
+                    object.insert("mode".into(), "swarm".into());
+                    assert!(serde_json::from_value::<StoredEvent>(retired).is_err());
+                }
+            }
         }
     }
 }
@@ -292,7 +300,7 @@ fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identi
 }
 
 #[test]
-fn imported_turns_preserve_legacy_mode_bytes_and_omit_the_default_in_new_records() {
+fn imported_turns_preserve_legacy_approval_bytes_without_agent_mode() {
     for approval_mode in ash_protocol::ApprovalMode::ALL {
         let turn: ash_protocol::Turn = serde_json::from_value(serde_json::json!({
             "turnId":"old-turn", "status":"completed", "items":[], "approvalMode":approval_mode
@@ -333,15 +341,13 @@ fn imported_turns_preserve_legacy_mode_bytes_and_omit_the_default_in_new_records
             let encoded = serde_json::to_string(&current).unwrap();
             let restored: StoredEvent = serde_json::from_str(&encoded).unwrap();
             assert_eq!(serde_json::to_string(&restored).unwrap(), encoded);
-            let legacy = encoded
-                .replace("\"schemaVersion\":22", "\"schemaVersion\":21")
-                .replace(",\"mode\":\"agent\"", "");
+            let legacy = encoded.replace("\"schemaVersion\":22", "\"schemaVersion\":21");
             let restored: StoredEvent = serde_json::from_str(&legacy).unwrap();
             assert_eq!(serde_json::to_string(&restored).unwrap(), legacy);
-            assert!(encoded.contains("\"mode\":\"agent\""));
+            assert!(!encoded.contains("\"mode\":\"agent\""));
             current.schema_version = 37;
             let encoded = serde_json::to_string(&current).unwrap();
-            assert!(encoded.contains("\"mode\":\"agent\""));
+            assert!(!encoded.contains("\"mode\":\"agent\""));
             assert_eq!(
                 serde_json::to_string(&serde_json::from_str::<StoredEvent>(&encoded).unwrap())
                     .unwrap(),

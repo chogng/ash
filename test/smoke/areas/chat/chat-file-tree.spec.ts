@@ -102,7 +102,7 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 				sessionId: session.sessionId, commandId: 'tree-turn', request: {
 					type: 'startTurn', threadId, expectedSequence: (await read()).thread.sequence,
 					// The isolated MCP fixture is the only external tool and only returns this test's snapshot.
-					model: { provider: 'custom-tree', model: 'tree-test' }, mode: 'agent', toolMode: 'direct', approvalMode: 'bypassPermissions',
+					model: { provider: 'custom-tree', model: 'tree-test' }, toolMode: 'direct', approvalMode: 'bypassPermissions',
 					input: [{ type: 'text', text: 'Show the captured workspace tree.' }],
 				},
 			});

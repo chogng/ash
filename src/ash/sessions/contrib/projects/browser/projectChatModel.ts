@@ -41,9 +41,9 @@ export class ProjectChatModel extends AshChatModel {
 	}
 
 	override async send(...args: Parameters<AshChatModel['send']>): Promise<void> {
-		if (!args[0].trim() && !args[3]?.length) return;
+		if (!args[0].trim() && !args[2]?.length) return;
 		await super.send(...args);
-		if (this.isDisposed || args[4]?.signal?.aborted) throw canceled();
+		if (this.isDisposed || args[3]?.signal?.aborted) throw canceled();
 		this.submitted = true;
 		this.reveal.schedule();
 	}

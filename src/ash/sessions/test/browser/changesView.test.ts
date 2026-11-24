@@ -155,12 +155,12 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		await settle();
 		const repositoryLabel = locale === 'zh-CN' ? 'source（feature/topic）' : 'source (feature/topic)';
 		assert.match(view.getAccessibleContent(), /feature\/topic/u);
-		const modePicker = view.element.querySelectorAll<HTMLSelectElement>('select')[1]!;
-		modePicker.value = 'tree';
-		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+		const agentPicker = view.element.querySelectorAll<HTMLSelectElement>('select')[1]!;
+		agentPicker.value = 'tree';
+		agentPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		assert.ok(Array.from(view.element.querySelectorAll('.ash-sessions-changes-tree .ash-multi-diff-file-list-row')).some(row => row.textContent === repositoryLabel));
-		modePicker.value = 'list';
-		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+		agentPicker.value = 'list';
+		agentPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		const initialPicker = view.element.querySelector<HTMLSelectElement>('select')!;
 		initialPicker.value = details.summary.changeSetId;
 		initialPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));

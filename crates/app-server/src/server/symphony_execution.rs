@@ -350,7 +350,6 @@ impl AppServer {
                 },
                 snapshot.thread_id.clone(),
                 Some(approval_mode),
-                ash_protocol::AgentMode::Agent,
                 model_selection,
                 reasoning_effort,
                 None,

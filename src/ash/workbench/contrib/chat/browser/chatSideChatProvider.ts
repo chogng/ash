@@ -6,7 +6,7 @@ import { createUuid } from '../../../../base/common/uuid.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IAgentThreadService } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
-import { IChatService, isTaskSlashCommand } from '../../../services/chat/common/chatService.js';
+import { applyDefaultTaskCommand, IChatService, isTaskSlashCommand } from '../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { resolveChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import { LocalChatSessionUri } from '../common/model/chatUri.js';
@@ -68,19 +68,14 @@ export class ChatSideChatProvider extends Disposable implements IChatSideChatPro
 		current();
 		const { thread } = await this.chat.readThread(branch.sessionId, branch.threadId, { type: 'latest', turnLimit: 1 });
 		current();
-		const prefix = state.mode !== 'agent' && !isTaskSlashCommand(query) ? `/${state.mode} ` : '';
-		const text = `${prefix}${query}`;
+		const input = applyDefaultTaskCommand(query, widget.defaultTaskCommand, contexts);
 		// Submit to the captured branch before navigation can replace the source composer's lifetime.
 		await this.chat.startTurn({
-			...branch, commandId: createUuid(), expectedSequence: thread.sequence, text,
+			...branch, commandId: createUuid(), expectedSequence: thread.sequence, ...input,
 			model: state.isAutomaticModel ? undefined : state.selectedModel, reasoningEffort: state.selectedReasoningEffort,
 			...(state.isAutomaticModel && { modelRouting: 'auto' as const }),
 			approvalMode: state.approvalMode, signal: options?.signal,
-			contexts: prefix ? contexts.map(context => context.reference ? {
-				...context,
-				reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
-			} : context) : contexts,
-			...(!isTaskSlashCommand(text) && model.commandInterpretation && { commandInterpretation: model.commandInterpretation }),
+			...(!isTaskSlashCommand(input.text) && model.commandInterpretation && { commandInterpretation: model.commandInterpretation }),
 		});
 		current();
 		if (this.navigation.openSideConversation) {

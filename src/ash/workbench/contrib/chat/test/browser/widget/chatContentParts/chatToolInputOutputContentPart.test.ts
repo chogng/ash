@@ -34,7 +34,7 @@ function toolItem(activity?: ChatToolCallBinding['activity']): IChatListItem {
 function approvalTurn(pendingInteraction: Turn['pendingInteraction'], status: Turn['status'] = 'waitingForApproval'): Turn {
 	const total = { reported: 0, complete: true };
 	return {
-		turnId: 'turn', status, mode: 'agent', approvalMode: 'manual', items: [], pendingInteraction,
+		turnId: 'turn', status, execution: 'agent', approvalMode: 'manual', items: [], pendingInteraction,
 		usage: { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total },
 	};
 }

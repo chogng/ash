@@ -369,7 +369,6 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         goal: None,
         hook_runs: Vec::new(),
         turns: vec![Turn {
-            mode: Default::default(),
             advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,

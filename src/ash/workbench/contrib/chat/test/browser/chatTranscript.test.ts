@@ -1539,7 +1539,7 @@ suite('chatTranscript browser component', () => {
 			await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp(false, true));
 			await page.evaluate(() => window.ashChatTranscriptIntegration.addTerminalContext());
 			const context = { id: 'terminal:saved', kind: 'terminal', name: 'Terminal: saved', content: 'Saved terminal context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved <script>unsafe()</script>\nTerminal output', columns: 80 }, reference: { start: 0, end: 15 } };
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: 'Terminal: saved ', contexts: [context] });
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ text: 'Terminal: saved ', contexts: [context] });
 			await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp(false, true));
 			const chat = page.locator('#app-chat');
 			const preview = chat.getByRole('button', { name: locale === 'en' ? 'Preview terminal snapshot' : '预览终端快照', exact: true });
@@ -1548,7 +1548,7 @@ suite('chatTranscript browser component', () => {
 			const input = page.getByRole('textbox', { name: locale === 'en' ? 'Saved terminal output (read only)' : '已保存的终端输出（只读）', exact: true });
 			await expect(input).toHaveAttribute('readonly', '');
 			await expect(page.locator('.ash-chat-terminal-preview-screen .xterm')).toBeVisible();
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ mode: 'plan', text: 'Terminal: saved ', contexts: [context] });
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toEqual({ text: 'Terminal: saved ', contexts: [context] });
 			await chat.getByRole('button', { name: locale === 'en' ? 'Remove Terminal: saved' : '移除 Terminal: saved', exact: true }).click();
 			await expect(page.locator('.ash-chat-terminal-preview-screen')).toHaveCount(0);
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.persistedChatDraft())).toBeUndefined();

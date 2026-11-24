@@ -102,7 +102,6 @@ suite('model picker browser component', () => {
 		await fast.press('Space');
 		await expect(fast).toHaveAttribute('aria-pressed', 'false');
 		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({
-			mode: 'agent',
 			selectedReasoningEffort: 'high',
 			preferenceWrites: [{ acceleration: 'priority' }, { ultra: true }, { ultra: false }, { ultra: true }, { ultra: false }, { acceleration: null }]
 				.map(update => ({ model: { provider: 'openai', model: 'test-model' }, update })),

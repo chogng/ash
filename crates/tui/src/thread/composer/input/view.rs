@@ -24,7 +24,7 @@ pub(crate) enum ChatInputCursor {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputChrome {
     Standard,
-    Mode(ash_protocol::AgentMode),
+    Mode(ash_protocol::TaskExecution),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

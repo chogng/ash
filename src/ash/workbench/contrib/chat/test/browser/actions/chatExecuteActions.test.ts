@@ -10,7 +10,7 @@ import { KeybindingsRegistry, KeybindingRuleKind } from '../../../../../../platf
 import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
-import { ChatSubmitAction, CancelAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenWorkspacePickerAction, registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
+import { ChatSubmitAction, CancelAction, OpenModelPickerAction, OpenAgentPickerAction, OpenPermissionPickerAction, OpenWorkspacePickerAction, registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
 
 const registration = registerChatExecuteActions();
 suiteTeardown(() => registration.dispose());
@@ -62,12 +62,12 @@ suite('Chat execution commands', () => {
 		const calls: string[] = [];
 		const widget = {
 			visible: true, input: {
-				openModelPicker: () => calls.push('model'), openModePicker: () => calls.push('mode'), openPermissionPicker: () => calls.push('permission'),
+				openModelPicker: () => calls.push('model'), openAgentPicker: () => calls.push('mode'), openPermissionPicker: () => calls.push('permission'),
 				openWorkspacePicker: () => calls.push('workspace'),
 			}
 		} as unknown as IChatWidget;
 		services.registerInstance(IChatWidgetService, { lastFocusedWidget: widget } as unknown as IChatWidgetService);
-		const ids = [OpenModelPickerAction.ID, OpenModePickerAction.ID, OpenPermissionPickerAction.ID, OpenWorkspacePickerAction.ID];
+		const ids = [OpenModelPickerAction.ID, OpenAgentPickerAction.ID, OpenPermissionPickerAction.ID, OpenWorkspacePickerAction.ID];
 		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
 		assert.deepEqual(calls, ['model', 'mode', 'permission', 'workspace']);
 		Object.assign(widget.input, { replyOnly: true });
@@ -83,7 +83,7 @@ suite('Chat execution commands', () => {
 		ChatContextKeys.enabled.bindTo(context).set(true);
 		const replyOnly = ChatContextKeys.replyOnlyInput.bindTo(context);
 		const inInput = ChatContextKeys.inChatInput.bindTo(context);
-		for (const id of [OpenModelPickerAction.ID, OpenModePickerAction.ID]) {
+		for (const id of [OpenModelPickerAction.ID, OpenAgentPickerAction.ID]) {
 			replyOnly.set(false);
 			const rule = KeybindingsRegistry.getKeybindings().find(rule => rule.kind === KeybindingRuleKind.Command && rule.command === id)!;
 			inInput.set(true); assert.equal(rule.when!.evaluate(context.getContext()), true);

@@ -166,11 +166,11 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ),
         (
             "model_messages",
-            json!({"system_instructions":"base", "agent_modes":{"unsupported":"mode"}}),
+            json!({"system_instructions":"base", "task_commands":{"unsupported":"mode"}}),
         ),
         (
             "model_messages",
-            json!({"system_instructions":"base", "agent_modes":{"plan":" "}}),
+            json!({"system_instructions":"base", "task_commands":{"plan":" "}}),
         ),
         (
             "model_messages",

@@ -14,7 +14,7 @@ agent-roles = { workspace = true }
 ash-core = { workspace = true }
 core-api = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
-agent-mode-templates = { package = "ash-agent-mode-templates", path = "../../agent-mode-templates" }
+task-command-templates = { package = "ash-task-command-templates", path = "../../task-command-templates" }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

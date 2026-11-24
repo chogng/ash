@@ -12,7 +12,7 @@ suite('Chat input state persistence codec', () => {
 			content: `data:image/png;base64,${'A'.repeat(64 * 1024)}`,
 			resource: 'file:///project/screen%20shot.png',
 		};
-		const draft = { mode: 'plan' as const, text: 'Inspect the screenshot', contexts: [image] };
+		const draft = { text: '/plan Inspect the screenshot', contexts: [image] };
 		const state = serializeUntitledInputState(draft);
 		const attachments = serializeUntitledInputAttachments(draft.contexts);
 		assert.deepEqual(deserializeUntitledInputState(state), { ...draft, contexts: [] });

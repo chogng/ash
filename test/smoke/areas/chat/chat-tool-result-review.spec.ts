@@ -75,7 +75,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Result disclosure review' }).click();
 		for (const index of [1, 2, 3]) {
-			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `review-turn-${index}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'agent', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: `Capture result ${index} using the configured tool.` }] } });
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `review-turn-${index}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: (await read()).sequence, approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: `Capture result ${index} using the configured tool.` }] } });
 			if (index < 3) {
 				const review = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat-tool-result-review');
 				await expect(review()).toBeVisible();

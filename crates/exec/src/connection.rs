@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::session::SessionReadParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
+use ash_app_server_protocol::protocol::session::SessionStartTurnParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use ash_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
@@ -299,19 +300,18 @@ impl ExecConnection for ServerConnection {
             .request_session(SessionRequestParams {
                 command_id,
                 session_id,
-                request: SessionRequest::StartTurn {
+                request: SessionRequest::StartTurn(SessionStartTurnParams {
                     command_interpretation: None,
                     ide_window_id: None,
                     thread_id,
                     expected_sequence,
-                    mode: ash_protocol::AgentMode::Agent,
                     approval_mode: Some(approval_mode),
                     model,
                     model_routing: None,
                     reasoning_effort: None,
                     tool_mode: None,
                     input,
-                },
+                }),
             })
             .map_err(|error| ConnectionError::new(error.to_string()))?
         {

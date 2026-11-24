@@ -59,8 +59,8 @@ test('Real reasoning streams keep disclosure and focus through canonical complet
 			commandId: 'thinking-turn', sessionId,
 			request: {
 				type: 'startTurn', threadId, expectedSequence: (await read()).sequence,
-				mode: 'ask', approvalMode: 'bypassPermissions', model,
-				input: [{ type: 'text', text: 'Return the synthetic reasoning and final answer.' }],
+				approvalMode: 'bypassPermissions', model,
+				input: [{ type: 'text', text: '/ask Return the synthetic reasoning and final answer.' }],
 			},
 		});
 		await expect.poll(() => !!stream).toBe(true);

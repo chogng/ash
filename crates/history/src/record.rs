@@ -10,9 +10,10 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 38 records task commands in frozen instructions and omits the default legacy mode.
+/// Version 39 stores task execution only in frozen task instructions.
+/// Version 38 introduced request-scoped task commands.
 /// Version 37 records frozen model guidance under `agentModes`.
-/// Version 36 records the Swarm agent mode as `swarm`.
+/// Version 36 records the Swarm execution as `swarm`.
 /// Version 35 supports opt-in context-window tool hints in frozen Turn policies.
 /// Version 34 records the actual Turn execution directory at acceptance.
 /// Version 33 records the Session classification as kind.
@@ -24,7 +25,7 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Supported older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 38;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 39;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
@@ -185,15 +186,13 @@ impl Serialize for StoredThreadEvent<'_> {
     where
         S: Serializer,
     {
-        // Old imported Turns must retain their byte representation: history prefixes are
-        // addressed by a digest of their serialized records, not just their reduced state.
-        if self.0.schema_version < 38 {
+        // History prefixes hash serialized records, including the original approval encoding.
+        if self.0.schema_version < 23 {
             match &self.0.event {
                 ThreadEvent::TurnAccepted {
                     thread_id,
                     turn_id,
                     kind,
-                    mode,
                     instructions,
                     directory: _,
                     policy_revision,
@@ -204,15 +203,12 @@ impl Serialize for StoredThreadEvent<'_> {
                     reasoning_effort,
                     advisor,
                     tool_profile,
-                } if self.0.schema_version < 23 => {
+                } => {
                     let mut event = serializer.serialize_struct("TurnAccepted", 15)?;
                     event.serialize_field("type", "turnAccepted")?;
                     event.serialize_field("threadId", thread_id)?;
                     event.serialize_field("turnId", turn_id)?;
                     event.serialize_field("kind", kind)?;
-                    if !mode.is_agent() {
-                        event.serialize_field("mode", mode)?;
-                    }
                     if let Some(value) = instructions {
                         event.serialize_field("instructions", value)?;
                     }
@@ -345,9 +341,6 @@ impl Serialize for LegacyTurn<'_> {
         record.serialize_field("turnId", &turn.turn_id)?;
         record.serialize_field("status", &turn.status)?;
         record.serialize_field("kind", &turn.kind)?;
-        if self.1 >= 22 {
-            record.serialize_field("mode", &turn.mode)?;
-        }
         macro_rules! optional {
             ($name:literal, $value:expr) => {
                 if let Some(value) = $value {
@@ -356,13 +349,7 @@ impl Serialize for LegacyTurn<'_> {
             };
         }
         optional!("instructions", &turn.instructions);
-        if self.1 >= 23 {
-            optional!("directory", &turn.directory);
-        }
         optional!("model", &turn.model);
-        if self.1 >= 23 {
-            optional!("modelRouting", &turn.model_routing);
-        }
         optional!("reasoningEffort", &turn.reasoning_effort);
         optional!("advisor", &turn.advisor);
         optional!("toolProfile", &turn.tool_profile);
@@ -374,14 +361,8 @@ impl Serialize for LegacyTurn<'_> {
         record.serialize_field("usage", &turn.usage)?;
         optional!("contextUsage", &turn.context_usage);
         record.serialize_field("items", &turn.items)?;
-        if self.1 >= 23 {
-            optional!("skillLoads", &turn.skill_loads);
-        }
         optional!("plan", &turn.plan);
         optional!("pendingInteraction", &turn.pending_interaction);
-        if self.1 >= 23 {
-            optional!("startedToolCallIds", &turn.started_tool_call_ids);
-        }
         optional!("error", &turn.error);
         record.end()
     }
@@ -436,7 +417,6 @@ impl Serialize for StoredThreadCommand<'_> {
             ThreadCommand::StartTurn {
                 context_policy: _,
                 kind,
-                mode,
                 instructions,
                 model,
                 model_routing,
@@ -452,9 +432,6 @@ impl Serialize for StoredThreadCommand<'_> {
                 let mut command = serializer.serialize_struct("StartTurn", 14)?;
                 command.serialize_field("type", "startTurn")?;
                 command.serialize_field("kind", kind)?;
-                if !mode.is_agent() {
-                    command.serialize_field("mode", mode)?;
-                }
                 if let Some(value) = instructions {
                     command.serialize_field("instructions", value)?;
                 }

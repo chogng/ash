@@ -211,7 +211,7 @@ suite('Project chat submission', () => {
 	for (const text of ['/advisor Question', '/advisor off', '/compact', '/config', '/init', '/develop Request', '/team Request', '/unknown']) {
 		test(`project sends ${text} as a literal first message with membership and navigation`, async () => {
 			using fixture = new ProjectChatFixture();
-			await fixture.model.send(text, 'agent');
+			await fixture.model.send(text);
 			await fixture.revealed.p;
 			assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open']);
 			assert.equal(fixture.turns[0]!.text, text);
@@ -221,7 +221,7 @@ suite('Project chat submission', () => {
 
 	test('empty input does not create a conversation or link a project', async () => {
 		using fixture = new ProjectChatFixture();
-		await fixture.model.send('   ', 'agent');
+		await fixture.model.send('   ');
 		assert.deepEqual(fixture.calls, []);
 		assert.equal(fixture.model.submitted, false);
 	});
@@ -229,11 +229,11 @@ suite('Project chat submission', () => {
 	test('links the current project revision before sending, then reveals the saved conversation', async () => {
 		using fixture = new ProjectChatFixture();
 		fixture.project = { ...fixture.project, revision: 8 };
-		await fixture.model.send('First project task', 'ask', undefined, [{ name: 'Notes', content: 'Attached notes' }]);
+		await fixture.model.send('First project task', undefined, [{ name: 'Notes', content: 'Attached notes' }]);
 		await fixture.revealed.p;
 		assert.deepEqual(fixture.calls, ['create', 'link:8', 'send', 'open']);
 		assert.equal(fixture.turns[0].text, 'First project task');
-		assert.equal(fixture.turns[0].mode, 'agent');
+		assert.ok(!('mode' in fixture.turns[0]));
 		assert.deepEqual(fixture.turns[0].model, fixture.preferredModel);
 		assert.deepEqual(fixture.turns[0].contexts, [{ name: 'Notes', content: 'Attached notes' }]);
 		assert.equal(fixture.model.submitted, true);
@@ -242,12 +242,12 @@ suite('Project chat submission', () => {
 	test('association failure sends nothing and retry reuses the same durable conversation', async () => {
 		using fixture = new ProjectChatFixture();
 		fixture.linkFailure = new Error('Revision conflict');
-		await assert.rejects(fixture.model.send('Keep my draft', 'agent'), /Revision conflict/);
+		await assert.rejects(fixture.model.send('Keep my draft'), /Revision conflict/);
 		assert.deepEqual(fixture.calls, ['create', 'link:1']);
 		assert.equal(fixture.model.submitted, false);
 		fixture.linkFailure = undefined;
 		fixture.project = { ...fixture.project, revision: 2 };
-		await fixture.model.send('Keep my draft', 'agent');
+		await fixture.model.send('Keep my draft');
 		await fixture.revealed.p;
 		assert.deepEqual(fixture.calls, [
 			'create',
@@ -264,10 +264,10 @@ suite('Project chat submission', () => {
 	test('a failed send keeps project membership and retries without creating or linking again', async () => {
 		using fixture = new ProjectChatFixture();
 		fixture.sendFailure = new Error('Request unavailable');
-		await assert.rejects(fixture.model.send('Retry this task', 'agent'), /Request unavailable/);
+		await assert.rejects(fixture.model.send('Retry this task'), /Request unavailable/);
 		assert.equal(fixture.model.submitted, false);
 		fixture.sendFailure = undefined;
-		await fixture.model.send('Retry this task', 'agent');
+		await fixture.model.send('Retry this task');
 		await fixture.revealed.p;
 		assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'send', 'open']);
 	});
@@ -278,7 +278,7 @@ suite('Project chat submission', () => {
 		assert.deepEqual(conversation, { sessionId: 'session', threadId: 'thread' });
 		assert.deepEqual(fixture.calls, ['create', 'link:1']);
 		assert.equal(fixture.model.submitted, false);
-		await fixture.model.send('Voice task', 'agent', undefined, undefined, { source: conversation });
+		await fixture.model.send('Voice task', undefined, undefined, { source: conversation });
 		await fixture.revealed.p;
 		assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open']);
 	});
@@ -287,7 +287,7 @@ suite('Project chat submission', () => {
 		using fixture = new ProjectChatFixture();
 		fixture.pendingRead = new DeferredPromise<Project>();
 		const controller = new AbortController();
-		const pending = fixture.model.send('Cancelled task', 'agent', undefined, undefined, { signal: controller.signal });
+		const pending = fixture.model.send('Cancelled task', undefined, undefined, { signal: controller.signal });
 		await fixture.reading.p;
 		controller.abort();
 		await fixture.pendingRead.complete(fixture.project);

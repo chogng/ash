@@ -50,7 +50,7 @@ test('Attachment resource gestures reach the Workbench file, editor and clipboar
 		transfer.setData('text/plain', text);
 		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 			version: 1, draft: {
-				mode: 'agent', text, contexts: [{ id: 'source', kind: 'file', name: 'main.ts', resource: `${resource}#2,3-2,7`, content: 'Frozen before the live source changed', reference: { start: 8, end: text.length } }],
+				text, contexts: [{ id: 'source', kind: 'file', name: 'main.ts', resource: `${resource}#2,3-2,7`, content: 'Frozen before the live source changed', reference: { start: 8, end: text.length } }],
 			}
 		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
@@ -117,7 +117,7 @@ test('Restored session references use the window widget factory through removal,
 		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 			version: 1,
 			draft: {
-				mode: 'agent', text, contexts: [{
+				text, contexts: [{
 					id: 'previous', kind: 'chatReference', name: 'Earlier design',
 					resource: 'ash-chat-session:/previous-session/previous-thread',
 					content: 'Captured earlier conversation', reference: { start: 8, end: 22 },
@@ -285,7 +285,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 		transfer.setData('text/plain', text);
 		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 			version: 1, draft: {
-				mode: 'agent', text, contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
+				text, contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
 			}
 		}));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
@@ -316,7 +316,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 		transfer.setData('text/plain', text);
 		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 			version: 1, draft: {
-				mode: 'agent', text, contexts: [{
+				text, contexts: [{
 					id: 'terminal', kind: 'terminal', name: 'Saved terminal',
 					content: 'captured before source closed', reference: { start: 8, end: 22 },
 					terminalSnapshot: { text: 'captured before source closed\r\n', columns: 80 },
@@ -374,7 +374,7 @@ test('Other captured contexts use native controls and retain readonly content af
 		transfer.setData('text/plain', text);
 		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 			version: 1, draft: {
-				mode: 'agent', text, contexts: [{
+				text, contexts: [{
 					id: 'commit', kind: 'scmHistoryItem', name,
 					content: 'Commit captured before repository closed\n+ original change',
 					reference: { start: 8, end: text.length },
@@ -432,7 +432,7 @@ for (const kind of ['browserElement', 'scmHistoryItemChange']) test(`${kind} ded
 		const text = `Explain ${attachment.name}`;
 		const transfer = new DataTransfer();
 		transfer.setData('text/plain', text);
-		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({ version: 1, draft: { mode: 'agent', text, contexts: [{ id: 'captured', ...attachment, reference: { start: 8, end: text.length } }] } }));
+		transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({ version: 1, draft: { text, contexts: [{ id: 'captured', ...attachment, reference: { start: 8, end: text.length } }] } }));
 		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, { kind, name, content, resource });
 	const open = chat.getByRole('button', { name: `Open ${name}`, exact: true });

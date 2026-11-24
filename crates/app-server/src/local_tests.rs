@@ -3579,7 +3579,6 @@ fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
                 &thread_id,
                 ash_core::StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_protocol::TurnInstructions::new(

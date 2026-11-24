@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
+use ash_app_server_protocol::protocol::session::SessionStartTurnParams;
 use ash_app_server_protocol::protocol::session::SessionSubscribeParams;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_client::ClientRequest;
@@ -166,12 +167,11 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         .request_session(SessionRequestParams {
             command_id: command_id("turn"),
             session_id: created_session.session.session_id,
-            request: SessionRequest::StartTurn {
+            request: SessionRequest::StartTurn(SessionStartTurnParams {
                 command_interpretation: None,
                 ide_window_id: None,
                 thread_id: created_thread.thread_id,
                 expected_sequence: 1,
-                mode: ash_protocol::AgentMode::Agent,
                 approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: Some(ModelRef::new(
                     ProviderId::new("ollama").unwrap(),
@@ -183,7 +183,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
                 input: vec![InputItem::Text {
                     text: "hello".into(),
                 }],
-            },
+            }),
         })
         .unwrap();
 

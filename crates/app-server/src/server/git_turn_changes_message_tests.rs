@@ -29,7 +29,6 @@ fn start(
                 reasoning_effort: None,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
-                mode: Default::default(),
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "test".into(),
                 approval_mode: ash_protocol::ApprovalMode::Manual,

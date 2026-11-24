@@ -285,7 +285,6 @@ fn turn(threads: &ThreadController, thread: &ThreadId, text: &str) -> TurnId {
             thread,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new(text).unwrap(),
                 expected_sequence: SequenceExpectation::Any,

@@ -1095,7 +1095,6 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new("copy-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
@@ -1264,7 +1263,7 @@ fn workbench_window_follows_the_sender_on_each_turn() {
 }
 
 #[test]
-fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
+fn task_commands_preserve_the_selected_base_in_rpc_turns_and_init() {
     let selected_model = ModelRef::new(
         ProviderId::new("openai").unwrap(),
         ModelId::new("gpt-6-astra").unwrap(),
@@ -1278,24 +1277,17 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
     else {
         panic!("missing model base");
     };
-    for mode in [
-        ash_protocol::AgentMode::Agent,
-        ash_protocol::AgentMode::Plan,
-        ash_protocol::AgentMode::Debug,
-        ash_protocol::AgentMode::Swarm,
-        ash_protocol::AgentMode::Ask,
-    ] {
+    for execution in ash_protocol::TaskExecution::ALL {
         let command = ash_slash_commands::TaskSlashCommand::ALL
             .into_iter()
-            .find(|command| serde_json::to_value(mode).unwrap().as_str() == Some(command.name()));
-        let mut cases = vec![
-            ("Inspect the module".into(), false),
-            ("/init".into(), false),
-        ];
-        if let Some(command) = command {
-            cases.push((format!("/{} Inspect the module", command.name()), true));
-        }
-        for (text, direct) in cases {
+            .find(|command| {
+                serde_json::to_value(execution).unwrap().as_str() == Some(command.name())
+            });
+        let cases = match command {
+            Some(command) => vec![format!("/{} Inspect the module", command.name())],
+            None => vec!["Inspect the module".into(), "/init".into()],
+        };
+        for text in cases {
             let threads = Arc::new(ThreadController::with_store(Arc::new(
                 InMemoryThreadStore::default(),
             )));
@@ -1310,58 +1302,47 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                 &server,
                 &mut connection,
                 "initialize",
-                serde_json::json!({"clientInfo":{"name":"mode-test","version":"1"},"capabilities":{}}),
+                serde_json::json!({"clientInfo":{"name":"task-command-test","version":"1"},"capabilities":{}}),
             );
             let created = call(
                 &server,
                 &mut connection,
                 "session/create",
-                serde_json::json!({"commandId":"mode-root","title":"Modes","kind":"code", "executionTarget":null}),
+                serde_json::json!({"commandId":"task-command-root","title":"Task execution","kind":"code", "executionTarget":null}),
             );
             let id = created["result"]["session"]["sessionId"].as_str().unwrap();
             let mut start = serde_json::json!({"type":"startTurn","threadId":id,"expectedSequence":1,
                 "model":selected_model,"input":[{"type":"text","text":text}]});
-            if !direct {
-                start["mode"] = serde_json::to_value(mode).unwrap();
-            }
             let response = call(
                 &server,
                 &mut connection,
                 "session/request",
-                serde_json::json!({"commandId":"mode-turn","sessionId":id,"request":start.clone()}),
+                serde_json::json!({"commandId":"task-command-turn","sessionId":id,"request":start.clone()}),
             );
             assert!(response.get("error").is_none(), "{response}");
             let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
             let root = threads.read_thread(&ThreadId::new(id).unwrap()).unwrap();
             let turn = &root.turns[0];
-            assert_eq!(
-                turn.mode,
-                if direct {
-                    ash_protocol::AgentMode::Agent
-                } else {
-                    mode
-                }
-            );
-            assert_eq!(turn.execution_approach(), mode);
+            assert_eq!(turn.execution_approach(), execution);
             let frozen = turn.instructions.as_ref().unwrap();
-            assert_eq!(frozen.task_command(), direct.then_some(mode));
-            if direct {
+            assert_eq!(frozen.task_command(), command.map(|_| execution));
+            if command.is_some() {
                 start["commandInterpretation"] = "literal".into();
                 let replay = call(
                     &server,
                     &mut connection,
                     "session/request",
-                    serde_json::json!({"commandId":"mode-turn","sessionId":id,"request":start}),
+                    serde_json::json!({"commandId":"task-command-turn","sessionId":id,"request":start}),
                 );
                 assert!(replay.get("error").is_some(), "{replay}");
             }
             assert_eq!(frozen.model_guidance(), Some(&expected));
             let messages = expected.messages().unwrap();
             let body = request.instructions.as_deref().unwrap();
-            for (candidate, asset) in &messages.agent_modes {
+            for (candidate, asset) in &messages.task_commands {
                 assert_eq!(
                     body.matches(asset.body.trim()).count(),
-                    usize::from(*candidate == mode)
+                    usize::from(*candidate == execution)
                 );
             }
             assert_eq!(
@@ -1379,8 +1360,8 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                     .count(),
                 1
             );
-            let approach = agent_mode_templates::instructions(mode);
-            assert_eq!(frozen.mode_instructions(), Some(&approach.as_text()));
+            let approach = task_command_templates::instructions(execution);
+            assert_eq!(frozen.task_instructions(), Some(&approach.as_text()));
             assert_eq!(
                 request
                     .instructions
@@ -1407,7 +1388,10 @@ fn agent_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
 
 #[test]
 fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() {
-    for mode in [ash_protocol::AgentMode::Plan, ash_protocol::AgentMode::Ask] {
+    for (command, mode) in [
+        ("/plan", ash_protocol::TaskExecution::Plan),
+        ("/ask", ash_protocol::TaskExecution::Ask),
+    ] {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
         )));
@@ -1437,12 +1421,12 @@ fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() 
             "session/request",
             serde_json::json!({"commandId":"analysis-turn","sessionId":id,
                 "request":{"type":"startTurn","threadId":id,"expectedSequence":1,
-                    "mode":mode,"input":[{"type":"text","text":"/develop add search"}]}}),
+                    "input":[{"type":"text","text":format!("{command} /develop add search")}]}}),
         );
         assert!(response.get("error").is_none(), "{response}");
         requests.recv_timeout(Duration::from_secs(10)).unwrap();
         let root = threads.read_thread(&ThreadId::new(id).unwrap()).unwrap();
-        assert_eq!(root.turns[0].mode, mode);
+        assert_eq!(root.turns[0].execution_approach(), mode);
         assert!(root.delegations.is_empty());
     }
 }
@@ -1495,7 +1479,6 @@ fn catalog_only_connections_observe_branch_management_and_full_reads_share_its_f
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_protocol::TurnInstructions::new(
@@ -1775,7 +1758,6 @@ fn rejected_thread_subscription_does_not_deliver_or_cancel_a_pending_interaction
                     &thread_id,
                     ash_core::StartTurnRequest {
                         context_policy: Default::default(),
-                        mode: Default::default(),
                         advisor: None,
                         command_id: CommandId::new("pending-interaction-turn").unwrap(),
                         expected_sequence: core_api::SequenceExpectation::Any,
@@ -1926,7 +1908,6 @@ fn thread_read_and_subscribe_keep_transients_within_the_visible_running_history(
                 &thread_id,
                 ash_core::StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(format!("transcript-window-{index}")).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Exact(before.sequence),
@@ -2077,7 +2058,6 @@ fn thread_tool_result_preview_reads_full_text_by_stable_byte_cursor() {
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new("large-tool-result-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(

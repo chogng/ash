@@ -27,7 +27,6 @@
 | `notes`          |    4 | `notes_list`、`notes_read`、`notes_search`、`notes_write`                                                                                                                                                                                                                                   |
 | `skills`         |    1 | `skills-read`                                                                                                                                                                                                                                                                               |
 | `instructions`   |    1 | `read_instruction`                                                                                                                                                                                                                                                                          |
-| `modes`          |    1 | `switch_mode`                                                                                                                                                                                                                                                                               |
 | `consultation`   |    1 | `advisor`                                                                                                                                                                                                                                                                                   |
 | `waiting`        |    1 | `sleep`                                                                                                                                                                                                                                                                                     |
 | `planning`       |    4 | `update_plan`、`get_goal`、`create_goal`、`update_goal`                                                                                                                                                                                                                                     |
@@ -42,7 +41,7 @@
 | `tool_discovery` |    3 | `tool_search`、`search_tools`、`call_mcp_tool`                                                                                                                                                                                                                                              |
 | `code_mode`      |    2 | `exec`、`wait`                                                                                                                                                                                                                                                                              |
 
-总计 26 个集合、86 个不同固定工具。集合数随真实能力发展，不作为封闭分类或必须满足的数量。
+总计 25 个集合、85 个不同固定工具。集合数随真实能力发展，不作为封闭分类或必须满足的数量。
 默认／可选组合、启用条件与范围约束统一维护在[工具系统](tools.md#默认启用与可选组合)。
 下文保留每个工具的用途、定义入口、执行归属和关键条件；完整参数 schema 以链接的定义为准。
 注册、选择或加载某个集合不代表具体操作已经获批，最终暴露方式和嵌套资格仍需单独检查。
@@ -214,17 +213,7 @@ ToolSet：`instructions`（目标）。
 | ------------------ | ---------------------------- | --------------- | ----------------------------------------------------------------------- |
 | `read_instruction` | 读取当前指令目录中的完整文件 | `instructions`  | 指令目录 owner；只接受目录或 preflight 返回的精确路径，不是通用文件读取 |
 
-### 13. 旧任务的模式切换（1）
-
-ToolSet：`modes`（目标）。
-
-定义见 [App Server 实现](../../crates/app-server/src/server/switch_mode_tool.rs)。
-
-| 工具          | 用途／主要操作   | ToolSet（目标） | 执行归属与条件                                                  |
-| ------------- | ---------------- | --------------- | --------------------------------------------------------------- |
-| `switch_mode` | 切换旧任务的模式 | `modes`         | ThreadController。见[兼容规则](tools.md#当前-turn-的模式切换)。 |
-
-### 14. 顾问咨询（1）
+### 13. 顾问咨询（1）
 
 ToolSet：`consultation`（目标）。
 
@@ -235,7 +224,7 @@ ToolSet：`consultation`（目标）。
 | --------- | ---------------------------------- | --------------- | ------------------------------------------------------------ |
 | `advisor` | 向配置的顾问请求战略指导与第二意见 | `consultation`  | 顾问模型服务；有独立成本和每 Turn 次数限制；不转交任务所有权 |
 
-### 15. 执行等待（1）
+### 14. 执行等待（1）
 
 ToolSet：`waiting`（目标）。
 
@@ -246,7 +235,7 @@ ToolSet：`waiting`（目标）。
 | ------- | ------------------------------ | --------------- | ----------------------------------------------------------- |
 | `sleep` | 等待 duration_ms，最长 12 小时 | `waiting`       | 当前执行；Turn 取消结束等待；不跨进程重启，不代替自动化调度 |
 
-### 16. 计划与目标（4）
+### 15. 计划与目标（4）
 
 ToolSet：`planning`（目标）。
 
@@ -259,7 +248,7 @@ ToolSet：`planning`（目标）。
 | `create_goal` | 创建具体目标，可指定 token budget | `planning`      | Goal runtime；需满足现有目标生命周期条件                  |
 | `update_goal` | 将目标标记为 complete 或 blocked  | `planning`      | Goal runtime；按目标状态契约校验，不是任意改写目标        |
 
-### 17. Agent 协作（7）
+### 16. Agent 协作（7）
 
 ToolSet：`collaboration`（目标）。
 
@@ -277,7 +266,7 @@ ToolSet：`collaboration`（目标）。
 | `board_read`         | 读取频道、主题、消息、未读通知或单条正文 | `collaboration` | 当前 Agent 树的消息板；cursor／offset 分页                                     |
 | `board_write`        | 创建频道、发帖／回复、变更订阅、确认已读 | `collaboration` | 消息板 owner；消息不会自动启动空闲 Agent，也不改变权限与验收状态               |
 
-### 18. 权限请求（1）
+### 17. 权限请求（1）
 
 ToolSet：`permissions`（目标）。
 
@@ -288,7 +277,7 @@ ToolSet：`permissions`（目标）。
 | --------------------- | -------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
 | `request_permissions` | 向用户请求本 Turn／Session 的临时目录能力或精确网络 host | `permissions`   | 权限交互与 grant owner；用户可部分批准；现有策略上限不变；集合待实现 |
 
-### 19. 会话与侧栏（12）
+### 18. 会话与侧栏（12）
 
 ToolSet：`sessions`（目标）。
 
@@ -310,7 +299,7 @@ ToolSet：`sessions`（目标）。
 | `move_thread_to_sidebar_section` | 移动任务到分组或移回未分组                        | `sessions`      | 发起 Agents 窗口；Session ID 与可空 section ID           |
 | `reorder_section`                | 重排一个分组内全部任务                            | `sessions`      | 发起 Agents 窗口；每个成员 Session ID 恰好出现一次       |
 
-### 20. 项目（1）
+### 19. 项目（1）
 
 ToolSet：`projects`（目标）。
 
@@ -321,7 +310,7 @@ ToolSet：`projects`（目标）。
 | --------------- | -------------- | --------------- | -------------- |
 | `list_projects` | 列出项目       | `projects`      | 共享项目服务   |
 
-### 21. 自动化（1）
+### 20. 自动化（1）
 
 ToolSet：`automations`（目标）。
 
@@ -332,7 +321,7 @@ ToolSet：`automations`（目标）。
 | ------------------- | ----------------------------------------- | --------------- | ------------------------------------------------------------------ |
 | `automation_update` | list、view、save、delete、run、runs、stop | `automations`   | 共享自动化服务；修改使用 expected_revision；运行和停止有独立副作用 |
 
-### 22. 工作台展示（1）
+### 21. 工作台展示（1）
 
 ToolSet：`workbench`（目标）。
 
@@ -343,7 +332,7 @@ ToolSet：`workbench`（目标）。
 | ------------- | -------------------------------------- | --------------- | --------------------------------------------------------------- |
 | `open_in_ash` | 打开 file、browser、terminal 或 review | `workbench`     | file／review 优先使用本轮选定 IDE；其余使用发起窗口；只打开界面 |
 
-### 23. 应用操作（2）
+### 22. 应用操作（2）
 
 ToolSet：`application`（目标）。
 
@@ -355,7 +344,7 @@ ToolSet：`application`（目标）。
 | `check_app_update` | 检查当前安装版本的更新 | `application`   | 发起客户端的桌面更新能力；不下载、安装或重启               |
 | `fire_confetti`    | 在调用窗口播放庆祝效果 | `application`   | 发起窗口；遵循减少动态效果设置；工具说明限定用户邀请的庆祝 |
 
-### 24. 远程独立任务（4）
+### 23. 远程独立任务（4）
 
 ToolSet：`remote_tasks`（目标）。
 
@@ -372,7 +361,7 @@ ToolSet：`remote_tasks`（目标）。
 远端任务使用目的地自己的模型、凭据和权限，可在来源连接关闭后继续执行，不属于 `spawn_agent` 的子 Agent 范围继承。
 投递结果不确定时按原 delivery_id 与相同参数重试，不能通过创建另一条投递隐式重复任务。
 
-### 25. 工具发现与转调（3）
+### 24. 工具发现与转调（3）
 
 ToolSet：`tool_discovery`（目标）。
 
@@ -386,7 +375,7 @@ ToolSet：`tool_discovery`（目标）。
 | `search_tools`  | 搜索冻结 MCP 目录，返回有界精确定义与绑定     | `tool_discovery` | MCP 目录桥；只在相应暴露模式下出现；候选受有效范围约束       |
 | `call_mcp_tool` | 用搜索返回的工具名及 digest 调用精确 MCP 工具 | `tool_discovery` | MCP 转调；目标范围与绑定独立检查；桥本身不授予目标权限       |
 
-### 26. Code Mode（2）
+### 25. Code Mode（2）
 
 ToolSet：`code_mode`（目标）。
 

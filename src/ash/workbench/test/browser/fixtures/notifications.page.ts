@@ -175,7 +175,7 @@ let openRequests = 0;
 let acknowledgeHandoff: (() => void) | undefined;
 invitationScope.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => ({ sessionId: 'invitation-session', threadId: 'invitation-thread' }),
-	captureActiveDraft: async () => ({ draft: { mode: 'agent', text: 'Synthetic unsent draft', contexts: [] }, clear: () => { draftCleared++; } }),
+	captureActiveDraft: async () => ({ draft: { text: 'Synthetic unsent draft', contexts: [] }, clear: () => { draftCleared++; } }),
 } as unknown as IChatSessionNavigationService);
 invitationScope.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None } as IHostService);
 invitationScope.registerInstance(IAppServerApi, { onConnectionState: () => Disposable.None } as unknown as IAppServerApi);

@@ -148,7 +148,7 @@ export class ReplyChatInputFactory {
 	}
 
 	private createInput(container: HTMLElement, delegate: ChatInputDelegate, editor: Pick<ChatInputEditorOptions, 'placeholder' | 'height' | 'tabFocusMode'>,
-		options: Omit<ChatInputPartOptions, 'layout' | 'alwaysExpanded' | 'modePicker' | 'modelPickerPosition' | 'renderSecondaryToolbar' | 'draftStorage'>): ChatInputPart {
+		options: Omit<ChatInputPartOptions, 'layout' | 'alwaysExpanded' | 'agentPicker' | 'modelPickerPosition' | 'renderSecondaryToolbar' | 'draftStorage'>): ChatInputPart {
 		const observableLayout = observableConfigValue<'compact' | 'stacked'>(SessionsConfiguration.chatInputLayout, 'compact', this.configuration);
 		return this.instantiation.createInstance(ChatInputPart, container, delegate, this.menus, this.contextViews, this.accessibleViews, this.notifications, {
 			create: (editorOptions: ChatInputEditorOptions) => this.instantiation.createInstance(ChatInputEditor, { ...editorOptions, ...editor }),
@@ -156,7 +156,7 @@ export class ReplyChatInputFactory {
 			...options,
 			layout: 'compact',
 			alwaysExpanded: derived((reader: IReader) => observableLayout.read(reader) === 'stacked'),
-			modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host',
+			agentPicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host',
 		});
 	}
 

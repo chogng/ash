@@ -318,9 +318,9 @@ const secondInputServices = resources.add(services.createChild());
 secondInputServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 const secondInput = resources.add(secondInputServices.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
-}, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
+}, [], { agentPicker: 'visible', modelPickerPosition: 'leading' }));
 secondInput.element.id = 'second-input';
-secondInput.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+secondInput.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 let extensionStarts = 0;
 let extensionLanguage: string | undefined;
 let extensionEmit: ((text: string, final: boolean) => void) | undefined;

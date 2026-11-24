@@ -88,8 +88,8 @@ suite('Model evaluation tools', () => {
 		const launched = await tools.execute(caller, create, signal) as { comparisonId: string; attempts: { status: string; }[]; };
 		assert.equal(launched.comparisonId, group.sectionId);
 		assert.deepEqual(launched.attempts.map(attempt => attempt.status), ['launched', 'launched', 'launchFailed']);
-		assert.deepEqual(submissions.map(({ model, text, approvalMode, reasoningEffort, mode }) => ({ model, text, approvalMode, reasoningEffort, mode })),
-			models.map(({ model }) => ({ model, text: `/ask ${create.prompt}`, approvalMode: 'manual', reasoningEffort: 'high', mode: undefined })));
+		assert.deepEqual(submissions.map(({ model, text, approvalMode, reasoningEffort }) => ({ model, text, approvalMode, reasoningEffort })),
+			models.map(({ model }) => ({ model, text: `/ask ${create.prompt}`, approvalMode: 'manual', reasoningEffort: 'high' })));
 		assert.deepEqual(members, ['attempt-1', 'attempt-2']);
 		assert.deepEqual(await tools.execute(caller, {
 			type: 'listModelComparisons', includeArchived: false, workspace: null, comparisonIds: [], cursor: null,

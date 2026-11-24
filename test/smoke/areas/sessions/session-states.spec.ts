@@ -181,10 +181,9 @@ for (const locale of ['en', 'zh-CN']) {
 			({ application, workbench } = await restartWorkbench());
 		}
 		const copy = locale === 'zh-CN'
-			? { idle: '空闲', working: '进行中', needsInput: '需要回应', readyForReview: '待审阅', failed: '失败', stopped: '已停止', thread: '分支', code: '代码', picker: '选择聊天模型' }
-			: { idle: 'Idle', working: 'Working', needsInput: 'Needs input', readyForReview: 'Ready for review', failed: 'Failed', stopped: 'Stopped', thread: 'Thread', code: 'Code', picker: 'Choose a chat model' };
+			? { idle: '空闲', working: '进行中', readyForReview: '待审阅', failed: '失败', stopped: '已停止', thread: '分支', code: '代码', picker: '选择聊天模型' }
+			: { idle: 'Idle', working: 'Working', readyForReview: 'Ready for review', failed: 'Failed', stopped: 'Stopped', thread: 'Thread', code: 'Code', picker: 'Choose a chat model' };
 		const held = new Map<string, ServerResponse>();
-		const questions = new Set<string>();
 		const modelRequests: unknown[] = [];
 		const chunk = (delta: unknown, finish: string | null = null): string => `data: ${JSON.stringify({ id: 'management-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 		const finish = (response: ServerResponse): void => { response.end(chunk({ content: 'Synthetic management answer' }) + chunk({}, 'stop') + 'data: [DONE]\n\n'); };
@@ -196,16 +195,12 @@ for (const locale of ['en', 'zh-CN']) {
 			modelRequests.push(body);
 			await writeFile(testInfo.outputPath('model-http-requests.json'), JSON.stringify(modelRequests, null, 2));
 			// The backend appends environment context after the authored user input.
-			const prompt = body.messages.filter(message => message.role === 'user').map(message => JSON.stringify(message.content)).reverse().find(text => /fixture-(hold|failure|retry|question)/u.test(text)) ?? '';
+			const prompt = body.messages.filter(message => message.role === 'user').map(message => JSON.stringify(message.content)).reverse().find(text => /fixture-(hold|failure|retry)/u.test(text)) ?? '';
 			if (prompt.includes('fixture-failure')) {
 				response.writeHead(400, { 'content-type': 'application/json' }); response.end(JSON.stringify({ error: { message: 'Synthetic fixture failure', type: 'invalid_request_error' } })); return;
 			}
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			response.flushHeaders();
-			if (prompt.includes('fixture-question') && !questions.has(prompt)) {
-				questions.add(prompt);
-				response.end(chunk({ tool_calls: [{ index: 0, id: 'management-mode-choice', type: 'function', function: { name: 'switch_mode', arguments: JSON.stringify({ mode: 'agent', reason: 'Synthetic management choice' }) } }] }) + chunk({}, 'tool_calls') + 'data: [DONE]\n\n'); return;
-			}
 			if (prompt.includes('fixture-hold')) {
 				response.write(chunk({})); held.set(prompt, response);
 				response.once('close', () => { if (held.get(prompt) === response) held.delete(prompt); }); return;
@@ -245,7 +240,7 @@ for (const locale of ['en', 'zh-CN']) {
 			};
 			const start = async (threadId: string, prompt: string): Promise<void> => {
 				const before = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
-				await client.request(APP_SERVER_METHODS['session/request'], { commandId: prompt, sessionId, request: { type: 'startTurn', threadId, expectedSequence: before.thread.sequence, mode: 'ask', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: prompt }] } });
+				await client.request(APP_SERVER_METHODS['session/request'], { commandId: prompt, sessionId, request: { type: 'startTurn', threadId, expectedSequence: before.thread.sequence, approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: prompt }] } });
 			};
 			const branchState = async (threadId: string): Promise<string | undefined> => (await read()).threads.find(thread => thread.threadId === threadId)?.manager?.status;
 			let agentsWorkbench = workbench;
@@ -338,7 +333,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const requests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string; }[]; }).sessionStateRequests!);
 			expect(requests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 			await rowIdentity?.dispose();
-			// A real selected source connection owns user input. The second window
+			// Stop the selected task from its source window. The second window
 			// still displays only catalog facts while retaining its unsent draft.
 			const history = await read();
 			const index = history.threads.findIndex(thread => thread.threadId === root.threadId);
@@ -346,15 +341,11 @@ for (const locale of ['en', 'zh-CN']) {
 			const historyRow = workbench.page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'Background management' }).filter({ hasText: `${copy.thread} ${index + 1}` });
 			await expect(historyRow).toContainText(copy.readyForReview); await historyRow.click();
 			await expect(workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-native-chat):visible')).toHaveAttribute('data-thread-id', root.threadId);
-			await start(root.threadId, 'fixture-question');
-			await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('needsInput');
-			await assertStatus(copy.needsInput, 'question');
-			await expect(row()).toHaveAttribute('aria-label', /Synthetic management choice/u);
+			await start(root.threadId, 'fixture-hold-before-reopen');
+			await expect.poll(() => branchState(root.threadId)).toBe('working');
+			await assertStatus(copy.working, 'working');
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 			await editor.waitForEditorContents(text => text === 'Keep the unsent management draft');
-			const question = workbench.page.getByRole('combobox', { name: 'switch_mode — Synthetic management choice', exact: true });
-			await expect(question).toBeVisible();
-			await expect(question.getByRole('option', { disabled: false })).toHaveText(['agent', 'ask']);
 			// A headless desktop may have no microphone. Record and dismiss only that
 			// environment notification so it cannot cover the real Stop control.
 			const audioFailure = workbench.page.locator('.ash-notification').filter({ hasText: 'Microphone enumeration failed' });

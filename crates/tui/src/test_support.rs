@@ -212,7 +212,6 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
         request: ::queue::QueueInput {
             window: None,
             command_interpretation: ash_protocol::CommandInterpretation::Product,
-            mode: submission.mode,
             task_command: None,
             model: None,
             model_routing: None,

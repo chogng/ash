@@ -496,7 +496,6 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
 #[test]
 fn local_policy_runs_agent_coordination_without_an_external_approval() {
     for tool_name in [
-        crate::server::switch_mode_tool::SWITCH_MODE_TOOL_NAME,
         crate::server::update_plan_tool::UPDATE_PLAN_TOOL_NAME,
         agent::SPAWN_AGENT_TOOL_NAME,
         agent::SEND_AGENT_MESSAGE_TOOL_NAME,
@@ -759,7 +758,6 @@ fn agent_commands_and_sessions_use_the_selected_repository_through_the_tool_port
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

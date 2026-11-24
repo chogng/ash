@@ -12,6 +12,7 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
+use ash_app_server_protocol::protocol::session::SessionStartTurnParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
@@ -183,12 +184,11 @@ where
             expected_sequence: scope.expected_sequence,
             question: question.to_owned(),
         },
-        _ => SessionRequest::StartTurn {
+        _ => SessionRequest::StartTurn(SessionStartTurnParams {
             command_interpretation: None,
             ide_window_id,
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
-            mode: submission.mode,
             approval_mode: Some(approval_mode),
             model: None,
             model_routing: None,
@@ -208,7 +208,7 @@ where
                 }
                 input
             },
-        },
+        }),
     };
     match client.request_session(SessionRequestParams {
         command_id,

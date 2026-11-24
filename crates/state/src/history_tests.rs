@@ -108,7 +108,6 @@ fn start(
         thread,
         ash_core::StartTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             command_id: CommandId::new("turn").unwrap(),
             expected_sequence: core_api::SequenceExpectation::Any,

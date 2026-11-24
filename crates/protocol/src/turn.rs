@@ -104,15 +104,12 @@ pub enum TurnModelRouting {
 
 /// Canonical readable state for one user-intent-driven Agent execution.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Turn {
     pub turn_id: TurnId,
     pub status: TurnStatus,
     #[serde(default)]
     pub kind: TurnKind,
-    /// Compatibility approach for Turns accepted before request-scoped task commands.
-    #[serde(default, skip_serializing_if = "crate::AgentMode::is_agent")]
-    pub mode: crate::AgentMode,
     /// Exact instructions frozen when this Turn was accepted.
     ///
     /// Historical Turns written before instruction snapshots were introduced omit this field.
@@ -168,11 +165,11 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// The frozen command takes precedence over the compatibility field in historical snapshots.
-    pub fn execution_approach(&self) -> crate::AgentMode {
+    /// Returns the accepted task command or the default execution.
+    pub fn execution_approach(&self) -> crate::TaskExecution {
         self.instructions
             .as_ref()
             .and_then(TurnInstructions::task_command)
-            .unwrap_or(self.mode)
+            .unwrap_or_default()
     }
 }

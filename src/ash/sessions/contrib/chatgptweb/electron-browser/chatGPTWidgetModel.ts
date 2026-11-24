@@ -239,7 +239,6 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 				readOnly: state.busy || state.sending || !!state.pendingCreation || voice,
 				canAttachFiles: state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending && !state.managing && !voice,
 			},
-			mode: 'ask',
 			phase: loading ? 'loading' : state.sending ? 'submitting' : 'ready',
 			inputBlocked: !canSend || state.busy || state.sending || state.managing || voice,
 			canInterrupt: state.sending,
@@ -294,7 +293,7 @@ export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel 
 		this.backend.setModel(state.model, presetId);
 	}
 
-	async send(text: string, _mode?: unknown, _skills?: unknown, _contexts?: unknown, options?: ChatSubmissionOptions): Promise<void> {
+	async send(text: string, _skills?: unknown, _contexts?: unknown, options?: ChatSubmissionOptions): Promise<void> {
 		options?.signal?.throwIfAborted();
 		if (text !== this.backend.state.get().draft) this.backend.setDraft(text);
 		await this.backend.send();

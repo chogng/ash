@@ -17,7 +17,7 @@ test('Chat shares input operations with model settings on the right and no mode 
 	const model = actions.locator('.ash-chat-input-model-action');
 	await expect(card).toBeVisible();
 	await expect(card.locator('.stanza-editor-placeholder-text:visible')).toHaveCount(0);
-	await expect(composer.locator('[data-action-id="ash.chat.input.mode"]')).toHaveCount(0);
+	await expect(composer.locator('[data-action-id="ash.chat.input.agent"]')).toHaveCount(0);
 	await expect(composer.getByRole('button', { name: /^Permissions:/u })).toHaveCount(0);
 	await expect(card.locator('[data-action-id="ash.chat.input.model"]')).toHaveCount(1);
 	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Add context');

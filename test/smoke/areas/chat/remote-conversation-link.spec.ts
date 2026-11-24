@@ -365,7 +365,7 @@ test('IDE opens an SSH conversation link and sends the first turn after SSH reco
 		const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;
 		await client.request(methods['session/request'], {
 			sessionId, commandId: 'remote-link-first-turn', request: {
-				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'agent', approvalMode: 'manual',
+				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, approvalMode: 'manual',
 				model: { provider, model: modelId }, input: [{ type: 'text', text: 'Initial remote message' }],
 			},
 		});

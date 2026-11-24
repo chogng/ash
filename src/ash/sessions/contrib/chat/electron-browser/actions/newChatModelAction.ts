@@ -31,7 +31,7 @@ export async function openAshChatWithModel(accessor: ServicesAccessor, selection
 
 	await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
 	view.openChatDraft(selection, id => {
-		if (draft.text.trim()) writeNewChatDraftState(storage, { text: draft.text, mode: 'agent', contexts: [] }, `ash-chat:untitled:${id}`);
+		if (draft.text.trim()) writeNewChatDraftState(storage, { text: draft.text, contexts: [] }, `ash-chat:untitled:${id}`);
 		if (draft.creationKind) sessions.setUntitledSessionCreationKind(id, draft.creationKind);
 	});
 }

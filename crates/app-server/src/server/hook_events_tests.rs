@@ -109,7 +109,6 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
                 &thread.thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

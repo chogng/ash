@@ -131,7 +131,7 @@ impl Runtime<'_> {
         }
         let request_key = store::command_request_key(
             &request.input,
-            request.mode,
+            request.instructions.task_command(),
             request.tool_mode,
             request.approval_mode,
             model_routing.is_some(),
@@ -257,9 +257,17 @@ impl Runtime<'_> {
             Some(AgentConfiguration {
                 role: selected.role,
                 capability_scope: selected.capability_scope,
-                base_instructions: Some(request.instructions.clone().with_mode(
-                    &agent_mode_templates::instructions(request.mode.delegated()),
-                )),
+                base_instructions: Some(
+                    request.instructions.clone().with_task_instructions(
+                        &task_command_templates::instructions(
+                            request
+                                .instructions
+                                .task_command()
+                                .unwrap_or_default()
+                                .delegated(),
+                        ),
+                    ),
+                ),
             })
         } else {
             None

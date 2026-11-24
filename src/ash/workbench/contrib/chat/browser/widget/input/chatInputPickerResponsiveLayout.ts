@@ -27,7 +27,7 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 
 	public setFooter(element: HTMLElement, getGroups: () => readonly (readonly IChatInputPickerResponsiveLayoutItem[])[], isEnabled: () => boolean): void {
 		this.footer = { element, getGroups, isEnabled };
-		this.toolbar.querySelector('.ash-chat-input-mode-selector.compact')?.classList.remove('compact');
+		this.toolbar.querySelector('.ash-chat-input-agent-selector.compact')?.classList.remove('compact');
 		this.resizeObserver.unobserve(this.toolbar);
 		this.resizeObserver.observe(element);
 		// Labels and visibility can change while the footer retains the same width.
@@ -43,7 +43,7 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 			return;
 		}
 		if (!this.toolbar.isConnected || this.toolbar.clientWidth === 0) return;
-		const modeSelector = this.toolbar.querySelector<HTMLElement>('.ash-chat-input-mode-selector');
+		const modeSelector = this.toolbar.querySelector<HTMLElement>('.ash-chat-input-agent-selector');
 		const modelSelector = this.toolbar.querySelector<HTMLElement>('.ash-chat-input-model-selector');
 		if (!modeSelector || !modelSelector) return;
 		modeSelector.classList.remove('compact');

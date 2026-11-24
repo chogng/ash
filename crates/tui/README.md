@@ -126,7 +126,7 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 
 输入框中的 Shift+↓ / Shift+↑ 在当前模型支持的档位内降档或升档，到边界后停住。未设置时从模型默认档开始；模型也无默认档时，首次调整选择第一档。状态栏显示当前档位。可在 `/shortcuts` 重绑，在 `/help` 查看。未明确选择模型或模型不支持推理档位时显示对应说明。选择、升降、边界判断及配置更新共用 [reasoning_effort.rs](src/models/reasoning_effort.rs)。
 
-以 `/swarm <任务>` 提交显式并行请求。`/ask <问题>`、`/plan <任务>`、`/debug <问题>` 同样直接提交。输入 `/` 查看命令。[Swarm 行为](../agent-mode-templates/README.md#swarm-的执行边界)
+以 `/swarm <任务>` 提交显式并行请求。`/ask <问题>`、`/plan <任务>`、`/debug <问题>` 同样直接提交。输入 `/` 查看命令。[Swarm 行为](../task-command-templates/README.md#swarm-的执行边界)
 
 ## 面板怎样接入后端
 

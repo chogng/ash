@@ -459,7 +459,6 @@ fn tool_search_revalidates_bindings_and_the_turn_survives_catalog_removal() {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -731,7 +730,6 @@ fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_execu
                 &thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

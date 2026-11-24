@@ -187,7 +187,7 @@ declare global {
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
 		setInputReadOnly(readOnly: boolean): void;
-		setAgent(agent: ChatInputState['selectedAgent'], mode?: ChatInputState['mode']): void;
+		setAgent(agent: ChatInputState['selectedAgent']): void;
 		showAgentHover(): void;
 		agentHoverAccessibility(): { help?: string; content?: string; };
 		setCatalogError(message: string | undefined): void;
@@ -912,7 +912,7 @@ const delegate: ChatInputDelegate = {
 		},
 		interrupt: () => voice.interrupt(),
 	} : undefined,
-	send: async (_text, _mode, _skills, contexts, _signal, queue) => {
+	send: async (_text, _skills, contexts, _signal, queue) => {
 		queueEvents.push({ kind: 'send', text: _text, queue });
 		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
@@ -947,7 +947,7 @@ const delegate: ChatInputDelegate = {
 		automatic = true;
 		renderModels();
 	},
-	listAgents: async () => [], selectAgent: () => { }, selectMode: mode => { state = { ...state, mode }; part.render(state); }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
+	listAgents: async () => [], selectAgent: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval' || response.type === 'toolResultReview') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
@@ -986,7 +986,7 @@ const inputServices = scopedTools ? resources.add(services.createChild()) : serv
 if (scopedTools) inputServices.registerSingleton(ILanguageModelToolsService, () => createToolsService(true));
 part = resources.add(inputServices.createInstance(ChatInputPart, document.querySelector('main')!, delegate, services.get(IContextMenuService), services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
-	modePicker: cowork ? 'hidden' : 'visible',
+	agentPicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	configureModelInMenu: new URLSearchParams(location.search).has('modelMenuConfiguration'),
 	chatModelSlider,
@@ -1112,7 +1112,7 @@ function sampleContextCategories(tokens: number): ChatContextUsage['categories']
 }
 
 let state: ChatInputState = {
-	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready',
+	queuedMessages: 0, approvalMode: 'manual', phase: 'ready',
 	...(conversationDrop ? { conversation: { sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId! } } : {}),
 	contextUsage: { estimatedTokens: 200, contextWindow: 1000, autoCompactAt: 800, categories: sampleContextCategories(200), latestRequestTokens: 180 }, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {
@@ -1178,8 +1178,8 @@ window.ashChatInputIntegration = {
 	voiceInputState: () => ({ starts: voiceStarts, stops: voiceStops, muted: voiceState?.muted === true, dictationCancelled }),
 	isDictationReady: () => emitDictation !== undefined,
 	setVoiceAvailable: available => { voiceAvailable = available; voiceChanges.fire(); },
-	setAgent: (selectedAgent, mode = 'agent') => {
-		state = { ...state, selectedAgent, mode, canSelectAgent: true };
+	setAgent: selectedAgent => {
+		state = { ...state, selectedAgent, canSelectAgent: true };
 		part.render(state);
 	},
 	showAgentHover: () => services.get(IHoverService).showManagedHover(document.activeElement as HTMLElement),
@@ -1312,7 +1312,7 @@ window.ashChatInputIntegration = {
 	openInputLink: () => services.get(ICommandService).executeCommand('editor.action.openLink'),
 	setSlashCommands: slashCommands => { state = { ...state, slashCommands }; part.render(state); },
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
-	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, mode: state.mode, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	finishModelPreference: success => finishModelPreference?.(success),
 	modelSelections: () => modelSelections.map(selection => selection.model),
 	finishModelSelection: (index, success) => modelSelections[index]?.complete(success),
@@ -1420,5 +1420,5 @@ window.ashScreenshotIntegration = {
 	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
 	stopImageEditor: () => imageEditorFixture?.stop(),
 	draft: async () => (await part.captureDraft())?.draft.text,
-	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ mode: state.mode, text: 'Next conversation', contexts: [] }); },
+	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ text: 'Next conversation', contexts: [] }); },
 };

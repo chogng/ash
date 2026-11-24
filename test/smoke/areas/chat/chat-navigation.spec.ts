@@ -7,7 +7,7 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 test.use({ gitRepository: true });
 
 for (const surface of ['IDE', 'Agents Code'] as const) {
-	test(`${surface} navigates messages and focuses a pending confirmation without sending or answering`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+	test(`${surface} navigates messages and returns to an unsent draft`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
 		let calls = 0;
 		const server = createServer(async (request, response) => {
@@ -17,12 +17,10 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			}
 			for await (const _chunk of request) { /* Consume the isolated fixture input. */ }
 			calls++;
-			const delta = calls === 3
-				? { tool_calls: [{ index: 0, id: 'navigation-confirmation', type: 'function', function: { name: 'switch_mode', arguments: JSON.stringify({ mode: 'agent', reason: 'Synthetic navigation confirmation' }) } }] }
-				: { content: `Navigation answer ${calls}` };
+			const delta = { content: `Navigation answer ${calls}` };
 			const chunk = (delta: unknown, finish: string | null): string => `data: ${JSON.stringify({ id: 'navigation', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			response.end(chunk(delta, null) + chunk({}, calls === 3 ? 'tool_calls' : 'stop') + 'data: [DONE]\n\n');
+			response.end(chunk(delta, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
@@ -53,7 +51,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 				const thread = await read();
 				await client.request(methods['session/request'], {
 					sessionId, commandId: `navigation-turn-${index}`, request: {
-						type: 'startTurn', threadId, expectedSequence: thread.sequence, mode: 'ask', approvalMode: 'manual', model,
+						type: 'startTurn', threadId, expectedSequence: thread.sequence, approvalMode: 'manual', model,
 						input: [{ type: 'text', text: `Navigation prompt ${index}` }],
 					}
 				});
@@ -115,20 +113,6 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			await expect(help).not.toHaveValue(/<keybinding:/u);
 			await page.keyboard.press('Escape');
 			await expect(draft).toBeFocused();
-			await start(3);
-			const question = chat.getByRole('combobox', { name: 'Synthetic navigation confirmation', exact: true });
-			await expect(question).toBeVisible();
-			const pending = await read();
-			await window.quickaccess.runCommand('editor.action.toggleScreenReaderAccessibilityMode');
-			await draft.focus();
-			await page.keyboard.press('ControlOrMeta+Shift+a');
-			await expect(question).toBeFocused();
-			await page.keyboard.press('ControlOrMeta+Shift+a');
-			await expect(draft).toBeFocused();
-			await window.quickaccess.runCommand('workbench.action.chat.focusConfirmation');
-			await expect(question).toBeFocused();
-			expect(await read()).toEqual(pending);
-			expect(calls).toBe(3);
 			await expect(composer.locator('.view-lines')).toContainText('Unsent first line');
 			await expect(composer.locator('.view-lines')).toContainText('Second line');
 			await page.screenshot({ path: testInfo.outputPath('chat-navigation.png') });

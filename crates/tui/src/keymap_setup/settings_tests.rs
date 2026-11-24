@@ -30,9 +30,6 @@ fn configured_rules_replace_user_keybindings() {
     let section = FrontendConfigDto(BTreeMap::from([(
         "keybindings".into(),
         json!([{
-            "key": "ctrl+g",
-            "command": "ashCode.action.cycleAgentMode"
-        }, {
             "key": "ctrl+y",
             "command": "ashCode.action.copyLastResponse"
         }]),
@@ -72,8 +69,8 @@ fn missing_keybindings_restore_builtins_without_user_rules() {
 #[test]
 fn shortcut_edit_preserves_unrelated_rules() {
     let document = json!([{
-        "key": "shift+tab",
-        "command": "ashCode.action.cycleAgentMode"
+        "key": "ctrl+g",
+        "command": "ashCode.action.copyLastResponse"
     }, {
         "key": "ctrl+x",
         "command": "ashCode.action.cycleApprovalMode"
@@ -90,8 +87,9 @@ fn shortcut_edit_preserves_unrelated_rules() {
     let (edited, notice) = edited_document(document, &edit).unwrap();
 
     assert_eq!(notice, "Added user shortcut `ctrl+y`.");
-    assert_eq!(edited.as_array().unwrap().len(), 2);
-    assert_eq!(edited[0]["command"], "ashCode.action.cycleApprovalMode");
+    assert_eq!(edited.as_array().unwrap().len(), 3);
+    assert_eq!(edited[0]["command"], "ashCode.action.copyLastResponse");
+    assert_eq!(edited[1]["command"], "ashCode.action.cycleApprovalMode");
     let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), edited)]));
     let settings = settings_from_tui(&section).unwrap();
     assert_eq!(
@@ -105,7 +103,11 @@ fn shortcut_edit_preserves_unrelated_rules() {
 
 #[test]
 fn invalid_keybinding_root_and_rules_are_rejected() {
-    for keybindings in [json!({}), json!([{"key": "ctrl+k escape", "block": true}])] {
+    for keybindings in [
+        json!({}),
+        json!([{"key": "ctrl+k escape", "block": true}]),
+        json!([{"key": "shift+tab", "command": "ashCode.action.cycleAgentMode"}]),
+    ] {
         let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), keybindings)]));
         assert!(settings_from_tui(&section).is_err());
     }

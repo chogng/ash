@@ -1953,7 +1953,7 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
             ..Default::default()
         }),
         policy.clone(),
-        ash_protocol::AgentMode::Plan,
+        ash_protocol::TaskExecution::Plan,
         ash_protocol::ApprovalMode::BypassPermissions,
     );
     assert_eq!(
@@ -1977,7 +1977,10 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
 
 #[test]
 fn read_only_commands_block_mutation_before_review_or_execution_in_every_permission_mode() {
-    for mode in [ash_protocol::AgentMode::Plan, ash_protocol::AgentMode::Ask] {
+    for mode in [
+        ash_protocol::TaskExecution::Plan,
+        ash_protocol::TaskExecution::Ask,
+    ] {
         for approval in [
             ash_protocol::ApprovalMode::Manual,
             ash_protocol::ApprovalMode::Auto,
@@ -2030,7 +2033,7 @@ fn analysis_investigation_process_keeps_read_only_sandbox_after_permission_bypas
             ..Default::default()
         }),
         Arc::new(AskPolicy),
-        ash_protocol::AgentMode::Plan,
+        ash_protocol::TaskExecution::Plan,
         ash_protocol::ApprovalMode::BypassPermissions,
     );
     assert_eq!(
@@ -2072,13 +2075,18 @@ fn fixture_with_approval_mode(
     policy: Arc<dyn ActionPolicyService>,
     approval_mode: ash_protocol::ApprovalMode,
 ) -> Fixture {
-    fixture_with_modes(tools, policy, ash_protocol::AgentMode::Agent, approval_mode)
+    fixture_with_modes(
+        tools,
+        policy,
+        ash_protocol::TaskExecution::Agent,
+        approval_mode,
+    )
 }
 
 fn fixture_with_modes(
     tools: Arc<ReviewTool>,
     policy: Arc<dyn ActionPolicyService>,
-    mode: ash_protocol::AgentMode,
+    mode: ash_protocol::TaskExecution,
     approval_mode: ash_protocol::ApprovalMode,
 ) -> Fixture {
     let store = Arc::new(InMemoryThreadStore::default());
@@ -2101,11 +2109,11 @@ fn fixture_with_modes(
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: ash_protocol::AgentMode::Agent,
+
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions()
-                    .with_task_command((!mode.is_agent()).then_some(mode)),
+                    .with_task_command((!mode.is_default()).then_some(mode)),
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

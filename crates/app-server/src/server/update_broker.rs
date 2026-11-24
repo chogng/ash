@@ -1728,7 +1728,6 @@ fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
             | ThreadEvent::GoalCleared { .. }
             | ThreadEvent::TurnAccepted { .. }
             | ThreadEvent::TurnStarted { .. }
-            | ThreadEvent::TurnModeChanged { .. }
             | ThreadEvent::TurnCancelling { .. }
             | ThreadEvent::TurnCompleted { .. }
             | ThreadEvent::TurnFailed { .. }

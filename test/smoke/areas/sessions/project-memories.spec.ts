@@ -181,7 +181,7 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 			const { thread } = await read(identity);
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: randomUUID(), sessionId: identity.sessionId,
-				request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: thread.sequence, input: [{ type: 'text', text }], toolMode: 'direct', mode: 'agent' },
+				request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: thread.sequence, input: [{ type: 'text', text }], toolMode: 'direct' },
 			});
 			await expect.poll(async () => (await read(identity)).thread.turns.at(-1)?.status).toBe('completed');
 		};

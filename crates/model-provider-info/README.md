@@ -177,7 +177,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
     "tools": {
       "spawn_agent": { "description": "Delegate one bounded task and verify its result." }
     },
-    "agent_modes": {
+    "task_commands": {
       "plan": "Inspect the task and produce a concrete plan within the active constraints."
     },
     "multi_agent": {
@@ -230,7 +230,7 @@ Astra 和 GPT-6.1 Sol 的 `settings.service_tiers` 声明 `ultrafast`。订阅�
 
 每个接入的 `modelAcceleration` 按模型保存准确的选项 ID。服务等级沿用原始 ID，速度参数使用 `speed:fast`，高速型号使用 `model:<型号>`。目录中的非默认服务等级以及速度或型号声明形成可选列表；`disabledAccelerationOptions` 按模型独立禁用各档位，禁用 Fast 不会连带禁用 Ultra Fast。后端在保存、HTTP 调用、WebSocket 连接和预热前校验选项。显式请求等级或速度优先于同类参数的加速偏好，也必须通过接入限制；清除选择使用声明的请求默认等级。配置文件 schema 9 将旧 `fastModels` 一次性迁移成原声明的选项 ID，未知映射或冲突会报错并保留原文件。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
 
-Ultra Fast 是服务等级。加速档位、[模型推理档位](../model-provider/README.md#ultra-与推理档位)和 [Agent 模式](../agent-mode-templates/README.md)独立设置。
+Ultra Fast 是服务等级。加速档位、[模型推理档位](../model-provider/README.md#ultra-与推理档位)和 [任务命令](../task-command-templates/README.md)独立设置。
 
 前端模型设置卡读取加速选项的名称和说明，保留键盘开关、焦点和保存行为，并把说明提供给读屏。内置文案通过现有 NLS 提供英文和中文；供应商自定义文案保留原文。实际型号、实际服务等级与证据进入调用/计价记录，详情见 [模型计价](../docs/model-accounting.md#加速调用如何进入计价)。
 
@@ -238,13 +238,13 @@ Ultra Fast 是服务等级。加速档位、[模型推理档位](../model-provid
 
 `context_window` 是默认上下文预算，`max_context_window` 是长上下文开启后的最大预算；最大值不得小于默认值，未知默认值不能声明最大值。省略最大值表示没有更大的档位。长上下文默认关闭，用户偏好保存 `modelContext.<model>.longContext` 布尔值；手工 `contextWindow` 数值与布尔偏好互斥。后端根据当前连接的目录容量限制有效预算，GUI 和 TUI 不根据型号或容量猜测开关。压缩推荐使用有效预算的 90%，显式压缩阈值也受这一上限限制。
 
-`model_messages` 中的 `system_instructions` 必填；`tools`、`agent_modes` 和 `multi_agent` 可省略，省略表示没有额外的模型专用指导，保留所属模块的现有规则。声明的正文不得空白，全部文本合计最多 64 KiB。`tools` 按准确工具名声明，只接受 `description`；`agent_modes` 使用[内置模式 ID](../agent-mode-templates/README.md#指令模板)；`multi_agent` 只接受 `root`、`subagent`。这些字段不能声明工具参数、开关或授权。
+`model_messages` 中的 `system_instructions` 必填；`tools`、`task_commands` 和 `multi_agent` 可省略，省略表示没有额外的模型专用指导，保留所属模块的现有规则。声明的正文不得空白，全部文本合计最多 64 KiB。`tools` 按准确工具名声明，只接受 `description`；`task_commands` 使用[内置任务命令 ID](../task-command-templates/README.md#指令模板)；`multi_agent` 只接受 `root`、`subagent`。这些字段不能声明工具参数、开关或授权。
 
 Core 在现有工具说明之后加入模型专用 `description`，保留工具参数、动态角色信息和原绑定。只有本次实际可用的工具会得到这段说明，Code Mode 的 `ALL_TOOLS` 同样使用冻结的模型说明。当前模式选择一段模式指导，Thread 的真实父子关系选择根或子 Agent 指导；额外正文保留宿主的模式限制、Role 与权限。上下文检查与执行使用同一组装路径，并将工具说明计入工具预算。
 
-`model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将基础、当前模式和身份指导与运行时指令组装成 `ModelRequest.instructions`，工具指导进入对应的工具说明；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
+`model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将基础、当前任务命令和身份指导与运行时指令组装成 `ModelRequest.instructions`，工具指导进入对应的工具说明；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
 
-`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、Agent 模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，Bazel 从 `models/*.json` 收集编译资源，行尾规则在根 `.gitattributes`。修改后需重编译并重启；不存在运行时文件扫描或额外生成的合并 JSON。新增厂商目录时创建 `models/<provider>.json`，并在 `src/model_catalog.rs` 的 `BUNDLED_CATALOGS` 登记厂商与文件入口；新增同厂商模型只编辑对应文件。
+`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、任务命令、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，Bazel 从 `models/*.json` 收集编译资源，行尾规则在根 `.gitattributes`。修改后需重编译并重启；不存在运行时文件扫描或额外生成的合并 JSON。新增厂商目录时创建 `models/<provider>.json`，并在 `src/model_catalog.rs` 的 `BUNDLED_CATALOGS` 登记厂商与文件入口；新增同厂商模型只编辑对应文件。
 
 `connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `glm` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 

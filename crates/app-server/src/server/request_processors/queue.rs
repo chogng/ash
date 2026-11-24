@@ -4,7 +4,7 @@ use super::decode;
 use super::operations::ThreadMutation;
 use super::operations::TurnModelSelection;
 use super::operations::TurnToolModeSelection;
-use super::operations::task_command_for_request;
+use super::operations::resolve_task_command;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::queue::QueueCancelParams;
@@ -56,7 +56,7 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
         mutation: super::operations::ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
-        mode: ash_protocol::AgentMode,
+        mode: ash_protocol::TaskExecution,
         tool_mode_selection: super::operations::TurnToolModeSelection,
         input: Vec<ash_protocol::UserInput>,
         kind: ash_protocol::TurnKind,
@@ -67,7 +67,6 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
     fn turn_instruction_selection(
         &self,
         input: &mut Vec<ash_protocol::UserInput>,
-        mode: ash_protocol::AgentMode,
         command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<super::operations::TurnInstructionSelection, super::RpcError>;
 }
@@ -167,10 +166,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             QueueEditAction::Resume => queue::QueueEdit::Resume,
             QueueEditAction::ReplaceText { text } => {
                 let existing = message_for_edit()?;
-                let task_command = task_command_for_request(
+                let task_command = resolve_task_command(
                     &[ash_protocol::UserInput::Text { text: text.clone() }],
                     command_interpretation.unwrap_or(existing.request.command_interpretation),
-                    existing.request.mode,
                 );
                 queue::QueueEdit::ReplaceText {
                     text,
@@ -180,10 +178,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             }
             QueueEditAction::ReplaceTextWithDelivery { text, delivery } => {
                 let existing = message_for_edit()?;
-                let task_command = task_command_for_request(
+                let task_command = resolve_task_command(
                     &[ash_protocol::UserInput::Text { text: text.clone() }],
                     command_interpretation.unwrap_or(existing.request.command_interpretation),
-                    existing.request.mode,
                 );
                 queue::QueueEdit::ReplaceTextWithDelivery {
                     text,
@@ -204,14 +201,10 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 self.check_reference_sources(scope, &input)?;
                 let interpretation =
                     command_interpretation.unwrap_or(existing.request.command_interpretation);
-                let task_command =
-                    task_command_for_request(&input, interpretation, existing.request.mode);
+                let task_command = resolve_task_command(&input, interpretation);
                 if task_command.is_none() {
-                    self.context.turn_instruction_selection(
-                        &mut input,
-                        existing.request.mode,
-                        interpretation,
-                    )?;
+                    self.context
+                        .turn_instruction_selection(&mut input, interpretation)?;
                 }
                 queue::QueueEdit::Replace {
                     input,
@@ -325,10 +318,10 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         let scope = connection.reference_read_scope();
         self.check_reference_sources(scope, &input)?;
         let interpretation = params.command_interpretation.unwrap_or_default();
-        let task_command = task_command_for_request(&input, interpretation, params.mode);
+        let task_command = resolve_task_command(&input, interpretation);
         if task_command.is_none() {
             self.context
-                .turn_instruction_selection(&mut input, params.mode, interpretation)?;
+                .turn_instruction_selection(&mut input, interpretation)?;
         }
         let tool_mode = match (params.tool_mode, existing.as_ref()) {
             (Some(mode), _) => mode,
@@ -362,7 +355,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                     thread_id: params.thread_id,
                     directory: self.queue_directory.clone(),
                     input,
-                    mode: params.mode,
+
                     task_command,
                     command_interpretation: interpretation,
                     model: params.model,
@@ -436,8 +429,8 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         if request.steer_turn.is_some() && request.task_command.is_some() {
             return Ok(Delivery::Rejected("taskCommandRequiresNewTurn".into()));
         }
-        let mode = request.task_command.unwrap_or(request.mode);
-        // A Steer receipt has no separate mode. Check the immutable target before replaying it.
+        let mode = request.task_command.unwrap_or_default();
+        // Steering must match the accepted task execution. Check the immutable target before replaying it.
         if let Some(turn_id) = &request.steer_turn
             && snapshot
                 .turns
@@ -517,7 +510,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             super::operations::TurnInstructionSelection::TaskCommand
         } else {
             self.context
-                .turn_instruction_selection(&mut input, mode, request.command_interpretation)
+                .turn_instruction_selection(&mut input, request.command_interpretation)
                 .map_err(|error| format!("{:?}", error.message))?
         };
         let start = self.context.start_agent_turn_request(
@@ -596,7 +589,6 @@ fn accepted(
             turn_id,
         },
         None => core_api::AcceptedCommand::Turn {
-            mode: request.mode,
             task_command: request.task_command,
             input: &request.input,
             tool_mode: request.tool_mode,

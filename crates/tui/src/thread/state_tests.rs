@@ -219,7 +219,6 @@ fn thread_snapshot() -> Thread {
         goal: None,
         hook_runs: Vec::new(),
         turns: vec![Turn {
-            mode: Default::default(),
             advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
@@ -268,7 +267,6 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
     let turn_id = TurnId::new(turn).unwrap();
     Thread {
         turns: vec![Turn {
-            mode: Default::default(),
             advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,

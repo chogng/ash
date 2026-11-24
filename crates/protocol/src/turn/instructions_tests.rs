@@ -18,7 +18,7 @@ fn frozen_model_messages_restore_all_assets_and_reject_changed_text() {
         digest: crate::ContentDigest::sha256(base.body().as_bytes()),
         messages: Some(ModelInstructionMessages {
             tools: [(crate::ToolName::new("spawn_agent").unwrap(), asset("TOOL"))].into(),
-            agent_modes: [(crate::AgentMode::Plan, asset("PLAN"))].into(),
+            task_commands: [(crate::TaskExecution::Plan, asset("PLAN"))].into(),
             root: Some(asset("ROOT")),
             subagent: Some(asset("WORKER")),
         }),
@@ -30,7 +30,7 @@ fn frozen_model_messages_restore_all_assets_and_reject_changed_text() {
     assert_eq!(restored, original);
     for path in [
         "/modelGuidance/messages/tools/spawn_agent/body",
-        "/modelGuidance/messages/agentModes/plan/body",
+        "/modelGuidance/messages/taskCommands/plan/body",
         "/modelGuidance/messages/root/body",
         "/modelGuidance/messages/subagent/body",
     ] {
@@ -104,13 +104,13 @@ fn replacing_mode_retains_common_rules_and_model_selection() {
         .unwrap()
         .with_shared(&shared)
         .with_model_guidance(ModelInstructionSelection::Generic { model: None })
-        .with_mode(&parent_mode);
-    let worker = base.clone().with_mode(&worker_mode);
+        .with_task_instructions(&parent_mode);
+    let worker = base.clone().with_task_instructions(&worker_mode);
     assert_eq!(worker.id(), base.id());
     assert_eq!(worker.body(), base.body());
     assert_eq!(worker.shared(), base.shared());
     assert_eq!(worker.model_guidance(), base.model_guidance());
-    assert_eq!(worker.mode_instructions(), Some(&worker_mode.as_text()));
+    assert_eq!(worker.task_instructions(), Some(&worker_mode.as_text()));
     let restored: TurnInstructions =
         serde_json::from_value(serde_json::to_value(&worker).unwrap()).unwrap();
     assert_eq!(restored, worker);

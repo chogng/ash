@@ -2,7 +2,6 @@
 //! This parser owns the JSON shape; `model_catalog` validates references and normalizes budgets.
 //! Field comments also become descriptions in the generated editor schema.
 
-use ash_protocol::AgentMode;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ContextWindow;
 use ash_protocol::Model;
@@ -21,6 +20,7 @@ use ash_protocol::ModelToolOutputLimit;
 use ash_protocol::ModelVerbosity;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use ash_protocol::TaskExecution;
 use ash_protocol::ToolName;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -35,9 +35,9 @@ pub struct ModelMessages {
     /// Additional model-specific descriptions for tools actually exposed by the host; parameters remain tool-owned.
     #[serde(default)]
     pub tools: BTreeMap<ToolName, ModelToolMessage>,
-    /// Additional guidance selected by the active agent mode, without changing its permissions.
+    /// Additional guidance for the task command or default task execution.
     #[serde(default)]
-    pub agent_modes: BTreeMap<AgentMode, String>,
+    pub task_commands: BTreeMap<TaskExecution, String>,
     /// Guidance selected by the Thread's actual root or delegated identity, separate from its task role.
     #[serde(default)]
     pub multi_agent: ModelAgentMessages,

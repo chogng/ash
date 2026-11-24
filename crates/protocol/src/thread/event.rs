@@ -74,7 +74,8 @@ pub enum ToolExecutionAuthority {
 #[serde(
     tag = "type",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum ThreadEvent {
     /// A short catch-up summary through a successfully completed Turn.
@@ -239,8 +240,6 @@ pub enum ThreadEvent {
         turn_id: TurnId,
         #[serde(default)]
         kind: TurnKind,
-        #[serde(default, skip_serializing_if = "crate::AgentMode::is_agent")]
-        mode: crate::AgentMode,
         /// Exact instructions selected before this Turn was durably accepted.
         ///
         /// Historical events written before instruction snapshots omit this field.
@@ -280,15 +279,6 @@ pub enum ThreadEvent {
     TurnStarted {
         thread_id: ThreadId,
         turn_id: TurnId,
-    },
-    /// Changes the approach for subsequent invocations without widening the Turn's tool or
-    /// permission ceiling. Earlier invocation records retain their original instruction input.
-    TurnModeChanged {
-        thread_id: ThreadId,
-        turn_id: TurnId,
-        from_mode: crate::AgentMode,
-        mode: crate::AgentMode,
-        instructions: TurnInstructions,
     },
     TurnSteered {
         thread_id: ThreadId,
@@ -488,7 +478,6 @@ impl ThreadEvent {
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
             Self::TurnSkillsLoaded { .. } => "turn.skills_loaded",
-            Self::TurnModeChanged { .. } => "turn.mode_changed",
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
@@ -552,7 +541,6 @@ impl ThreadEvent {
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
             | Self::TurnSkillsLoaded { thread_id, .. }
-            | Self::TurnModeChanged { thread_id, .. }
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }

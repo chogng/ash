@@ -15,7 +15,6 @@ fn start(
         thread,
         ash_core::StartTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             advisor: None,
             command_id: ash_protocol::CommandId::new("repair").unwrap(),
             expected_sequence: core_api::SequenceExpectation::Any,

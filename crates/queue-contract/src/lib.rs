@@ -30,13 +30,10 @@ pub struct QueueInput {
     #[serde(default, skip_serializing_if = "CommandInterpretation::is_product")]
     pub command_interpretation: CommandInterpretation,
     pub input: Vec<UserInput>,
-    /// Retained so requests enqueued by an older composer preserve their scope.
-    #[serde(default, skip_serializing_if = "protocol::AgentMode::is_agent")]
-    pub mode: protocol::AgentMode,
     /// The explicit task command resolved at enqueue or edit time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub task_command: Option<protocol::AgentMode>,
+    pub task_command: Option<protocol::TaskExecution>,
     #[serde(default)]
     pub model: Option<protocol::ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,19 +81,19 @@ pub enum QueueEdit {
     /// Change user text without reconstructing frozen attachments or tool selection.
     ReplaceText {
         text: String,
-        task_command: Option<protocol::AgentMode>,
+        task_command: Option<protocol::TaskExecution>,
         command_interpretation: Option<CommandInterpretation>,
     },
     /// Save text and its delivery intent in one revision, retaining frozen non-text input.
     ReplaceTextWithDelivery {
         text: String,
         delivery: QueueDelivery,
-        task_command: Option<protocol::AgentMode>,
+        task_command: Option<protocol::TaskExecution>,
         command_interpretation: Option<CommandInterpretation>,
     },
     Replace {
         input: Vec<UserInput>,
-        task_command: Option<protocol::AgentMode>,
+        task_command: Option<protocol::TaskExecution>,
         command_interpretation: Option<CommandInterpretation>,
     },
     Move {

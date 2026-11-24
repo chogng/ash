@@ -177,7 +177,7 @@ test('Thread history windows reach read and subscribe and retain detached pagina
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
 			return {
-				thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'History', status: 'active', sequence: 80, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, turns: [{ turnId: 'turn', status: 'running', kind: 'coding', mode: 'agent', approvalMode: 'manual', usage, items }], hookRuns: [] },
+				thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'History', status: 'active', sequence: 80, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, turns: [{ turnId: 'turn', status: 'running', kind: 'coding', approvalMode: 'manual', usage, items }], hookRuns: [] },
 				transcript: { sessionId: 'session', threadId: 'thread', durableSequence: 80, revision: 9, entries: [] },
 				history: boundary, updates: [],
 			};
@@ -243,7 +243,7 @@ function messageSnapshot(text: string, sequence = 1): SessionThreadReadResult {
 	const usage = { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
 	const item = { type: 'agentMessage' as const, itemId: 'answer', turnId: 'turn', text, phase: 'final_answer' as const };
 	return {
-		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Body reuse', status: 'active', sequence, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: [{ turnId: 'turn', status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] }] },
+		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Body reuse', status: 'active', sequence, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: [{ turnId: 'turn', status: 'completed', kind: 'coding', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] }] },
 		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: sequence, revision: sequence, entries: [{ type: 'item', entryId: 'item:answer', turnId: 'turn', item: { ...item }, transient: false }] },
 	};
 }
@@ -1026,7 +1026,7 @@ test('Moving a conversation checks both the destination and the original Thread 
 });
 
 test('Queue adapters preserve durable identity and revision and map guarded mutations without transport objects', async () => {
-	const request = { sessionId: 'session', threadId: 'thread', commandId: 'queued', directory: '/workspace', mode: 'agent', approvalMode: 'manual', toolMode: 'direct', model: null, reasoningEffort: null, steerTurn: null, input: [{ type: 'text', text: 'Before\n' }, { type: 'context', name: 'note', content: 'Frozen' }, { type: 'text', text: 'After' }, { type: 'toolSelection', disabled: [], allowed: ['read_file'] }] };
+	const request = { sessionId: 'session', threadId: 'thread', commandId: 'queued', directory: '/workspace', approvalMode: 'manual', toolMode: 'direct', model: null, reasoningEffort: null, steerTurn: null, input: [{ type: 'text', text: 'Before\n' }, { type: 'context', name: 'note', content: 'Frozen' }, { type: 'text', text: 'After' }, { type: 'toolSelection', disabled: [], allowed: ['read_file'] }] };
 	const wire = { request, revision: 9, status: 'paused', turnId: null, error: null };
 	const calls: unknown[] = [];
 	let failure: unknown;
@@ -1037,7 +1037,7 @@ test('Queue adapters preserve durable identity and revision and map guarded muta
 			return method.method === 'queue/list' ? { messages: [wire] } : wire;
 		}
 	} as unknown as AppServerProtocolClient);
-	const expected = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 9, mode: 'agent', status: 'paused', text: 'Before\nAfter', contextCount: 2, turnId: undefined, error: undefined };
+	const expected = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 9, execution: 'agent', status: 'paused', text: 'Before\nAfter', contextCount: 2, turnId: undefined, error: undefined };
 	assert.deepEqual(await api.listQueued({ sessionId: 'session', threadId: 'thread' }), { messages: [expected] });
 	const target = { sessionId: 'session', threadId: 'thread', commandId: 'queued', expectedRevision: 9 };
 	for (const action of [{ type: 'pause' }, { type: 'resume' }, { type: 'replaceText', text: 'Edited' }, { type: 'send' }] as const) {
@@ -1142,6 +1142,6 @@ test('Turn adapters retain the owning composer literal command interpretation ac
 			return { type: 'turn', value: { turnId: 'turn', sequence: 1 } };
 		},
 	} as unknown as AppServerProtocolClient);
-	await service.start({ commandId: 'literal', sessionId: 'session', threadId: 'thread', expectedSequence: 0, mode: 'agent', commandInterpretation: 'literal', input: [{ type: 'text', text: '/init' }] });
-	assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ method: 'session/request', params: { commandId: 'literal', sessionId: 'session', request: { type: 'startTurn', commandInterpretation: 'literal', threadId: 'thread', expectedSequence: 0, mode: 'agent', input: [{ type: 'text', text: '/init' }] } } }]);
+	await service.start({ commandId: 'literal', sessionId: 'session', threadId: 'thread', expectedSequence: 0, commandInterpretation: 'literal', input: [{ type: 'text', text: '/init' }] });
+	assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ method: 'session/request', params: { commandId: 'literal', sessionId: 'session', request: { type: 'startTurn', commandInterpretation: 'literal', threadId: 'thread', expectedSequence: 0, input: [{ type: 'text', text: '/init' }] } } }]);
 });

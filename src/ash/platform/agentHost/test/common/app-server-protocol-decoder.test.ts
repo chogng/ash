@@ -91,7 +91,7 @@ test('closed records retain constant, unknown-field and own-property checks', ()
 test('literal union alternatives retain all turn kinds and validate the selected record', () => {
 	for (const kind of ['coding', 'review', 'advisor', 'shell', 'tool', 'contextCompaction'] as const) {
 		const response = usageResponse();
-		const turn = { turnId: 'turn', status: 'completed' as const, kind, mode: 'agent' as const, toolMode: 'direct' as const, approvalMode: 'manual' as const, usage: response.result.thread.usage, items: [] };
+		const turn = { turnId: 'turn', status: 'completed' as const, kind, toolMode: 'direct' as const, approvalMode: 'manual' as const, usage: response.result.thread.usage, items: [] };
 		response.result.thread.turns.push(turn);
 		assert.deepEqual(decodeAppServerResponse('session/thread/read', response), response);
 		for (const invalid of [{ kind: 'future' }, { kind: null }, { kind: { coding: true } }, { kind: 'coding', status: 'future' }, { kind: 'coding', usage: { modelInvocations: -1 } }]) {
@@ -334,6 +334,17 @@ test('App Server params decoding rejects integers that JSON cannot preserve exac
 	);
 });
 
+
+test('Turn and queue requests take a task command in text and reject the retired mode field', () => {
+	const identity = { sessionId: 'session', commandId: 'command' };
+	const input = [{ type: 'text', text: '/swarm Review the changes' }];
+	const request = { type: 'startTurn', threadId: 'thread', expectedSequence: 1, input };
+	const queue = { ...identity, threadId: 'thread', input };
+	assert.deepEqual(decodeAppServerRequestParams('session/request', { ...identity, request }), { ...identity, request });
+	assert.deepEqual(decodeAppServerRequestParams('queue/enqueue', queue), queue);
+	assert.throws(() => decodeAppServerRequestParams('session/request', { ...identity, request: { ...request, mode: 'swarm' } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('queue/enqueue', { ...queue, mode: 'swarm' }), AppServerProtocolDecodeError);
+});
 
 test('Feature map keys and queue edits are validated from the generated schema', () => {
 	const params = { commandId: 'config', expectedRevision: 0, features: { codeMode: false } };

@@ -20,7 +20,7 @@ export class CreatePullRequestChatRequest {
 		const { thread } = await this.chatService.readThread(session.sessionId, chat.threadId);
 		if (session.status === 'archived' || thread.status === 'archived') { throw new Error(localize('sessions.changes.prReadOnly', 'Cannot send a pull request request to an archived conversation.')); }
 		const text = await creation.prepareChatRequest(createPullRequestMessage(options), options);
-		const submission = { sessionId: session.sessionId, threadId: chat.threadId, expectedSequence: thread.sequence, text, mode: 'agent' as const };
+		const submission = { sessionId: session.sessionId, threadId: chat.threadId, expectedSequence: thread.sequence, text };
 		const active = thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status));
 		try {
 			if (active) { await this.chatService.queueTurn(submission); }

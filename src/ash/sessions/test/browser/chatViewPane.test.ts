@@ -103,7 +103,7 @@ import { setImmediate } from 'node:timers/promises';
 import { constObservable } from '../../../base/common/observable.js';
 import { test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
+import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, TaskExecution, Thread, ThreadTranscriptSnapshot, TurnInstructions } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
 import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
@@ -615,7 +615,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	assert.equal(sessions.navigationRevision, revision);
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	assert.equal(mainInput.value, 'Keep the main draft');
-	assert.equal(original.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(original.querySelector('.ash-chat-input-agent-menu'), null);
 	const helpImplementation = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'quickChat' && provider.type === AccessibleViewType.Help)!;
 	using help = helpImplementation.getProvider(services)!;
 	assert.match(help.provideContent(), /workbench.action.quickchat.toggle/);
@@ -633,7 +633,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await waitFor(() => fake.turnStartRequests.length === 1);
 	await nextTask();
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.ok(!('mode' in fake.turnStartRequests[0]!));
 	assert.ok(fake.turnStartRequests[0]!.input.some(item => item.type === 'text' && item.text.startsWith('/ask ')));
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	quick.close();
@@ -1151,7 +1151,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(dom.window.document.activeElement, effort);
 	reopenedPicker.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-picker'), null);
-	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-menu"), null);
+	assert.equal(firstChatPane.querySelector(".ash-chat-input-agent-menu"), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
 		const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
@@ -1316,7 +1316,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const delegate: ChatInputDelegate = {
 			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt,
 			selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
-			listAgents: async () => [], selectAgent: () => { }, selectMode: mode => model.selectMode(mode),
+			listAgents: async () => [], selectAgent: () => { },
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
 		const composerResources = resources.add(new DisposableStore());
@@ -1335,7 +1335,7 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		fixture.services.registerInstance(ISessionContext, fixture.model);
 		fixture.services.registerInstance(ILayoutService, inputResources.add(new BrowserLayoutService({ root: document.body })));
-		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
+		fixture.model.send = async (text, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		if (history) Object.defineProperty(fixture.model, 'items', { get: () => history });
 		const contribution = fixture.services.createInstance(SharedChatInputComposerContribution);
@@ -1399,8 +1399,8 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	const originalGetContext = canvas.getContext;
 	canvas.getContext = () => null;
 	using restoreCanvas = toDisposable(() => { canvas.getContext = originalGetContext; });
-	const submissions: { text: string; skills: Parameters<ChatInputDelegate['send']>[2]; }[] = [];
-	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
+	const submissions: { text: string; skills: Parameters<ChatInputDelegate['send']>[1]; }[] = [];
+	using fixture = await sessionsInputFixture(async (text, skills) => { submissions.push({ text, skills }); });
 	fixture.disposeInput();
 	using inputOwner = new DisposableStore();
 	using input = fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
@@ -1509,7 +1509,7 @@ test('Sessions custom composer context ring opens details without sending and st
 
 test('Sessions composer forwards its original submission lifetime to the owning widget', async () => {
 	let submittedSignal: AbortSignal | undefined;
-	using fixture = await sessionsInputFixture(async (_text, _mode, _skills, _contexts, signal) => { submittedSignal = signal; });
+	using fixture = await sessionsInputFixture(async (_text, _skills, _contexts, signal) => { submittedSignal = signal; });
 	await fixture.input.acceptInput('Use this composer');
 	assert.ok(submittedSignal);
 	assert.equal(submittedSignal.aborted, false);
@@ -1551,8 +1551,8 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 
 test('Task slash commands preserve attachments and queue intent through the composer', async () => {
 	const sends: unknown[] = [];
-	using fixture = await sessionsInputFixture(async (text, mode, _skills, contexts, _signal, queue) => {
-		sends.push({ text, mode, contexts: contexts?.map(context => context.name), queue });
+	using fixture = await sessionsInputFixture(async (text, _skills, contexts, _signal, queue) => {
+		sends.push({ text, contexts: contexts?.map(context => context.name), queue });
 	});
 	const { input, model } = fixture;
 	input.render({
@@ -1565,29 +1565,18 @@ test('Task slash commands preserve attachments and queue intent through the comp
 	const text = (await input.captureDraft())?.draft.text;
 	await input.acceptInput(undefined, { queue: ChatRequestQueueKind.Queued });
 	assert.match(text ?? '', /^\/plan Inspect task\.ts/u);
-	assert.deepEqual(sends, [{ text, mode: 'agent', contexts: ['task.ts'], queue: ChatRequestQueueKind.Queued }]);
+	assert.deepEqual(sends, [{ text, contexts: ['task.ts'], queue: ChatRequestQueueKind.Queued }]);
 });
 
-test('Sessions composer migrates a legacy Swarm draft and its attachment to slash syntax', async () => {
-	const draft = {
-		mode: 'swarm',
-		text: 'Review task.ts ',
-		contexts: [{ id: 'source', kind: 'file', name: 'task.ts', content: 'Unsaved code', resource: 'file:///project/task.ts', reference: { start: 7, end: 14 } }],
-	};
-	using fixture = await sessionsInputFixture(undefined, JSON.stringify(draft));
+test('Sessions composer discards a legacy Swarm draft without rewriting it', async () => {
+	const raw = JSON.stringify({ mode: 'swarm', text: 'Review task.ts ', contexts: [] });
+	using fixture = await sessionsInputFixture(undefined, raw);
 	const { input, storage, notices, identity } = fixture;
-	assert.deepEqual(notices.model.getNotifications(), []);
-	const migrated = {
-		mode: 'agent',
-		text: '/swarm Review task.ts ',
-		contexts: [{ ...draft.contexts[0], reference: { start: 14, end: 21 } }],
-	};
-	assert.deepEqual((await input.captureDraft())?.draft, migrated);
+	assert.equal((await input.captureDraft())?.draft, undefined);
+	assert.equal(notices.model.getNotifications().length, 1);
 
-	input.appendToDraft('Keep this edit');
-	const editedText = `${migrated.text}\n\nKeep this edit`;
-	await waitFor(() => readNewChatDraftState(storage, identity)?.text === editedText);
-	assert.deepEqual(readNewChatDraftState(storage, identity), { ...migrated, text: editedText });
+	input.appendToDraft('/swarm Review the current project');
+	assert.deepEqual(readNewChatDraftState(storage, identity), { text: '/swarm Review the current project', contexts: [] });
 });
 
 test('Sessions composer retains corrupt storage through visibility changes until the user edits', async () => {
@@ -1601,7 +1590,7 @@ test('Sessions composer retains corrupt storage through visibility changes until
 	assert.equal(notices.model.getNotifications().length, 1);
 	assert.match(notices.model.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
 	input.appendToDraft('A new draft');
-	assert.deepEqual(readNewChatDraftState(storage, identity), { mode: 'agent', text: 'A new draft', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(storage, identity), { text: 'A new draft', contexts: [] });
 });
 
 test('Chinese Sessions draft recovery and accessibility help use the product language catalog', async () => {
@@ -1672,7 +1661,7 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	await source.error(new Error('Source unavailable'));
 	await rejected;
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
-	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { text: 'Keep this task  ', contexts: [] });
 });
 
 test('a Code draft checkpoint saves edits made while its attachment is resolving', async () => {
@@ -1695,7 +1684,7 @@ test('a Code draft checkpoint saves edits made while its attachment is resolving
 test('Sessions composer waits for file paste before sending and clears only the completed request', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: string[] = [];
-	using fixture = await sessionsInputFixture(async (text, _mode, _skills, contexts) => {
+	using fixture = await sessionsInputFixture(async (text, _skills, contexts) => {
 		assert.equal(text, 'source.txt ');
 		for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 	});
@@ -1727,7 +1716,7 @@ test('Sessions composer cancellation keeps the text and prevents a late file fro
 	await Promise.all([reading, sending]);
 	fixture.input.setVisible(true);
 	assert.equal(sends, 0);
-	assert.deepEqual((await fixture.input.captureDraft())?.draft, { mode: 'agent', text: 'Keep this task', contexts: [] });
+	assert.deepEqual((await fixture.input.captureDraft())?.draft, { text: 'Keep this task', contexts: [] });
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
 });
 
@@ -1865,7 +1854,7 @@ for (const background of [false, true]) test(background
 		assert.equal(input?.getAttribute('aria-busy'), 'false');
 		assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
 		if (background) {
-			codeView.restoreDraft({ mode: 'agent', text: 'Send this in background', contexts: [] });
+			codeView.restoreDraft({ text: 'Send this in background', contexts: [] });
 			widget.focusInput();
 			const focused = dom.window.document.activeElement;
 			assert.ok(focused && input?.contains(focused));
@@ -1913,7 +1902,7 @@ for (const background of [false, true]) test(background
 			panelId: 'separate-chat', selection: chatSelection, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
 		});
 		chatWidget.setVisible(true);
-		const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
+		const chatDraft = { text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 		chatWidget.restoreDraft(chatDraft);
 		const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
 		await attachment.complete({ name: 'code.ts', content: 'Code context' });
@@ -2091,7 +2080,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'default' });
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.equal(fake.turnStartRequests[0]?.mode, undefined);
+	assert.ok(!('mode' in fake.turnStartRequests[0]!));
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: 'context', name: 'Git commit abc1234', content: 'diff --git a/file b/file' },
@@ -2789,7 +2778,6 @@ test('ChatWidgetModel projects and refreshes the canonical durable Turn plan', a
 		turns: [{
 			turnId: 'turn-1',
 			status: 'running',
-			mode: 'agent',
 			kind: 'coding',
 			toolMode: 'direct',
 			approvalMode: 'manual',
@@ -2929,7 +2917,6 @@ test('ChatWidgetModel projects a durable Turn failure into the conversation', as
 		turns: [{
 			turnId: 'turn-1',
 			status: 'failed',
-			mode: 'agent',
 			kind: 'coding',
 			toolMode: 'direct',
 			approvalMode: 'manual',
@@ -3441,7 +3428,7 @@ test('Chat service projects unique enabled Skills and submits the exact pinned r
 			version: { type: 'pinnedDigest', digest: 'sha256:commit' },
 		},
 	}]);
-	await chat.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: '$commit staged changes', mode: 'agent', skills: [selectors[0]!.skill] });
+	await chat.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: '$commit staged changes', skills: [selectors[0]!.skill] });
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: 'skill', skill: selectors[0]!.skill },
 		{ type: 'text', text: '$commit staged changes' },
@@ -3507,7 +3494,7 @@ test('instruction references reach Turn start, queue and steering without becomi
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
 	const contexts = [{ name: 'Review', content: '/workspace/.ash/instructions/review.md', kind: 'instruction' as const }];
-	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Review this API', mode: 'agent' as const, contexts };
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Review this API', contexts };
 	await chat.startTurn(options);
 	await chat.queueTurn(options);
 	await chat.steerTurn({ ...options, turnId: 'turn-1' });
@@ -4202,7 +4189,7 @@ test('ChatWidgetModel sends image-only input using the selected approval mode', 
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	model.selectApprovalMode('auto');
-	await model.send('', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
+	await model.send('', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests[0]?.approvalMode, 'auto');
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }]);
 	assert.equal(model.inputState.approvalMode, 'auto');
@@ -4216,7 +4203,6 @@ test('ChatWidgetModel steers an active Turn instead of starting another Turn', a
 		turns: [{
 			turnId: 'turn-running',
 			status: 'running',
-			mode: 'agent',
 			kind: 'coding',
 			toolMode: 'direct',
 			approvalMode: 'manual',
@@ -4272,16 +4258,16 @@ test('ChatWidgetModel queues a task command while keeping the active Turn unchan
 	const activeSession = session('session-1', 'thread-1');
 	const value = thread('working');
 	value.turns[0]!.status = 'running';
-	value.turns[0]!.mode = 'plan';
+	value.turns[0]!.instructions = taskInstructions('plan');
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.equal(model.inputState.mode, 'agent');
+
 	await model.selectAutomaticModel();
 	model.selectApprovalMode('auto');
-	await model.send('/swarm Implement independent steps', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
+	await model.send('/swarm Implement independent steps', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
@@ -4293,9 +4279,9 @@ test('ChatWidgetModel queues a task command while keeping the active Turn unchan
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: '/swarm Implement independent steps' }],
 		approvalMode: 'auto',
 	}]);
-	assert.equal(model.thread?.turns[0]?.mode, 'plan');
+	assert.equal(model.thread?.turns[0]?.execution, 'plan');
 	assert.equal(value.turns[0]!.approvalMode, 'manual');
-	assert.equal(model.inputState.mode, 'agent');
+
 });
 
 for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
@@ -4304,13 +4290,12 @@ for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
 		const value = thread('previous result');
 		value.turns[0]!.status = 'running';
 		value.turns[0]!.kind = kind;
-		value.turns[0]!.mode = 'agent';
 		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
 		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 		await model.initialize();
-		await model.send('Follow up', 'agent', undefined, [{ name: 'App context', content: 'latest context' }]);
+		await model.send('Follow up', undefined, [{ name: 'App context', content: 'latest context' }]);
 		assert.equal(fake.turnStartRequests.length, 0);
 		assert.equal(fake.turnSteerRequests.length, 0);
 		assert.equal(fake.queuedRequests.length, 1);
@@ -4362,7 +4347,7 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu exposes option descr
 			assert.equal(option.getAttribute('aria-expanded'), null);
 		}
 		const selected = document.activeElement;
-		fixture.model.selectMode('plan');
+
 		assert.ok(menu.isConnected);
 		assert.equal(document.activeElement, selected);
 		const provider = focusedChatHelp(fixture.services);
@@ -4405,88 +4390,49 @@ for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help follows Code
 	} finally { resetNlsResolver(); }
 });
 
-test('ChatWidgetModel displays legacy mode updates without changing the next request', async () => {
-	for (const selectedMode of [undefined, 'ask'] as const) {
-		const activeSession = session('session-1', 'thread-1');
-		let value = thread('working');
-		value.turns[0]!.status = 'running';
-		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
-		using chat = createChatService(fake.api);
-		using sessions = new SessionsManagementService(fake.api);
-		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
-		await model.initialize();
-		if (selectedMode) {
-			model.selectMode(selectedMode);
-		}
-		value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'plan' }] };
-		const update: ServerNotification = {
-			method: 'session/thread/update',
-			params: {
-				sessionId: 'session-1', threadId: 'thread-1', durableSequence: value.sequence,
-				update: {
-					type: 'committed', event: {
-						type: 'turnModeChanged', threadId: 'thread-1', turnId: 'turn-1',
-						fromMode: 'agent', mode: 'plan',
-						instructions: { owner: 'test', id: 'approach', revision: '1', body: 'Plan the task.' },
-					}
-				},
-			},
-		};
-		fake.emit(update);
-		await waitFor(() => model.thread?.sequence === value.sequence);
-		assert.equal(model.thread?.turns[0]?.mode, 'plan');
-		assert.equal(model.inputState.mode, selectedMode ?? 'agent');
-		model.selectMode('agent');
-		fake.emit(update);
-		assert.equal(model.inputState.mode, 'agent', 'replayed events must not overwrite a later choice');
-	}
-});
-
 test('ChatWidgetModel keeps ordinary requests independent of restored task history', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	let value = thread('planning');
-	value.turns[0]!.mode = 'plan';
+	value.turns[0]!.instructions = taskInstructions('plan');
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.equal(model.inputState.mode, 'agent');
-	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'agent' }] };
+
+	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, instructions: undefined }] };
 	fake.emitReady();
 	await waitFor(() => model.thread?.sequence === value.sequence);
-	assert.equal(model.inputState.mode, 'agent');
+
 	await model.send('Continue planning');
-	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.ok(!('mode' in fake.turnStartRequests[0]!));
 	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: 'Continue planning' }]);
 });
 
-test('ChatWidgetModel keeps the embedded Ask scope when submitting a server command', async () => {
+test('Quick Chat keeps /ask when a server command starts a request', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
+	const fake = fakeApi({ sessions: [activeSession] });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	model.selectMode('ask');
-	await model.executeServerCommand('init', '');
-	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	await model.executeServerCommand('init', '', undefined, 'ask');
 	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/ask /init' }]);
 });
 
-test('ChatWidgetModel retries a legacy Debug request as a task command', async () => {
+test('ChatWidgetModel retries a Debug request with its task command', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	const value = threadWithFailure('providerUnavailable', true);
-	value.turns[0]!.mode = 'debug';
+	value.turns[0]!.instructions = taskInstructions('debug');
 	value.turns[0]!.items = [{ type: 'userMessage', itemId: 'request', turnId: 'turn-1', text: 'Find the failure' }];
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	model.selectMode('ask');
+
 	await model.retryFailedTurn('turn-1');
-	assert.equal(fake.turnStartRequests[0]!.mode, undefined);
+	assert.ok(!('mode' in fake.turnStartRequests[0]!));
 	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/debug Try again.' }]);
 });
 
@@ -4720,10 +4666,10 @@ function fakeApi(options: FakeOptions = {}): {
 			configureAdvisor: async (params: SessionOperationInput<'configureAdvisor'>) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
 			read: async () => {
 				const value = currentThread();
-				return { thread: value, transcript: transcript(value) };
+				return { thread: projectTestThread(value), transcript: transcript(value) };
 			},
 			subscribe: async () => ({
-				thread: currentThread(),
+				thread: projectTestThread(currentThread()),
 				transcript: transcript(currentThread()),
 				updates: [],
 			}),
@@ -4841,7 +4787,6 @@ function thread(agentText?: string): Thread {
 			? [{
 				turnId: 'turn-1',
 				status: 'completed',
-				mode: 'agent',
 				kind: 'coding',
 				toolMode: 'direct',
 				approvalMode: 'manual',
@@ -4855,6 +4800,14 @@ function thread(agentText?: string): Thread {
 			}]
 			: [],
 	};
+}
+
+function taskInstructions(taskCommand: Exclude<TaskExecution, 'agent'>): TurnInstructions {
+	return { owner: 'ash', id: taskCommand, revision: '1', body: 'Run the requested task.', taskCommand };
+}
+
+function projectTestThread(value: Thread) {
+	return { ...value, turns: value.turns.map(turn => ({ ...turn, execution: turn.instructions?.taskCommand ?? 'agent' as const })) };
 }
 
 function transcript(value: Thread): ThreadTranscriptSnapshot {
@@ -4888,7 +4841,7 @@ function pagedChatFixture(initialCount = 65) {
 		const end = history?.type === 'before' ? value.turns.findIndex(turn => turn.turnId === history.turnId) : count;
 		assert.ok(end >= 0, 'the requested cursor must exist');
 		const start = history ? Math.max(0, end - history.turnLimit) : 0;
-		const visible = { ...value, turns: value.turns.slice(start, end).map(turn => ({ ...turn, mode: turn.mode ?? 'agent' as const })) };
+		const visible = { ...value, turns: value.turns.slice(start, end).map(turn => ({ ...turn, execution: turn.instructions?.taskCommand ?? 'agent' as const })) };
 		return {
 			thread: visible,
 			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: sequence, revision: history?.type === 'before' ? 0 : sequence, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
@@ -5131,11 +5084,11 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	assert.equal(model.thread?.sequence, 67);
 });
 
-function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items' | 'mode'> & { mode: 'agent'; items: []; } {
+function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items'> & { execution: 'agent'; items: []; } {
 	return {
 		turnId: 'turn-1',
 		status: 'failed',
-		mode: 'agent',
+		execution: 'agent',
 		kind: 'coding',
 		toolMode: 'direct',
 		approvalMode: 'manual',
@@ -5378,10 +5331,10 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 		send: text => model.send(text),
 		executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
 		selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
-		listAgents: async () => [], selectAgent: () => { }, selectMode: () => { },
+		listAgents: async () => [], selectAgent: () => { },
 		openModelSettings: async () => { }, resolveInteraction: async () => { },
 	};
-	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { agentPicker: 'visible', modelPickerPosition: 'leading' });
 	using changed = model.onDidChange(() => part.render(model.inputState));
 	part.render(model.inputState);
 	part.appendToDraft('Keep this draft');
@@ -5609,7 +5562,7 @@ for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as c
 		await model.initialize();
 		using contextView = new BrowserContextViewService(document.body);
 		const services = createInputServices(contextView, chat);
-		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { agentPicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 		using widget = kind === 'Code'
 			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
 			: services.createInstance(NativeChatWidget, document.body, 'goal-banner', model, () => { }, createInput);
@@ -5649,7 +5602,7 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inl
 	await model.initialize();
 	using contextView = new BrowserContextViewService(document.body);
 	const services = createInputServices(contextView, chat);
-	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { agentPicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 	using widget = kind === 'Code'
 		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
 		: services.createInstance(NativeChatWidget, document.body, 'ordered-snapshots', model, () => { }, createInput);
@@ -5692,7 +5645,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		{} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications,
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
-			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { agentPicker: 'visible', modelPickerPosition: 'leading' });
 		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
@@ -5789,7 +5742,7 @@ test('Chat sends a newly selected effort independently of backend defaults', asy
 test('Queued chat Turns delegate omitted approvals to the backend and preserve explicit choices', async () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
-	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' as const };
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue' as const };
 	await chat.queueTurn(options);
 	assert.equal(fake.queuedRequests[0]?.approvalMode, undefined);
 	await chat.queueTurn({ ...options, approvalMode: 'manual' });
@@ -5821,7 +5774,7 @@ test('A late enqueue receipt cannot emit a submission after a same-generation cr
 	});
 	let submitted = false;
 	using submission = chat.onDidSubmitRequest(() => { submitted = true; });
-	const queuing = chat.queueTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' });
+	const queuing = chat.queueTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue' });
 	const rejected = assert.rejects(queuing, error => isCancellationError(error));
 	connection.fire('crashed');
 	await pending.complete();
@@ -6092,7 +6045,7 @@ for (const locale of ['en', 'zh-CN']) test(`Independent Chat editor tabs retain 
 		const snapshot = {
 			...running, thread: {
 				...running.thread, turns: [{
-					turnId: 'turn-1', status: 'running' as const, mode: 'agent' as const, kind: 'coding' as const, toolMode: 'direct' as const,
+					turnId: 'turn-1', status: 'running' as const, execution: 'agent' as const, kind: 'coding' as const, toolMode: 'direct' as const,
 					approvalMode: 'manual' as const, usage: emptyUsage(), items: [],
 				}]
 			}, transcript: {
@@ -7435,7 +7388,7 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 	let changes = 0;
 	using listener = model.onDidChangeComposer(() => changes++);
 	const generation = model.composerGeneration;
-	const sending = model.send('Old source request', 'agent');
+	const sending = model.send('Old source request');
 	const rejected = assert.rejects(sending, isCancellationError);
 	current = { ...current, threadId: 'child' };
 	await model.selectThread({ session: durable, threadId: 'child' });
@@ -7450,10 +7403,11 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 
 test('The original draft codec preserves terminal snapshots and rejects malformed stored geometry', () => {
 	using storage = createTestStorage();
-	const draft = { mode: 'agent' as const, text: 'Check this output', contexts: [{ id: 'terminal:saved', kind: 'terminal', name: 'Saved terminal', content: 'Context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved output', columns: 80 } }] };
+	const draft = { text: 'Check this output', contexts: [{ id: 'terminal:saved', kind: 'terminal', name: 'Saved terminal', content: 'Context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved output', columns: 80 } }] };
 	writeNewChatDraftState(storage, draft, 'thread');
 	assert.deepEqual(readNewChatDraftState(storage, 'thread'), draft);
-	storage.store('sessions.inputDraft:thread', JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const record = JSON.parse(storage.get('sessions.inputDraft:thread', StorageScope.WORKSPACE)!);
+	storage.store(`sessions.inputDraftAttachments:thread:${record.attachments}`, JSON.stringify([{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }]), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.throws(() => readNewChatDraftState(storage, 'thread'), /Invalid terminal snapshot/);
 });
 
@@ -7487,7 +7441,7 @@ test('AI preference blocks direct dispatch while history and interrupt remain us
 	using services = new InstantiationService();
 	registerChatBackend(services, fake.api, undefined, configuration);
 	using chat = services.createInstance(ChatService);
-	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', mode: 'agent' as const };
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request' };
 	await configuration.updateValue(ChatAIDisabledSettingId, true);
 	for (const request of [
 		() => chat.startTurn(options), () => chat.queueTurn(options), () => chat.steerTurn({ ...options, turnId: 'turn-1' }),
@@ -7628,7 +7582,7 @@ test('Chat accepted-request notifications follow backend success and exclude rej
 	using chat = createChatService({ ...fake.api, turn: { ...fake.api.turn, start: async () => { if (reject) throw new Error('Controlled rejected submission'); return accepted.p; } } });
 	const submissions: { sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number; }[] = [];
 	using listener = chat.onDidSubmitRequest(event => submissions.push(event));
-	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', mode: 'agent' as const, isNewSession: true };
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', isNewSession: true };
 	const starting = chat.startTurn(options);
 	assert.equal(submissions.length, 0);
 	await accepted.complete({ turnId: 'turn-1', sequence: 2 });
@@ -7661,7 +7615,7 @@ test('first send leaves automatic naming to the backend and manual rename errors
 	const names: Parameters<import('../../../platform/agentHost/common/agentService.js').IAgentThreadService['rename']>[0][] = [];
 	fake.api.thread.rename = params => { names.push(params); throw new Error('Synthetic naming failure'); };
 	using service = createChatService(fake.api);
-	await service.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, mode: 'agent', text: '  修复  parser\nnow ', isNewSession: true });
+	await service.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: '  修复  parser\nnow ', isNewSession: true });
 	await Promise.resolve();
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.deepEqual(names, []);
@@ -7897,7 +7851,7 @@ test('Welcome routes the accepted snapshot before model send and restores a reje
 	using services = createInputServices(contextView, chat);
 	let reject = false;
 	const routed: { text: string; attachments: readonly string[]; }[] = [];
-	const submitHandler: NonNullable<IChatWidgetViewOptions['submitHandler']> = async (text, _mode, contexts) => {
+	const submitHandler: NonNullable<IChatWidgetViewOptions['submitHandler']> = async (text, contexts) => {
 		assert.equal(await widget.captureDraft(), undefined, 'routing must use the accepted snapshot after the live input clears');
 		routed.push({ text, attachments: await Promise.all(contexts.map(async context => (await context.resolve()).content)) });
 		if (reject) { throw new Error('Cannot open chosen workspace'); }

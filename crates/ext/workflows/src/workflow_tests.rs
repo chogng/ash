@@ -174,7 +174,6 @@ impl Fixture {
     fn request(&self, id: &str, text: &str) -> StartTurnRequest {
         StartTurnRequest {
             context_policy: Default::default(),
-            mode: Default::default(),
             command_id: CommandId::new(id).unwrap(),
             expected_sequence: SequenceExpectation::Exact(
                 self.threads.read_thread(&self.root).unwrap().sequence,
@@ -582,16 +581,16 @@ fn parallel_develop_command_is_not_reinterpreted_as_generic_team_work() {
 #[test]
 fn workflow_delegation_preserves_debug_and_replaces_swarm_with_agent() {
     for mode in [
-        protocol::AgentMode::Agent,
-        protocol::AgentMode::Debug,
-        protocol::AgentMode::Swarm,
+        protocol::TaskExecution::Agent,
+        protocol::TaskExecution::Debug,
+        protocol::TaskExecution::Swarm,
     ] {
         let fixture = Fixture::new(Store::in_memory().unwrap());
         let mut request = fixture.request("begin", "/team improve search");
-        request.mode = mode;
         request.instructions = request
             .instructions
-            .with_mode(&agent_mode_templates::instructions(mode));
+            .with_task_instructions(&task_command_templates::instructions(mode))
+            .with_task_command((!mode.is_default()).then_some(mode));
         let receipt = fixture
             .runtime()
             .execute(
@@ -601,7 +600,7 @@ fn workflow_delegation_preserves_debug_and_replaces_swarm_with_agent() {
             )
             .unwrap();
         assert_eq!(
-            fixture.threads.read_thread(&fixture.root).unwrap().turns[0].mode,
+            fixture.threads.read_thread(&fixture.root).unwrap().turns[0].execution_approach(),
             mode
         );
         let child = fixture
@@ -609,17 +608,19 @@ fn workflow_delegation_preserves_debug_and_replaces_swarm_with_agent() {
             .read_thread(&receipt.child.unwrap())
             .unwrap();
         let child_turn = child.turns.last().unwrap();
-        assert_eq!(child_turn.mode, mode.delegated());
+        assert_eq!(child_turn.execution_approach(), mode.delegated());
         assert_eq!(
             child_turn
                 .instructions
                 .as_ref()
                 .unwrap()
-                .mode_instructions(),
-            Some(&agent_mode_templates::instructions(mode.delegated()).as_text()),
+                .task_instructions(),
+            Some(&task_command_templates::instructions(mode.delegated()).as_text()),
         );
         let mut request = fixture.request("begin", "/team improve search");
-        request.mode = protocol::AgentMode::Ask;
+        request.instructions = request
+            .instructions
+            .with_task_command(Some(protocol::TaskExecution::Ask));
         assert!(matches!(
             fixture.runtime().execute(
                 &fixture.root,
@@ -663,11 +664,12 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             root,
         };
         let mut request = fixture.request("start", "/develop durable feature");
-        request.mode = protocol::AgentMode::Swarm;
+        let execution = protocol::TaskExecution::Swarm;
         request.reasoning_effort = Some(protocol::ReasoningEffort::High);
         request.instructions = request
             .instructions
-            .with_mode(&agent_mode_templates::instructions(request.mode));
+            .with_task_instructions(&task_command_templates::instructions(execution))
+            .with_task_command(Some(execution));
         let plan = fixture
             .runtime()
             .prepare(
@@ -695,7 +697,10 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.recover().unwrap(), 0);
         let snapshot = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(snapshot.turns.len(), 1);
-        assert_eq!(snapshot.turns[0].mode, protocol::AgentMode::Swarm);
+        assert_eq!(
+            snapshot.turns[0].execution_approach(),
+            protocol::TaskExecution::Swarm
+        );
         assert_eq!(
             snapshot.turns[0].reasoning_effort,
             Some(protocol::ReasoningEffort::High)
@@ -724,14 +729,17 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.backend.0.lock().unwrap().len(), 1);
         let child_snapshot = fixture.threads.read_thread(child).unwrap();
         let child_turn = child_snapshot.turns.last().unwrap();
-        assert_eq!(child_turn.mode, protocol::AgentMode::Agent);
+        assert_eq!(
+            child_turn.execution_approach(),
+            protocol::TaskExecution::Agent
+        );
         assert_eq!(
             child_turn
                 .instructions
                 .as_ref()
                 .unwrap()
-                .mode_instructions(),
-            Some(&agent_mode_templates::instructions(protocol::AgentMode::Agent).as_text()),
+                .task_instructions(),
+            Some(&task_command_templates::instructions(protocol::TaskExecution::Agent).as_text()),
         );
         fixture.complete(child, "ready", "durable intent");
         fixture.command("accept", "/develop accept 1").unwrap();

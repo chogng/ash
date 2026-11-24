@@ -127,7 +127,7 @@ test('unavailable operating-system shortcut reports its user label', () => {
 test('system-wide shortcut retains and dispatches arguments after the editor owner closes', async () => {
 	const shortcuts = new TestShortcuts();
 	const calls: unknown[] = [];
-	const args = { draft: { mode: 'agent', text: 'Review this', contexts: [] } };
+	const args = { draft: { text: 'Review this', contexts: [] } };
 	using service = new GlobalKeybindingsMainService({
 		shortcuts,
 		activeWindowId: () => 2,

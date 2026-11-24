@@ -760,7 +760,7 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
         mutation: super::operations::ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
-        mode: ash_protocol::AgentMode,
+        mode: ash_protocol::TaskExecution,
         tool_mode_selection: super::operations::TurnToolModeSelection,
         input: Vec<ash_protocol::UserInput>,
         kind: ash_protocol::TurnKind,
@@ -1116,7 +1116,7 @@ impl super::queue_operations::QueueRequestProcessorContext for AppServer {
         mutation: super::operations::ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
-        mode: ash_protocol::AgentMode,
+        mode: ash_protocol::TaskExecution,
         tool_mode_selection: super::operations::TurnToolModeSelection,
         input: Vec<ash_protocol::UserInput>,
         kind: ash_protocol::TurnKind,
@@ -1140,10 +1140,9 @@ impl super::queue_operations::QueueRequestProcessorContext for AppServer {
     fn turn_instruction_selection(
         &self,
         input: &mut Vec<ash_protocol::UserInput>,
-        mode: ash_protocol::AgentMode,
         command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<super::operations::TurnInstructionSelection, super::RpcError> {
         self.agent_processor()
-            .turn_instruction_selection(input, mode, command_interpretation)
+            .turn_instruction_selection(input, command_interpretation)
     }
 }

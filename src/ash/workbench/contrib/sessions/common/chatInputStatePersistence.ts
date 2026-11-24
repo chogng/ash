@@ -3,9 +3,9 @@ import type { IOpenAgentsWindowOptions } from '../../../../platform/native/commo
 type InputState = NonNullable<IOpenAgentsWindowOptions['draft']>;
 type InputAttachments = InputState['contexts'];
 
-/** Attachment snapshots have their own storage lifetime, independent of edits to text or mode. */
+/** Attachment snapshots have their own storage lifetime, independent of edits to text. */
 export function serializeUntitledInputState(value: InputState | undefined): string {
-	return JSON.stringify(value ? { ...value, contexts: [] } : null);
+	return JSON.stringify(value ? { text: value.text, contexts: [] } : null);
 }
 
 /** The owning draft store validates the complete state after joining its attachment payload. */

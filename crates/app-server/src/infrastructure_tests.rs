@@ -118,7 +118,7 @@ fn enqueue(
         server,
         connection,
         json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":{
-            "commandId":"queued-one","sessionId":session,"threadId":thread,"mode":"debug","reasoningEffort":"high","input":[{"type":"text","text":"queued hello"}],
+            "commandId":"queued-one","sessionId":session,"threadId":thread,"reasoningEffort":"high","input":[{"type":"text","text":"queued hello"}],
             "toolMode":"direct","approvalMode": ash_protocol::ApprovalMode::default()
         }}),
     );
@@ -381,7 +381,7 @@ fn referenced_session_commands_replay_after_the_source_is_deleted() {
         .unwrap();
     assert_eq!(
         thread.turns[0].execution_approach(),
-        ash_protocol::AgentMode::Agent
+        ash_protocol::TaskExecution::Agent
     );
 
     let deleted = call(
@@ -466,7 +466,7 @@ fn queued_chat_reference_reads_the_source_at_delivery_and_replays_the_same_turn(
             json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{
                 "commandId":format!("source-send-{id}"),"sessionId":session,"request":{
                     "type":"startTurn","threadId":source_id,"expectedSequence":sequence,
-                    "mode":"agent","input":[{"type":"text","text":text}]
+                    "input":[{"type":"text","text":text}]
                 }
             }}),
         );
@@ -923,7 +923,10 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
         .threads()
         .read_thread(&message.request.thread_id)
         .unwrap();
-    assert_eq!(restored.turns[0].mode, ash_protocol::AgentMode::Debug);
+    assert_eq!(
+        restored.turns[0].execution_approach(),
+        ash_protocol::TaskExecution::Agent
+    );
     assert_eq!(
         restored.turns[0].reasoning_effort,
         Some(ash_protocol::ReasoningEffort::High)
@@ -933,8 +936,8 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
             .instructions
             .as_ref()
             .unwrap()
-            .mode_instructions(),
-        Some(&agent_mode_templates::instructions(ash_protocol::AgentMode::Debug).as_text())
+            .task_instructions(),
+        Some(&task_command_templates::instructions(ash_protocol::TaskExecution::Agent).as_text())
     );
 }
 
@@ -1947,16 +1950,18 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
             &thread_id,
             ash_core::StartTurnRequest {
                 context_policy: Default::default(),
-                mode: ash_protocol::AgentMode::Plan,
                 command_id: ash_protocol::CommandId::new("active-plan").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,
                 model: None,
                 reasoning_effort: None,
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
-                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze().with_mode(
-                    &agent_mode_templates::instructions(ash_protocol::AgentMode::Plan),
-                ),
+                instructions: ash_prompts::AGENT_INSTRUCTIONS
+                    .freeze()
+                    .with_task_instructions(&task_command_templates::instructions(
+                        ash_protocol::TaskExecution::Plan,
+                    ))
+                    .with_task_command(Some(ash_protocol::TaskExecution::Plan)),
                 policy_revision: "queue-test".into(),
                 activated_skills: Vec::new(),
                 approval_mode: ash_protocol::ApprovalMode::Manual,
@@ -1985,7 +1990,10 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
         queue::Delivery::Rejected(reason) if reason == "steerModeMismatch"));
     let snapshot = server.threads().read_thread(&thread_id).unwrap();
     assert_eq!(snapshot.turns.len(), 1);
-    assert_eq!(snapshot.turns[0].mode, ash_protocol::AgentMode::Plan);
+    assert_eq!(
+        snapshot.turns[0].execution_approach(),
+        ash_protocol::TaskExecution::Plan
+    );
     assert!(
         !snapshot
             .commands
@@ -2012,79 +2020,6 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
 }
 
 #[test]
-fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
-    for mode in [
-        ash_protocol::AgentMode::Plan,
-        ash_protocol::AgentMode::Ask,
-        ash_protocol::AgentMode::Swarm,
-    ] {
-        let root = tempfile::tempdir().unwrap();
-        let (server, _) = queued_server(root.path());
-        let server = server.with_home(Arc::new(ash_home::AshHome::new(
-            ash_utils_absolute_path::AbsolutePathBuf::from_absolute(root.path()).unwrap(),
-        )));
-        let mut connection = server.connection();
-        let (session, thread) = create(&server, &mut connection);
-        let params = json!({"commandId":"queued-mode","sessionId":session,"threadId":thread,
-            "mode":mode,"reasoningEffort":"high","input":[{"type":"text","text":"/init"}],
-            "approvalMode":"manual"});
-        let response = call(
-            &server,
-            &mut connection,
-            json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":params}),
-        );
-        let accepted: queue::QueuedMessage =
-            serde_json::from_value(response["result"].clone()).expect(&response.to_string());
-        let store = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
-        let message = store.get(&accepted.request.command_id).unwrap().unwrap();
-        assert_eq!(message, accepted);
-        assert_eq!(message.request.mode, mode);
-        assert_eq!(
-            message.request.reasoning_effort,
-            Some(ash_protocol::ReasoningEffort::High)
-        );
-        let queue::Delivery::Started(turn_id) = server.deliver_queued_message(&message).unwrap()
-        else {
-            panic!("mode queue did not start")
-        };
-        super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
-        let snapshot = server
-            .threads()
-            .read_thread(&message.request.thread_id)
-            .unwrap();
-        let turn = snapshot
-            .turns
-            .iter()
-            .find(|turn| turn.turn_id == turn_id)
-            .unwrap();
-        assert_eq!(turn.mode, mode);
-        assert_eq!(
-            turn.reasoning_effort,
-            Some(ash_protocol::ReasoningEffort::High)
-        );
-        assert_eq!(
-            turn.instructions.as_ref().unwrap().id(),
-            "instructions/init"
-        );
-        assert_eq!(
-            turn.instructions.as_ref().unwrap().mode_instructions(),
-            Some(&agent_mode_templates::instructions(mode).as_text())
-        );
-        assert!(
-            matches!(server.deliver_queued_message(&message).unwrap(), queue::Delivery::Started(id) if id == turn_id)
-        );
-        let mut conflict = params;
-        conflict["mode"] = json!("debug");
-        let response = call(
-            &server,
-            &mut connection,
-            json!({"jsonrpc":"2.0","id":5,"method":"queue/enqueue","params":conflict}),
-        );
-        assert!(response.get("error").is_some(), "{response}");
-    }
-}
-
-#[test]
 fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
     let root = tempfile::tempdir().unwrap();
     let (server, _) = queued_server(root.path());
@@ -2095,7 +2030,7 @@ fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
         &mut connection,
         json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":{
             "commandId":"queued-task-command","sessionId":session,"threadId":thread,
-            "input":[{"type":"text","text":"/plan Inspect build prerequisites"}]
+            "input":[{"type":"text","text":"/swarm Inspect build prerequisites"}]
         }}),
     );
     let accepted: queue::QueuedMessage =
@@ -2103,15 +2038,18 @@ fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
     assert!(response["result"]["request"].get("mode").is_none());
     assert_eq!(
         accepted.request.task_command,
-        Some(ash_protocol::AgentMode::Plan)
+        Some(ash_protocol::TaskExecution::Swarm)
     );
+    let mut retired = response["result"].clone();
+    retired["request"]["mode"] = "swarm".into();
+    assert!(serde_json::from_value::<queue::QueuedMessage>(retired).is_err());
     let mut queued = accepted.clone();
     for (index, (interpretation, text, command)) in [
         ("literal", "/init", None),
         (
             "product",
-            "/plan Inspect build prerequisites",
-            Some(ash_protocol::AgentMode::Plan),
+            "/swarm Inspect build prerequisites",
+            Some(ash_protocol::TaskExecution::Swarm),
         ),
     ]
     .into_iter()
@@ -2157,8 +2095,10 @@ fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
         .iter()
         .find(|turn| turn.turn_id == turn_id)
         .unwrap();
-    assert_eq!(turn.mode, ash_protocol::AgentMode::Agent);
-    assert_eq!(turn.execution_approach(), ash_protocol::AgentMode::Plan);
+    assert_eq!(
+        turn.execution_approach(),
+        ash_protocol::TaskExecution::Swarm
+    );
     assert!(matches!(
         server.deliver_queued_message(&message).unwrap(),
         queue::Delivery::Started(id) if id == turn_id
@@ -2239,7 +2179,7 @@ fn literal_queued_messages_never_enter_code_commands_after_reopen() {
             &mut connection,
             json!({"jsonrpc":"2.0", "id":4, "method":"queue/enqueue", "params": {
                 "commandId":"literal-queue", "sessionId":session, "threadId":thread,
-                "mode":"agent", "commandInterpretation":"literal", "approvalMode":"manual",
+                "commandInterpretation":"literal", "approvalMode":"manual",
                 "input":[{"type":"text", "text":text}]
             }}),
         );

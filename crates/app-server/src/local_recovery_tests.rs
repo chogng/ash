@@ -322,7 +322,6 @@ fn legacy_goal_failure_does_not_block_startup_or_other_goal_recovery() {
                 &thread_id,
                 StartGoalTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     command_id: CommandId::new("recovered-goal-turn").unwrap(),
@@ -557,7 +556,6 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
                 &thread.thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -782,7 +780,7 @@ fn unavailable_keyring_allows_local_model_turns_and_queue_restart() {
     let message: queue::QueuedMessage = serde_json::from_value(rpc(
         "queue/enqueue",
         serde_json::json!({"commandId":"local-model-queued","sessionId":session,"threadId":thread,
-            "mode":"agent","input":[{"type":"text","text":"second local turn"}],
+            "input":[{"type":"text","text":"second local turn"}],
             "toolMode":"direct","approvalMode":ash_protocol::ApprovalMode::default()}),
         &mut connection,
     ))

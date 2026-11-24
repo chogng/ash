@@ -16,6 +16,7 @@ use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
+use ash_app_server_protocol::protocol::session::SessionStartTurnParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use ash_app_server_protocol::protocol::skills::SkillEnablementDto;
@@ -507,12 +508,11 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         .request_session(SessionRequestParams {
             command_id: CommandId::new("turn-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
-            request: SessionRequest::StartTurn {
+            request: SessionRequest::StartTurn(SessionStartTurnParams {
                 command_interpretation: None,
                 ide_window_id: None,
                 thread_id: thread.thread_id.clone(),
                 expected_sequence: 1,
-                mode: ash_protocol::AgentMode::Agent,
                 approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: None,
                 model_routing: None,
@@ -531,7 +531,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                         .into(),
                     },
                 ],
-            },
+            }),
         })
         .expect("Turn starts");
     let turn = match turn {

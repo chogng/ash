@@ -24,9 +24,9 @@ use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
-use ash_protocol::AgentMode;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
+use ash_protocol::TaskExecution;
 use ash_protocol::TurnStatus;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
@@ -203,8 +203,8 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let swarm_prompt = "/swarm Compare the two parts of this checklist.";
     let ordinary_prompt = "Explain the result in one paragraph.";
     for (expected_turns, prompt, approach) in [
-        (3, swarm_prompt, AgentMode::Swarm),
-        (4, ordinary_prompt, AgentMode::Agent),
+        (3, swarm_prompt, TaskExecution::Swarm),
+        (4, ordinary_prompt, TaskExecution::Agent),
     ] {
         let submission = submit_from_input(&mut app, prompt);
         let started = submit_prompt(
@@ -217,14 +217,13 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
         app.set_active_turn(started.turn_id);
         let completed = wait_for_completed_thread(&mut client, &conversation, expected_turns);
         let turn = completed.thread.turns.last().unwrap();
-        assert_eq!(turn.mode, AgentMode::Agent);
         assert_eq!(turn.execution_approach(), approach);
         conversation.set_thread_sequence(completed.thread.sequence);
         app.update(ThreadEvent::TranscriptSnapshotReceived(
             completed.transcript,
         ));
         apply_active_turn_snapshot(&mut app, &completed.thread.turns);
-        assert_eq!(app.agent_mode(), AgentMode::Agent);
+        assert_eq!(app.task_execution(), TaskExecution::Agent);
     }
 
     drop(client);
@@ -232,11 +231,11 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let restored = read_thread(&mut reopened, &conversation);
     assert_eq!(
         restored.thread.turns[2].execution_approach(),
-        AgentMode::Swarm
+        TaskExecution::Swarm
     );
     assert_eq!(
         restored.thread.turns[3].execution_approach(),
-        AgentMode::Agent
+        TaskExecution::Agent
     );
     let app = app_for_conversation(&mut reopened, &conversation);
     assert!(
@@ -244,7 +243,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             .iter()
             .any(|message| message.text() == swarm_prompt)
     );
-    assert_eq!(app.agent_mode(), AgentMode::Agent);
+    assert_eq!(app.task_execution(), TaskExecution::Agent);
 }
 
 fn app_for_conversation(

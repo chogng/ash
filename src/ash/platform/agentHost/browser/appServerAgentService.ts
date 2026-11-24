@@ -615,7 +615,7 @@ function queuedMessage(value: QueuedMessageDto): QueuedMessage {
 	return {
 		...(value.request.steerTurn ? { steerTurnId: value.request.steerTurn } : {}),
 		sessionId: value.request.sessionId, threadId: value.request.threadId, commandId: value.request.commandId,
-		revision: value.revision, status: value.status, mode: value.request.mode ?? 'agent',
+		revision: value.revision, status: value.status, execution: value.request.taskCommand ?? 'agent',
 		text: value.request.input.flatMap(item => item.type === 'text' ? [item.text] : []).join(''),
 		contextCount: value.request.input.filter(item => item.type !== 'text').length,
 		turnId: value.turnId ?? undefined, error: value.error ?? undefined,
@@ -651,7 +651,6 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					commandInterpretation: params.commandInterpretation,
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,
-					...(params.mode && { mode: params.mode }),
 					approvalMode: params.approvalMode,
 					model: params.model,
 					modelRouting: params.modelRouting,
@@ -804,7 +803,7 @@ function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority:
 			directory: toExecutionTarget(turn.directory, remoteHost),
 			kind: turn.kind,
 			status: turn.status,
-			mode: turn.instructions?.taskCommand ?? turn.mode ?? 'agent',
+			execution: turn.instructions?.taskCommand ?? 'agent',
 			approvalMode: turn.approvalMode,
 			startedToolCallIds: turn.startedToolCallIds ? [...turn.startedToolCallIds] : turn.startedToolCallIds,
 			pendingInteraction: turn.pendingInteraction ? {
@@ -883,11 +882,6 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 				return { type: 'committed', event: { type: event.type, turnId: event.turnId, toolCallId: event.toolCallId } };
 			if (event.type === 'interactionRequested')
 				return { type: 'committed', event: { type: event.type, interaction: toTurnInteraction(event.interaction) } };
-			if (event.type === 'turnModeChanged')
-				return {
-					type: 'committed',
-					event: { type: event.type, turnId: event.turnId, fromMode: event.fromMode, mode: event.mode }
-				};
 			if (event.type === 'interactionResolved' || event.type === 'interactionCancelled')
 				return { type: 'committed', event: { type: event.type, turnId: event.turnId, requestId: event.requestId } };
 			if (event.type === 'turnCompleted' || event.type === 'turnFailed' || event.type === 'turnInterrupted')

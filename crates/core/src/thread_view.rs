@@ -48,7 +48,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
                         started_at_unix_ms: turn.started_at_unix_ms,
                         duration_ms: turn.duration_ms,
                         kind: turn.kind,
-                        mode: turn.mode,
+
                         instructions: turn.instructions,
                         directory: turn.directory,
                         model: turn.model,
@@ -131,7 +131,7 @@ impl crate::ThreadSnapshot {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     kind: turn.kind,
-                    mode: turn.mode,
+
                     instructions: turn.instructions.clone(),
                     directory: turn.directory.clone(),
                     model: turn.model.clone(),

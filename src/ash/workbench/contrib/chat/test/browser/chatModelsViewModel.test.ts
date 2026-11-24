@@ -232,7 +232,7 @@ test('Tools and Agent filters require independent affirmative declarations and s
 	assert.equal(models('@capability:tools @capability:agent').length, 0);
 	using rendered = renderMarkdown(getModelHoverContent(models('newest')[0].model), { ownerDocument: browserEnvironment.window.document });
 	const hover = rendered.element.textContent!.replaceAll('\u00a0', ' ');
-	assert.match(hover, /Tools: Supported; Agent mode: Unknown/);
+	assert.match(hover, /Tools: Supported; Multi-step Agent workflows: Unknown/);
 	assert.match(hover, /Pricing unavailable/);
 });
 

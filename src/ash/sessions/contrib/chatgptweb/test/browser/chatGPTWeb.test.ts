@@ -494,7 +494,7 @@ suite('ChatGPT entry', () => {
 		assert.ok(selected?.kind === 'draft');
 		assert.deepEqual(selected.model, model);
 		assert.equal(management.untitledSessions.find(draft => draft.untitledSessionId === selected.id)?.creationKind, 'slides');
-		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
+		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`), { text: 'Unsent prompt', contexts: [] });
 		assert.deepEqual(loadChatSelection(storage), selected);
 
 		experimental = true;
@@ -509,7 +509,7 @@ suite('ChatGPT entry', () => {
 		const experimentalSelection = selection.chatSelection.get();
 		assert.ok(experimentalSelection?.kind === 'draft');
 		assert.deepEqual(experimentalSelection.model, model);
-		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`), { text: 'Experimental prompt', mode: 'agent', contexts: [] });
+		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`), { text: 'Experimental prompt', contexts: [] });
 	});
 
 	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {

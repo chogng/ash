@@ -2,7 +2,7 @@ import type { TurnChangeSetSummary, TurnChangeDetails, ThreadChangesSummary, Tur
 import { URI } from '../../../../base/common/uri.js';
 import type { EditSuggestionId } from '../../../../editor/common/textModelEditSource.js';
 import type { AgentInput, CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
-import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentInteractionDecision, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, Turn, Thread, ThreadGoalUpdate, AgentInteractionDecision, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -112,6 +112,19 @@ export function isTaskSlashCommand(text: string): boolean {
 	return TASK_SLASH_COMMAND_NAMES.some(name => command === `/${name}`);
 }
 
+/** Applies the host's default command to plain input and keeps attachment spans aligned. */
+export function applyDefaultTaskCommand(text: string, command: 'ask' | undefined, contexts: readonly ResolvedChatContext[] = []): { text: string; contexts: readonly ResolvedChatContext[]; } {
+	if (command === undefined || isTaskSlashCommand(text)) return { text, contexts };
+	const prefix = `/${command} `;
+	return {
+		text: prefix + text,
+		contexts: contexts.map(context => context.reference ? {
+			...context,
+			reference: { start: context.reference.start + prefix.length, end: context.reference.end + prefix.length },
+		} : context),
+	};
+}
+
 export interface SkillSelectorDefinition {
 	readonly name: string;
 	readonly description: string;
@@ -168,7 +181,6 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
 	readonly text: string;
-	readonly mode?: ChatMode;
 	readonly approvalMode?: ApprovalMode;
 	readonly model?: ModelRef;
 	readonly modelRouting?: 'auto';
@@ -178,7 +190,6 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 	readonly skills?: readonly SkillReference[];
 }
 
-export type ChatMode = SessionMode;
 export interface StartReviewOptions {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;

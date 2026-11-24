@@ -488,7 +488,6 @@ fn legacy_start_turn_without_host_skill_activations_remains_distinguishable() {
     assert!(matches!(
         command,
         ThreadCommand::StartTurn {
-            mode: crate::AgentMode::Agent,
             kind: TurnKind::Coding,
             host_activated_skills: None,
             instructions: None,
@@ -1316,41 +1315,38 @@ fn root_and_child_agent_configurations_share_the_same_role_size_bound() {
 }
 
 #[test]
-fn agent_modes_round_trip_and_delegated_workers_keep_their_approach() {
-    use crate::AgentMode;
+fn task_execution_round_trips_and_delegated_workers_keep_their_approach() {
+    use crate::TaskExecution;
     for (mode, name, child) in [
-        (AgentMode::Agent, "agent", AgentMode::Agent),
-        (AgentMode::Plan, "plan", AgentMode::Plan),
-        (AgentMode::Debug, "debug", AgentMode::Debug),
-        (AgentMode::Swarm, "swarm", AgentMode::Agent),
-        (AgentMode::Ask, "ask", AgentMode::Ask),
+        (TaskExecution::Agent, "agent", TaskExecution::Agent),
+        (TaskExecution::Plan, "plan", TaskExecution::Plan),
+        (TaskExecution::Debug, "debug", TaskExecution::Debug),
+        (TaskExecution::Swarm, "swarm", TaskExecution::Agent),
+        (TaskExecution::Ask, "ask", TaskExecution::Ask),
     ] {
         assert_eq!(serde_json::to_value(mode).unwrap(), json!(name));
         assert_eq!(
-            serde_json::from_value::<AgentMode>(json!(name)).unwrap(),
+            serde_json::from_value::<TaskExecution>(json!(name)).unwrap(),
             mode
         );
         assert_eq!(mode.delegated(), child);
     }
     for invalid in ["multitask", "unknown"] {
-        assert!(serde_json::from_value::<AgentMode>(json!(invalid)).is_err());
+        assert!(serde_json::from_value::<TaskExecution>(json!(invalid)).is_err());
     }
 }
 
 #[test]
-fn mode_change_events_round_trip_the_previous_mode_and_frozen_instructions() {
+fn retired_turn_mode_change_events_are_rejected() {
     let event = json!({
         "type": "turnModeChanged", "threadId": "thread", "turnId": "turn",
         "fromMode": "agent", "mode": "plan",
         "instructions": {
             "owner": "ash", "id": "agent", "revision": "1", "body": "Shared rules",
-            "modeInstructions": { "owner": "ash", "id": "plan", "revision": "1", "body": "Plan the task" }
+            "taskInstructions": { "owner": "ash", "id": "plan", "revision": "1", "body": "Plan the task" }
         }
     });
-    let decoded: ThreadEvent = serde_json::from_value(event.clone()).unwrap();
-    assert_eq!(decoded.kind(), "turn.mode_changed");
-    assert_eq!(decoded.thread_id(), &ThreadId::new("thread").unwrap());
-    assert_eq!(serde_json::to_value(decoded).unwrap(), event);
+    assert!(serde_json::from_value::<ThreadEvent>(event).is_err());
 }
 #[test]
 fn permission_ids_are_closed_and_product_order_does_not_change_the_default() {

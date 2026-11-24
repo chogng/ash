@@ -53,7 +53,7 @@ pub(crate) enum SessionCompletion {
 pub(crate) enum CommandRequest {
     Fork {
         prompt: String,
-        mode: ash_protocol::AgentMode,
+        mode: ash_protocol::TaskExecution,
         approval_mode: ApprovalMode,
     },
     Preview {
@@ -355,7 +355,7 @@ fn fork_session(
     client: &mut AppServerRequestHandle,
     source: &ActiveConversation,
     prompt: &str,
-    mode: ash_protocol::AgentMode,
+    mode: ash_protocol::TaskExecution,
     approval_mode: ApprovalMode,
 ) -> Result<ForkCompletion, String> {
     use ash_app_server_protocol::protocol::session::SessionRequest;

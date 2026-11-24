@@ -20,7 +20,7 @@ pub fn window_instructions(window: ash_protocol::WorkbenchWindow) -> ash_protoco
         ash_protocol::WorkbenchWindow::AgentWindow => PromptArtifact::new(
             "prompts",
             "window/agents",
-            "agents-window-v1",
+            "agents-window-v2",
             include_str!("../templates/surfaces/agents-window.md"),
         ),
     };

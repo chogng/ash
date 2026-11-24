@@ -22,7 +22,8 @@ use ts_rs::TS;
 #[serde(
     tag = "type",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum ThreadCommand {
     ResolveToolResultReview {
@@ -56,8 +57,6 @@ pub enum ThreadCommand {
         context_policy: crate::ContextCompactionPolicy,
         #[serde(default)]
         kind: TurnKind,
-        #[serde(default, skip_serializing_if = "crate::AgentMode::is_agent")]
-        mode: crate::AgentMode,
         /// Exact instructions selected by the host before durable Turn acceptance.
         ///
         /// `None` exists only so journals written before instruction snapshots remain readable.

@@ -9,7 +9,6 @@ use crate::protocol::turn::InputItem;
 use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
-use ash_protocol::AgentMode;
 use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::CommandInterpretation;
@@ -242,6 +241,41 @@ pub enum RewriteCommandInterpretation {
     Accepted,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionStartTurnParams {
+    /// Literal messages do not enter Code's product-command interpretation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command_interpretation: Option<CommandInterpretation>,
+    /// Pins the editor used to capture this submission; a changed selection rejects admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub ide_window_id: Option<String>,
+    pub thread_id: ThreadId,
+    #[ts(type = "number")]
+    pub expected_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub approval_mode: Option<ash_protocol::ApprovalMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model: Option<ash_protocol::ModelRef>,
+    /// Applies only to the accepted Turn; it does not update user model configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
+    /// Mutually exclusive with an explicit model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model_routing: Option<ash_protocol::ModelRoutingMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_mode: Option<ToolMode>,
+    #[schemars(length(min = 1))]
+    pub input: Vec<InputItem>,
+}
+
 /// A typed request routed through one `session_id` grouping boundary.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -348,41 +382,7 @@ pub enum SessionRequest {
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,
     },
-    StartTurn {
-        /// Literal messages do not enter Code's product-command interpretation.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        command_interpretation: Option<CommandInterpretation>,
-        /// Pins the editor used to capture this submission; a changed selection rejects admission.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        ide_window_id: Option<String>,
-        thread_id: ThreadId,
-        #[ts(type = "number")]
-        expected_sequence: u64,
-        /// Compatibility for clients that still submit a separate composer approach.
-        #[serde(default, skip_serializing_if = "AgentMode::is_agent")]
-        mode: AgentMode,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        approval_mode: Option<ash_protocol::ApprovalMode>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        model: Option<ash_protocol::ModelRef>,
-        /// Applies only to the accepted Turn; it does not update user model configuration.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        reasoning_effort: Option<ash_protocol::ReasoningEffort>,
-        /// Mutually exclusive with an explicit model.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        model_routing: Option<ash_protocol::ModelRoutingMode>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        tool_mode: Option<ToolMode>,
-        #[schemars(length(min = 1))]
-        input: Vec<InputItem>,
-    },
+    StartTurn(SessionStartTurnParams),
     StartReview {
         thread_id: ThreadId,
         #[ts(type = "number")]

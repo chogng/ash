@@ -28,7 +28,6 @@ fn start(threads: &ThreadController, root: &ThreadId, key: &str) -> TurnId {
             root,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new(key).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

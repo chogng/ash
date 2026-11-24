@@ -29,7 +29,7 @@ for (const active of [false, true]) test(`PR agent request ${active ? 'queues be
 	await services.createInstance(CreatePullRequestChatRequest).send(session, options, creation, chat);
 	assert.equal(calls.length, 1);
 	assert.equal(calls[0]!.action, active ? 'queue' : 'start');
-	assert.deepEqual({ ...calls[0]!.request, text: undefined }, { sessionId: 'origin', threadId: 'origin-thread', expectedSequence: 17, mode: 'agent', text: undefined });
+	assert.deepEqual({ ...calls[0]!.request, text: undefined }, { sessionId: 'origin', threadId: 'origin-thread', expectedSequence: 17, text: undefined });
 	assert.match(calls[0]!.request.text, /github.com\/team\/repo.*\/origin.*feature.*main/u);
 	assert.match(calls[0]!.request.text, /Title: Reviewed title\nDescription:\nReviewed description/u);
 	assert.match(calls[0]!.request.text, /SQUASH/u);

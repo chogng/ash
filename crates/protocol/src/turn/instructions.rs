@@ -18,7 +18,7 @@ pub enum WorkbenchWindow {
 
 /// Immutable instructions selected before one Agent Turn is durably accepted.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TurnInstructions {
     owner: String,
     id: String,
@@ -31,14 +31,14 @@ pub struct TurnInstructions {
     model_guidance: Option<ModelInstructionSelection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    mode_instructions: Option<InstructionText>,
+    task_instructions: Option<InstructionText>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     window_instructions: Option<InstructionText>,
     /// Task approach resolved by the host for this execution, from a command or owning workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    task_command: Option<crate::AgentMode>,
+    task_command: Option<crate::TaskExecution>,
 }
 
 impl TurnInstructions {
@@ -56,7 +56,7 @@ impl TurnInstructions {
             body: body.into(),
             shared: Vec::new(),
             model_guidance: None,
-            mode_instructions: None,
+            task_instructions: None,
             window_instructions: None,
             task_command: None,
         };
@@ -84,10 +84,10 @@ impl TurnInstructions {
         if let Some(window) = &self.window_instructions {
             window.validate()?;
         }
-        if let Some(mode) = &self.mode_instructions {
-            mode.validate()?;
+        if let Some(task) = &self.task_instructions {
+            task.validate()?;
         }
-        if self.task_command == Some(crate::AgentMode::Agent) {
+        if self.task_command == Some(crate::TaskExecution::Agent) {
             return Err(InvalidTurnInstructions("task command"));
         }
         if let Some(ModelInstructionSelection::Specialized {
@@ -146,23 +146,23 @@ impl TurnInstructions {
         self
     }
 
-    /// Replaces only the approach for a delegated worker or an explicit mode change.
+    /// Sets instructions for the selected task command or delegated execution.
     /// Keeping it separate prevents copying a parent's coordinating approach into worker rules.
-    pub fn with_mode(mut self, mode: &Self) -> Self {
-        self.mode_instructions = Some(mode.as_text());
+    pub fn with_task_instructions(mut self, instructions: &Self) -> Self {
+        self.task_instructions = Some(instructions.as_text());
         self
     }
 
-    pub fn mode_instructions(&self) -> Option<&InstructionText> {
-        self.mode_instructions.as_ref()
+    pub fn task_instructions(&self) -> Option<&InstructionText> {
+        self.task_instructions.as_ref()
     }
 
-    pub fn with_task_command(mut self, command: Option<crate::AgentMode>) -> Self {
+    pub fn with_task_command(mut self, command: Option<crate::TaskExecution>) -> Self {
         self.task_command = command;
         self
     }
 
-    pub fn task_command(&self) -> Option<crate::AgentMode> {
+    pub fn task_command(&self) -> Option<crate::TaskExecution> {
         self.task_command
     }
 
@@ -279,12 +279,12 @@ impl ModelInstructionSelection {
     }
 }
 
-/// Model-owned guidance frozen at selection; Core chooses only the active mode, identity and available tools.
+/// Model-owned guidance frozen at selection by task command, Agent identity and available tools.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelInstructionMessages {
     pub tools: BTreeMap<crate::ToolName, InstructionText>,
-    pub agent_modes: BTreeMap<crate::AgentMode, InstructionText>,
+    pub task_commands: BTreeMap<crate::TaskExecution, InstructionText>,
     pub root: Option<InstructionText>,
     pub subagent: Option<InstructionText>,
 }
@@ -294,7 +294,7 @@ impl ModelInstructionMessages {
     pub fn assets(&self) -> impl Iterator<Item = &InstructionText> {
         self.tools
             .values()
-            .chain(self.agent_modes.values())
+            .chain(self.task_commands.values())
             .chain(self.root.iter())
             .chain(self.subagent.iter())
     }

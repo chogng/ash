@@ -160,7 +160,7 @@ const documentTest = test.extend<{
 			if (!root) throw new Error('The Session has no root Thread');
 			const identity = { sessionId: created.session.sessionId, threadId: root.threadId };
 			const before = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
-			await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'editor-review-ready', sessionId: identity.sessionId, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: before.thread.sequence, mode: 'agent', approvalMode: 'manual', model, input: [{ type: 'text', text: 'Return the review fixture ready message without using tools.' }] } });
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'editor-review-ready', sessionId: identity.sessionId, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: before.thread.sequence, approvalMode: 'manual', model, input: [{ type: 'text', text: 'Return the review fixture ready message without using tools.' }] } });
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
 			if (before.directory?.type !== 'local') throw new Error('The Session has no local directory');
 			const page = await workbench.openAgentsWindow(target.kind);
@@ -390,7 +390,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		diagnostics.identity = identity;
 		diagnostics.publicSessionCreated = created;
 		diagnostics.publicThreadBeforeTurn = before;
-		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'k-review-ready', sessionId: identity.sessionId, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: before.thread.sequence, mode: 'agent', approvalMode: 'manual', model, input: [{ type: 'text', text: 'Return the review fixture ready message without using tools.' }] } });
+		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'k-review-ready', sessionId: identity.sessionId, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: before.thread.sequence, approvalMode: 'manual', model, input: [{ type: 'text', text: 'Return the review fixture ready message without using tools.' }] } });
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
 		if (before.directory?.type !== 'local') { throw new Error('The review Session has no local directory'); }
 		const file = join(before.directory.root, 'main.ts');

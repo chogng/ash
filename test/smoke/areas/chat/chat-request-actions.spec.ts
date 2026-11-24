@@ -80,7 +80,6 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 		const clipboardOnly = scenario === 'clipboard';
 		const writesFiles = scenario === 'turnChanges' || scenario === 'versions';
 		const needsCheckpoint = scenario === 'checkpoint' || scenario === 'reply' || scenario === 'restore' || scenario === 'redo' || writesFiles;
-		const mode = writesFiles ? 'agent' : 'ask';
 		const approvalMode = writesFiles ? 'bypassPermissions' : 'manual';
 		test.setTimeout(180_000);
 		let modelCalls = 0;
@@ -135,7 +134,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 			const before = await read(root);
 			await client.request(methods['session/request'], {
 				sessionId, commandId: scenario === 'reply' ? 'ash-code-review-request-actions' : 'request-actions-turn', request: {
-					type: 'startTurn', threadId: root, expectedSequence: before.sequence, mode, approvalMode, model,
+					type: 'startTurn', threadId: root, expectedSequence: before.sequence, approvalMode, model,
 					input: [{ type: 'context', name: 'Accepted file', content: 'Original immutable context' }, { type: 'text', text: 'Original request' }],
 				}
 			});
@@ -150,7 +149,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				const source = await read(root);
 				await client.request(methods['session/request'], {
 					sessionId, commandId: 'request-actions-follow-up', request: {
-						type: 'startTurn', threadId: root, expectedSequence: source.sequence, mode, approvalMode, model,
+						type: 'startTurn', threadId: root, expectedSequence: source.sequence, approvalMode, model,
 						input: [{ type: 'text', text: 'Follow-up request' }],
 					},
 				});
@@ -310,7 +309,7 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				await page.keyboard.insertText('Keep this unsent draft');
 				const queued = async (commandId: string) => (await client.request(methods['queue/list'], { sessionId, threadId: root })).messages.find(message => message.request.commandId === commandId);
 				for (const [commandId, text] of [['queue-edit', 'Edit this queued request'], ['queue-remove', 'Remove this queued request'], ['queue-send', 'Send this queued request']]) {
-					await client.request(methods['queue/enqueue'], { sessionId, threadId: root, commandId, mode: 'ask', approvalMode: 'manual', model, input: [{ type: 'text', text }] });
+					await client.request(methods['queue/enqueue'], { sessionId, threadId: root, commandId, approvalMode: 'manual', model, input: [{ type: 'text', text }] });
 				}
 				const row = (text: string) => transcript.locator('.ash-chat-item-queuedMessage').filter({ hasText: text });
 				await row('Edit this queued request').getByRole('button', { name: 'Edit queued message', exact: true }).press('Enter');

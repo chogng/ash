@@ -9,7 +9,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { ChatSubmissionOptions, ChatRequestQueueKind, QueuedMessage } from '../../../../services/chat/common/chatService.js';
+import { applyDefaultTaskCommand, type ChatSubmissionOptions, type ChatRequestQueueKind, type QueuedMessage } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -28,7 +28,7 @@ import type { IContextKey } from '../../../../../platform/contextkey/common/cont
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
-import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../services/chat/common/chatService.js';
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
@@ -109,8 +109,8 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string>;
+	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
+	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal, defaultTaskCommand?: IChatWidgetViewOptions['defaultTaskCommand']): Promise<void | string>;
 	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
@@ -120,7 +120,6 @@ export interface IChatWidgetModel extends IDisposable {
 	selectAutomaticModel?(): Promise<void>;
 	listAgents?(): Promise<readonly ChatAgent[]>;
 	selectAgent?(agent: ChatAgent | undefined): void;
-	selectMode?(mode: ChatMode): void;
 	selectApprovalMode?(mode: ApprovalMode): void;
 	resolveInteraction?(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
 	retryFailedTurn?(turnId: string): Promise<void>;
@@ -190,8 +189,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const modelVoice = model.voice;
 		const voiceClient = this.voiceSessionController = modelVoice ? undefined : this._register(instantiationService.createInstance(VoiceSessionController, async (request: AgentVoiceTaskRequest, signal: AbortSignal) => {
 			if (signal.aborted || this.isDisposed || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
-			// The original composer/model owns mode, queue, steering and approval. Speech remains low-trust context.
-			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
+			// The original composer/model owns queue, steering and approval. Speech remains low-trust context.
+			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
 		}, (error: unknown) => this.reportVoiceError(error), this.model.prepareConversation ? async (signal: AbortSignal) => {
 			const source = await this.model.prepareConversation!(signal);
 			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
@@ -351,7 +350,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					const id = this.appContextId(source);
 					// An App follow-up includes its own source context, never a user's unsent draft or files.
 					const contexts = [...this.input.attachmentModel.attachments.filter(attachment => attachment.id === id || attachment.id.startsWith(`${id}:image:`)), ...images];
-					await this.send(text, this.model.inputState.mode, undefined, contexts, source, signal);
+					await this.send(text, undefined, contexts, source, signal);
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
@@ -391,7 +390,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}),
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
-			send: (text, mode, skills, contexts, submissionSignal, queue) => this.send(text, mode, skills, contexts, undefined, submissionSignal, queue),
+			send: (text, skills, contexts, submissionSignal, queue) => this.send(text, skills, contexts, undefined, submissionSignal, queue),
 			executeCommand: ({ commandId, argumentsText }) => {
 				if (commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID) {
 					return commandService.executeCommand(commandId, this.model, argumentsText);
@@ -404,7 +403,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					await commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
 					return;
 				}
-				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal);
+				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal, this.defaultTaskCommand);
 				if (typeof recap === 'string') {
 					this.notifications.info(recap);
 				}
@@ -426,7 +425,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			selectAutomaticModel: model.selectAutomaticModel?.bind(model),
 			listAgents: () => model.listAgents?.() ?? Promise.resolve([]),
 			selectAgent: agent => model.selectAgent?.(agent),
-			selectMode: mode => model.selectMode?.(mode),
 			selectApprovalMode: model.selectApprovalMode && (async mode => {
 				const generation = this.model.composerGeneration;
 				const identity = this.model.threadId ?? this.model.untitledSessionId;
@@ -440,7 +438,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		};
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
-			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
+			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { agentPicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
 		ChatContextKeys.replyOnlyInput.bindTo(context).set(this.input.replyOnly === true);
 		this._register(widgets.register(this));
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
@@ -490,6 +488,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	get sessionId(): SessionId | undefined {
 		return this.model.sessionId;
+	}
+
+	get defaultTaskCommand(): IChatWidgetViewOptions['defaultTaskCommand'] {
+		return this.viewOptions?.defaultTaskCommand;
 	}
 
 	get untitledSessionId(): string | undefined {
@@ -656,11 +658,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 
-	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void> {
+	private async send(text: string, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void> {
 		const model = this.model;
 		const generation = model.composerGeneration;
 		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
-		if (this.viewOptions?.submitHandler && await this.viewOptions.submitHandler(text, mode, contexts, submissionSignal)) {
+		if (this.viewOptions?.submitHandler && await this.viewOptions.submitHandler(text, contexts, submissionSignal)) {
 			return;
 		}
 		if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) { throw canceled(); }
@@ -672,7 +674,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) throw canceled();
 			if (appSource) this.appContextId(appSource);
 			const options = appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal: submissionSignal } : submissionSignal ? { signal: submissionSignal } : undefined;
-			await model.send(text, mode, skills, resolvedContexts, queue ? { ...options, queue } : options);
+			const input = applyDefaultTaskCommand(text, this.defaultTaskCommand, resolvedContexts);
+			await model.send(input.text, skills, input.contexts, queue ? { ...options, queue } : options);
 		} catch (error) {
 			if (!this.isDisposed && !submissionSignal?.aborted && generation === model.composerGeneration && model.items.length === 0) {
 				this.submittedMessage = false;
@@ -884,11 +887,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Let the host style the welcome state without watching transcript DOM mutations.
 		this.element.classList.toggle('ash-chat-show-welcome', showWelcome);
 		this.welcome.render(showWelcome ? {
-			title: welcomeTitle ?? (input.mode === 'ask'
-				? localize('chat.welcome.ask', 'Ask about your code')
-				: input.mode === 'agent'
-					? localize('chat.welcome.agent', 'Build with Agent')
-					: localize('chat.welcome.start', 'Start a conversation')),
+			title: welcomeTitle ?? localize('chat.welcome.agent', 'Build with Agent'),
 			message: localize('chat.welcome.verify', 'Check important details in AI-generated responses.'),
 		} : undefined);
 	}

@@ -291,7 +291,6 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -384,7 +383,6 @@ fn managed_thread_turn_uses_instructions_after_workspace_rebinding() {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -440,11 +438,7 @@ fn init_does_not_import_external_instructions_into_agent_input() {
 
     server
         .agent_processor()
-        .turn_instruction_selection(
-            &mut input,
-            ash_protocol::AgentMode::Agent,
-            ash_protocol::CommandInterpretation::Product,
-        )
+        .turn_instruction_selection(&mut input, ash_protocol::CommandInterpretation::Product)
         .unwrap();
 
     assert!(!input.iter().any(|item| match item {
@@ -590,7 +584,7 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
     assert!(tool_names.contains(agent::SPAWN_AGENT_TOOL_NAME));
     assert!(tool_names.contains(agent::SEND_AGENT_MESSAGE_TOOL_NAME));
     assert!(tool_names.contains(agent::WAIT_AGENT_TOOL_NAME));
-    assert!(tool_names.contains(crate::server::switch_mode_tool::SWITCH_MODE_TOOL_NAME));
+    assert!(!tool_names.contains("switch_mode"));
     assert!(!tool_names.contains("browser_open"));
     host.tools.replace_host_available(true).unwrap();
     assert!(
@@ -2434,7 +2428,6 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -2705,7 +2698,6 @@ fn active_turn_blocks_directory_root_switch_without_changing_authority() {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -2775,7 +2767,6 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -3840,7 +3831,6 @@ fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_comp
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -4063,7 +4053,6 @@ fn reusable_approvals_follow_core_and_bind_the_exact_action() {
                 &thread.thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -4344,7 +4333,6 @@ fn remote_network_connections_require_the_exact_core_approval_before_upstream_io
                 &thread.thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -4537,7 +4525,6 @@ fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
             &thread.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -5957,42 +5944,32 @@ fn web_session_exact_watcher_observed_withdrawal_cannot_revive_after_forget() {
 #[test]
 fn literal_messages_bypass_all_product_command_selection() {
     let server = server();
-    for mode in [ash_protocol::AgentMode::Agent, ash_protocol::AgentMode::Ask] {
-        for text in [
-            "/init",
-            "/init workspace",
-            "/develop add offline search",
-            "/team status",
-            "/advisor Question",
-            "/compact",
-        ] {
-            let mut input = vec![UserInput::Text { text: text.into() }];
-            let original = input.clone();
-            let selection = server
-                .agent_processor()
-                .turn_instruction_selection(
-                    &mut input,
-                    mode,
-                    ash_protocol::CommandInterpretation::Literal,
-                )
-                .unwrap();
-            assert!(matches!(
-                selection,
-                crate::server::operations::TurnInstructionSelection::Agent
-            ));
-            assert_eq!(input, original);
-        }
+    for text in [
+        "/init",
+        "/init workspace",
+        "/develop add offline search",
+        "/team status",
+        "/advisor Question",
+        "/compact",
+    ] {
+        let mut input = vec![UserInput::Text { text: text.into() }];
+        let original = input.clone();
+        let selection = server
+            .agent_processor()
+            .turn_instruction_selection(&mut input, ash_protocol::CommandInterpretation::Literal)
+            .unwrap();
+        assert!(matches!(
+            selection,
+            crate::server::operations::TurnInstructionSelection::Agent
+        ));
+        assert_eq!(input, original);
     }
     let mut input = vec![UserInput::Text {
         text: "/develop add offline search".into(),
     }];
     let selection = server
         .agent_processor()
-        .turn_instruction_selection(
-            &mut input,
-            ash_protocol::AgentMode::Agent,
-            ash_protocol::CommandInterpretation::Product,
-        )
+        .turn_instruction_selection(&mut input, ash_protocol::CommandInterpretation::Product)
         .unwrap();
     assert!(matches!(
         selection,

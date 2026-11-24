@@ -24,7 +24,7 @@ instructions = { package = "ash-instructions", path = "../../instructions" }
 model-provider-info = { workspace = true }
 models-manager = { package = "ash-models-manager", path = "../../models-manager" }
 prompts = { package = "ash-prompts", path = "../../prompts" }
-agent-mode-templates = { package = "ash-agent-mode-templates", path = "../../agent-mode-templates" }
+task-command-templates = { package = "ash-task-command-templates", path = "../../task-command-templates" }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 
 [dev-dependencies]

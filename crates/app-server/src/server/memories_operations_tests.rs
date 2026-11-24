@@ -67,7 +67,7 @@ fn project_memory_from_message_keeps_verified_source_and_user_ownership() {
         "session/request",
         json!({
             "commandId":"start-turn", "sessionId":session_id, "request":{
-            "type":"startTurn", "threadId":thread_id, "expectedSequence":sequence, "mode":"agent",
+                "type":"startTurn", "threadId":thread_id, "expectedSequence":sequence,
                 "input":[{"type":"text","text":"The demo uses the violet sample."}],
             },
         }),

@@ -61,11 +61,11 @@ test('desktop dialog and window routes reject malformed requests', async () => {
 	assert.throws(() => openAgents.validate({ windowId: 1 }), /Invalid Agents Window options/);
 	assert.throws(() => openAgents.validate({}), /requires a conversation or draft/);
 	assert.throws(() => openAgents.validate({ conversation: { sessionId: '', threadId: 'thread' } }), /Invalid Agents Window conversation/);
-	assert.throws(() => openAgents.validate({ draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
-	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
+	assert.throws(() => openAgents.validate({ draft: { text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
+	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
 	await openAgents.invoke(openAgents.validate(handoff));
 	assert.deepEqual(operations.at(-1), handoff);
-	const terminalDraft = { draft: { mode: 'agent', text: '', contexts: [{ id: 'terminal', kind: 'terminal', name: 'Shell', content: 'saved', terminalSnapshot: { text: 'saved', columns: 80 } }] } };
+	const terminalDraft = { draft: { text: '', contexts: [{ id: 'terminal', kind: 'terminal', name: 'Shell', content: 'saved', terminalSnapshot: { text: 'saved', columns: 80 } }] } };
 	assert.deepEqual(openAgents.validate(terminalDraft), terminalDraft);
 	for (const snapshot of [{ text: 'saved', columns: 0 }, { text: 'saved', columns: Infinity }, { text: 'x'.repeat(131073), columns: 80 }, { text: 'saved', columns: 80, execute: true }]) {
 		assert.throws(() => openAgents.validate({ draft: { ...terminalDraft.draft, contexts: [{ ...terminalDraft.draft.contexts[0], terminalSnapshot: snapshot }] } }), /Invalid terminal snapshot/);

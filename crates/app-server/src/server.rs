@@ -255,7 +255,6 @@ mod wire_log;
 #[path = "server/request_processors/skills.rs"]
 mod skill_operations;
 mod subscription_adapter;
-pub(crate) mod switch_mode_tool;
 #[path = "server/request_processors/symbols.rs"]
 mod symbol_index_operations;
 mod symbol_index_runtime;
@@ -3183,7 +3182,7 @@ impl AppServer {
             command,
             ash_core::StartTurnRequest {
                 context_policy: request.context_policy,
-                mode: request.mode,
+
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,

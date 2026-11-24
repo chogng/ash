@@ -46,7 +46,7 @@ fn executor(threads: Arc<ThreadController>, model: Arc<ScriptedModel>) -> TurnEx
 #[test]
 fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
     let (threads, thread_id, turn_id) = started_turn_with_options(
-        protocol::AgentMode::Agent,
+        protocol::TaskExecution::Agent,
         protocol::ToolMode::Direct,
         Some(protocol::ReasoningEffort::High),
     );
@@ -236,7 +236,6 @@ fn recovered_unresolved_advisor_fails_durably_without_stopping_other_goal_recove
             &thread_id,
             StartGoalTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("legacy-continuation").unwrap(),
@@ -367,7 +366,6 @@ fn start_session_turn(
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -393,14 +391,14 @@ fn start_session_turn(
 #[test]
 fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() {
     use extension_api::ContinuationContributor;
-    use protocol::AgentMode;
+    use protocol::TaskExecution;
 
     for mode in [
-        AgentMode::Agent,
-        AgentMode::Plan,
-        AgentMode::Debug,
-        AgentMode::Swarm,
-        AgentMode::Ask,
+        TaskExecution::Agent,
+        TaskExecution::Plan,
+        TaskExecution::Debug,
+        TaskExecution::Swarm,
+        TaskExecution::Ask,
     ] {
         let (threads, thread_id, turn_id) =
             started_turn_with_options(mode, protocol::ToolMode::Direct, None);
@@ -413,7 +411,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
         let extension = crate::runtime::GoalExtension::new(&threads);
         let next = extension.next_turn(&thread_id, &turn_id).unwrap();
 
-        if matches!(mode, AgentMode::Plan | AgentMode::Ask) {
+        if matches!(mode, TaskExecution::Plan | TaskExecution::Ask) {
             assert!(next.is_none(), "{mode:?} must wait for the user");
             assert!(
                 ContinuationContributor::recover(
@@ -438,7 +436,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
                 .iter()
                 .find(|turn| turn.turn_id == next.turn_id)
                 .unwrap();
-            assert_eq!(next_turn.mode, mode);
+            assert_eq!(next_turn.execution_approach(), mode);
             assert!(extension.next_turn(&thread_id, &turn_id).unwrap().is_none());
         }
     }
@@ -446,7 +444,7 @@ fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() 
 
 #[test]
 fn analysis_modes_do_not_receive_active_goal_execution_instructions() {
-    for mode in [protocol::AgentMode::Plan, protocol::AgentMode::Ask] {
+    for mode in [protocol::TaskExecution::Plan, protocol::TaskExecution::Ask] {
         let (threads, thread_id, turn_id) =
             started_turn_with_options(mode, protocol::ToolMode::Direct, None);
         threads
@@ -518,7 +516,6 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
             &thread_id,
             StartGoalTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("recovered-goal-continuation").unwrap(),
@@ -595,7 +592,11 @@ impl ModelService for ScriptedModel {
 }
 
 fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
-    started_turn_with_options(protocol::AgentMode::Agent, protocol::ToolMode::Direct, None)
+    started_turn_with_options(
+        protocol::TaskExecution::Agent,
+        protocol::ToolMode::Direct,
+        None,
+    )
 }
 
 fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -619,7 +620,6 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Review,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -643,7 +643,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
 }
 
 fn started_turn_with_options(
-    mode: protocol::AgentMode,
+    mode: protocol::TaskExecution,
     tool_mode: protocol::ToolMode,
     reasoning_effort: Option<protocol::ReasoningEffort>,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -667,10 +667,11 @@ fn started_turn_with_options(
             &thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode,
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
-                instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
+                instructions: prompts::AGENT_INSTRUCTIONS
+                    .freeze()
+                    .with_task_command((!mode.is_default()).then_some(mode)),
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

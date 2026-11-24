@@ -171,8 +171,16 @@
       "description": "Model-owned prompt text, assembled with runtime instructions before provider encoding.",
       "type": "object",
       "properties": {
-        "agent_modes": {
-          "description": "Additional guidance selected by the active agent mode, without changing its permissions.",
+        "multi_agent": {
+          "description": "Guidance selected by the Thread's actual root or delegated identity, separate from its task role.",
+          "$ref": "#/$defs/ModelAgentMessages"
+        },
+        "system_instructions": {
+          "description": "Complete model-specific Agent instructions; runtime permission and project instructions are separate.",
+          "type": "string"
+        },
+        "task_commands": {
+          "description": "Additional guidance for the task command or default task execution.",
           "type": "object",
           "properties": {
             "agent": {
@@ -193,14 +201,6 @@
           },
           "additionalProperties": false,
           "default": {}
-        },
-        "multi_agent": {
-          "description": "Guidance selected by the Thread's actual root or delegated identity, separate from its task role.",
-          "$ref": "#/$defs/ModelAgentMessages"
-        },
-        "system_instructions": {
-          "description": "Complete model-specific Agent instructions; runtime permission and project instructions are separate.",
-          "type": "string"
         },
         "tools": {
           "description": "Additional model-specific descriptions for tools actually exposed by the host; parameters remain tool-owned.",

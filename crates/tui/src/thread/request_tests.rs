@@ -43,11 +43,18 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
-fn submit_prompt_carries_every_agent_mode_to_the_app_server() {
+fn submit_prompt_uses_message_text_for_the_task_command() {
     use ash_app_server_protocol::protocol::session::SessionRequest;
     use ash_app_server_protocol::protocol::session::SessionRequestParams;
+    use ash_app_server_protocol::protocol::turn::InputItem;
     use ash_app_server_protocol::protocol::turn::TurnStartResult;
-    for mode in ash_protocol::AgentMode::ALL {
+    for text in [
+        "ordinary message",
+        "/ask work",
+        "/plan work",
+        "/debug work",
+        "/swarm work",
+    ] {
         let recorded = Arc::new(Mutex::new(None));
         let result = SessionRequestResult::Turn(TurnStartResult {
             turn_id: TurnId::new("turn").unwrap(),
@@ -65,10 +72,10 @@ fn submit_prompt_carries_every_agent_mode_to_the_app_server() {
                 7,
             ),
             ChatSubmission {
-                mode,
+                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new("submission").unwrap(),
-                display_text: "work".into(),
-                input: vec![ChatInputItem::Text("work".into())],
+                display_text: text.into(),
+                input: vec![ChatInputItem::Text(text.into())],
             },
             ash_protocol::ApprovalMode::Manual,
         )
@@ -77,10 +84,11 @@ fn submit_prompt_carries_every_agent_mode_to_the_app_server() {
             serde_json::from_str(recorded.lock().unwrap().as_ref().unwrap()).unwrap();
         let params: SessionRequestParams =
             serde_json::from_value(request["params"].clone()).unwrap();
-        let SessionRequest::StartTurn { mode: actual, .. } = params.request else {
+        let SessionRequest::StartTurn(actual) = params.request else {
             panic!("expected a start turn request")
         };
-        assert_eq!(actual, mode);
+        assert_eq!(actual.input, vec![InputItem::Text { text: text.into() }]);
+        assert!(request["params"]["request"].get("mode").is_none());
     }
 }
 

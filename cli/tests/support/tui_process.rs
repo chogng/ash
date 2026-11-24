@@ -471,6 +471,13 @@ contextWindow = 128000
         sessions
     }
 
+    pub fn stop_daemon(&self) -> std::io::Result<std::process::Output> {
+        std::process::Command::new(&self.ash)
+            .args(["app-server", "daemon", "stop"])
+            .envs(self.environment())
+            .output()
+    }
+
     pub fn only_thread(&self) -> (String, String) {
         let sessions = self.sessions();
         assert_eq!(sessions.len(), 1);
@@ -501,10 +508,7 @@ impl Drop for Fixture {
             }
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.
-        let _ = std::process::Command::new(&self.ash)
-            .args(["app-server", "daemon", "stop"])
-            .envs(self.environment())
-            .output();
+        let _ = self.stop_daemon();
     }
 }
 

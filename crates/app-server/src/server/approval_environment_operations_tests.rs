@@ -401,7 +401,6 @@ fn project_history_scan_reads_other_sessions_with_provenance_and_never_authorize
                 &thread.thread_id,
                 ash_core::StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: ash_protocol::CommandId::new(format!("start-{label}")).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,

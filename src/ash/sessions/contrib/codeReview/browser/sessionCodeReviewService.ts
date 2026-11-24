@@ -356,7 +356,7 @@ export class SessionCodeReviewService extends Disposable {
 				: prompt;
 			await this.chat.startTurn({
 				...destination, commandId: batch.id, expectedSequence: thread.sequence,
-				mode: 'agent', commandInterpretation: 'literal',
+				commandInterpretation: 'literal',
 				text,
 				contexts: [{ name: localize('sessions.codeReview.title', 'Code Review'), content: reviewContext(batch) }],
 			});

@@ -180,7 +180,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 	});
 
 	test('selects across all commands before filtering and keeps direct command arguments', async () => {
-		const args = { draft: { mode: 'agent', text: 'Review this', contexts: [] } };
+		const args = { draft: { text: 'Review this', contexts: [] } };
 		using fixture = new Fixture([
 			binding('ctrl+shift+a', { command: 'other.command' }),
 			binding('ctrl+shift+a'),
@@ -300,7 +300,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		const keybindings = KeybindingsRegistry.getKeybindings();
 		using registration = registerOpenAgentsWindowCommand();
 		using commands = new CommandService(fixture.services);
-		const options = { draft: { mode: 'agent', text: 'Keep this draft', contexts: [] } };
+		const options = { draft: { text: 'Keep this draft', contexts: [] } };
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, options);
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID);
 		await assert.rejects(commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, { unexpected: true }), /Invalid Agents Window options/);

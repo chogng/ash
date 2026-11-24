@@ -63,7 +63,6 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 &parent.thread_id,
                 StartTurnRequest {
                     context_policy: Default::default(),
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new("turn").unwrap(),
                     expected_sequence: SequenceExpectation::Any,

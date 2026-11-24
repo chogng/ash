@@ -135,10 +135,10 @@ class ObservableInputPart extends ChatInputPart {
 	clientCommandsForTest!: IChatSlashCommandService;
 }
 
-function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact', mcp?: IMcpServerManagementService): ObservableInputPart {
+function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact', mcp?: IMcpServerManagementService): ObservableInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
-	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	let state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const service = dictation ? createTestDictationBackend(inputResources, dictation) : undefined;
 	const services = sharedServices ?? inputResources.add(new InstantiationService());
 	if (!sharedServices) {
@@ -238,7 +238,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		partServices.registerSingleton(IActionViewItemService, () => partServices.createInstance(descriptor) as IActionViewItemService);
 	}
 	if (!partServices.get(IActionViewItemService).lookUp(MenuId.ChatExecute, MenuId.ChatExecuteQueue)) inputResources.add(partServices.createInstance(ChatQueuePickerRendering));
-	part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, agentPicker: 'visible', modelPickerPosition: 'leading' });
 	part.inputNotificationsForTest = partServices.get(IChatInputNotificationService);
 	part.clientCommandsForTest = partServices.get(IChatSlashCommandService);
 	part.render(state);
@@ -259,7 +259,7 @@ test('An explicit empty screenshot capture never opens the manual image editor o
 
 test('Chat working logo follows the current input state without replacing the status text or mark', () => {
 	using part = inputPart(sharedNotifications);
-	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const ready: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const logo = part.element.querySelector<HTMLElement>('.ash-chat-working-logo')!;
 	const status = logo.parentElement!;
 	assert.equal(logo.getAttribute('aria-hidden'), 'true');
@@ -293,16 +293,16 @@ test('Chat Agent picker loads Agents before opening the shared action widget and
 	let finishSelection!: (agent: ChatAgent | undefined) => void;
 	const selection = new Promise<ChatAgent | undefined>(resolve => { finishSelection = resolve; });
 	const selectedAgents: (ChatAgent | undefined)[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		listAgents: () => agents,
 		selectAgent: selected => { selectedAgents.push(selected); finishSelection(selected); },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
-	assert.equal(document.querySelector('.ash-action-widget.ash-chat-input-mode-menu'), null);
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.agent"] button')!.click();
+	assert.equal(document.querySelector('.ash-action-widget.ash-chat-input-agent-menu'), null);
 	const opened = new Promise<HTMLElement>(resolve => {
 		const observer = new browserEnvironment.window.MutationObserver(() => {
-			const widget = document.querySelector<HTMLElement>('.ash-action-widget.ash-chat-input-mode-menu');
+			const widget = document.querySelector<HTMLElement>('.ash-action-widget.ash-chat-input-agent-menu');
 			if (widget) {
 				observer.disconnect();
 				resolve(widget);
@@ -320,17 +320,17 @@ test('Chat Agent picker loads Agents before opening the shared action widget and
 	]);
 	choices[1]!.click();
 	assert.deepEqual(await selection, agent);
-	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
-	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true, selectedAgent: agent });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
+	assert.equal(document.querySelector('.ash-chat-input-agent-menu'), null);
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.agent"] button')!.getAttribute('aria-expanded'), 'false');
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true, selectedAgent: agent });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.agent"] button')!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	const reopenedChoices = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
+	const reopenedChoices = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-agent-menu [role=menuitemradio]')];
 	assert.equal(reopenedChoices[0]!.getAttribute('aria-checked'), 'false');
 	assert.equal(reopenedChoices[1]!.getAttribute('aria-checked'), 'true');
 	reopenedChoices[0]!.click();
 	assert.deepEqual(selectedAgents, [agent, undefined]);
-	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(document.querySelector('.ash-chat-input-agent-menu'), null);
 });
 
 test('Agent picker ignores a late load and reloads when shown again', async () => {
@@ -338,22 +338,22 @@ test('Agent picker ignores a late load and reloads when shown again', async () =
 	const listing = new DeferredPromise<readonly ChatAgent[]>();
 	let reads = 0;
 	const selected: (ChatAgent | undefined)[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		listAgents: () => ++reads === 1 ? listing.p : Promise.resolve([agent]),
 		selectAgent: agent => { selected.push(agent); },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
-	const trigger = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!;
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
+	const trigger = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.agent"] button')!;
 	trigger().click();
 	part.setVisible(false);
 	await listing.complete([agent]);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(document.querySelector('.ash-chat-input-agent-menu'), null);
 	assert.deepEqual(selected, []);
 	part.setVisible(true);
 	trigger().click();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
+	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-agent-menu [role=menuitemradio]')];
 	assert.equal(reads, 2);
 	assert.deepEqual(options.map(option => option.getAttribute('aria-label')), ['Default Agent', agent.name]);
 	options[1]!.click();
@@ -361,17 +361,17 @@ test('Agent picker ignores a late load and reloads when shown again', async () =
 	assert.deepEqual(selected, [agent]);
 	trigger().click();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.ok(document.querySelector('.ash-chat-input-mode-menu'));
+	assert.ok(document.querySelector('.ash-chat-input-agent-menu'));
 	part.invalidatePendingInput();
-	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(document.querySelector('.ash-chat-input-agent-menu'), null);
 });
 
 test('Attachment menus preserve submission and stay honest across provider tool capabilities and conversations', async () => {
 	const submissions: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, mode, skills, contexts) => { submissions.push({ text, mode, skills, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); },
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, skills, contexts) => { submissions.push({ text, skills, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); },
 	});
-	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const ready: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	for (const [provider, toolCalling] of [['openai', 'supported'], ['ollama', 'unsupported'], ['custom', 'unknown']] as const) {
 		const model = { provider, model: 'fixture' };
 		const entry = { model, displayName: provider, longContext: null, capabilities: { toolCalling, agentMode: toolCalling } };
@@ -392,18 +392,18 @@ test('Attachment menus preserve submission and stay honest across provider tool 
 		}
 		assert.equal(submissions.length, 0);
 		await part.acceptInput();
-		assert.deepEqual(submissions.splice(0), [{ text: draft, mode: 'agent', skills: undefined, contexts: [{ name: 'brief.txt', content: 'Synthetic brief' }] }]);
+		assert.deepEqual(submissions.splice(0), [{ text: draft, skills: undefined, contexts: [{ name: 'brief.txt', content: 'Synthetic brief' }] }]);
 	}
 });
 
 test('All context kinds insert at the cursor without an attachment bar; tool configuration persists without enabling Send', async () => {
 	const sent: ChatContextAttachment[][] = [];
 	const commands: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (_text, _mode, _skills, contexts) => { sent.push([...(contexts ?? [])]); },
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (_text, _skills, contexts) => { sent.push([...(contexts ?? [])]); },
 		executeCommand: async invocation => { commands.push(invocation.commandId); },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', resolve: async () => ({ name: 'Tools', kind: 'toolSelection', content: '["write_file"]' }) });
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
 	await part.acceptInput();
@@ -431,15 +431,14 @@ test('All context kinds insert at the cursor without an attachment bar; tool con
 for (const layout of [undefined, 'compact'] as const) test(`Chat input sends attachments without text and rejects duplicate submissions while pending (${layout ?? 'default'})`, async () => {
 	let complete!: () => void;
 	const sent: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'debug', {
-		send: async (text, mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			sent.push(text);
-			assert.equal(mode, 'debug');
 			assert.equal(contexts?.[0]?.name, 'file.ts');
 			await new Promise<void>(resolve => { complete = resolve; });
 		},
 	}, undefined, undefined, undefined, layout);
-	part.render({ mode: 'debug', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'let value = 1;' }) });
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
 	const pending = part.acceptInput();
@@ -453,8 +452,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Chat input sends att
 });
 
 test('Chat input keeps failed attachments and restores text for retry', async () => {
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { throw new Error('Request failed'); } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { throw new Error('Request failed'); } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Review image');
 	part.addContext({ id: 'image', kind: 'image', name: 'image.png', resolve: async () => ({ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }) });
 	await assert.rejects(part.acceptInput(), /Request failed/u);
@@ -474,7 +473,7 @@ function edit(part: ChatInputPart, text: string): void {
 test('Local permission and Guardian commands work before the model catalog is ready while Turn input waits', async () => {
 	const commands: Array<{ commandId: string; argumentsText: string; }> = [];
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		executeCommand: async invocation => { commands.push(invocation); },
 		send: async () => { sends++; },
 		executeServerCommand: async () => { assert.fail('server commands require a ready conversation'); },
@@ -486,7 +485,7 @@ test('Local permission and Guardian commands work before the model catalog is re
 		assert.equal(part.element.querySelector('textarea')?.value, '');
 	}
 	assert.deepEqual(commands, [{ commandId: 'chat.permission', argumentsText: 'auto' }, { commandId: 'chat.guardian.setup', argumentsText: 'setup' }]);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
 	for (const text of ['Create a file', '/compact']) {
 		edit(part, text);
 		assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, true);
@@ -498,8 +497,8 @@ test('Local permission and Guardian commands work before the model catalog is re
 
 test('source-owned App context survives consecutive submissions, updates in place and respects user removal', async () => {
 	const sends: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async (text, _mode, _skills, contexts) => { sends.push({ text, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: async (text, _skills, contexts) => { sends.push({ text, contexts: await Promise.all((contexts ?? []).map(context => context.resolve())) }); } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const context = (text: string) => ({ id: 'app-context', kind: 'mcpApp', lifetime: 'source' as const, name: 'App context', resolve: async () => ({ name: 'App context', content: text }) });
 	edit(part, 'First turn');
 	part.addContext(context('first'));
@@ -523,29 +522,29 @@ test('source-owned App context survives consecutive submissions, updates in plac
 
 test('Chat configuration requests append without sending or replacing draft attachments', async () => {
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'debug', { send: async () => { sends++; } });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { sends++; } });
 	edit(part, 'Existing draft');
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
 	const oldCapture = await part.captureDraft();
 	part.appendToDraft('Configure Hooks');
 	oldCapture?.clear();
 	assert.deepEqual((await part.captureDraft())?.draft, {
-		mode: 'debug', text: 'Existing draft file.ts \n\nConfigure Hooks', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const answer = 42;', reference: { start: 15, end: 22 } }],
+		text: 'Existing draft file.ts \n\nConfigure Hooks', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const answer = 42;', reference: { start: 15, end: 22 } }],
 	});
 	assert.equal(sends, 0);
 });
 
 test('Chat draft handoff moves text and resolved attachments after acknowledgement', async () => {
-	using source = inputPart(sharedNotifications, undefined, 'debug');
+	using source = inputPart(sharedNotifications);
 	using target = inputPart(sharedNotifications);
-	edit(source, 'Review this file');
+	edit(source, '/debug Review this file');
 	source.addContext({ id: 'src/file.ts', kind: 'file', resource: URI.file('/workspace/file.ts'), name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
 	const captured = await source.captureDraft();
 	assert.ok(captured);
 	assert.deepEqual(captured.draft, {
-		mode: 'debug',
-		text: 'Review this file file.ts ',
-		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts', reference: { start: 17, end: 24 } }],
+
+		text: '/debug Review this file file.ts ',
+		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts', reference: { start: 24, end: 31 } }],
 	});
 	target.restoreDraft(captured.draft);
 	assert.equal(target.element.querySelector('textarea')?.value, '/debug Review this file file.ts ');
@@ -560,7 +559,7 @@ test('Restoring a chat reference draft preserves its source URI and snapshot', a
 	using part = inputPart(sharedNotifications);
 	const text = 'Earlier design';
 	const draft = {
-		mode: 'agent' as const,
+
 		text,
 		contexts: [{
 			id: 'previous',
@@ -612,12 +611,12 @@ test('Selected code is inserted at the message cursor and survives handoff witho
 test('A pending file picker inserts its filename before submission captures the message', async () => {
 	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
 	let sent: unknown;
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			sent = { text, contexts: await Promise.all(contexts!.map(context => context.resolve())) };
 		}
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Explain  please');
 	part.element.querySelector('textarea')!.setSelectionRange(8, 8);
 	const acquiring = part.acquireContext(() => prepared.p);
@@ -631,7 +630,7 @@ test('A pending file picker inserts its filename before submission captures the 
 
 test('Restoring an older file attachment draft adds a filename reference instead of a bar pill', async () => {
 	using part = inputPart(sharedNotifications);
-	part.restoreDraft({ mode: 'agent', text: 'Explain', contexts: [{ id: 'legacy', kind: 'file', name: 'file.ts', resource: 'file:///workspace/file.ts', content: 'Older unsaved snapshot' }] });
+	part.restoreDraft({ text: 'Explain', contexts: [{ id: 'legacy', kind: 'file', name: 'file.ts', resource: 'file:///workspace/file.ts', content: 'Older unsaved snapshot' }] });
 	const draft = (await part.captureDraft())!.draft;
 	assert.equal(draft.text, 'Explain file.ts ');
 	assert.deepEqual(draft.contexts[0]?.reference, { start: 8, end: 15 });
@@ -641,13 +640,13 @@ test('Restoring an older file attachment draft adds a filename reference instead
 
 test('Sending a selected code reference forwards its snapshot and restores it after failure', async () => {
 	let submitted: unknown;
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			submitted = { text, contexts: await Promise.all(contexts!.map(context => context.resolve())) };
 			throw new Error('Send failed');
 		}
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved selected code' }) });
 	const draft = (await part.captureDraft())?.draft;
 	await assert.rejects(part.acceptInput(), /Send failed/);
@@ -673,7 +672,7 @@ test('Chat shows first-use model download on the mic button, supports cancellati
 	try {
 		using modelStatus = new Emitter<ILocalTranscriptionModelStatus>();
 		let cancelled = 0;
-		using part = inputPart(sharedNotifications, undefined, 'agent', {}, undefined, {
+		using part = inputPart(sharedNotifications, undefined, {}, undefined, {
 			_serviceBrand: undefined, isSupported: true,
 			onDidChangeModels: AshEvent.None, onDidChangeModelStatus: modelStatus.event, onDidTranscribe: AshEvent.None,
 			getModel: async model => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 100 }),
@@ -731,7 +730,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 	const sent: string[] = [];
 	let settingsOpened!: () => void;
 	let opened = new Promise<void>(resolve => { settingsOpened = resolve; });
-	using part = inputPart(sharedNotifications, undefined, 'agent', { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } }, undefined, {
+	using part = inputPart(sharedNotifications, undefined, { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } }, undefined, {
 		_serviceBrand: undefined, isSupported: true,
 		onDidChangeModels: changed.event, onDidChangeModelStatus: AshEvent.None,
 		onDidTranscribe: AshEvent.None,
@@ -745,7 +744,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		cancelModel: async () => { cancelled++; }, deleteModel: async () => { },
 		pushAudio: async () => { }, start: async () => { starts++; }, stop: async () => '', cancel: async () => { },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	assert.equal(reads, 0);
 	edit(part, 'Text still works');
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
@@ -804,8 +803,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Dictation replaces t
 			transcript = onTranscript;
 			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; void stopRequested.complete(); }); transcript('replacement', true); onEnded(); }, cancel: async () => { } };
 		},
-	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	}, { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'before old after');
 	const input = part.element.querySelector('textarea')!;
 	input.setSelectionRange(7, 10);
@@ -839,8 +838,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Enter submits an int
 				cancel: async () => { },
 			};
 		},
-	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	}, { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	transcript('interim words', false);
@@ -864,8 +863,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Failed dictation fin
 	const sent: string[] = [];
 	using part = inputPart(notifications, {
 		start: async () => ({ stop: async () => { throw new Error('transcription failed'); }, cancel: async () => { } }),
-	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	}, { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Existing draft');
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
@@ -889,8 +888,8 @@ for (const locale of ['en', 'zh-CN']) for (const layout of [undefined, 'compact'
 				stop: async () => { stopped++; onTranscript('Recognized words', true); onEnded(); },
 				cancel: async () => { },
 			}),
-		}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
-		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+		}, { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+		part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 		const microphone = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!;
 		assert.ok(microphone().querySelector('.ash-icon-mic'));
 		microphone().click();
@@ -920,8 +919,8 @@ test('submitting an edited dictated draft records aggregate accuracy once withou
 	}
 	using part = inputPart(sharedNotifications, {
 		start: async (_options, onTranscript) => ({ stop: async () => onTranscript('cat', true), cancel: async () => { } }),
-	}, 'agent', { send: async () => { } }, undefined, undefined, new Telemetry());
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	}, { send: async () => { } }, undefined, undefined, new Telemetry());
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	const inserted = new DeferredPromise<void>();
@@ -971,8 +970,8 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	const speech = services.get(IChatSpeechToTextService);
 	using firstNotifications = new TestNotificationService();
 	using secondNotifications = new TestNotificationService();
-	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
-	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
+	using first = inputPart(firstNotifications, undefined, {}, services);
+	using second = inputPart(secondNotifications, undefined, {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
@@ -1007,8 +1006,8 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 	if (!services.has(INotificationService)) services.registerInstance(INotificationService, sharedNotifications);
 	const speech = services.get(IChatSpeechToTextService);
-	using first = inputPart(sharedNotifications, undefined, 'agent', {}, services);
-	using second = inputPart(sharedNotifications, undefined, 'agent', {}, services);
+	using first = inputPart(sharedNotifications, undefined, {}, services);
+	using second = inputPart(sharedNotifications, undefined, {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
@@ -1049,8 +1048,8 @@ test('A failed shared session notifies its window once without notifying unrelat
 	const speech = services.get(IChatSpeechToTextService);
 	using firstNotifications = new TestNotificationService();
 	using secondNotifications = new TestNotificationService();
-	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
-	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
+	using first = inputPart(firstNotifications, undefined, {}, services);
+	using second = inputPart(secondNotifications, undefined, {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
@@ -1076,7 +1075,7 @@ async function waitForSpeechState(service: IChatSpeechToTextService, state: Chat
 
 test('Input construction rejects a missing window dictation service', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatSpeechToTextService/);
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { agentPicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatSpeechToTextService/);
 });
 
 test('Input construction requires the window attachment resolver', () => {
@@ -1085,16 +1084,16 @@ test('Input construction requires the window attachment resolver', () => {
 	services.registerInstance(IVoiceInputModeService, {} as IVoiceInputModeService);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(IMenuService, {} as IMenuService);
-	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatAttachmentResolveService/u);
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { agentPicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatAttachmentResolveService/u);
 });
 
 
 test('approval shows every exact target as text and dispatches both decisions', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	const scopes = ['/tmp/a file.txt', String.raw`C:\Users\name\file.txt`, String.raw`\\server\share\file.txt`, '<img src=x onerror=alert(1)>', 'api.example.test'];
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'approval-1', request: { type: 'approval', request: { reason: 'Review these actions', capabilities: scopes.map((scope, index) => ({ kind: index === 4 ? 'network' : 'fileWrite', scope })) } } },
 	};
 	part.render(state);
@@ -1120,13 +1119,13 @@ test('approval shows every exact target as text and dispatches both decisions', 
 test('Chat input retry restores the original Skill revision and backward selection', async () => {
 	const failure = new DeferredPromise<void>();
 	const sent: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (_text, _mode, skills) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (_text, skills) => {
 			sent.push(skills);
 			if (sent.length === 1) await failure.p;
 		}
 	});
-	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const skill = (digest: string): ChatInputState['skillSelectors'][number] => ({ name: 'commit', description: 'Commit changes', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } });
 	part.render({ ...state, skillSelectors: [skill('original')] });
 	edit(part, '$commit review');
@@ -1146,10 +1145,10 @@ test('Chat input retry restores the original Skill revision and backward selecti
 for (const layout of [undefined, 'compact'] as const) for (const outcome of ['success', 'failure'] as const) for (const replacement of ['attachment', 'emptied'] as const) test(`Submission cleanup preserves a draft created by its change listener (${layout ?? 'default'}, ${outcome}, ${replacement})`, async () => {
 	const reply = new DeferredPromise<void>();
 	const sent: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		send: async text => { sent.push(text); await reply.p; },
 	}, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Original request');
 	part.addContext({ id: 'old', kind: 'file', name: 'old.txt', resolve: async () => ({ name: 'old.txt', content: 'Original capture' }) });
 	const original = (await part.captureDraft())!.draft;
@@ -1183,8 +1182,8 @@ for (const layout of [undefined, 'compact'] as const) for (const outcome of ['su
 
 for (const layout of [undefined, 'compact'] as const) test(`Failed submission publishes one complete restored draft (${layout ?? 'default'})`, async () => {
 	const reply = new DeferredPromise<void>();
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: () => reply.p }, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: () => reply.p }, undefined, undefined, undefined, layout);
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Original request');
 	part.addContext({ id: 'original-file', kind: 'file', name: 'original.txt', resolve: async () => ({ name: 'original.txt', content: 'Original capture' }) });
 	const input = part.element.querySelector('textarea')!;
@@ -1205,8 +1204,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Failed submission pu
 for (const stage of ['clear', 'recovery'] as const) test(`Disposing the composer from its ${stage} notification retires submission cleanly`, async () => {
 	const reply = new DeferredPromise<void>();
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; await reply.p; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { sends++; await reply.p; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Original request');
 	using changed = part.onDidChangeInputForTest(() => {
 		const value = part.element.querySelector('textarea')?.value;
@@ -1227,8 +1226,8 @@ for (const stage of ['clear', 'recovery'] as const) test(`Disposing the composer
 
 test('Chat input failure does not restore over a new draft that was edited and emptied', async () => {
 	const failure = new DeferredPromise<void>();
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: () => failure.p });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: () => failure.p });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const sending = part.acceptInput('Original');
 	edit(part, 'New draft');
 	edit(part, '');
@@ -1241,13 +1240,13 @@ test('Chat input failure does not restore over a new draft that was edited and e
 test('Chat input waits for file preparation before sending its inline reference and snapshot', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			assert.equal(text, 'input.txt ');
 			for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 		}
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt', { type: 'text/plain' })]);
 	const sending = part.acceptInput();
 	assert.deepEqual(sent, []);
@@ -1260,12 +1259,12 @@ for (const layout of [undefined, 'compact'] as const) test(`Submission blocked d
 	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
 	const sent: { text: string; contents: string[]; }[] = [];
 	using notifications = new TestNotificationService();
-	using part = inputPart(notifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(notifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
 		},
 	}, undefined, undefined, undefined, layout);
-	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const ready: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	part.render(ready);
 	edit(part, 'Keep this task');
 	const acquiring = part.acquireContext(() => prepared.p);
@@ -1297,12 +1296,12 @@ for (const layout of [undefined, 'compact'] as const) for (const input of [
 			stop: async () => { void stopping.complete(); await finalization.p; },
 			cancel: async () => { },
 		}),
-	}, 'agent', {
+	}, {
 		send: async () => { calls.push('message'); },
 		executeServerCommand: async () => { calls.push('server command'); },
 		executeCommand: async () => { calls.push('local command'); },
 	}, undefined, undefined, undefined, layout);
-	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false };
+	const ready: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false };
 	part.render(ready);
 	// Start capture while the draft is empty; slash commands intentionally hide the microphone.
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
@@ -1331,8 +1330,8 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 	const messages: string[] = [];
 	using listener = notifications.model.onDidAdd(message => messages.push(message.message));
 	let sends = 0;
-	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(notifications, undefined, { send: async () => { sends++; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Keep original');
 	const attaching = part.attachFiles([new browserEnvironment.window.File(['\0binary'], 'bad.bin')]);
 	await assert.rejects(part.acceptInput(), /must contain nonempty UTF-8 text/u);
@@ -1345,11 +1344,11 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 test('The Ash composer keeps staged attachments editable and waits for readiness before sending', async () => {
 	const sent: string[] = [];
 	let retries = 0;
-	using part = inputPart(sharedNotifications, undefined, 'ask', {
+	using part = inputPart(sharedNotifications, undefined, {
 		draft: { setText() { }, attachFiles: async () => { }, retryFile: async () => { retries++; }, removeFile() { } },
 		send: async text => { sent.push(text); },
 	});
-	const state: ChatInputState = { mode: 'ask', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const draft = { text: 'My draft', readOnly: false, canAttachFiles: true };
 	const attachment = { id: 'local-file', name: 'notes.txt' };
 	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'uploading' }] } });
@@ -1383,8 +1382,8 @@ test('Hiding an input cancels pending file preparation without sending or notify
 	let errors = 0;
 	using listener = notifications.model.onDidAdd(() => { errors++; });
 	let sends = 0;
-	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(notifications, undefined, { send: async () => { sends++; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt')]);
 	const sending = assert.rejects(part.acceptInput(), isCancellationError);
 	part.setVisible(false);
@@ -1399,12 +1398,12 @@ test('Hiding an input cancels pending file preparation without sending or notify
 test('Editing a draft during file preparation cancels the waiting send and keeps both file references', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const sent: { text: string; contents: string[]; }[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
 		}
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Original request');
 	const first = part.attachFiles([new browserEnvironment.window.File(['first contents'], 'first.txt')]);
 	const sending = part.acceptInput();
@@ -1424,8 +1423,8 @@ test('Disposing an input during preparation cancels sending without creating new
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using notifications = new TestNotificationService();
 	let sends = 0;
-	const part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const part = inputPart(notifications, undefined, { send: async () => { sends++; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const attaching = part.attachFiles([new browserEnvironment.window.File(['file contents'], 'input.txt')]);
 	const rejected = assert.rejects(part.acceptInput(), isCancellationError);
 	part.dispose();
@@ -1439,7 +1438,7 @@ test('Disposing an input during preparation cancels sending without creating new
 test('A local settings command executes while file context is still being prepared', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	const commands: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async invocation => { commands.push(invocation.commandId); } });
+	using part = inputPart(sharedNotifications, undefined, { executeCommand: async invocation => { commands.push(invocation.commandId); } });
 	const attaching = part.attachFiles([new browserEnvironment.window.File(['following context'], 'following.txt')]);
 	const command = part.acceptInput('/config');
 	assert.equal(commands.length, 1);
@@ -1454,13 +1453,13 @@ test('Pending attachment-only context exposes mouse Send and waits for acquisiti
 	const preparation = new DeferredPromise<readonly Parameters<ChatInputPart['addContext']>[0][]>();
 	const delivered = new DeferredPromise<void>();
 	const sent: { text: string; contents: string[]; }[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (text, _mode, _skills, contexts) => {
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (text, _skills, contexts) => {
 			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
 			await delivered.complete();
 		}
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const acquiring = part.acquireContext(() => preparation.p);
 	const send = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button');
 	assert.ok(send);
@@ -1479,7 +1478,7 @@ test('Canceling pending attachment-only context restores the empty mouse toolbar
 	const preparation = new DeferredPromise<readonly Parameters<ChatInputPart['addContext']>[0][]>();
 	const controller = new AbortController();
 	using part = inputPart(sharedNotifications);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const acquiring = part.acquireContext(() => preparation.p, controller.signal);
 	const rejected = assert.rejects(acquiring, isCancellationError);
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
@@ -1494,8 +1493,8 @@ test('Canceling pending attachment-only context restores the empty mouse toolbar
 test('A retired composer cannot restore its failed request into the reopened blank draft', async () => {
 	const reply = new DeferredPromise<void>();
 	const dispatched = new DeferredPromise<void>();
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { await dispatched.complete(); await reply.p; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { await dispatched.complete(); await reply.p; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const sending = part.acceptInput('Request for the previous composer');
 	const rejected = assert.rejects(sending, /Retired request failed/u);
 	try {
@@ -1518,14 +1517,14 @@ test('A reopened composer keeps its send locked when the retired send settles', 
 	const nextReply = new DeferredPromise<void>();
 	const nextDispatched = new DeferredPromise<void>();
 	const sent: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		send: async text => {
 			sent.push(text);
 			if (text === 'Previous request') await previousReply.p;
 			else { await nextDispatched.complete(); await nextReply.p; }
 		},
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const previous = assert.rejects(part.acceptInput('Previous request'), /Retired request failed/u);
 	part.setVisible(false);
 	part.setVisible(true);
@@ -1574,12 +1573,12 @@ for (const submission of [
 ]) {
 	test(`Retiring input during synchronous draft clearing blocks the old ${submission.kind}`, async () => {
 		const calls: string[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'agent', {
+		using part = inputPart(sharedNotifications, undefined, {
 			send: async () => { calls.push('message'); },
 			executeCommand: async () => { calls.push('local command'); },
 			executeServerCommand: async () => { calls.push('server command'); },
 		});
-		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
+		part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false });
 		edit(part, submission.text);
 		let retired = false;
 		using transition = part.onDidChangeInputForTest(() => {
@@ -1599,10 +1598,10 @@ for (const submission of [
 
 test('Live App context survives inline draft submission and is revoked by its owning source', async () => {
 	const sent: string[][] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
-		send: async (_text, _mode, _skills, contexts) => { sent.push(await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content))); },
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async (_text, _skills, contexts) => { sent.push(await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content))); },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'First request');
 	part.attachmentModel.addContext({ id: 'app', kind: 'mcpApp', lifetime: 'source', name: 'App context', resolve: async () => ({ name: 'App context', content: 'first source state' }) });
 	await part.acceptInput();
@@ -1626,7 +1625,7 @@ test('Draft handoff carries user context and leaves source-owned App context wit
 	const captured = await part.captureDraft();
 	assert.ok(captured);
 	assert.deepEqual(captured.draft, {
-		mode: 'agent', text: 'User draft  file.ts ',
+		text: 'User draft  file.ts ',
 		contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'User file', reference: { start: 12, end: 19 } }],
 	});
 	assert.equal(sourceReads, 0);
@@ -1646,9 +1645,9 @@ test('Draft handoff carries user context and leaves source-owned App context wit
 
 test('permission requests approve only selected capabilities and can shorten the lifetime', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'permissions-1', request: {
 				type: 'permissions', request: {
@@ -1675,9 +1674,9 @@ test('permission requests approve only selected capabilities and can shorten the
 
 test('approval exposes only offered reusable decisions and renders exact argv as text', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'reusable', request: {
 				type: 'approval', request: {
@@ -1698,9 +1697,9 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 
 test('file write approval submits the offered session scope', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'file-write', request: {
 				type: 'approval', request: {
@@ -1720,9 +1719,9 @@ test('file write approval submits the offered session scope', async () => {
 
 test('shell approval displays and submits the backend command prefix', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'shell-prefix', request: {
 				type: 'approval', request: {
@@ -1742,9 +1741,9 @@ test('shell approval displays and submits the backend command prefix', async () 
 
 test('result review retains literal evidence and sends only the exact offer decision', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'result-review', request: {
 				type: 'toolResultReview', request: {
@@ -1776,9 +1775,9 @@ test('result review retains literal evidence and sends only the exact offer deci
 
 test('client tool skip targets its exact offer and retired controls cannot answer another call', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'client-offer', request: { type: 'dynamicTool', call: { callId: 'client-call', name: '<img src=x>', definitionDigest: 'frozen-definition', arguments: { literal: '<script>data</script>' } } } },
 	};
 	part.render(state);
@@ -1798,9 +1797,9 @@ test('client tool skip targets its exact offer and retired controls cannot answe
 
 test('sandbox approval retains captured output and submits only offered decisions for the current request', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'sandbox', request: {
 				type: 'approval', request: {
@@ -1833,7 +1832,7 @@ test('sandbox approval retains captured output and submits only offered decision
 
 test('peer-chat navigation isolates drafts and references while first-send materialization retains the live draft', async () => {
 	using part = inputPart(sharedNotifications);
-	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	part.render({ ...state, draftIdentity: { id: 'draft', generation: 0 } });
 	part.appendToDraft('Original draft');
 	part.addContext({ id: 'file', name: 'private.txt', kind: 'file', resolve: async () => ({ name: 'private.txt', content: 'Original file snapshot' }) });
@@ -1851,50 +1850,47 @@ test('peer-chat navigation isolates drafts and references while first-send mater
 });
 
 
-for (const mode of ['ask', 'plan'] as const) test(`peer-chat round trips restore ${mode} drafts and send mode independently of approvals`, async () => {
-	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, draftIdentity: { id: 'A', generation: 0 } };
+test('Peer-chat draft switches preserve /swarm text and leave approval policy with the model', async () => {
+	let state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, draftIdentity: { id: 'A', generation: 0 } };
 	const requests: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, mode, {
-		selectMode: selected => { state = { ...state, mode: selected }; part.render(state); },
-		send: async (text, selected) => { requests.push({ text, mode: selected, approval: state.approvalMode }); },
+	using part = inputPart(sharedNotifications, undefined, {
+		send: async text => { requests.push({ text, approval: state.approvalMode }); },
 	});
 	part.render(state);
-	part.appendToDraft('Draft A');
-	state = { ...state, mode: 'agent', approvalMode: 'auto', draftIdentity: { id: 'B', generation: 1 } };
+	part.appendToDraft('/swarm Draft A');
+	state = { ...state, approvalMode: 'auto', draftIdentity: { id: 'B', generation: 1 } };
 	part.render(state);
 	part.appendToDraft('Draft B');
 	state = { ...state, draftIdentity: { id: 'A', generation: 2 } };
 	part.render(state);
-	assert.equal(state.mode, mode, 'Restored mode is published to the owning model');
-	assert.equal(state.approvalMode, 'auto', 'Draft restoration does not restore approval policy');
-	assert.equal((await part.captureDraft())!.draft.mode, mode);
+	assert.equal(state.approvalMode, 'auto');
+	assert.equal((await part.captureDraft())!.draft.text, '/swarm Draft A');
 	state = { ...state, approvalMode: 'manual', draftIdentity: { id: 'B', generation: 3 } };
 	part.render(state);
-	assert.equal(state.mode, 'agent');
 	await part.acceptInput();
 	state = { ...state, draftIdentity: { id: 'A', generation: 4 } };
 	part.render(state);
 	await part.acceptInput();
-	assert.deepEqual(requests, [{ text: 'Draft B', mode: 'agent', approval: 'manual' }, { text: 'Draft A', mode, approval: 'manual' }]);
+	assert.deepEqual(requests, [{ text: 'Draft B', approval: 'manual' }, { text: '/swarm Draft A', approval: 'manual' }]);
 });
 
 test('persistent Chat drafts retire consumed attachments when an untitled composer is promoted', async () => {
 	using changes = new Emitter<void>();
 	const model = { threadId: undefined as string | undefined, untitledSessionId: 'draft-promotion', onDidChange: changes.event };
 	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		send: async () => { model.threadId = 'promoted-thread'; changes.fire(); },
 	});
 	part.bindDraftStorage(model as IChatWidgetModel, {
 		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); }, flush: async () => { },
 	}, AshEvent.None);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Consume this snapshot');
 	part.addContext({ id: 'consumed', kind: 'file', name: 'consumed.txt', resolve: async () => ({ name: 'consumed.txt', content: 'Consumed snapshot' }) });
 	await part.acceptInput();
 	await Promise.resolve();
 	assert.equal(drafts.get('untitled:draft-promotion'), undefined);
-	assert.deepEqual(drafts.get('promoted-thread'), { mode: 'agent', text: '', contexts: [] });
+	assert.deepEqual(drafts.get('promoted-thread'), { text: '', contexts: [] });
 	assert.equal(await part.captureDraft(), undefined);
 });
 
@@ -1915,7 +1911,7 @@ test('Chat shutdown waits for file preparation and retains the draft when the st
 	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
 	let flushes = 0;
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; } });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { sends++; } });
 	part.bindDraftStorage({ threadId: 'shutdown-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
 		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); },
 		flush: async () => { if (++flushes === 1) throw new Error('Storage unavailable'); },
@@ -2651,7 +2647,7 @@ suite('chatInput browser component', () => {
 			transfer.setData('text/plain', text);
 			transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
 				version: 1, draft: {
-					text, mode: 'agent', contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
+					text, contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
 				}
 			}));
 			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
@@ -5420,13 +5416,13 @@ suite('chatInput browser component', () => {
 for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]) {
 	test(`Explicit ${queue} carries composer context and restores a failed unedited draft`, async () => {
 		const calls: unknown[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'agent', {
-			send: async (text, mode, skills, contexts, signal, intent) => {
-				calls.push({ text, mode, skills, contexts, signal, intent });
+		using part = inputPart(sharedNotifications, undefined, {
+			send: async (text, skills, contexts, signal, intent) => {
+				calls.push({ text, skills, contexts, signal, intent });
 				throw new Error('Synthetic explicit submission failed');
 			},
 		});
-		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+		part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 		edit(part, 'Preserve this draft');
 		part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
 		const before = await part.captureDraft();
@@ -5444,11 +5440,11 @@ for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]
 for (const layout of [undefined, 'compact'] as const) test(`Stop and Send preserves its draft and attachments when interruption fails (${layout ?? 'default'})`, async () => {
 	const failure = new Error('Synthetic interruption failure');
 	const calls: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		interrupt: async () => { calls.push('interrupt'); throw failure; },
 		send: async () => { calls.push('send'); },
 	}, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Keep this unsent draft');
 	part.addContext({ id: 'stop-note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
 	const captured = await part.captureDraft();
@@ -5461,10 +5457,10 @@ for (const layout of [undefined, 'compact'] as const) test(`Stop task reports a 
 	using notifications = new TestNotificationService();
 	let pending = new DeferredPromise<void>();
 	let started = new DeferredPromise<void>();
-	using part = inputPart(notifications, undefined, 'agent', {
+	using part = inputPart(notifications, undefined, {
 		interrupt: async () => { started.complete(); await pending.p; },
 	}, undefined, undefined, undefined, layout);
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	const stop = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.interrupt"] button')!;
 	assert.ok(stop);
 	stop.click();
@@ -5486,15 +5482,15 @@ test('Stop and Send waits for interruption and restores draft and attachments on
 	const started = new DeferredPromise<void>();
 	const stopped = new DeferredPromise<void>();
 	const calls: string[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		interrupt: async () => { calls.push('interrupt'); started.complete(); await stopped.p; },
-		send: async (text, _mode, _skills, contexts) => {
+		send: async (text, _skills, contexts) => {
 			calls.push(text);
 			assert.equal(contexts?.[0]?.id, 'note');
 			throw new Error('Synthetic send failure');
 		},
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Captured stop draft');
 	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
 	const captured = await part.captureDraft();
@@ -5513,11 +5509,11 @@ test('Stop and Send cannot submit into a successor conversation after interrupti
 	const started = new DeferredPromise<void>();
 	const stopped = new DeferredPromise<void>();
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		interrupt: async () => { started.complete(); await stopped.p; },
 		send: async () => { sends++; },
 	});
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Old conversation');
 	const pending = assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), error => isCancellationError(error));
 	await started.p;
@@ -5531,8 +5527,8 @@ test('Stop and Send cannot submit into a successor conversation after interrupti
 
 test('Explicit queue intent cannot execute a slash command or change a hidden draft', async () => {
 	let commands = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async () => { commands++; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { executeCommand: async () => { commands++; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, '/config');
 	await assert.rejects(part.acceptInput(undefined, { queue: ChatRequestQueueKind.Queued }), /not slash commands/);
 	assert.equal(part.element.querySelector('textarea')!.value, '/config');
@@ -5547,9 +5543,9 @@ for (const locale of ['en', 'zh-CN']) test(`MCP questions retain required fields
 	initializeTestLocalization(locale);
 	try {
 		const responses: unknown[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 		part.render({
-			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 			interaction: {
 				requestId: 'mcp-fields', request: {
 					type: 'userInput', request: {
@@ -5587,9 +5583,9 @@ test('Question choices require selection and retain both presets and custom answ
 	initializeTestLocalization('zh-CN');
 	try {
 		const responses: unknown[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 		part.render({
-			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 			interaction: {
 				requestId: 'choose-mode',
 				request: {
@@ -5631,9 +5627,9 @@ test('Plan review renders Markdown and resolves the original request with locali
 	initializeTestLocalization('zh-CN');
 	try {
 		const responses: unknown[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'plan', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+		using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 		const state: ChatInputState = {
-			mode: 'plan', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 			interaction: {
 				requestId: 'review-plan',
 				request: {
@@ -5687,7 +5683,7 @@ test('Follow-up buttons append a draft and retire when the conversation changes'
 	try {
 		using part = inputPart(sharedNotifications);
 		const state: ChatInputState = {
-			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 			conversation: { sessionId: 'session', threadId: 'first' },
 			followups: { responseId: 'reply', prompts: ['Run the reconnect tests'] },
 		};
@@ -5707,9 +5703,9 @@ test('Follow-up buttons append a draft and retire when the conversation changes'
 
 test('MCP type and bounds errors keep the request open for correction', () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
 		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'mcp-types', request: {
@@ -5751,11 +5747,11 @@ test('MCP type and bounds errors keep the request open for correction', () => {
 
 test('Cancelling a question sends its identity without submitting required answers', () => {
 	const decisions: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', {
+	using part = inputPart(sharedNotifications, undefined, {
 		resolveInteraction: async (decision, requestId) => { decisions.push({ decision, requestId }); },
 	});
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [],
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [],
 		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'pending', request: {
@@ -5785,7 +5781,7 @@ test('Question draft survives a fresh offer for the same pending request', () =>
 		},
 	};
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
 		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction, pendingUserInputRequestId: interaction.requestId,
 		conversation: { sessionId: 'session', threadId: 'thread' },
@@ -5807,9 +5803,9 @@ test('Question draft survives a fresh offer for the same pending request', () =>
 
 test('Retired answer forms cannot resolve a replacement interaction or hidden composer', async () => {
 	const replies: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { replies.push(response); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { replies.push(response); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'first', request: { type: 'userInput', request: { questions: [{ id: 'answer', header: 'Answer', question: 'Question', required: true, allowFreeForm: true }] } } }
 	};
 	part.render(state);
@@ -5830,9 +5826,9 @@ test('Retired answer forms cannot resolve a replacement interaction or hidden co
 
 test('Approval ports use the displayed request identity and reject hidden, disabled and non-approval inputs', async () => {
 	const replies: { response: Parameters<ChatInputDelegate['resolveInteraction']>[0]; requestId?: string; }[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { replies.push({ response, requestId }); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { replies.push({ response, requestId }); } });
 	const state: ChatInputState = {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'displayed', request: { type: 'approval', request: { reason: 'Review action', capabilities: [] } } }
 	};
 	part.render(state); await part.acceptActiveToolConfirmation(); await part.skipActiveToolConfirmation();
@@ -5849,9 +5845,9 @@ test('Approval ports use the displayed request identity and reject hidden, disab
 
 test('Confirmation focus toggles through the owning input without answering or changing its draft', () => {
 	let answered = false;
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async () => { answered = true; } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async () => { answered = true; } });
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'focus-only', request: { type: 'approval', request: { reason: 'Review action', capabilities: [] } } }
 	});
 	edit(part, 'Keep this draft');
@@ -5865,8 +5861,8 @@ test('Confirmation focus toggles through the owning input without answering or c
 
 test('/btw composer captures the untrimmed question and shifts frozen reference offsets while preserving a failed draft', async () => {
 	let sends = 0;
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; } });
-	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	using part = inputPart(sharedNotifications, undefined, { send: async () => { sends++; } });
+	part.render({ queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, '/btw Question');
 	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
 	const captured = (await part.captureDraft())!.draft;
@@ -5897,7 +5893,7 @@ function reviewTool(presentation: ToolConfirmationPresentation, itemId = 'rich-t
 }
 function richApprovalState(tool: IChatToolInvocation): ChatInputState {
 	return {
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: { requestId: 'rich-offer', itemId: tool.call.itemId, request: { type: 'approval', request: { reason: 'Review these changes', capabilities: [] } } }, toolInvocation: tool, toolInvocations: [tool]
 	};
 }
@@ -5910,7 +5906,7 @@ test('typed confirmation evidence reaches the real approval factory and retains 
 		[{ type: 'sandboxPrerequisite', dependencies: ['<script>dependency</script>'], remediations: ['Install dependency'] }, '<script>dependency</script>'],
 	] satisfies [ToolConfirmationPresentation, string][]) {
 		const responses: unknown[] = [];
-		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+		using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 		const state = richApprovalState(reviewTool(presentation));
 		part.render(state);
 		const retained = part.element.querySelector<HTMLButtonElement>('.ash-chat-interaction button');
@@ -5936,7 +5932,7 @@ test('extension approval can find a package without resolving the tool offer', a
 		const searches: unknown[] = [];
 		const responses: unknown[] = [];
 		using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { searches.push(options); });
-		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } });
 		part.render(richApprovalState(reviewTool({ type: 'extensionsInstall', extensions: ['publisher.valid', '@installed', '<script>literal</script>'] })));
 		const list = part.element.querySelector('.ash-chat-extension-requests')!;
 		const buttons = list.querySelectorAll('button');
@@ -5953,7 +5949,7 @@ test('extension approval can find a package without resolving the tool offer', a
 
 test('confirmation carousel reviews adjacent evidence without granting another call approval', async () => {
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
 	const current = reviewTool({ type: 'extensionsInstall', extensions: ['publisher.current'] });
 	const adjacent = reviewTool({ type: 'agentFeedbackReview', message: 'feedback' }, 'adjacent');
 	const state = { ...richApprovalState(current), toolInvocations: [current, adjacent] };
@@ -5980,7 +5976,7 @@ test('authentication uses the bound MCP host and cancels hidden login without ap
 	const login = new DeferredPromise<void>();
 	const servers = { isOAuthAvailable: true, login: async (serverId: string, _options: unknown, signal?: AbortSignal) => { attempts.push({ serverId, signal }); await login.p; } } as unknown as IMcpServerManagementService;
 	const responses: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } }, undefined, undefined, undefined, undefined, servers);
+	using part = inputPart(sharedNotifications, undefined, { resolveInteraction: async response => { responses.push(response); } }, undefined, undefined, undefined, undefined, servers);
 	const state = richApprovalState(reviewTool({ type: 'authentication', provider: 'Source provider' }));
 	part.render(state);
 	const signIn = [...part.element.querySelectorAll('button')].find(button => button.textContent === 'Sign in to Source provider')!;
@@ -6014,7 +6010,7 @@ test('authentication uses the bound MCP host and cancels hidden login without ap
 test('result review retires its media when hidden and restores it for the same offer', () => {
 	using part = inputPart(sharedNotifications);
 	part.render({
-		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 		interaction: {
 			requestId: 'review-image', request: {
 				type: 'toolResultReview', request: {
@@ -6040,8 +6036,8 @@ test('Attaching a Skill retains its accepted source and digest through text edit
 	const accepted = { id: { source: 'plugin:review-tools@1', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:accepted' } };
 	const replacement = { ...accepted, id: { ...accepted.id, source: 'replacement-host' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:replacement' } };
 	const sent: unknown[] = [];
-	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async (text, _mode, skills) => { sent.push({ text, skills }); } });
-	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true };
+	using part = inputPart(sharedNotifications, undefined, { send: async (text, skills) => { sent.push({ text, skills }); } });
+	const state: ChatInputState = { queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true };
 	part.render(state);
 	part.attachSkill(accepted);
 	part.appendToDraft('Inspect the project changes.');

@@ -270,7 +270,6 @@ fn diagnostic_trace_records_tool_model_consultation_through_the_real_turn_mailbo
                 reasoning_effort: None,
                 advisor: Some(ash_protocol::AdvisorConfig::new(advisory_model.clone())),
                 kind: ash_protocol::TurnKind::Coding,
-                mode: Default::default(),
                 instructions: crate::test_turn_instructions(),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::Manual,

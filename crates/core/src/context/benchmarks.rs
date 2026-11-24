@@ -62,7 +62,6 @@ impl Fixture {
                 &thread.thread_id,
                 StartTurnRequest {
                     context_policy: policy,
-                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new("benchmark-turn").unwrap(),
                     expected_sequence: SequenceExpectation::Exact(1),

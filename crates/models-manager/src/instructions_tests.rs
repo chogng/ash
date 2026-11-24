@@ -159,8 +159,8 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
         .get_mut(&name)
         .unwrap()
         .description = "UPDATED TOOL GUIDANCE".into();
-    spec.model_messages.agent_modes.insert(
-        ash_protocol::AgentMode::Plan,
+    spec.model_messages.task_commands.insert(
+        ash_protocol::TaskExecution::Plan,
         "UPDATED PLAN GUIDANCE".into(),
     );
     spec.model_messages.multi_agent.root = Some("UPDATED ROOT GUIDANCE".into());
@@ -187,7 +187,7 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
     );
     assert_eq!(new_messages.tools[&name].body, "UPDATED TOOL GUIDANCE");
     assert_eq!(
-        new_messages.agent_modes[&ash_protocol::AgentMode::Plan].body,
+        new_messages.task_commands[&ash_protocol::TaskExecution::Plan].body,
         "UPDATED PLAN GUIDANCE"
     );
     assert_eq!(
@@ -268,7 +268,9 @@ fn turn_freezes_the_selected_base_and_preserves_tasks_modes_and_custom_bases() {
     let second = model("anthropic", "claude-sonnet-5-5");
     let unknown = model("openai", "unregistered-model");
     let mode = ash_protocol::TurnInstructions::new("mode", "mode", "v1", "MODE").unwrap();
-    let default = ash_prompts::AGENT_INSTRUCTIONS.freeze().with_mode(&mode);
+    let default = ash_prompts::AGENT_INSTRUCTIONS
+        .freeze()
+        .with_task_instructions(&mode);
     let frozen = catalog.for_turn(default.clone(), Some(&first));
     assert_eq!(frozen.id(), "model/openai/gpt-6-astra");
     assert_eq!(
@@ -278,7 +280,7 @@ fn turn_freezes_the_selected_base_and_preserves_tasks_modes_and_custom_bases() {
             .model_messages
             .system_instructions
     );
-    assert_eq!(frozen.mode_instructions(), default.mode_instructions());
+    assert_eq!(frozen.task_instructions(), default.task_instructions());
     assert_eq!(
         frozen.model_guidance(),
         Some(&catalog.resolve(Some(&first)))

@@ -5,7 +5,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { ModelRef, ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
-import { ChatRequestQueueKind, IChatService, type ChatMode, type ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
+import { ChatRequestQueueKind, IChatService, type ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { ILanguageModelsService } from '../../../../workbench/contrib/chat/common/languageModels.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { modelRefIdentity } from '../../../../workbench/services/chat/common/modelCatalog.js';
@@ -31,7 +31,6 @@ export class AshChatModel extends ChatWidgetModel {
 	protected override get useSkillSelectors(): boolean { return this.presentation === 'session'; }
 	protected override get snapshotHistory() { return this.presentation === 'session' ? undefined : super.snapshotHistory; }
 	protected override get submissionApprovalMode() { return this.presentation === 'session' ? this.inputState.approvalMode : super.submissionApprovalMode; }
-	override get mode(): ChatMode { return this.presentation === 'session' ? super.mode : 'agent'; }
 	override get isAutomaticModel(): boolean { return this.presentation === 'session' && super.isAutomaticModel; }
 
 	constructor(
@@ -102,9 +101,9 @@ export class AshChatModel extends ChatWidgetModel {
 		if (!this.isDisposed && this.presentation === 'session') this.preferences?.rememberSelectedModel(undefined);
 	}
 
-	override send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		if (this.presentation === 'session') return super.send(text, mode, skills, contexts, options);
-		return super.send(text, 'agent', undefined, contexts, {
+	override send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
+		if (this.presentation === 'session') return super.send(text, skills, contexts, options);
+		return super.send(text, undefined, contexts, {
 			...options, queue: options?.queue ?? ChatRequestQueueKind.Queued,
 		});
 	}

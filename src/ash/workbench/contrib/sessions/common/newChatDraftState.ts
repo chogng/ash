@@ -1,4 +1,3 @@
-import { structuralEquals } from '../../../../base/common/equals.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
 import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
@@ -25,20 +24,10 @@ function attachmentsKey(draftId: string, id: string): string {
 
 /** A draft belongs to a Thread or an `untitled:` session identity, regardless of layout. */
 export function readNewChatDraftState(storage: IStorageService, draftId: string): ChatDraft | undefined {
-	const stored = readStoredDraft(storage, draftId);
-	if (stored?.combined) writeNewChatDraftState(storage, stored.draft, draftId);
-	return stored?.draft;
-}
-
-/** Migration compares destinations without rewriting a conflicting record. */
-function readStoredDraft(storage: IStorageService, draftId: string): { readonly draft: ChatDraft; readonly combined: boolean; } | undefined {
 	const raw = storage.get(`sessions.inputDraft:${draftId}`, StorageScope.WORKSPACE);
 	if (raw === undefined) return undefined;
-	const value: unknown = JSON.parse(raw);
-	const stored = storedInput(value);
-	if (!stored) {
-		return { draft: decodeStoredChatDraft(value), combined: true };
-	}
+	const stored = storedInput(JSON.parse(raw));
+	if (!stored) throw new TypeError('Invalid stored Chat draft');
 	const state = deserializeUntitledInputState(stored.state);
 	if (!isRecord(state) || !Array.isArray(state.contexts) || state.contexts.length !== 0) throw new TypeError('Invalid stored Chat input state');
 	let contexts: ChatDraft['contexts'] = [];
@@ -47,19 +36,9 @@ function readStoredDraft(storage: IStorageService, draftId: string): { readonly 
 		if (payload === undefined) throw new TypeError('Missing stored Chat draft attachments');
 		contexts = deserializeUntitledInputAttachments(payload);
 	}
-	return { draft: decodeStoredChatDraft({ ...state, contexts }), combined: false };
-}
-
-function decodeStoredChatDraft(draft: unknown): ChatDraft {
-	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'swarm', 'ask'].includes(draft.mode as string)
-		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
-		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'
-			&& typeof context.kind === 'string' && typeof context.name === 'string' && typeof context.content === 'string'
-			&& (context.resource === undefined || typeof context.resource === 'string'))) {
-		throw new TypeError('Invalid stored Chat draft');
-	}
+	const draft = { ...state, contexts };
 	validateOpenAgentsWindow({ draft });
-	return draft as unknown as ChatDraft;
+	return draft;
 }
 
 export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraft | undefined, draftId: string): void {
@@ -78,7 +57,7 @@ export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraf
 	const reuse = attachments !== undefined && storage.get(attachmentsKey(draftId, attachments), StorageScope.WORKSPACE) === payload;
 	if (!reuse) attachments = payload === undefined ? undefined : generateUuid();
 	// Publish the small state only after its immutable payload exists. A failed write
-	// leaves the previous record usable, including during legacy migration.
+	// leaves the previous record usable.
 	if (attachments && !reuse) storage.store(attachmentsKey(draftId, attachments), payload!, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	try {
 		storage.store(key, JSON.stringify({ state, attachments }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -87,30 +66,4 @@ export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraf
 		throw error;
 	}
 	if (previous?.attachments && previous.attachments !== attachments) storage.remove(attachmentsKey(draftId, previous.attachments), StorageScope.WORKSPACE);
-}
-
-/** Conflicting legacy drafts get their own session before their old entry is removed. */
-export function migrateNewChatDraftState(storage: IStorageService, onError?: (error: unknown) => void): readonly { readonly draft: ChatDraft; readonly key: string; }[] {
-	const prefixes = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code'
-		? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
-	const recovered: { draft: ChatDraft; key: string; }[] = [];
-	for (const prefix of prefixes) {
-		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
-			try {
-				const draft = decodeStoredChatDraft(deserializeUntitledInputState(storage.get(key, StorageScope.WORKSPACE)!));
-				const identity = key.slice(prefix.length + 1);
-				const existing = identity ? readStoredDraft(storage, identity)?.draft : undefined;
-				if (!identity || existing && !structuralEquals(existing, draft)) {
-					recovered.push({ draft, key });
-					continue;
-				}
-				writeNewChatDraftState(storage, draft, identity);
-				storage.remove(key, StorageScope.WORKSPACE);
-			} catch (error) {
-				// One corrupt entry must not block other drafts or remove recoverable storage.
-				onError?.(error);
-			}
-		}
-	}
-	return recovered;
 }

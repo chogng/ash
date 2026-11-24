@@ -9,7 +9,7 @@ export type WorkbenchWindow = 'ide' | 'agentWindow';
 
 export type CommandInterpretation = 'product' | 'literal';
 
-export type SessionMode = 'agent' | 'plan' | 'debug' | 'swarm' | 'ask';
+export type TaskExecution = 'agent' | 'plan' | 'debug' | 'swarm' | 'ask';
 
 export type SessionId = string;
 
@@ -22,7 +22,6 @@ export type AgentReviewTarget =
 	| { readonly type: 'baseBranch'; readonly branch: string; }
 	| { readonly type: 'custom'; readonly instructions: string; };
 
-type ChatMode = SessionMode;
 
 export interface SessionMutationParams {
 	readonly sessionId: string;
@@ -60,7 +59,6 @@ interface SessionOperations {
 	readonly startTurn: {
 		readonly threadId: string;
 		readonly expectedSequence: number;
-		readonly mode?: SessionMode;
 		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
@@ -268,7 +266,6 @@ export type AdvisorConfigureResult = TurnInterruptResult;
 export interface QueueEnqueueParams extends SessionMutationParams {
 	readonly commandInterpretation?: CommandInterpretation;
 	readonly threadId: string;
-	readonly mode?: SessionMode;
 	readonly model?: ModelRef | null;
 	readonly modelRouting?: 'auto';
 	readonly reasoningEffort?: ModelReasoningEffort | null;
@@ -284,7 +281,7 @@ export interface QueuedMessage {
 	readonly commandId: string;
 	readonly revision: number;
 	readonly status: 'pending' | 'paused' | 'delivering' | 'started' | 'rejected' | 'cancelled';
-	readonly mode: SessionMode;
+	readonly execution: TaskExecution;
 	readonly text: string;
 	/** Non-text input is retained by Core and never reconstructed by an editor. */
 	readonly contextCount: number;
@@ -570,7 +567,7 @@ export interface Turn {
 	readonly kind?: 'coding' | 'review' | 'advisor' | 'shell' | 'tool' | 'contextCompaction';
 	readonly turnId: string;
 	readonly status: TurnStatus;
-	readonly mode: ChatMode;
+	readonly execution: TaskExecution;
 	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
 	readonly modelRouting?: 'selected' | 'fallback' | 'reused';
@@ -815,12 +812,6 @@ export type ThreadCommittedEvent =
 	| { readonly type: 'interactionResolved' | 'interactionCancelled'; readonly turnId: string; readonly requestId: string; }
 	| { readonly type: 'turnCompleted' | 'turnFailed' | 'turnInterrupted'; readonly turnId: string; }
 	| { readonly type: 'interactionRequested'; readonly interaction: TurnInteraction; }
-	| {
-		readonly type: 'turnModeChanged';
-		readonly turnId: string;
-		readonly fromMode: ChatMode;
-		readonly mode: ChatMode;
-	}
 	| {
 		readonly type:
 		| 'threadCreated'

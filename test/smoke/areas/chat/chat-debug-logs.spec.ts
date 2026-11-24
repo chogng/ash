@@ -55,7 +55,7 @@ async function seedSession(client: AppServerProtocolClient, root: string, title:
 	const read = () => client.request(methods['session/thread/read'], { sessionId: session.sessionId, threadId });
 	await client.request(methods['session/request'], {
 		sessionId: session.sessionId, commandId: 'debug-log-turn', request: {
-			type: 'startTurn', threadId, expectedSequence: (await read()).thread.sequence, model, mode: 'ask', toolMode: 'direct', approvalMode: 'manual', input: [{ type: 'text', text: 'debug-logs-saved-user-request' }],
+			type: 'startTurn', threadId, expectedSequence: (await read()).thread.sequence, model, toolMode: 'direct', approvalMode: 'manual', input: [{ type: 'text', text: '/ask debug-logs-saved-user-request' }],
 		}
 	});
 	await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');

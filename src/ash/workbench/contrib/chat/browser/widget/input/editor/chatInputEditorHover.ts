@@ -34,7 +34,7 @@ export class ChatAgentHoverParticipant implements IEditorHoverParticipant {
 		hover.domNode.tabIndex = -1;
 		hover.domNode.dataset.chatInputId = this.editor.getId();
 		hover.domNode.setAttribute('role', 'group');
-		hover.domNode.setAttribute('aria-label', localize('chat.agentPicker.mode', 'Agent: {0}', part.agent.name));
+		hover.domNode.setAttribute('aria-label', localize('chat.agentPicker.selected', 'Agent: {0}', part.agent.name));
 		context.container.append(hover.domNode);
 		resources.add(toDisposable(() => hover.domNode.remove()));
 		resources.add(this.editor.onDidChangeModelDecorations(() => {

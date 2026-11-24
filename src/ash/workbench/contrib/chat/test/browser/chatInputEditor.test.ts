@@ -250,7 +250,6 @@ test('Pasting a chat reference restores its widget and frozen snapshot', async (
 	clipboard.setData(CHAT_ATTACHMENT_MIME_TYPE, JSON.stringify({
 		version: 1,
 		draft: {
-			mode: 'agent',
 			text: name,
 			contexts: [{ id: 'previous', kind: 'chatReference', name, content, resource: resource.toString(), reference: { start: 0, end: name.length } }],
 		},
@@ -269,7 +268,7 @@ test('Chat ignores forged clipboard reference ranges and preserves the ordinary 
 	const target = createSnapshotComposer(resources);
 	const clipboard = new SnapshotClipboard();
 	clipboard.setData('text/plain', 'actual text');
-	clipboard.setData(CHAT_ATTACHMENT_MIME_TYPE, JSON.stringify({ version: 1, draft: { mode: 'agent', text: 'actual text', contexts: [{ id: 'forged', kind: 'file', name: 'other', content: 'Hidden snapshot', reference: { start: 0, end: 5 } }] } }));
+	clipboard.setData(CHAT_ATTACHMENT_MIME_TYPE, JSON.stringify({ version: 1, draft: { text: 'actual text', contexts: [{ id: 'forged', kind: 'file', name: 'other', content: 'Hidden snapshot', reference: { start: 0, end: 5 } }] } }));
 	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
 	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
 	assert.equal(target.editor.value, 'actual text');

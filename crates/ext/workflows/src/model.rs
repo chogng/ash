@@ -213,7 +213,6 @@ impl Submission {
             command: protocol::ThreadCommand::StartTurn {
                 context_policy: request.context_policy,
                 kind: request.kind,
-                mode: request.mode,
                 instructions: Some(request.instructions),
                 model: request.model,
                 model_routing,
@@ -240,7 +239,6 @@ impl Submission {
         let protocol::ThreadCommand::StartTurn {
             context_policy,
             kind,
-            mode,
             instructions,
             model,
             reasoning_effort,
@@ -263,7 +261,6 @@ impl Submission {
             reasoning_effort: *reasoning_effort,
             advisor: advisor.clone(),
             kind: *kind,
-            mode: *mode,
             instructions: instructions.clone().expect("frozen command instructions"),
             policy_revision: self.policy.clone(),
             approval_mode: *approval_mode,

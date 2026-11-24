@@ -1,6 +1,6 @@
 # Agent 指令组合、模型专化与评测
 
-Agent 指令组合共同规则、当前模式、Role 与模型指导。模型适配的效果通过独立评测衡量。模式选择、切换和委托行为见 [Agent 模式](../../agent-mode-templates/README.md)。
+Agent 指令组合共同规则、当前模式、Role 与模型指导。模型适配的效果通过独立评测衡量。模式选择、切换和委托行为见 [任务命令](../../task-command-templates/README.md)。
 
 [Agent 定义](../../../docs/agents.md)维护角色契约，[Agent 委托与运行树](../../../docs/core-multi-agent.md)维护委托生命周期。[2026-09-09 接入与性能记录](../benchmarks/agent-instructions-2026-09-09.md)保留实现验证和两批原始样本。
 
@@ -12,7 +12,7 @@ Core 按独立来源组装指令。工具、目录和外部服务的授权由对
 | ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | `models/<provider>.json` 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
 | 窗口提示词                | IDE 或 Agents Window 发起本轮对话时，选用该窗口的正文            | [窗口提示词](../templates/surfaces/)                                            |
-| Agent 模式                | 当前 Turn 的任务处理方式，作为独立指令资产保存                   | [内置模式模板](../../agent-mode-templates/README.md#指令模板)                   |
+| 任务命令                  | 当前 Turn 的任务处理方式，作为独立指令资产保存                   | [内置模式模板](../../task-command-templates/README.md#指令模板)                 |
 | 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | `models/<provider>.json`；Models Manager 选择并冻结                             |
 | Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                                     |
 | 工具与运行信息            | 实际可调用工具、环境、父子关系和取消状态                         | 各执行领域；Core 组装                                                           |
@@ -31,17 +31,17 @@ Core 按独立来源组装指令。工具、目录和外部服务的授权由对
 
 本次按本地 Codex 提交 `73a1148c9c775c2a4616ce5096291740a00ed68a` 的 `codex-rs/prompts` 逐项核对，并按 Ash 已有执行入口补齐。下表维护采用范围，不以目录或文件数相同作为完成标准。
 
-| Codex 资产/模块                                        | Ash 对应入口                                                                    | 当前差异与接线                                                                                          |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 模式模板、`ModeKind` 与 Core 模式上下文                | [`ash-agent-mode-templates`](../../agent-mode-templates/README.md)、`AgentMode` | Core 分别保存模式资产、共同规则和 Role                                                                  |
-| `permissions_instructions` 与 `templates/permissions`  | [`permissions_instructions`](../src/permissions.rs)                             | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
-| 沙箱 read-only/workspace-write/full-access             | `templates/permissions/actions.md`                                              | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
-| approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*`                                              | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
-| compact prompt / summary prefix                        | [`compact.rs`](../src/compact.rs)                                               | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
-| review rubric / review request                         | [角色正文](../../agent-roles/assets/reviewer.md)、[目标渲染](../src/review.rs)  | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
-| review exit success / interrupted                      | `review_exit_prompt`                                                            | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
-| 普通 Turn 中断说明                                     | `TURN_INTERRUPTED_PROMPT`                                                       | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
-| realtime start / end / backend                         | 尚未接入                                                                        | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
+| Codex 资产/模块                                        | Ash 对应入口                                                                            | 当前差异与接线                                                                                          |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 模式模板、`ModeKind` 与 Core 模式上下文                | [`ash-task-command-templates`](../../task-command-templates/README.md)、`TaskExecution` | Core 分别保存模式资产、共同规则和 Role                                                                  |
+| `permissions_instructions` 与 `templates/permissions`  | [`permissions_instructions`](../src/permissions.rs)                                     | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
+| 沙箱 read-only/workspace-write/full-access             | `templates/permissions/actions.md`                                                      | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
+| approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*`                                                      | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
+| compact prompt / summary prefix                        | [`compact.rs`](../src/compact.rs)                                                       | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
+| review rubric / review request                         | [角色正文](../../agent-roles/assets/reviewer.md)、[目标渲染](../src/review.rs)          | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
+| review exit success / interrupted                      | `review_exit_prompt`                                                                    | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
+| 普通 Turn 中断说明                                     | `TURN_INTERRUPTED_PROMPT`                                                               | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
+| realtime start / end / backend                         | 尚未接入                                                                                | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
 
 参考源码：[模块与导出](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/lib.rs)、[权限组装](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/permissions_instructions.rs)、[审查结束](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/review_exit.rs)、[实时语音资产入口](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/realtime.rs)。
 
@@ -110,7 +110,7 @@ Core 接收：冻结基础正文 + 当前发送窗口的提示词 + 按实际模
 
 当前内置模型的完整基础提示词与规格统一登记在 [模型目录](../../model-provider-info/models/)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。
 
-目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`agent_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
+目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`task_commands` 按默认执行方式或任务命令选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
 这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 
@@ -276,7 +276,7 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 | 资料                                               | 维护内容                                                 |
 | -------------------------------------------------- | -------------------------------------------------------- |
 | 本文                                               | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口 |
-| [Agent 模式](../../agent-mode-templates/README.md) | 模式选择、持久化、执行与委托规则                         |
+| [任务命令](../../task-command-templates/README.md) | 任务命令的执行、持久化与委托规则                         |
 | `docs/agents.md`                                   | Role 选择、定义及启动契约；当前实现单独标注              |
 | 所属 crate README                                  | 当前职责、真实入口和已实现状态；不提前写成已迁移         |
 | 模板源码                                           | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文  |

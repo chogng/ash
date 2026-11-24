@@ -5,7 +5,7 @@ use crate::tui_process::Fixture;
 use crate::tui_process::LARGE_SIZE;
 use crate::tui_process::TuiProcess;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
-use ash_protocol::AgentMode;
+use ash_protocol::TaskExecution;
 use ash_protocol::TurnStatus;
 use std::fs;
 use std::process::Command;
@@ -30,7 +30,7 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
     ];
     // Requests from the coordinator and workers may arrive in any order.
     let server = ScenarioServer::start_routed(6, move |request| {
-        if request.contains("# Agent mode: Agent") {
+        if request.contains("# Default task execution") {
             let Some((_, _, finding)) = workers.iter().find(|(_, task, _)| request.contains(*task))
             else {
                 return HttpResponse::failure(422, "Unexpected Swarm worker task");
@@ -96,10 +96,10 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
         .unwrap();
     for thread in &session.threads {
         let mode = if thread.thread_id == root.thread_id {
-            AgentMode::Swarm
+            TaskExecution::Swarm
         } else {
             assert_eq!(thread.parent_thread_id.as_ref(), Some(&root.thread_id));
-            AgentMode::Agent
+            TaskExecution::Agent
         };
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -111,7 +111,6 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
                 })
                 .unwrap();
             let turn = &restored.thread.turns[0];
-            assert_eq!(turn.mode, AgentMode::Agent);
             assert_eq!(turn.execution_approach(), mode);
             if turn.status == TurnStatus::Completed {
                 break;
@@ -123,10 +122,12 @@ fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {
     }
     inspector.shutdown().unwrap();
     process.quit();
+    let stopped = fixture.stop_daemon().unwrap();
+    assert!(stopped.status.success(), "{stopped:?}");
 
     let bodies = server.request_bodies();
     assert_eq!(bodies.len(), 6);
-    assert!(bodies[0].contains("# Agent mode: Swarm"));
+    assert!(bodies[0].contains("# Task command: /swarm"));
 
     let mut resumed = TuiProcess::start(
         &fixture,
@@ -232,7 +233,39 @@ fn actual_tui_runs_three_complete_conversation_turns() {
     assert!(bodies[1].contains("第一轮正在流式回答"));
     assert!(bodies[2].contains("第二轮会引用上一轮"));
     assert!(bodies[2].contains("第三轮：总结前三轮是否稳定"));
+    let inspector = fixture.connect();
+    let mut client = inspector.client();
+    let sessions = client.list_sessions().unwrap().sessions;
+    assert_eq!(sessions.len(), 1);
+    let session = &sessions[0];
+    let thread_id = &session.threads[0].thread_id;
+    let restored = client
+        .read_session_thread(SessionThreadReadParams {
+            session_id: session.session_id.clone(),
+            thread_id: thread_id.clone(),
+            history: None,
+        })
+        .unwrap();
+    assert_eq!(restored.thread.turns.len(), 3);
+    for turn in restored.thread.turns {
+        assert_eq!(turn.status, TurnStatus::Completed);
+        assert_eq!(turn.execution_approach(), TaskExecution::Agent);
+        assert!(turn.instructions.unwrap().task_command().is_none());
+    }
+    inspector.shutdown().unwrap();
     process.quit();
+    let stopped = fixture.stop_daemon().unwrap();
+    assert!(stopped.status.success(), "{stopped:?}");
+
+    let mut resumed = TuiProcess::start(
+        &fixture,
+        &["resume", session.session_id.as_str(), thread_id.as_str()],
+        LARGE_SIZE,
+    );
+    resumed.wait_for_stable_screen("连续多轮对话已完成");
+    resumed.wait_for_stable_screen("第三轮：总结前三轮是否稳定");
+    assert_eq!(server.request_count(), 3);
+    resumed.quit();
 }
 
 #[test]

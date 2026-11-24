@@ -91,7 +91,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 			const { session } = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, kind: 'code', title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const identity = { sessionId: session.sessionId, threadId: session.threads[0]!.threadId };
 			const { thread } = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
-			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: thread.sequence, mode: 'agent', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: name }] } });
+			await client.request(APP_SERVER_METHODS['session/request'], { ...identity, commandId: `write-${name}`, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: thread.sequence, approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: name }] } });
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
 			const completed = (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)!;
 			const results = completed.items.filter(item => item.type === 'toolResult');

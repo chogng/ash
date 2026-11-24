@@ -172,11 +172,11 @@ fn refuses_execution_without_durable_turn_identity() {
 #[test]
 fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
     for mode in [
-        protocol::AgentMode::Agent,
-        protocol::AgentMode::Plan,
-        protocol::AgentMode::Debug,
-        protocol::AgentMode::Swarm,
-        protocol::AgentMode::Ask,
+        protocol::TaskExecution::Agent,
+        protocol::TaskExecution::Plan,
+        protocol::TaskExecution::Debug,
+        protocol::TaskExecution::Swarm,
+        protocol::TaskExecution::Ask,
     ] {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
@@ -245,7 +245,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                     kind: protocol::TurnKind::Coding,
                     instructions: prompts::AGENT_INSTRUCTIONS
                         .freeze()
-                        .with_mode(&agent_mode_templates::instructions(mode)),
+                        .with_task_instructions(&task_command_templates::instructions(mode)),
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: protocol::ApprovalMode::Manual,
                     tool_mode: protocol::ToolMode::Direct,
@@ -346,8 +346,8 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                 .instructions
                 .as_ref()
                 .unwrap()
-                .mode_instructions(),
-            Some(&agent_mode_templates::instructions(mode.delegated()).as_text())
+                .task_instructions(),
+            Some(&task_command_templates::instructions(mode.delegated()).as_text())
         );
     }
 }
@@ -445,7 +445,6 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
             &parent.thread_id,
             StartTurnRequest {
                 context_policy: Default::default(),
-                mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),

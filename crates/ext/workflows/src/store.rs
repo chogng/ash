@@ -49,7 +49,7 @@ impl Store {
         root: &ThreadId,
         command: &CommandId,
         input: &[protocol::UserInput],
-        mode: protocol::AgentMode,
+        task_command: Option<protocol::TaskExecution>,
         tool_mode: protocol::ToolMode,
         approval_mode: protocol::ApprovalMode,
         automatic_model: bool,
@@ -70,7 +70,14 @@ impl Store {
         let Some((original, plan)) = existing else {
             return Ok(None);
         };
-        if original != command_request_key(input, mode, tool_mode, approval_mode, automatic_model)?
+        if original
+            != command_request_key(
+                input,
+                task_command,
+                tool_mode,
+                approval_mode,
+                automatic_model,
+            )?
         {
             return Err(CoreError::CommandConflict);
         }
@@ -567,22 +574,21 @@ impl Store {
 
 pub(crate) fn command_request_key(
     input: &[protocol::UserInput],
-    mode: protocol::AgentMode,
+    task_command: Option<protocol::TaskExecution>,
     tool_mode: protocol::ToolMode,
     approval_mode: protocol::ApprovalMode,
     automatic_model: bool,
 ) -> Result<String, CoreError> {
-    // Requests without routing retain the key used by existing workflow plans.
     if automatic_model {
         serde_json::to_string(&(
             input,
-            mode,
+            task_command,
             tool_mode,
             approval_mode,
             protocol::ModelRoutingMode::Auto,
         ))
     } else {
-        serde_json::to_string(&(input, mode, tool_mode, approval_mode))
+        serde_json::to_string(&(input, task_command, tool_mode, approval_mode))
     }
     .map_err(journal)
 }
