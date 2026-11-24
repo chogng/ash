@@ -9,6 +9,11 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadFinishParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadStartParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
+use ash_app_server_protocol::protocol::fs::FsDirectoryTarget;
+use ash_app_server_protocol::protocol::fs::FsFileType;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryParams;
+use ash_app_server_protocol::protocol::fs::FsReadFileParams;
+use ash_app_server_protocol::protocol::fs::FsResolvePathParams;
 use ash_app_server_protocol::protocol::session::SessionRequest;
 use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
@@ -312,6 +317,18 @@ where
                 content,
                 source_url: None,
             },
+            ChatInputItem::WorkspaceResource {
+                name,
+                path,
+                is_directory,
+            } => {
+                let content = read_workspace_context(client, &name, path, is_directory)?;
+                InputItem::Context {
+                    name,
+                    content,
+                    source_url: None,
+                }
+            }
             ChatInputItem::ChatReference {
                 name,
                 session_id,
@@ -332,6 +349,59 @@ where
         });
     }
     Ok(input)
+}
+
+fn read_workspace_context<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    name: &str,
+    absolute_path: std::path::PathBuf,
+    is_directory: bool,
+) -> Result<String, ClientError> {
+    // A working directory switch must not change what a staged reference points to.
+    let resolved = client.resolve_file_path(FsResolvePathParams {
+        path: absolute_path.clone(),
+    })?;
+    let path = absolute_path
+        .strip_prefix(resolved.root)
+        .map_err(|_| {
+            ClientError::Protocol("workspace reference is outside the resolved directory".into())
+        })?
+        .to_path_buf();
+    let (dir_id, session_directory) = match resolved.target {
+        FsDirectoryTarget::Environment { dir_id } => (Some(dir_id), None),
+        FsDirectoryTarget::Session { session_directory } => (None, Some(session_directory)),
+    };
+    if !is_directory {
+        let file = client.read_file(FsReadFileParams {
+            read_access: None,
+            dir_id,
+            session_directory,
+            path,
+            encoding: Some("auto".into()),
+            auto_guess_encoding: None,
+            candidate_guess_encodings: None,
+        })?;
+        return Ok(file.content);
+    }
+    let mut directory = client.read_directory(FsReadDirectoryParams {
+        dir_id,
+        session_directory,
+        path,
+    })?;
+    directory
+        .entries
+        .sort_unstable_by(|left, right| left.name.cmp(&right.name));
+    let mut content = format!("Directory: {name}\n");
+    for (index, entry) in directory.entries.into_iter().take(1000).enumerate() {
+        if index > 0 {
+            content.push('\n');
+        }
+        content.push_str(&entry.name);
+        if entry.file_type == FsFileType::Directory {
+            content.push('/');
+        }
+    }
+    Ok(content)
 }
 
 fn materialize_image<T>(

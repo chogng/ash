@@ -150,8 +150,9 @@ fn clearing_fullscreen_cancels_the_drag_before_a_fresh_click_at_the_new_size() {
     assert_eq!(count, super::super::selection::ClickCount::Single);
     assert_eq!(
         activate_pointer_item(&mut app, area, position.x, position.y),
-        Some(AppCommand::Quit)
+        None
     );
+    assert_eq!(app.input(), "/quit ");
 }
 
 #[test]
@@ -645,6 +646,11 @@ fn inline_mode_stops_fullscreen_pointer_targets_and_keeps_keyboard_navigation() 
     assert_eq!(app.input(), "/q");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.input(), "/quit ");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Quit)
     );
 
@@ -652,8 +658,9 @@ fn inline_mode_stops_fullscreen_pointer_targets_and_keeps_keyboard_navigation() 
     app.insert_text("/q");
     assert_eq!(
         activate_pointer_item(&mut app, area, target.0, target.1),
-        Some(AppCommand::Quit)
+        None
     );
+    assert_eq!(app.input(), "/quit ");
 }
 
 #[test]

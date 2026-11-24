@@ -183,11 +183,8 @@ impl ChatComposer {
         &mut self,
         input: &mut ChatInput,
         index: usize,
-        availability: SlashCommandAvailability,
     ) -> Option<ChatComposerOutcome> {
-        input
-            .activate_completion(index, availability)
-            .map(map_chat_input_outcome)
+        input.activate_completion(index).map(map_chat_input_outcome)
     }
 
     pub(crate) fn begin_steer(&mut self, text: String) -> SteerId {

@@ -107,6 +107,7 @@ export interface EditorViewportOptions {
 	readonly container: HTMLElement;
 	/** Reused by the Widget across model attachments; View owns its children. */
 	readonly rootDomNode?: HTMLDivElement;
+	readonly overflowWidgetsDomNode?: HTMLElement;
 	readonly viewModel: IViewModel;
 	readonly commandDelegate: ICommandDelegate;
 	readonly controller?: ViewControllerOptions;
@@ -487,7 +488,8 @@ export class View extends ViewEventHandler {
 		overviewRulerLayout.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerLayout.insertBefore);
 		this._register(addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) => this.delegateVerticalScrollbarPointerDown(event)));
 		this._register(new MouseHandler(this.viewContext, this.controller, this.createPointerHandlerHelper()));
-		ownerDocument.body.append(
+		const overflowWidgetsHost = options.overflowWidgetsDomNode ?? ownerDocument.body;
+		overflowWidgetsHost.append(
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);

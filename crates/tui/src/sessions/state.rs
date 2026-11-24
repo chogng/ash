@@ -112,6 +112,11 @@ impl SessionsState {
     pub(crate) fn catalog(&self) -> &[Session] {
         &self.catalog
     }
+
+    pub(crate) fn refresh_draft_conversation_mentions(&mut self) {
+        self.input
+            .refresh_conversation_mentions(&self.catalog, None);
+    }
 }
 
 #[cfg(test)]

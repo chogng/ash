@@ -44,6 +44,8 @@ export interface ChatInputState {
 	readonly draft?: IChatInputDraft;
 	readonly status?: string;
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
+	/** Host that will own an unsent conversation and resolve its context references. */
+	readonly draftReferenceProviderId?: string;
 	readonly followups?: { readonly responseId: string; readonly prompts: readonly string[]; };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };

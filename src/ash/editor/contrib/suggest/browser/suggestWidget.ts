@@ -4,20 +4,28 @@ import { URI } from '../../../../base/common/uri.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
 import type { ILanguageService } from '../../../common/languages/language.js';
 import { getIconClasses } from '../../../common/services/getIconClasses.js';
-import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from '../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { addDisposableListener, fragment as createFragment, getClientArea, getWindow, h, isElement, reset, stopEvent } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { applyFontInfo } from '../../../browser/config/domFontInfo.js';
+import { ContentWidgetPositionPreference, contentWidgetViewportVerticalPadding, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, SuggestModel } from './suggestModel.js';
 import { LanguageCompletionItemKind } from '../../../common/languages.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { type View } from '../../../browser/view.js';
 
 let nextCompletionWidgetId = 1;
+const minimumSpaceToPreferAbove = 150;
 
 /** Displays one completion session in Stanza-owned browser UI. */
-export class CompletionWidget extends Disposable {
+export class SuggestWidget extends Disposable implements IContentWidget {
+	readonly allowEditorOverflow = true;
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
+	private preferAbove = false;
+	private horizontalAnchor: HTMLElement | undefined;
+	private readonly horizontalAnchorResize = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -25,7 +33,6 @@ export class CompletionWidget extends Disposable {
 		private readonly viewport: View,
 		private readonly session: SuggestModel,
 		private readonly languageService: ILanguageService,
-		container: HTMLElement | undefined = undefined,
 	) {
 		super();
 		try {
@@ -46,13 +53,21 @@ export class CompletionWidget extends Disposable {
 		this.element.className = 'stanza-editor-completion';
 		this.element.setAttribute('role', 'listbox');
 		this.element.hidden = true;
-		(container ?? viewport.domNode.domNode).append(this.element);
+		applyFontInfo(this.element, editor.getOption(EditorOption.fontInfo));
+		this.editor.addContentWidget(this);
 		this._register(toDisposable(() => {
-			this.element.remove();
-			this.viewport.setAriaOptions({ activeDescendant: undefined });
+			this.editor.removeContentWidget(this);
+			this.updateAria(undefined);
 		}));
 		this._register(session.onDidChange(() => this.render()));
-		this._register(viewport.onDidChangeLayout(() => this.position()));
+		this._register(viewport.onDidChangeLayout(() => this.layout()));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.fontInfo)) {
+				applyFontInfo(this.element, editor.getOption(EditorOption.fontInfo));
+				this.layout();
+			}
+		}));
+		this._register(addDisposableListener(getWindow(this.element), 'resize', () => this.layout()));
 		this._register(addDisposableListener(view.element, 'keydown', event => this.handleKeydown(event)));
 		this._register(addDisposableListener(view.element, 'blur', () => session.cancel()));
 		this._register(addDisposableListener(view.element, 'compositionstart', () => session.cancel()));
@@ -68,6 +83,62 @@ export class CompletionWidget extends Disposable {
 
 	get visible(): boolean {
 		return this.element.classList.contains('visible');
+	}
+
+	getId(): string {
+		return this.widgetId;
+	}
+
+	getDomNode(): HTMLElement {
+		return this.element;
+	}
+
+	getPosition(): IContentWidgetPosition | null {
+		const state = this.readState();
+		if (!state) return null;
+		const above = this.prefersAbove(this.getAnchor(state)?.top ?? 0);
+		const first = above ? ContentWidgetPositionPreference.ABOVE : ContentWidgetPositionPreference.BELOW;
+		const second = above ? ContentWidgetPositionPreference.BELOW : ContentWidgetPositionPreference.ABOVE;
+		return { position: state.position, preference: [first, second], horizontalAnchor: this.horizontalAnchor };
+	}
+
+	beforeRender(): null {
+		const state = this.readState();
+		const anchor = state && this.getAnchor(state);
+		if (anchor) {
+			const viewportHeight = getClientArea(this.element.ownerDocument.body).height;
+			const spaceAbove = anchor.top - contentWidgetViewportVerticalPadding;
+			const spaceBelow = viewportHeight - contentWidgetViewportVerticalPadding - anchor.top - anchor.height;
+			const availableHeight = this.prefersAbove(anchor.top) ? spaceAbove : Math.max(spaceAbove, spaceBelow);
+			this.element.style.setProperty('--stanza-suggest-available-height', `${Math.max(0, Math.floor(availableHeight))}px`);
+		}
+		return null;
+	}
+
+	afterRender(position: ContentWidgetPositionPreference | null): void {
+		if (position === null) return;
+		const selected = this.element.querySelector<HTMLElement>('.stanza-editor-completion-option.focused');
+		if (!selected) return;
+		const top = selected.offsetTop;
+		const bottom = top + selected.offsetHeight;
+		const scrollTop = this.element.scrollTop;
+		if (top < scrollTop) {
+			this.element.scrollTop = top;
+		} else if (bottom > scrollTop + this.element.clientHeight) {
+			this.element.scrollTop = bottom - this.element.clientHeight;
+		}
+	}
+
+	forceRenderingAbove(): void {
+		if (this.preferAbove) return;
+		this.preferAbove = true;
+		this.layout();
+	}
+
+	setHorizontalAnchor(anchor: HTMLElement): void {
+		this.horizontalAnchor = anchor;
+		this.horizontalAnchorResize.value = observeResize(anchor, () => this.layout(), { box: 'border-box' });
+		this.layout();
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
@@ -122,13 +193,26 @@ export class CompletionWidget extends Disposable {
 			reset(this.element);
 			this.element.classList.remove('visible');
 			this.element.hidden = true;
-			this.viewport.setAriaOptions({ activeDescendant: undefined });
+			this.updateAria(undefined);
+			this.editor.layoutContentWidget(this);
 			return;
 		}
 		const ownerDocument = this.element.ownerDocument;
 		const fragment = createFragment(ownerDocument);
+		let group: HTMLElement | undefined;
 		for (let index = 0; index < state.items.length; index += 1) {
 			const item = state.items[index]!;
+			if (item.group?.label !== state.items[index - 1]?.group?.label) {
+				group = undefined;
+				if (item.group) {
+					const heading = h(ownerDocument, 'div', { className: 'stanza-editor-completion-group-heading' });
+					heading.setAttribute('aria-hidden', 'true');
+					heading.textContent = item.group.label;
+					group = h(ownerDocument, 'div', { attributes: { role: 'group', 'aria-label': item.group.label } });
+					group.append(heading);
+					fragment.append(group);
+				}
+			}
 			const option = h(ownerDocument, 'div');
 			const kind = h(ownerDocument, 'span');
 			const label = h(ownerDocument, 'span');
@@ -168,21 +252,38 @@ export class CompletionWidget extends Disposable {
 				documentation.textContent = state.details.documentation;
 				option.append(documentation);
 			}
-			fragment.append(option);
+			(group ?? fragment).append(option);
 		}
 		reset(this.element, fragment);
 		this.element.hidden = false;
 		this.element.classList.add('visible');
-		this.viewport.setAriaOptions({ activeDescendant: state.selectedIndex < 0 ? undefined : `${this.widgetId}-option-${state.selectedIndex}` });
-		this.position(state);
+		this.updateAria(state);
+		this.layout();
 	}
 
-	private position(state = this.readState()): void {
-		if (!state) return;
-		const coordinates = this.viewport.getPositionContentCoordinates(state.position);
-		const scroll = this.viewport.viewportLayout.scrollPosition;
-		this.element.style.left = `${coordinates.left - scroll.left}px`;
-		this.element.style.top = `${coordinates.top - scroll.top + coordinates.height}px`;
+	private layout(): void {
+		if (this.visible) this.editor.layoutContentWidget(this);
+	}
+
+	private getAnchor(state: LanguageCompletionSessionState): { top: number; height: number; } | undefined {
+		const caret = this.editor.getScrolledVisiblePosition(state.position);
+		if (!caret) return undefined;
+		const editorTop = this.viewport.domNode.domNode.getBoundingClientRect().top;
+		return { top: editorTop + caret.top, height: caret.height };
+	}
+
+	private prefersAbove(anchorTop: number): boolean {
+		return this.preferAbove && anchorTop > minimumSpaceToPreferAbove;
+	}
+
+	private updateAria(state: LanguageCompletionSessionState | undefined): void {
+		if (state) {
+			this.view.element.setAttribute('aria-controls', this.widgetId);
+		} else if (this.view.element.getAttribute('aria-controls') === this.widgetId) {
+			this.view.element.removeAttribute('aria-controls');
+		}
+		const activeDescendant = state && state.selectedIndex >= 0 ? `${this.widgetId}-option-${state.selectedIndex}` : undefined;
+		this.viewport.setAriaOptions({ activeDescendant });
 	}
 
 	private readState(): LanguageCompletionSessionState | undefined {

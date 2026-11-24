@@ -247,6 +247,7 @@ impl SlashCommandInvocation {
             | Some(ChatInputItem::Audio { .. })
             | Some(ChatInputItem::AudioAttachment(_))
             | Some(ChatInputItem::Context { .. })
+            | Some(ChatInputItem::WorkspaceResource { .. })
             | Some(ChatInputItem::ChatReference { .. })
             | Some(ChatInputItem::Skill { .. })
             | None => {

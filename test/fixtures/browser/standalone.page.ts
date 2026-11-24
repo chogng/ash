@@ -1017,7 +1017,8 @@ window.ashStandaloneIntegration = {
 		range.collapse(true);
 		const caret = range.getBoundingClientRect();
 		const root = callerEditor.getDomNode()!.getBoundingClientRect();
-		const widget = callerContainer.querySelector('.stanza-editor-completion')!.getBoundingClientRect();
+		const input = callerContainer.querySelector('.stanza-editor-input')!;
+		const widget = document.getElementById(input.getAttribute('aria-controls')!)!.getBoundingClientRect();
 		return {
 			caret: { left: caret.left - root.left, top: caret.top - root.top, height: caret.height },
 			api: callerEditor.getScrolledVisiblePosition(position)!,

@@ -38,7 +38,7 @@ control／viewer 仍有底层差异：当前 AsyncDataTree 逐父节点刷新时
 
 host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerCharacterToken` 提供，`AgentHostInputCompletionsBase` 在读取当前模型版本后使用它：只查询 host 声明的触发词，行首斜杠命令可以继续补全参数；普通文字、邮箱中的 `@`、引用词后的空白和过期 snapshot 不发起 host 查询。注册、取消和附件状态继续由原输入及领域服务拥有。
 
-上下文补全也先核对捕获的模型版本，再通过同文件的 `computeCompletionRanges` 和 `getCompletionRangeWord` 区分光标前的查询与完整替换词，保留词后消息及已有分隔空格。范围工具不维护候选或草稿状态。host 结果目前受 App Server 的 command／skill／resource 领域契约约束；上游 chat 引用、配置动作等变体不能只在 Renderer 增加分支，须先有后端契约与实际 producer。
+上下文补全也先核对捕获的模型版本，再通过同文件的 `computeCompletionRanges` 和 `getCompletionRangeWord` 区分光标前的查询与完整替换词，保留词后消息及已有分隔空格。范围工具不维护候选或草稿状态。host 补全结果沿用 App Server 的 command／skill／resource 契约。
 
 `widget/chatAgentHover.ts / ChatAgentHover` 展示现有选中自定义 Agent 的名称与描述，不发布第二份 Agent 目录，也不展示内部目录标识。Agent 选择器使用原托管 Hover；输入开头的 `@名称` 与选中 Agent 精确匹配时，`editor/chatInputEditorContrib.ts / InputEditorDecorations` 借用同一对象投影引用，`ChatAgentHoverParticipant` 通过原编辑器 Hover 展示同一信息卡。引用文字保留在草稿中，不切换 Agent 或建立新的请求路由语义。键盘 hover、无障碍纯文本、Escape 焦点恢复及切换 Agent、隐藏、释放均沿现有输入与 Hover 生命周期处理。
 
@@ -66,7 +66,7 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 `common/contextContrib/chatContext.ts` 定义工作区、显式条目和资源 provider；`browser/contextContrib/chatContextService.ts` 唯一持有窗口注册和已提交的工作区值。`chatContext.contribution.ts` 维护 manifest 中的来源名称与图标，显式选择按需激活对应扩展。SDK `chat.registerChat*ContextProvider` 经已有 `chat.context.v1` DataChannel 和 `MainThreadChatContext` 接入，adapter 校验数据并绑定包、incarnation、activation generation 与取消。资源提供方按语言／URI 或编辑器类型匹配；仅在用户附加资源时解析，随后交回原草稿快照。工作区值在 Send 时单独捕获，不进入正文引用、输入历史或草稿移交。扩展停用会撤销注册、工作区值及来源操作，已捕获内容保留；提供方描述随内容交给模型，图标和 tooltip 由原附件控件呈现。
 
-共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
+资源补全复用 Search 与 App Server 的资源候选，选中后由附件解析服务读取内容并绑定到正文。准备过程属于原草稿，候选文字或光标变化会取消待完成的附加，撤销和重做恢复已捕获的内容。`ChatConversationCompletions` 通过 `IChatSessionNavigationService` 读取窗口的会话目录，接受前复核草稿、所选主机和来源身份，再由 `ChatInputPart` 附加 Session／Thread 引用。App Server 在提交时读取对话消息快照。
 
 `actions/chatContext.ts` 的 `ChatContextContributions` 随共享窗口入口注册剪贴板图片、截图、会话与工具四个内置来源，并在释放时撤销登记；来源类保持模块私有。Tools 和 Sessions 通过 picker 契约向同一个选择界面提供选项，读取发起操作的输入和会话，不借用最近聚焦的另一份草稿。工具选择保留在原输入的附件模型，图片来源借用 `IChatInputPart.supportsImages()` 判断当前模型的接收能力；窗口注册不持有这些状态。已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查、选择和结果读取均随原输入取消。
 
@@ -105,6 +105,20 @@ Profile 输入历史沿 `platform/messageHistory` 领域服务 → App Server �
 IDE 与 Agent Window 均提供 Fork Conversation 和 New Chat in Session。Fork 通过 `IAgentThreadService.fork` 复制当前历史，IDE 创建新 Session，Agent Window 在当前 Session 新建 Thread；新增聊天通过 `CreateThread` 创建同 Session 的空 Thread。后端拥有复制与执行，窗口导航修订阻止迟到结果抢回选择。IDE 与 Agent Window 的输入按 Thread 复用原持久草稿存储，保留文本、模式和用户选择的附件快照；实时来源上下文仍归其生产者。
 
 普通 Workbench 的“Move Chat to Editor Area”与“Move Chat to Side Bar”借用同一个 Chat 画布、会话模型和输入框。Chat 可与文档分组并排；切换布局、隐藏、关闭标签和重启均不会提交消息，重启恢复当前聊天及草稿。画布只能存在于一个编辑器组，分屏或复制到新窗口不会生成第二份 Chat 状态。关闭窗口等待附件准备与存储写入，失败保留草稿并允许重试；输入的 Alt+F1 帮助说明这些操作。
+
+### 输入补全
+
+Ash Code TUI、IDE 和 Agents Window Code 共用三个触发符。候选取自当前入口可用的命令、上下文和 Skills。
+
+| 触发符 | 接受候选后的行为                                                        |
+| ------ | ----------------------------------------------------------------------- |
+| `/`    | 将命令补全到草稿，保留已有参数。提交草稿后执行命令。                    |
+| `@`    | 附加已有对话、文件、文件夹或当前入口提供的其他上下文。                  |
+| `$`    | 将所选 Skill 绑定到草稿。后端受理请求时按绑定的 `SkillRef` 加载该版本。 |
+
+- IDE 和 Agents Window Code 的 `@` 候选按对话、文件和文件夹等来源分组。已有对话和已选定主机的新草稿都可以引用该主机上的其他活跃对话。`#` 仍可查找文件等资源，已保存的对话中仍可用 `#session:` 查找对话。
+- 桌面补全弹层横向贴齐输入框，优先在光标上方展开。`chatInputSurface.ts` 提供横向对齐边界，通用编辑器的 `suggestWidget.ts` 管理分组呈现和键盘选择，`contentWidgets.ts` 管理弹层定位和视口边界。
+- TUI 的文件和文件夹候选来自本地启动工作区，远程 TUI 仍可查找已连接主机上的对话。原有 `@` Plugin 写法继续可用。见 [TUI 命令与补全](../crates/tui/README.md#命令与补全)。
 
 ### 截图
 
@@ -240,6 +254,8 @@ IDE 与 Agent Window 均可从命令面板运行“开发人员：导出 Agent H
 ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录制状态及读取失败、未录制、截断和分页上限。每个文件最多 16 MiB，最多 1,000 个文件、64 MiB，每类会话证据最多 64 页；正文索引最多 1,000 项，完整原引用仍在诊断分页中。daemon 每次只读取该 profile 的最多 32 个日志文件，共最多 64 MiB，不修改生产日志。超过限额的来源和宿主尾读缺口均有标记，不再因旧的 1 MiB 单文件限制丢弃正文。部分来源失败仍导出已有证据并通知用户。取消等待当前有界读取结束后停止并释放尚未读取的资源，不下载半成品；后端连接或 capture 变化拒绝迟到证据，不向新代次续读。复测入口为 `exportAgentHostDebugLogs.test.ts`、`appServerAgentService.test.ts` 和 `test/smoke/areas/chat/chat-debug-logs.spec.ts`。
 
 ## 历史验证与复测入口
+
+2026-11-24 在 macOS 验证三种补全入口。`just test-tui-unit` 通过 1,405 项，覆盖分组、命令回填及附加后提交。前端定向测试通过 33 项，覆盖中文分组、按主机筛选、新草稿、撤销和重做。IDE 和 Agents Window Code 的本地命令通过 Electron 冒烟测试，Code 的弹层通过宽窗及窄窗的边界断言。
 
 2026-11-02 在 macOS 验证本轮输入调用链：补全、输入编辑器及命令删除的 3 文件 108 项和完整 composer 323 项通过，包含 en／zh-CN、真实浏览器键盘、只读、焦点、撤销与重做。正常 Desktop 构建通过；Workbench 和 Agents Window 的 host 补全、文件捕获并发送，以及命令补全即时删除的 3 个 Electron＋App Server 场景通过，之前的模型配置与翻译构建阻塞未再复现。Renderer、automation、翻译及触及格式检查通过，记录在 `.build/chat-input-editor-finish/`。此前直接运行本地 VS Code 源码 helper 的 795 组触发词结果相同。随后已通过隔离合成 provider 补上命令和图片鼠标预览的四主题参照，范围见下文；该参照不等同于本地 1.146.0 源码的完整 API／UI 验收。
 

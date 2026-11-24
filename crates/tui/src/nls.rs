@@ -892,6 +892,23 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
+    translation("Conversations", "会話", "对话", "Conversations"),
+    translation("Conversation", "会話", "对话", "Conversation"),
+    translation("Files", "ファイル", "文件", "Fichiers"),
+    translation("Folders", "フォルダー", "文件夹", "Dossiers"),
+    translation("Folder", "フォルダー", "文件夹", "Dossier"),
+    translation(
+        "Searching context…",
+        "コンテキストを検索中…",
+        "正在搜索上下文…",
+        "Recherche de contexte…",
+    ),
+    translation(
+        "No matching context",
+        "一致するコンテキストがありません",
+        "没有匹配的上下文",
+        "Aucun contexte correspondant",
+    ),
     translation(
         "continue this conversation in Ash desktop",
         "この会話を Ash デスクトップで続ける",

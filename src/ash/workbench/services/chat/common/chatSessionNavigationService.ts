@@ -41,7 +41,7 @@ export interface IChatSessionNavigationService {
 	showConversationHistory?(): void | Promise<void>;
 	getConversations(): readonly { readonly providerId?: string; readonly providerLabel?: string; readonly kind?: SessionKind; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Uses the renderer identities that the composer and transcript service share. */
-	getConversationsForReference?(): readonly { readonly providerId: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
+	getConversationsForReference?(options?: { readonly includeArchived?: boolean; }): readonly { readonly providerId: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; readonly updatedAt?: number; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;
 	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined;

@@ -67,7 +67,7 @@ test('The optional Remote package registers SSH configuration and snippets throu
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
 	await editor.waitForTypeInEditor('ssh-host');
 	await editor.input.press('Control+Space');
-	const snippet = workbench.editors.groupAt(0).content.locator('.stanza-editor-completion-option').filter({ hasText: 'ssh-host' });
+	const snippet = page.locator('.stanza-editor-completion-option').filter({ hasText: 'ssh-host' });
 	await expect(snippet).toHaveCount(1);
 	await snippet.click();
 	await editor.waitForEditorContents(text => text.includes('HostName example.com') && text.includes('IdentityFile'));

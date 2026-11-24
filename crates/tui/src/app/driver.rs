@@ -503,8 +503,10 @@ impl AppDriver {
         let snapshots = file_search.poll();
         let changed = !snapshots.is_empty();
         for snapshot in snapshots {
-            self.app
-                .update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
+            self.app.update(ThreadEvent::FileSearchSnapshotReceived {
+                root: file_search.root().to_path_buf(),
+                snapshot,
+            });
         }
         changed
     }

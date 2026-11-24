@@ -206,6 +206,9 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
             crate::thread::composer::ChatInputItem::Image { .. } => {
                 panic!("image tests must provide a materialized server attachment")
             }
+            crate::thread::composer::ChatInputItem::WorkspaceResource { .. } => {
+                panic!("workspace references must be materialized through the test server")
+            }
         })
         .collect();
     ::queue::QueuedMessage {

@@ -12,6 +12,7 @@ import type { AgentHostInputCompletionItem } from '../../../../../../../platform
 import type { SkillReference } from '../../../../../../../platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../../platform/workspace/common/workspace.js';
 import { AgentHostInputCompletionsBase } from './agentHostInputCompletionsBase.js';
+import { chatResourceCompletionGroup } from './chatInputCompletions.js';
 
 interface AcceptedCompletion {
 	readonly item: AgentHostInputCompletionItem;
@@ -101,6 +102,7 @@ export class AgentHostInputCompletions extends AgentHostInputCompletionsBase {
 				return [{
 					id, label: item.label, insertText,
 					kind: value.kind === 'skill' ? LanguageCompletionItemKind.Reference : value.isDirectory ? LanguageCompletionItemKind.Folder : LanguageCompletionItemKind.File,
+					group: value.kind === 'resource' && text[item.start] === '@' ? chatResourceCompletionGroup(value.isDirectory) : undefined,
 					range: Range.fromPositions(this.model.getPositionAt(item.start), this.model.getPositionAt(item.end)),
 					filterText: text.slice(item.start, offset), detail: item.detail, sortText: index.toString().padStart(6, '0'), preselect: item.preselect,
 					command: { id: 'ash.chat.acceptHostInputCompletion', title: localize('chat.context.add', 'Add context'), arguments: [id] },

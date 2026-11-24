@@ -687,7 +687,9 @@ test('runCommands offers command names and nested batch arguments in Keybindings
 		await group.editor.input.press('ControlOrMeta+End');
 		for (let count = offset; count < source.length; count++) await group.editor.input.press('ArrowLeft');
 		await group.editor.input.press('Control+Space');
-		await expect(group.content.locator('.stanza-editor-completion-option').filter({ hasText: suggestion })).toBeVisible();
+		const page = workbench.page;
+		const label = page.locator('.stanza-editor-completion-label').getByText(suggestion, { exact: true });
+		await expect(page.getByRole('option').filter({ has: label })).toBeVisible();
 		await group.editor.input.press('Escape');
 	}
 });
@@ -695,7 +697,7 @@ test('runCommands offers command names and nested batch arguments in Keybindings
 test('Keybindings JSON completes paste command arguments and ordered provider preferences', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
-	const options = group.content.locator('.stanza-editor-completion-option');
+	const options = workbench.page.locator('.stanza-editor-completion-option');
 	for (const argument of ['kind', 'preferences']) {
 		await replaceJson(group.editor.input, `[{"key":"ctrl+alt+y","command":"editor.action.pasteAs","args":{${argument === 'kind' ? '"kind":""' : '"preferences":[""]'}}}]`);
 		await group.editor.input.press('ControlOrMeta+End');

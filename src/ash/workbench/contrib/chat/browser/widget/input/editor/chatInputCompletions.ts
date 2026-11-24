@@ -6,14 +6,16 @@ import { CancellationTokenSource } from '../../../../../../../base/common/cancel
 import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { basename, dirname, extUri } from '../../../../../../../base/common/resources.js';
 import { URI } from '../../../../../../../base/common/uri.js';
-import { localize } from '../../../../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../../../../nls.js';
 import { ILanguageFeaturesService } from '../../../../../../../editor/common/services/languageFeatures.js';
+import { EditorOption } from '../../../../../../../editor/common/config/editorOptions.js';
 import { IWorkspaceContextService } from '../../../../../../../platform/workspace/common/workspace.js';
 import { IFileService } from '../../../../../../../platform/files/common/files.js';
 import { ISearchService } from '../../../../../../services/search/common/search.js';
 import { QueryBuilder } from '../../../../../../services/search/common/queryBuilder.js';
 import { IEditorGroupsService } from '../../../../../../services/editor/common/editorGroupsService.js';
 import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
+import { IChatSessionNavigationService } from '../../../../../../services/chat/common/chatSessionNavigationService.js';
 import { IChatAttachmentResolveService } from '../../../attachments/chatAttachmentResolveService.js';
 import type { IChatInputEditor } from '../chatInputEditorRegistry.js';
 import { LanguageCompletionItemKind, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../../editor/common/languages.js';
@@ -21,9 +23,121 @@ import { Position } from '../../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { matchedCharacterIndices, type SlashCommandCatalog } from '../../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../../common/skillSelectors.js';
+import { createChatReferenceVariableEntry } from '../../../../common/attachments/chatVariableEntries.js';
 import { computeCompletionRanges, getCompletionRangeWord } from './chatInputCompletionUtils.js';
 
 export const CHAT_INPUT_LANGUAGE_ID = 'ash-chat-input';
+
+/** Group order is shared by host and Workbench resource providers. */
+export function chatResourceCompletionGroup(isDirectory: boolean) {
+	return isDirectory
+		? { order: 2, label: localize('chat.input.completion.folders', 'Folders') }
+		: { order: 1, label: localize('chat.input.completion.files', 'Files') };
+}
+
+type ConversationCompletionDestination = { readonly sessionId: string; readonly threadId: string; }
+	| { readonly providerId: string; readonly draft: { readonly id: string; readonly generation: number; }; };
+
+interface ConversationCompletionSelection {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly destination: ConversationCompletionDestination;
+	readonly mention: boolean;
+	readonly start: number;
+	readonly end: number;
+	readonly text: string;
+}
+
+export interface ChatConversationCompletionHost {
+	getDestination(): ConversationCompletionDestination | undefined;
+	accept(replacement: { readonly start: number; readonly end: number; }, attachment: ChatContextAttachment, signal: AbortSignal): Promise<void>;
+}
+
+function sameConversationDestination(left: ConversationCompletionDestination, right: ConversationCompletionDestination): boolean {
+	if ('draft' in left) return 'draft' in right && left.providerId === right.providerId && left.draft.id === right.draft.id && left.draft.generation === right.draft.generation;
+	return 'sessionId' in right && left.sessionId === right.sessionId && left.threadId === right.threadId;
+}
+
+function conversationCompletionTitle(title: string): string {
+	return title.replace(/\s+/gu, ' ').trim() || localize('chat.input.completion.untitledConversation', 'Untitled conversation');
+}
+
+/** Resolves conversation references through the host catalog and the current draft owner. */
+export class ChatConversationCompletions extends Disposable {
+	constructor(
+		input: IChatInputEditor,
+		host: ChatConversationCompletionHost,
+		@ILanguageFeaturesService features: ILanguageFeaturesService,
+		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
+	) {
+		super();
+		const editor = input.codeEditor;
+		const model = input.getModel?.();
+		if (!editor || !model) return;
+
+		const getSources = (destination: ConversationCompletionDestination, mention: boolean) => {
+			const conversations = navigation.getConversationsForReference?.({ includeArchived: !mention }) ?? [];
+			const providerId = 'draft' in destination ? destination.providerId
+				: conversations.find(item => sameConversationDestination(item, destination))?.providerId;
+			return providerId === undefined ? [] : conversations.filter(item => item.providerId === providerId);
+		};
+		const isCurrent = (resource: string | undefined, version: number) => !this.isDisposed && !model.isDisposed()
+			&& resource === model.uri.toString() && version === model.getVersionId() && !editor.getOption(EditorOption.readOnly);
+		this._register(features.completionProvider.register({
+			id: `ash.chat.conversationReference.${createUuid()}`,
+			languageIds: [CHAT_INPUT_LANGUAGE_ID],
+			triggerCharacters: ['@', '#'],
+			provideCompletions: request => {
+				const destination = host.getDestination();
+				if (!destination || !isCurrent(request.resource?.toString(), request.snapshot.version)) return undefined;
+				const ranges = computeCompletionRanges(model, request.position, /[@#][^\s#@]*/u, true);
+				const token = ranges && getCompletionRangeWord(ranges);
+				if (!ranges || !token || token === '#') return undefined;
+				const mention = token.startsWith('@');
+				const input = token.toLowerCase();
+				if (!mention && ('draft' in destination || (!'#session'.startsWith(input) && !input.startsWith('#session:')))) return undefined;
+				const query = mention ? token.slice(1) : token.slice('#session:'.length);
+				const { replace: range } = ranges;
+				const start = model.getOffsetAt(range.getStartPosition());
+				const end = model.getOffsetAt(range.getEndPosition());
+				const text = model.getValueInRange(range);
+				const sources = getSources(destination, mention).sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
+				const items = sources.flatMap(source => {
+					const current = sameConversationDestination(source, destination);
+					if (mention && current) return [];
+					const title = conversationCompletionTitle(source.title);
+					const matches = matchedCharacterIndices(title, query);
+					if (query && !matches.length) return [];
+					const selection: ConversationCompletionSelection = { sessionId: source.sessionId, threadId: source.threadId, destination, mention, start, end, text };
+					const updated = source.updatedAt === undefined ? undefined : new Date(source.updatedAt).toLocaleString(getNLSLanguage());
+					const detail = current ? [localize('chat.input.completion.currentConversation', 'Current conversation'), updated].filter(Boolean).join(' · ')
+						: mention ? source.providerLabel ?? updated : updated;
+					return [{
+						id: JSON.stringify([source.sessionId, source.threadId]), label: title, labelMatchIndices: matches,
+						kind: LanguageCompletionItemKind.Reference, range, insertText: text, filterText: token,
+						detail,
+						group: mention ? { order: 0, label: localize('chat.input.completion.conversations', 'Conversations') } : undefined,
+						command: { id: 'ash.chat.acceptConversationCompletion', title: localize('chat.context.add', 'Add context'), arguments: [selection] },
+					}];
+				});
+				return { items: items.slice(0, mention ? 50 : 100), isIncomplete: true };
+			},
+			executeCompletionCommand: async (request, signal) => {
+				const selection = request.command.arguments[0] as ConversationCompletionSelection;
+				const destination = host.getDestination();
+				if (signal.aborted || !isCurrent(request.resource?.toString(), request.snapshot.version)
+					|| !destination || !sameConversationDestination(destination, selection.destination)
+					|| request.snapshot.getText().slice(selection.start, selection.end) !== selection.text) return;
+				const cursor = input.getSelection();
+				if (cursor.anchor !== selection.end || cursor.active !== selection.end) return;
+				const source = getSources(destination, selection.mention).find(item => item.sessionId === selection.sessionId && item.threadId === selection.threadId);
+				if (!source) return;
+				const attachment = createChatReferenceVariableEntry(source.sessionId, source.threadId, conversationCompletionTitle(source.title));
+				await host.accept(selection, { ...attachment, id: `${attachment.id}:${createUuid()}` }, signal);
+			},
+		}));
+	}
+}
 
 /** Adapts the Chat slash-command catalog to Stanza's completion contract. */
 export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog): LanguageCompletionProvider {
@@ -227,7 +341,9 @@ export class BuiltinDynamicCompletions extends Disposable {
 				if (signal.aborted || lifetime.signal.aborted) { throw canceled(); }
 				return {
 					items: candidates.slice(0, 50).map((candidate, index) => ({
-						id: candidate.key, label: candidate.name, kind: candidate.directory ? LanguageCompletionItemKind.Folder : LanguageCompletionItemKind.Reference,
+						id: candidate.key, label: candidate.name, kind: candidate.directory ? LanguageCompletionItemKind.Folder : candidate.resource ? LanguageCompletionItemKind.File : LanguageCompletionItemKind.Reference,
+						group: token.startsWith('@') ? candidate.resource ? chatResourceCompletionGroup(!!candidate.directory)
+							: { order: 3, label: localize('chat.input.completion.attached', 'Attached context') } : undefined,
 						detail: candidate.resource?.path, range, insertText: `${candidate.name} `,
 						filterText: token, preselect: index === 0, sortText: String(index).padStart(3, '0'),
 						command: { id: 'chat.attachContext', title: localize('chat.context.add', 'Add context'), arguments: [{ ...candidate, resource: candidate.resource?.toString(), start }] },

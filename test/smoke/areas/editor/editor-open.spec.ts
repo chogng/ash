@@ -1171,7 +1171,7 @@ test('Code shows App Server LSP completions in Stanza', async ({ target, workben
 	await input.press('End');
 	await input.press('Control+Space');
 
-	const options = group.content.locator('.stanza-editor-completion-option');
+	const options = workbench.page.locator('.stanza-editor-completion-option');
 	await expect.poll(() => options.count(), { timeout: 60_000, message: 'LSP completion candidates appear' }).toBeGreaterThan(0);
 	await expect(options.filter({ hasText: 'len' }).first()).toBeVisible();
 });
@@ -1846,7 +1846,7 @@ test('save cleanup protects a completion snippet during AUTO and retains Tab nav
 	await group.editor.waitForEditorFocus();
 	await group.editor.input.pressSequentially('forof');
 	await group.editor.input.press('Control+Space');
-	const option = group.content.locator('.stanza-editor-completion-option').filter({ hasText: 'forof' });
+	const option = workbench.page.locator('.stanza-editor-completion-option').filter({ hasText: 'forof' });
 	await expect(option).toHaveCount(1);
 	await expect(option).toHaveAttribute('aria-selected', 'true');
 	await option.click();

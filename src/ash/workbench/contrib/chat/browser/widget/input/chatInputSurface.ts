@@ -6,6 +6,7 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import type { IObservable } from '../../../../../../base/common/observable.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { SuggestController } from '../../../../../../editor/contrib/suggest/browser/suggestController.js';
 import { localize } from '../../../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
 import type { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
@@ -40,6 +41,9 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 		container.append(this.form);
 		this.form.append(editorHost);
 		this.editor = this._register(options.createEditor(editorHost));
+		if (this.editor.codeEditor) {
+			SuggestController.get(this.editor.codeEditor)?.widget.setHorizontalAnchor(this.form);
+		}
 		this._register(addDisposableListener(this.form, 'mousedown', event => {
 			// Padding belongs to the input; descendants retain their own selection and action handling.
 			if (event.button !== 0 || event.defaultPrevented

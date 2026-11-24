@@ -203,6 +203,22 @@ suite('AgentHostInputCompletions', () => {
 
 suite('Agent host completion browser input', () => {
 	const browser = useBrowserTests();
+	test('groups IDE context suggestions and accepts a conversation without sending', async () => {
+		const { page } = browser;
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode&conversationDrop&locale=zh-CN');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('@');
+		const list = page.locator('.stanza-editor-completion.visible');
+		await expect(list.getByRole('group', { name: '对话', exact: true })).toContainText('Earlier design');
+		await expect(list.getByRole('group', { name: '文件', exact: true })).toContainText('nested.txt');
+		await expect(list.getByRole('group', { name: '文件夹', exact: true })).toContainText('src/');
+		await input.pressSequentially('Earlier');
+		await expect(list.getByRole('option')).toHaveCount(1);
+		await input.press('Tab');
+		await expect(page.getByRole('button', { name: '打开 Earlier design', exact: true })).toBeVisible();
+		await expect(input).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`ordinary typing skips host queries and a reference token still completes in ${locale}`, async () => {
 			const { page } = browser;

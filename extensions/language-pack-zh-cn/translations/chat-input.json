@@ -1,5 +1,11 @@
 {
   "ash": {
+    "chat.input.completion.folders": "文件夹",
+    "chat.input.completion.files": "文件",
+    "chat.input.completion.untitledConversation": "未命名对话",
+    "chat.input.completion.currentConversation": "当前对话",
+    "chat.input.completion.conversations": "对话",
+    "chat.input.completion.attached": "已附加的上下文",
     "chat.input.permissionCommandHelp": "使用 /permission 选择下一回合的权限。也可以在命令后输入准确的权限名称。",
     "chat.input.taskSlashCommandsHelp": "输入 / 查看可用的任务命令（{0}）。",
     "chat.input.planCommandHelp": "使用 /plan 调查并提出计划。实施计划时发送新请求。",
@@ -113,7 +119,7 @@
     "chat.notice.help": "聊天通知显示在消息上方。通知优先于功能介绍和提示。使用 {0} 在可见通知与消息之间切换焦点。使用 Tab 访问通知操作。Escape 可从通知返回消息，或关闭功能介绍并停止其录音。隐藏的功能介绍会停止录音，并在通知消失后恢复显示。关闭通知会隐藏当前通知。通知操作应用于此输入框。",
     "chat.input.commandArguments": "命令参数：{0}",
     "chat.input.sessionLinksHelp": "在聊天输入框中，按住 Ctrl（macOS 上为 Command）并点击会话或作品链接即可打开。也可以将光标移到链接内，在命令面板运行“打开链接”。在桌面端，打开已保存 SSH 宿主的会话链接时，可能会提示你连接。确认宿主和工作区后，选择“连接并打开”或“取消”。使用“Agents：管理已连接宿主”管理其他远程连接。宿主选择器会朗读连接状态，并在可用时提供“重新连接”操作。聊天历史记录会显示远程会话所在的宿主。后续消息会发送到该会话所在的宿主。打开链接不会发送草稿。",
-    "chat.input.contextCompletionHelp": "在词首输入 @ 或 # 可补全文件、文件夹、打开的编辑器和已附加的上下文。用方向键选择，按 Enter 或 Tab 附加所选项，按 Escape 关闭候选。接受补全不会发送消息。撤销和重做会恢复引用及其捕获的内容。",
+    "chat.input.contextCompletionHelp": "输入 @ 查找当前主机上的对话、文件、文件夹和其他上下文。输入 $ 查找可用技能。用方向键选择，按 Enter 或 Tab 确认，按 Escape 关闭候选。接受补全后消息仍保留在草稿中。撤销和重做会恢复引用及其捕获的内容。",
     "chat.input.commandArgumentsHelp": "斜杠命令接受参数时，输入区域会提示所需内容。消息输入框获得焦点时会朗读提示。输入参数后提示消失，提示不会进入消息或撤销历史。 仅输入 / 后接受命令补全，紧接着按 Backspace 可删除整个命令。输入部分命令后接受补全仍按普通字符删除。输入文字或移动光标后恢复逐字符删除；撤销可恢复已删除的命令。",
     "chat.queue.removeAll": "聊天：移除所有队列消息",
     "chat.queue.removeAllFailed": "已移除 {0} 条队列消息。有 {1} 条消息已更改或无法移除，请重新检查队列。",

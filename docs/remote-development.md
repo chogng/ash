@@ -387,8 +387,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
    一起丢弃。CLI 只对 SSH transport failure 重试同一 verified exact runtime；新连接握手成功后，TUI
    读取该 Session 的 canonical active Thread 和完整最新 snapshot。若原 Thread 不存在或尚未 active，则选择该
    Session 最新 active Thread；runtime 缺失、schema 改变、protocol stream failure 或 server
-   rejection 不进入退避。Remote TUI 状态栏显示远端 Workspace，但在 App Server 提供路径候选契约前
-   显式关闭本机 `@file` 扫描，避免把启动目录中的本机文件投影到远端会话。
+   rejection 不进入退避。Remote TUI 状态栏显示远端 Workspace。`@` 可查找远端对话，文件和文件夹补全仅在本地工作区提供。见 [TUI 命令与补全](../crates/tui/README.md#命令与补全)。
    `app` 的语言文档同步和请求使用独立 App Server connection，避免慢语言请求阻塞 Agent、文件和
    Session 请求；当前它对应独立 SSH stdio，后续连接池可在 transport 层复用底层 SSH。UTF-8 编辑器
    byte position 在发出请求前转换为协议 UTF-16 position，返回的诊断、Hover 和 Completion range

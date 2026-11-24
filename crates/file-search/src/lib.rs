@@ -34,6 +34,11 @@ const IDLE_WAIT: Duration = Duration::from_millis(100);
 
 pub use ranking::PathMatch;
 
+struct PathCandidate {
+    path: Arc<str>,
+    is_directory: bool,
+}
+
 /// An incremental snapshot produced for the most recently processed query.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PathSearchSnapshot {
@@ -43,6 +48,8 @@ pub struct PathSearchSnapshot {
     pub query: String,
     /// Highest-scoring matches, bounded by [`PathSearchOptions`].
     pub matches: Vec<PathMatch>,
+    /// Directory matches from an opt-in incremental search.
+    pub directory_matches: Vec<PathMatch>,
     /// Number of candidates matching the query before the result limit.
     pub total_match_count: usize,
     /// Number of ordinary UTF-8 file paths injected by the walker.
@@ -58,9 +65,16 @@ pub struct PathSearchSnapshot {
 pub struct PathSearchOptions {
     result_limit: NonZeroUsize,
     worker_threads: NonZeroUsize,
+    include_directories: bool,
 }
 
 impl PathSearchOptions {
+    /// Includes directory candidates in incremental snapshots.
+    pub fn with_directories(mut self) -> Self {
+        self.include_directories = true;
+        self
+    }
+
     /// Sets the maximum number of matches included in each snapshot.
     pub fn with_result_limit(mut self, result_limit: NonZeroUsize) -> Self {
         self.result_limit = result_limit;
@@ -79,6 +93,7 @@ impl Default for PathSearchOptions {
         Self {
             result_limit: NonZeroUsize::new(50).expect("50 is non-zero"),
             worker_threads: NonZeroUsize::new(2).expect("2 is non-zero"),
+            include_directories: false,
         }
     }
 }
@@ -225,6 +240,7 @@ impl Service {
             root,
             result_limit: options.result_limit.get(),
             worker_threads: options.worker_threads.get(),
+            include_directories: options.include_directories,
             shutdown: AtomicBool::new(false),
             next_query_revision: AtomicU64::new(0),
             scanned_file_count: AtomicUsize::new(0),
@@ -272,6 +288,7 @@ struct SearchInner {
     root: PathBuf,
     result_limit: usize,
     worker_threads: usize,
+    include_directories: bool,
     shutdown: AtomicBool,
     next_query_revision: AtomicU64,
     scanned_file_count: AtomicUsize,
@@ -305,7 +322,7 @@ fn path_walker(root: &Path, worker_threads: usize) -> WalkBuilder {
     builder
 }
 
-fn walker_worker(inner: Arc<SearchInner>, injector: Injector<Arc<str>>) {
+fn walker_worker(inner: Arc<SearchInner>, injector: Injector<PathCandidate>) {
     let builder = path_walker(&inner.root, inner.worker_threads);
     let walker = builder.build_parallel();
 
@@ -319,7 +336,12 @@ fn walker_worker(inner: Arc<SearchInner>, injector: Injector<Arc<str>>) {
             let Ok(entry) = entry else {
                 return ignore::WalkState::Continue;
             };
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            let Some(kind) = entry.file_type() else {
+                return ignore::WalkState::Continue;
+            };
+            let is_directory = kind.is_dir();
+            if !kind.is_file() && !(inner.include_directories && is_directory && entry.depth() > 0)
+            {
                 return ignore::WalkState::Continue;
             }
             let Ok(relative) = entry.path().strip_prefix(&inner.root) else {
@@ -329,10 +351,18 @@ fn walker_worker(inner: Arc<SearchInner>, injector: Injector<Arc<str>>) {
                 return ignore::WalkState::Continue;
             };
             let relative = relative.replace(std::path::MAIN_SEPARATOR, "/");
-            injector.push(Arc::from(relative.as_str()), |_, columns| {
-                columns[0] = Utf32String::from(relative.as_str());
-            });
-            inner.scanned_file_count.fetch_add(1, Ordering::Relaxed);
+            injector.push(
+                PathCandidate {
+                    path: Arc::from(relative.as_str()),
+                    is_directory,
+                },
+                |_, columns| {
+                    columns[0] = Utf32String::from(relative.as_str());
+                },
+            );
+            if !is_directory {
+                inner.scanned_file_count.fetch_add(1, Ordering::Relaxed);
+            }
             ignore::WalkState::Continue
         })
     });
@@ -343,7 +373,7 @@ fn matcher_worker(
     inner: Arc<SearchInner>,
     work_rx: Receiver<WorkSignal>,
     snapshot_tx: Sender<PathSearchSnapshot>,
-    mut nucleo: Nucleo<Arc<str>>,
+    mut nucleo: Nucleo<PathCandidate>,
 ) {
     let config = Config::DEFAULT.match_paths();
     let mut indices_matcher = Matcher::new(config);
@@ -415,7 +445,7 @@ fn matcher_worker(
 
 fn build_snapshot(
     inner: &SearchInner,
-    nucleo: &Nucleo<Arc<str>>,
+    nucleo: &Nucleo<PathCandidate>,
     indices_matcher: &mut Matcher,
     query_revision: u64,
     query: &str,
@@ -425,34 +455,45 @@ fn build_snapshot(
     let snapshot = nucleo.snapshot();
     let pattern = snapshot.pattern().column_pattern(0);
     let mut best = ranking::TopMatches::new(inner.result_limit);
+    let mut directories = ranking::TopMatches::new(inner.result_limit);
     for matched in snapshot.matches() {
         if inner.shutdown.load(Ordering::Relaxed) {
             break;
         }
         if let Some(item) = snapshot.get_item(matched.idx) {
-            best.push(matched.score, Path::new(item.data.as_ref()));
+            let list = if item.data.is_directory {
+                &mut directories
+            } else {
+                &mut best
+            };
+            list.push(matched.score, Path::new(item.data.path.as_ref()));
         }
     }
-    let matches = best
-        .into_sorted()
-        .into_iter()
-        .map(|(score, path)| {
-            let text = Utf32String::from(path.to_str().expect("walker admits UTF-8 paths"));
-            let mut indices = Vec::new();
-            let _ = pattern.indices(text.slice(..), indices_matcher, &mut indices);
-            indices.sort_unstable();
-            indices.dedup();
-            PathMatch {
-                score,
-                path,
-                indices,
-            }
-        })
-        .collect();
+    let mut materialize = |matches: ranking::TopMatches| {
+        matches
+            .into_sorted()
+            .into_iter()
+            .map(|(score, path)| {
+                let text = Utf32String::from(path.to_str().expect("walker admits UTF-8 paths"));
+                let mut indices = Vec::new();
+                let _ = pattern.indices(text.slice(..), indices_matcher, &mut indices);
+                indices.sort_unstable();
+                indices.dedup();
+                PathMatch {
+                    score,
+                    path,
+                    indices,
+                }
+            })
+            .collect()
+    };
+    let matches = materialize(best);
+    let directory_matches = materialize(directories);
     PathSearchSnapshot {
         query_revision,
         query: query.to_owned(),
         matches,
+        directory_matches,
         total_match_count: snapshot.matched_item_count() as usize,
         scanned_file_count: inner.scanned_file_count.load(Ordering::Relaxed),
         scan_complete,

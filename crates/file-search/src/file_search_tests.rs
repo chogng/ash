@@ -46,6 +46,34 @@ fn handle_streams_scored_paths_and_highlight_indices() {
 }
 
 #[test]
+fn opted_in_directory_matches_include_empty_folders() {
+    let workspace = TestWorkspace::new();
+    workspace.write("src/lib.rs");
+    std::fs::create_dir_all(workspace.path.join("empty")).unwrap();
+    let (handle, snapshots) = crate::Service
+        .start(
+            workspace.path.clone(),
+            PathSearchOptions::default().with_directories(),
+        )
+        .unwrap();
+    handle.update_query("");
+    let result = wait_for_snapshot(&snapshots, "", |snapshot| snapshot.search_complete);
+    assert!(
+        result
+            .directory_matches
+            .iter()
+            .any(|item| item.path == Path::new("empty"))
+    );
+    assert!(
+        result
+            .matches
+            .iter()
+            .any(|item| item.path == Path::new("src/lib.rs"))
+    );
+    assert_eq!(result.scanned_file_count, 1);
+}
+
+#[test]
 fn query_updates_reuse_the_handle_and_publish_the_latest_query() {
     let directory = TestWorkspace::new();
     directory.write("src/alpha.rs");

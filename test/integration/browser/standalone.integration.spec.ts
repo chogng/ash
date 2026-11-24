@@ -119,14 +119,14 @@ test.describe('contribution lifecycle', () => {
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: false }]);
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(`alpha${trigger === '(' ? '()' : '.'} beta\n  gamma\nalpha`);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-				await expect(page.locator('#caller .stanza-editor-completion')).toContainText('completion: typescript');
+				await expect(page.locator('.stanza-editor-completion.visible')).toContainText('completion: typescript');
 				await page.keyboard.type('z');
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
-				await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+				await expect(page.locator('.stanza-editor-completion.visible')).toBeVisible();
 				await page.keyboard.press('Escape');
 				await page.keyboard.type('q');
-				await expect(page.locator('#caller .stanza-editor-completion')).toBeHidden();
+				await expect(page.locator('.stanza-editor-completion.visible')).toBeHidden();
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(2);
 				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 			});

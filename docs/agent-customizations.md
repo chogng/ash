@@ -224,7 +224,7 @@ Core 不读取 customization 文件，也不在组装模型请求时扫描目录
 Instructions、Agent references、已激活 Skill 内容、用户消息和 Tool results，但它仍是
 `ModelRequest`，不是一个需要持久化的 Prompt artifact。
 
-Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill selector 把用户选择绑定到稳定 `SkillRef`。两种入口的名称、补全和展示状态都不能代替目标对象的 identity、权限或 activation validation。文件和 Plugin 提供的上下文继续使用 `@`，不进入 Skill selector。
+Slash Command catalog 包含产品和服务命令。独立的 `$name` Skill 选择器把用户选择绑定到稳定的 `SkillRef`。命令执行与 Skill 激活各自校验身份、权限和可用性。命令、上下文和 Skill 的用户入口见[输入补全](chat.md#输入补全)。
 
 ## 7. 当前能力与限制
 
@@ -241,7 +241,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；设置可查看自定义角色，在编辑器中打开授权目录的文件 |
 | `.ash/{instructions,skills,agents}` loader                       | 已实现   | 固定 roots、有界校验、Directory activation 与 watcher refresh                                                                                                                 |
 | External parser、preview 与 apply                                | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成                                                                           |
-| `$name` Skill selector                                           | 已实现   | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文                                                                                    |
+| `$name` Skill selector                                           | 已实现   | TUI、IDE 和 Agents Window Code 的 `$name` 绑定 `SkillRef`，`/skills` 打开管理界面                                                                                             |
 
 `$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
 保留为初始化 `ASH.md` 的产品命令。两者使用正常文件工具和目录授权；已有文件先读取再修改。

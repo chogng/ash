@@ -385,7 +385,7 @@ instructions（下一个 model safe point 重新冻结）
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
 - **Skills**（`crates/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
-  - 用户入口使用独立 `$name` selector；`/` 只触发产品和服务命令，`@` 留给文件与 Plugin 上下文；
+  - 用户通过 `$name` 选择 Skill。命令与上下文的入口见[输入补全](chat.md#输入补全)。
   - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
     model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
     输入被拒绝；

@@ -28,6 +28,7 @@ import { LinkDetector } from '../../../../../../editor/contrib/links/browser/lin
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { PlaceholderTextContribution } from '../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
 import { EditorContributionInstantiation } from '../../../../../../editor/browser/editorExtensions.js';
+import { SuggestController } from '../../../../../../editor/contrib/suggest/browser/suggestController.js';
 import '../../../../../../editor/contrib/placeholderText/browser/placeholderText.css';
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -76,7 +77,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			...(!options.hostCompletions && options.skills ? [createChatSkillCompletionProvider(options.skills)] : []),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
-		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID, LinkDetector.ID, 'chatTokenDeleter'];
+		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', SuggestController.ID, 'editor.contrib.hover', CopyPasteController.ID, LinkDetector.ID, 'chatTokenDeleter'];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -84,6 +85,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			ariaLabel: options.ariaLabel,
 			placeholder: options.placeholder,
 			presentation: 'embedded',
+			// Keep floating widgets in the composer's layer, including when it is hosted by Quick Chat.
+			fixedOverflowWidgets: true,
+			overflowWidgetsDomNode: this.element,
 			padding: CHAT_INPUT_EDITOR_PADDING,
 			glyphMargin: false,
 			lineDecorationsWidth: 0,
@@ -98,8 +102,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			// Plain-text hosts do not activate the full editor feature package.
 			contributions: [{ id: PlaceholderTextContribution.ID, ctor: PlaceholderTextContribution, instantiation: EditorContributionInstantiation.Eager }],
 			completionProviders,
-			completionWidgetContainer: this.element,
 		}));
+		SuggestController.get(this.editor)?.forceRenderingAbove();
 		this.verticalScrollbarSize = this.editor.getOption(EditorOption.scrollbar).verticalScrollbarSize;
 		if (options.ariaDescribedBy) {
 			const { textArea, element } = this.editor.controller;

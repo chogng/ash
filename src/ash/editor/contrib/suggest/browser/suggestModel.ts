@@ -234,25 +234,32 @@ export class SuggestModel extends Disposable {
 		if (!result || result.value.items.length === 0 || !this.selectionMatches(result.value.position)) {
 			return undefined;
 		}
+		const candidates = result.value.items;
+		const items = candidates.some(item => item.group)
+			? Object.freeze([...candidates].sort((left, right) => {
+				const order = (left.group?.order ?? Number.MAX_SAFE_INTEGER) - (right.group?.order ?? Number.MAX_SAFE_INTEGER);
+				return order || (left.group?.label ?? '').localeCompare(right.group?.label ?? '');
+			}))
+			: candidates;
 		const previousItem = this.currentState?.selectedItem;
 		const retainedIndex = previousItem === undefined
 			? -1
-			: result.value.items.findIndex(item => (
+			: items.findIndex(item => (
 				item.providerId === previousItem.providerId &&
 				item.id === previousItem.id
 			));
-		const preselectedIndex = result.value.items.findIndex(item => item.preselect === true);
+		const preselectedIndex = items.findIndex(item => item.preselect === true);
 		const selectedIndex = retainedIndex >= 0 &&
 			this.currentState?.modelVersion === result.modelVersion &&
 			Position.compare(this.currentState.position, result.value.position) === 0
 			? retainedIndex
-			: preselectedIndex >= 0 ? preselectedIndex : result.value.items.every(item => item.preselect === false) ? -1 : 0;
-		const selectedItem = result.value.items[selectedIndex];
+			: preselectedIndex >= 0 ? preselectedIndex : items.every(item => item.preselect === false) ? -1 : 0;
+		const selectedItem = items[selectedIndex];
 		return Object.freeze({
 			requestId: result.requestId,
 			modelVersion: result.modelVersion,
 			position: result.value.position,
-			items: result.value.items,
+			items,
 			selectedIndex,
 			selectedItem,
 			isIncomplete: result.value.isIncomplete,

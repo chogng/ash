@@ -6,8 +6,8 @@ mod view;
 
 use super::slash_commands::built_in_slash_command_definitions;
 use super::state::ChatInput;
+use super::state::ChatInputItem;
 use super::state::ChatInputOutcome;
-use super::state::SlashCommandAvailability;
 use crate::keymap::KeyEvent;
 use ash_file_search::PathSearchSnapshot;
 use ash_protocol::SkillRef;
@@ -90,7 +90,6 @@ pub(super) struct CompletionState {
 pub(super) enum CompletionInputOutcome {
     Completed(CompletionEdit),
     Consumed,
-    Submit(CompletionEdit),
     Unhandled,
 }
 
@@ -103,8 +102,14 @@ pub(super) enum CompletionEdit {
     Element {
         range: Range<usize>,
         value: String,
-        skill: Option<SkillRef>,
+        binding: Option<CompletionBinding>,
     },
+}
+
+#[derive(Debug)]
+pub(super) enum CompletionBinding {
+    Skill(SkillRef),
+    Context(ChatInputItem),
 }
 
 pub(crate) enum CompletionView<'a> {
@@ -204,12 +209,19 @@ impl CompletionState {
                     .and_then(|command| self.slash_edit(command))
                     .map(CompletionInputOutcome::Completed)
                     .unwrap_or(CompletionInputOutcome::Consumed),
-                KeyCode::Enter if key.modifiers.is_empty() => self
-                    .slash_commands
-                    .selected_command()
-                    .and_then(|command| self.slash_edit(command))
-                    .map(CompletionInputOutcome::Submit)
-                    .unwrap_or(CompletionInputOutcome::Unhandled),
+                KeyCode::Enter if key.modifiers.is_empty() => {
+                    let Some(command) = self.slash_commands.selected_command() else {
+                        return CompletionInputOutcome::Unhandled;
+                    };
+                    // An exact command typed into the draft can be submitted directly.
+                    let query = self.slash_commands.view().expect("the list is open").query;
+                    if command.name.eq_ignore_ascii_case(query) {
+                        return CompletionInputOutcome::Unhandled;
+                    }
+                    self.slash_edit(command)
+                        .map(CompletionInputOutcome::Completed)
+                        .unwrap_or(CompletionInputOutcome::Unhandled)
+                }
                 _ => CompletionInputOutcome::Unhandled,
             };
         }
@@ -244,10 +256,6 @@ impl CompletionState {
         self.mentions.query()
     }
 
-    pub(super) fn apply_file_search_snapshot(&mut self, snapshot: PathSearchSnapshot) {
-        self.mentions.apply_search_snapshot(snapshot);
-    }
-
     pub(super) fn replace_catalog(&mut self, catalog: ChatInputCatalog) {
         self.slash_commands.set_catalog(catalog.slash_commands);
         self.skills.replace_catalog(catalog.skills);
@@ -259,7 +267,7 @@ impl CompletionState {
             CompletionView::Slash(_) => {
                 let command = self.slash_commands.command_at(index)?.clone();
                 self.slash_edit(&command)
-                    .map(CompletionInputOutcome::Submit)
+                    .map(CompletionInputOutcome::Completed)
             }
             CompletionView::Mention(_) => self
                 .mentions
@@ -321,10 +329,16 @@ impl CompletionState {
 }
 
 fn mention_edit(completion: mention::MentionCompletion) -> CompletionEdit {
+    let (value, binding) = match completion.value {
+        mention::MentionValue::Plugin(value) => (value, None),
+        mention::MentionValue::Context(item) => {
+            (completion.label, Some(CompletionBinding::Context(item)))
+        }
+    };
     CompletionEdit::Element {
         range: completion.range,
-        value: completion.value,
-        skill: None,
+        value,
+        binding,
     }
 }
 
@@ -332,7 +346,7 @@ fn skill_edit(completion: skill::SkillCompletion) -> CompletionEdit {
     CompletionEdit::Element {
         range: completion.range,
         value: completion.value,
-        skill: Some(completion.skill),
+        binding: Some(CompletionBinding::Skill(completion.skill)),
     }
 }
 
@@ -350,26 +364,37 @@ impl ChatInput {
         self.sync_completion();
     }
 
-    pub(crate) fn apply_file_search_snapshot(&mut self, snapshot: PathSearchSnapshot) {
-        self.completion.apply_file_search_snapshot(snapshot);
+    pub(crate) fn apply_file_search_snapshot(
+        &mut self,
+        root: &std::path::Path,
+        snapshot: PathSearchSnapshot,
+    ) {
+        self.completion
+            .mentions
+            .apply_search_snapshot(root, snapshot);
     }
 
-    pub(crate) fn activate_completion(
+    pub(crate) fn refresh_conversation_mentions(
         &mut self,
-        index: usize,
-        availability: SlashCommandAvailability,
-    ) -> Option<ChatInputOutcome> {
+        catalog: &[ash_protocol::Session],
+        current: Option<&ash_protocol::ThreadId>,
+    ) {
+        if let Some(query) = self.completion.mention_query() {
+            let matches = mention::conversation_matches(catalog, current, query);
+            self.completion
+                .mentions
+                .replace_conversation_matches(matches);
+        }
+    }
+
+    pub(crate) fn activate_completion(&mut self, index: usize) -> Option<ChatInputOutcome> {
         let outcome = self.completion.activate(index)?;
-        self.apply_completion_outcome(outcome, availability)
+        self.apply_completion_outcome(outcome)
     }
 
-    pub(super) fn handle_completion_key(
-        &mut self,
-        key: KeyEvent,
-        availability: SlashCommandAvailability,
-    ) -> Option<ChatInputOutcome> {
+    pub(super) fn handle_completion_key(&mut self, key: KeyEvent) -> Option<ChatInputOutcome> {
         let outcome = self.completion.handle_key(key);
-        self.apply_completion_outcome(outcome, availability)
+        self.apply_completion_outcome(outcome)
     }
 
     pub(super) fn sync_completion(&mut self) {
@@ -397,7 +422,6 @@ impl ChatInput {
     fn apply_completion_outcome(
         &mut self,
         outcome: CompletionInputOutcome,
-        availability: SlashCommandAvailability,
     ) -> Option<ChatInputOutcome> {
         match outcome {
             CompletionInputOutcome::Completed(edit) => {
@@ -405,10 +429,6 @@ impl ChatInput {
                 Some(ChatInputOutcome::Consumed)
             }
             CompletionInputOutcome::Consumed => Some(ChatInputOutcome::Consumed),
-            CompletionInputOutcome::Submit(edit) => {
-                self.apply_completion_edit(edit);
-                Some(self.submit_current(availability))
-            }
             CompletionInputOutcome::Unhandled => None,
         }
     }
@@ -422,12 +442,18 @@ impl ChatInput {
             CompletionEdit::Element {
                 range,
                 value,
-                skill,
+                binding,
             } => {
                 self.textarea.replace_range(range, "");
                 let element_id = self.textarea.insert_element(&value);
-                if let Some(skill) = skill {
-                    self.skill_bindings.push((element_id, skill));
+                match binding {
+                    Some(CompletionBinding::Skill(skill)) => {
+                        self.skill_bindings.push((element_id, skill))
+                    }
+                    Some(CompletionBinding::Context(context)) => {
+                        self.contexts.push((element_id, context))
+                    }
+                    None => {}
                 }
                 if !self.textarea.text()[self.textarea.cursor()..]
                     .chars()

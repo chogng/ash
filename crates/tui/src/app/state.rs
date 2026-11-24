@@ -1081,9 +1081,8 @@ impl App {
         if !self.accepts_input() {
             return None;
         }
-        let new_session = self.starts_new_session();
         let (panel, input) = self.composer_parts_mut();
-        let outcome = panel.activate_completion(input, index, new_session)?;
+        let outcome = panel.activate_completion(input, index)?;
         self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
@@ -1110,6 +1109,7 @@ impl App {
         if self.accepts_input() {
             let (panel, input) = self.composer_parts_mut();
             panel.insert_text(input, text);
+            self.refresh_conversation_mentions();
             self.dismiss_fullscreen_welcome_on_input();
         }
     }
@@ -1336,6 +1336,7 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
             }
+            self.refresh_conversation_mentions();
             self.dismiss_fullscreen_welcome_on_input();
         }
     }
@@ -1763,6 +1764,7 @@ impl App {
         } else {
             panel.handle_composer_key(input, key)
         };
+        self.refresh_conversation_mentions();
         self.dismiss_fullscreen_welcome_on_input();
         outcome
     }
@@ -2063,6 +2065,18 @@ impl App {
             return None;
         }
         self.input_state().mention_query()
+    }
+
+    pub(super) fn refresh_conversation_mentions(&mut self) {
+        if self.starts_new_session() {
+            self.sessions.refresh_draft_conversation_mentions();
+        } else {
+            let current = self.thread_presentations.active_id().clone();
+            self.thread_presentations
+                .active_mut()
+                .input
+                .refresh_conversation_mentions(self.sessions.catalog(), Some(&current));
+        }
     }
 
     #[cfg(test)]
@@ -3060,9 +3074,9 @@ impl App {
                 self.set_status(Status::Ready);
                 self.chat_panel.start_input();
             }
-            ThreadEvent::FileSearchSnapshotReceived(snapshot) => {
+            ThreadEvent::FileSearchSnapshotReceived { root, snapshot } => {
                 let (_, input) = self.composer_parts_mut();
-                input.apply_file_search_snapshot(snapshot);
+                input.apply_file_search_snapshot(&root, snapshot);
             }
             ThreadEvent::InterruptFailed(error) => {
                 self.thread
@@ -3568,6 +3582,7 @@ impl App {
             SessionEvent::CatalogReceived(catalog) => {
                 let writable = self.viewed_thread_accepts_input();
                 self.sessions.refresh_catalog(catalog);
+                self.refresh_conversation_mentions();
                 if writable && !self.viewed_thread_accepts_input() {
                     self.thread_presentations.active_mut().input.freeze_draft();
                     self.fullscreen.viewports.active_mut().queue.blur();

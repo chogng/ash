@@ -412,7 +412,7 @@ test('Preferred paste and drop JSON completions use registered provider kinds', 
 		await group.editor.input.press('ArrowLeft');
 		await group.editor.input.press('ArrowLeft');
 		await group.editor.input.press('Control+Space');
-		const options = group.content.locator('.stanza-editor-completion-option');
+		const options = workbench.page.locator('.stanza-editor-completion-option');
 		const relative = options.filter({ hasText: 'uri.path.relative' });
 		await expect(relative).toBeVisible();
 		await expect(options.filter({ hasText: 'uri.path.absolute' })).toBeVisible();

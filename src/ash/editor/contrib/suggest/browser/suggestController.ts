@@ -16,11 +16,9 @@ import { createLanguageCompletionIncompleteRefreshContext, createLanguageComplet
 import { LanguageCompletionService } from './suggest.js';
 import { type EditorViewDidEditEvent, type EditorViewTextUpdateEvent, type ViewController } from '../../../browser/view/viewController.js';
 import { SuggestModel, type LanguageCompletionSessionState } from './suggestModel.js';
-import { CompletionWidget } from './suggestWidget.js';
+import { SuggestWidget } from './suggestWidget.js';
 
 export interface SuggestControllerOptions {
-	/** Optional host for the widget; defaults to the editor viewport root. */
-	readonly widgetContainer?: HTMLElement;
 	readonly onRequestError?: (error: unknown) => void;
 }
 
@@ -39,7 +37,7 @@ export class SuggestController extends Disposable {
 		return editor.getContribution<SuggestController>(SuggestController.ID);
 	}
 
-	readonly widget: CompletionWidget;
+	readonly widget: SuggestWidget;
 	private readonly onRequestError: (error: unknown) => void;
 	private completionRequest: AbortController | undefined;
 	private completionIsIncomplete = false;
@@ -71,13 +69,12 @@ export class SuggestController extends Disposable {
 			this._register(results.onDidChange(change => {
 				if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
 			}));
-			this.widget = this._register(new CompletionWidget(
+			this.widget = this._register(new SuggestWidget(
 				editor,
 				view,
 				view.viewport,
 				session,
 				languageService,
-				options.widgetContainer,
 			));
 			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
@@ -104,6 +101,10 @@ export class SuggestController extends Disposable {
 			this.dispose();
 			throw error;
 		}
+	}
+
+	forceRenderingAbove(): void {
+		this.widget.forceRenderingAbove();
 	}
 
 	private handleBeforeInput(event: InputEvent): void {
@@ -351,7 +352,7 @@ registerEditorContribution({
 			context.controller,
 			completions,
 			session,
-			{ onRequestError: context.onLanguageError, widgetContainer: context.options.completionWidgetContainer },
+			{ onRequestError: context.onLanguageError },
 		);
 	},
 });

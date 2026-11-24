@@ -256,6 +256,7 @@ export class ChatWidgetModel extends Disposable {
 		const modelUnavailableMessage = this.modelUnavailableMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
+			draftReferenceProviderId: this.selection.kind === 'untitled' ? this.selection.session.providerId : undefined,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
 			inputBlocked: this._thread?.status === 'archived' || modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),

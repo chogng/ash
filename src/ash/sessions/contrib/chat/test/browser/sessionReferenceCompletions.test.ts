@@ -6,6 +6,29 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('Session reference completions', () => {
 	const browser = useBrowserTests();
 
+	test('offers conversations from the selected host in an unsent Code draft', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&sideThreads&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		await page.evaluate(async () => {
+			const fixture = window.ashSessionsIntegration.multiHost!;
+			await fixture.open('Host A');
+			await fixture.open('Host B', true);
+		});
+		const composer = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor');
+		const input = composer.getByRole('textbox');
+		await input.pressSequentially('@');
+		const group = composer.getByRole('group', { name: '对话' });
+		await expect(group.getByRole('option').filter({ hasText: 'Host B' })).toHaveCount(2);
+		await expect(group.getByRole('option').filter({ hasText: 'Host A' })).toHaveCount(0);
+		await input.pressSequentially('Foll');
+		await expect(group.getByRole('option')).toHaveCount(1);
+		await input.press('Tab');
+		await expect(composer.getByRole('button', { name: '打开 Follow-up chat', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => window.ashSessionsIntegration.multiHost!.submissions)).toHaveLength(0);
+	});
+
 	test('filters the host catalog and attaches the selected conversation with the keyboard', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost&sideThreads&locale=zh-CN');
@@ -32,8 +55,9 @@ suite('Session reference completions', () => {
 		await expect(content).toHaveText('Review #session:Foll');
 
 		await input.press('ControlOrMeta+a');
-		await input.pressSequentially('Review #session:Foll');
+		await input.pressSequentially('Review @Foll');
 		await expect(options).toHaveCount(1);
+		await expect(composer.getByRole('group', { name: '对话' })).toContainText('Follow-up chat');
 		await input.press('Tab');
 		const attachment = composer.getByRole('button', { name: '打开 Follow-up chat', exact: true });
 		await expect(attachment).toBeVisible();
@@ -43,13 +67,13 @@ suite('Session reference completions', () => {
 		]);
 		await input.press('ControlOrMeta+z');
 		await expect(attachment).toHaveCount(0);
-		await expect(content).toHaveText('Review #session:Foll');
+		await expect(content).toHaveText('Review @Foll');
 		await input.press('ControlOrMeta+Shift+z');
 		await expect(attachment).toBeVisible();
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.submissions)).toMatchObject([{
 			host: 'Host A',
-			contexts: [{ name: 'Follow-up chat', content: expect.stringContaining('Conversation: Follow-up chat\n') }],
+			contexts: [{ name: 'Follow-up chat', chatReference: { sessionId: 'same', threadId: 'side' } }],
 		}]);
 	});
 });

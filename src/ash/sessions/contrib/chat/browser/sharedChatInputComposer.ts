@@ -20,7 +20,6 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../../../browser/chatPresentation.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
-import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
@@ -110,7 +109,6 @@ export class SharedChatInputComposer extends Disposable {
 			},
 			primaryPermissionPicker: permissionPicker,
 		} satisfies ChatInputPartOptions);
-		this._register(instantiationService.createInstance(SessionReferenceCompletions, input, model));
 		const form = input.composerForm;
 		this._register(addDisposableListener(form, 'focusin', event => {
 			if (form.contains(event.relatedTarget as Node | null)) return;

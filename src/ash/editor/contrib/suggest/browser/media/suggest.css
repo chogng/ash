@@ -1,12 +1,13 @@
 .stanza-editor-completion {
-	position: absolute;
+	--stanza-content-widget-available-width: 100vw;
+	--stanza-content-widget-preferred-max-width: 480px;
+	--stanza-suggest-available-height: 240px;
 	z-index: 6;
-	display: none;
 	box-sizing: border-box;
-	min-width: 220px;
-	max-width: min(480px, calc(100% - 16px));
-	max-height: 240px;
+	min-width: min(220px, var(--stanza-content-widget-available-width));
+	max-height: min(240px, var(--stanza-suggest-available-height));
 	overflow: auto;
+	pointer-events: auto;
 	color: var(--ash-editor-foreground);
 	white-space: normal;
 	background: var(--ash-dialog-background);
@@ -15,8 +16,11 @@
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
-.stanza-editor-completion.visible {
-	display: block;
+.stanza-editor-completion-group-heading {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+	line-height: 1.5;
 }
 
 .stanza-editor-completion-option {

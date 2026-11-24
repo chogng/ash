@@ -59,7 +59,7 @@ test('Code Sessions consumes the shared JSON extension for settings completion, 
 	await editor.input.press('ArrowLeft');
 	await editor.input.press('ArrowLeft');
 	await editor.input.press(process.platform === 'darwin' ? 'Control+Space' : 'ControlOrMeta+Space');
-	await content.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }) }).click();
+	await page.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }) }).click();
 	await commands.runCommand('editor.action.formatDocument');
 	await editor.input.press('ControlOrMeta+S');
 	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);

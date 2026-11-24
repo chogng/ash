@@ -143,6 +143,18 @@ class ChatSessionNavigationService extends Disposable implements IChatSessionNav
 			})));
 	}
 
+	getConversationsForReference(options?: { readonly includeArchived?: boolean; }): ReturnType<NonNullable<IChatSessionNavigationService['getConversationsForReference']>> {
+		return this.sessions.sessions.filter(session => options?.includeArchived || session.status === 'active').flatMap(session =>
+			session.chats.filter(chat => options?.includeArchived || chat.status === 'active').map(chat => ({
+				providerId: session.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID,
+				providerLabel: session.providerLabel,
+				sessionId: session.sessionId,
+				threadId: chat.threadId,
+				title: chat.title ?? session.title,
+				updatedAt: chat.updatedAt?.getTime(),
+			})));
+	}
+
 	async openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void> {
 		if (providerId !== undefined && providerId !== parseSessionIdentity(sessionId, LOCAL_AGENT_HOST_PROVIDER_ID).providerId) {
 			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));

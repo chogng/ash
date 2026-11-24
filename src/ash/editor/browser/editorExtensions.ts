@@ -550,7 +550,6 @@ export interface TextEditorContributionContext extends SharedTextContext {
 		| 'colorDecoratorsLimit'
 		| 'completionWorkerFactory'
 		| 'completionProviders'
-		| 'completionWidgetContainer'
 		| 'defaultColorDecorators'
 		| 'find'
 		| 'folding'

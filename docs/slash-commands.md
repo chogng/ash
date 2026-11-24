@@ -23,15 +23,15 @@
 
 IDE 的 Quick Chat 使用同一份桌面 Code 目录，普通问题默认以 `/ask` 提交。Agents Window 的 **Open IDE** 是窗口操作，Code 标题栏还可在 IDE 中打开当前会话。
 
-Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
+输入 `/` 打开命令选择器。接受候选先补全草稿，提交后调用命令。TUI 手输完整命令名时可直接按 Enter 提交。对话与资源使用 `@`，Skill 使用 `$`。见[输入补全](chat.md#输入补全)。
 
-| 用户看到或产品要做的事         | 正确抽象                 | 谁决定内容                |
-| ------------------------------ | ------------------------ | ------------------------- |
-| 输入 `/` 后出现快速选择面板    | Slash Launcher           | 产品选择并组合列表        |
-| TUI 展示可执行 `/command`      | Slash Command list       | `ash-code` 的命令 adapter |
-| TUI/Desktop 展示可调用 Skills  | `$name` Skill selector   | 客户端的 Skill adapter    |
-| app 展示文件或 Plugin 上下文   | `@` context selector     | 对应上下文来源            |
-| 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner       |
+| 用户看到或产品要做的事        | 正确抽象                 | 谁决定内容                |
+| ----------------------------- | ------------------------ | ------------------------- |
+| 输入 `/` 后出现快速选择面板   | Slash Launcher           | 产品选择并组合列表        |
+| TUI 展示可执行 `/command`     | Slash Command list       | `ash-code` 的命令 adapter |
+| TUI/Desktop 展示可调用 Skills | `$name` Skill selector   | 客户端的 Skill adapter    |
+| 客户端展示对话或资源等上下文  | `@` context selector     | 对应上下文来源            |
+| 提交命令或附加上下文          | 来源自己的 typed binding | 对应产品/领域 owner       |
 
 App Server 在 `initialize.slashCommands` 发布服务端命令。TUI 的 `/` 补全、`/help` 和提交读取同一份合并目录。桌面的 `/` 补全、输入帮助和提交也读取各输入框的同一份目录。桌面继续从 App Server 获取 Skill 与文件候选。行布局、DOM、WGPU、Ratatui 绘制和平台输入事件留在各呈现层。
 

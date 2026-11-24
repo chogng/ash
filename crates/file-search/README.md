@@ -1,6 +1,6 @@
 # `ash-file-search`
 
-> 本 README 是 文件路径枚举、glob 与 fuzzy search 的实现契约。TUI `@file` 交互由
+> 本 README 是路径枚举、glob 与 fuzzy search 的实现契约。TUI 的 `@` 路径补全由
 > [Ash Code README](../tui/README.md#命令与补全) 维护。Agent 与编辑器的文件内容搜索见
 > [`crates/grep/README.md`](../grep/README.md)；可执行文件的
 > discovery 与冻结边界见 [`crates/shell-command/README.md`](../shell-command/README.md)。
@@ -50,7 +50,7 @@ Ash 只接收有界结果，不缓存完整目录路径。
 
 ```text
 ignore::WalkBuilder worker
-  └─ directory-relative file path → Nucleo injector
+  └─ directory-relative candidate path → Nucleo injector
 
 Nucleo matcher worker
   ├─ QueryChanged → incremental pattern reparse
@@ -66,6 +66,8 @@ shutdown 并唤醒 matcher；walker 在遍历 callback 中观察 shutdown。交�
 平局的前 N 项、匹配字符索引、扫描文件数以及 scan/search completion 状态。调用方必须同时检查
 revision 和 query，避免输入从 A 变成 B 再回到 A 时接受第一次 A 的过期结果。
 增量 matcher 的全部匹配先按公共前 N 项选择规则筛选，再计算高亮；同分结果不依赖扫描顺序。
+`PathSearchOptions::with_directories()` 为增量搜索启用子目录候选。匹配分别进入 `matches` 和
+`directory_matches`，两类各自应用结果上限。`scanned_file_count` 只统计文件。
 
 路径 walker：
 
@@ -73,7 +75,7 @@ revision 和 query，避免输入从 A 变成 B 再回到 A 时接受第一次 A
 - 不跟随 symlink；
 - 按共同准入规则跳过根目录下的 `.git`、`.ash`、`node_modules` 与 `target` 子目录；根本身不按名称排除；
 - 跳过非 UTF-8 relative path；
-- 只注入普通文件，不返回目录。
+- 默认注入普通文件。启用目录候选后，同时注入符合准入规则的子目录，包括空目录。
 
 ## Glob 与文件枚举
 

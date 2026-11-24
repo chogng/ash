@@ -501,7 +501,7 @@ test('standalone completion providers execute in a live editor', async () => {
 	await new Promise<void>(resolve => setImmediate(resolve));
 
 	assert.equal(requests, 1);
-	assert.equal(container.querySelector('.stanza-editor-completion-option')?.textContent, 'TextstandaloneResult');
+	assert.equal(dom.window.document.querySelector('.stanza-editor-completion-option')?.textContent, 'TextstandaloneResult');
 	editor.dispose();
 	dom.window.close();
 });
@@ -1725,7 +1725,7 @@ suite('standalone browser component', () => {
 				}
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: true }]);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-				await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
+				await expect(page.locator('.stanza-editor-completion.visible')).toHaveCount(0);
 				await expect(page.locator('#caller .stanza-editor-input[aria-activedescendant]')).toHaveCount(0);
 			});
 		}
@@ -1738,9 +1738,9 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('Control+Space');
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-			await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+			await expect(page.locator('.stanza-editor-completion.visible')).toBeVisible();
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('provider'));
-			await expect(page.locator('#caller .stanza-editor-completion')).toBeHidden();
+			await expect(page.locator('.stanza-editor-completion.visible')).toBeHidden();
 			await page.keyboard.press('Enter');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).not.toContain('result');
 		});
@@ -1755,7 +1755,7 @@ suite('standalone browser component', () => {
 				await page.keyboard.press('Control+Space');
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-				await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+				await expect(page.locator('.stanza-editor-completion.visible')).toBeVisible();
 				const geometry = await page.evaluate(() => window.ashStandaloneIntegration.readCompletionGeometry());
 				expect(geometry.contentLeft).toBeGreaterThan(0);
 				expect(Math.abs(geometry.api.left - geometry.caret.left)).toBeLessThan(2);
@@ -2327,10 +2327,10 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('Control+Space');
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'javascript', aborted: false }]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-			await expect(page.locator('#caller .stanza-editor-completion')).toContainText('completion: javascript');
+			await expect(page.locator('.stanza-editor-completion.visible')).toContainText('completion: javascript');
 			await page.keyboard.press('Escape');
 			await page.keyboard.type('z');
-			await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
+			await expect(page.locator('.stanza-editor-completion.visible')).toHaveCount(0);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
 		});
 
@@ -4465,7 +4465,7 @@ suite('standalone browser component', () => {
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('Control+Space');
-		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+		await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toHaveCount(2);
 		await page.keyboard.press('Enter');
 		await expect(page.locator('#caller .view-line').first()).toContainText('conname(value)');
 		await page.keyboard.type('fn');
@@ -4495,7 +4495,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(snippet => window.ashStandaloneIntegration.enableCompletionNavigation(snippet), snippet);
 			await page.locator('#caller .stanza-editor-input').focus();
 			await page.keyboard.press('Control+Space');
-			await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+			await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toHaveCount(2);
 			await page.keyboard.press('Enter');
 			const line = page.locator('#caller .view-line').first();
 			await expect(line).toContainText(initial);
@@ -4528,7 +4528,7 @@ suite('standalone browser component', () => {
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('Control+Space');
-		const options = page.locator('#caller .stanza-editor-completion-option');
+		const options = page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option');
 		await expect(options).toHaveCount(2);
 		for (const option of await options.all()) expect((await option.boundingBox())!.height).toBe(22);
 		await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
@@ -5908,7 +5908,7 @@ suite('standalone browser component', () => {
 		});
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-		await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+		await expect(page.locator('.stanza-editor-completion.visible')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.prepareInlineRequests();
@@ -6032,8 +6032,8 @@ suite('standalone browser component', () => {
 			current: true,
 		});
 		await page.keyboard.press('Control+Space');
-		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
-		await expect(page.locator('#caller .stanza-editor-completion-option')).toContainText(['alpha', 'alphabet']);
+		await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toHaveCount(2);
+		await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toContainText(['alpha', 'alphabet']);
 		expect(workers.some(url => url.includes('editorWebWorkerMain'))).toBe(true);
 		expect(workers.some(url => /syntaxWorkerMain|languageCompletionWorkerMain/.test(url))).toBe(false);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -7902,12 +7902,12 @@ suite('standalone browser component', () => {
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('Control+Space');
-		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+		await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toHaveCount(2);
 		await page.keyboard.press('Enter');
 		await page.keyboard.press('ArrowRight');
 		await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('(${1:inner}+$1)-${2:end}', false));
 		await page.keyboard.press('Control+Space');
-		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+		await expect(page.locator('.stanza-editor-completion.visible .stanza-editor-completion-option')).toHaveCount(2);
 		await page.keyboard.press('Enter');
 		await page.keyboard.type('X');
 		const line = page.locator('#caller .view-line').first();

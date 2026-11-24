@@ -89,7 +89,7 @@ use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpdateParam
 use ash_app_server_protocol::protocol::fs::{
     FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
-    FsWriteFileParams, FsWriteFileResult,
+    FsResolvePathParams, FsResolvePathResult, FsWriteFileParams, FsWriteFileResult,
 };
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::{
@@ -499,6 +499,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: LanguageLocationsParams,
     ) -> Result<LanguageLocationsResult, ClientError> {
         self.call(ClientMethod::LanguageLocations, params)
+    }
+
+    pub fn resolve_file_path(
+        &mut self,
+        params: FsResolvePathParams,
+    ) -> Result<FsResolvePathResult, ClientError> {
+        self.call(ClientMethod::FsResolvePath, params)
     }
 
     pub fn read_directory(

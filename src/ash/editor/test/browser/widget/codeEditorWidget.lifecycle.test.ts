@@ -492,9 +492,9 @@ test('Suggest registration follows editor enablement and model disposal', async 
 		using model = new TextModel('alpha');
 		using editor = createTestCodeEditor({ container, model, suggestions: enabled });
 		assert.equal(SuggestController.get(editor) !== null, enabled);
-		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, enabled ? 1 : 0);
+		assert.equal(dom.window.document.querySelectorAll('.stanza-editor-completion').length, enabled ? 1 : 0);
 		editor.setModel(null);
-		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, 0);
+		assert.equal(dom.window.document.querySelectorAll('.stanza-editor-completion').length, 0);
 	}
 });
 

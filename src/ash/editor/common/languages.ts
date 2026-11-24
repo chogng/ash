@@ -1231,6 +1231,7 @@ export interface LanguageCompletionItem {
 	readonly documentation?: string;
 	readonly filterText?: string;
 	readonly sortText?: string;
+	readonly group?: { readonly label: string; readonly order: number; };
 	readonly preselect?: boolean;
 	/** Characters that atomically accept this item before being inserted. */
 	readonly commitCharacters?: readonly string[];
@@ -1383,6 +1384,10 @@ export function normalizeLanguageCompletionResult(
 		assertOptionalText(item.documentation, 'Language completion item documentation');
 		assertOptionalText(item.filterText, 'Language completion item filterText');
 		assertOptionalText(item.sortText, 'Language completion item sortText');
+		const group = item.group;
+		if (group !== undefined && (!group || typeof group.label !== 'string' || !Number.isSafeInteger(group.order))) {
+			throw new TypeError('Language completion item group must have a label and integer order');
+		}
 		if (item.preselect !== undefined && typeof item.preselect !== 'boolean') {
 			throw new TypeError('Language completion item preselect must be a boolean');
 		}
@@ -1416,6 +1421,7 @@ export function normalizeLanguageCompletionResult(
 			...(item.documentation === undefined ? {} : { documentation: item.documentation }),
 			...(item.filterText === undefined ? {} : { filterText: item.filterText }),
 			...(item.sortText === undefined ? {} : { sortText: item.sortText }),
+			...(group === undefined ? {} : { group: Object.freeze({ label: group.label, order: group.order }) }),
 			...(item.preselect === undefined ? {} : { preselect: item.preselect }),
 			...(commitCharacters === undefined ? {} : { commitCharacters }),
 			...(additionalTextEdits === undefined ? {} : { additionalTextEdits }),

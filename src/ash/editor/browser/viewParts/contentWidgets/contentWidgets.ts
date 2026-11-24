@@ -1,7 +1,7 @@
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { h, getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
+import { ContentWidgetPositionPreference, contentWidgetViewportVerticalPadding, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
@@ -164,6 +164,7 @@ class ContentWidget extends Disposable {
 	private cachedWidth = -1;
 	private cachedHeight = -1;
 	private maxWidth = -1;
+	private anchoredWidth: number | undefined;
 	private visible = false;
 	private renderData: RenderData | null = null;
 
@@ -200,7 +201,7 @@ class ContentWidget extends Disposable {
 		if (!position) return;
 		const viewPosition = this.context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(this.context.viewModel.model.validatePosition(position), this.position?.positionAffinity);
 		if (viewPosition.lineNumber < viewportData.startLineNumber || viewPosition.lineNumber > viewportData.endLineNumber) return;
-		this.updateMaxWidth();
+		if (!this.allowEditorOverflow || !this.position?.horizontalAnchor) this.updateMaxWidth();
 	}
 
 	public setPosition(position: IContentWidgetPosition | null): void {
@@ -253,10 +254,11 @@ class ContentWidget extends Disposable {
 			};
 		}
 		const secondary = position.secondaryPosition ? anchorCoordinate(context, this.context, position.secondaryPosition, position.positionAffinity) : null;
-		this.updateDimensions();
+		const horizontalBounds = this.getHorizontalBounds(position.horizontalAnchor);
+		this.updateDimensions(horizontalBounds?.width);
 		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, this.context);
 		const placement = this.allowEditorOverflow
-			? this.layoutBoxInPage(anchor, context)
+			? this.layoutBoxInPage(anchor, context, horizontalBounds?.left)
 			: layoutBoxInViewport(anchor, this.cachedWidth, this.cachedHeight, context);
 		for (let pass = 1; pass <= 2; pass += 1) {
 			for (const preference of position.preference) {
@@ -267,15 +269,15 @@ class ContentWidget extends Disposable {
 					return { kind: 'inViewport', coordinate: new RenderedCoordinate(placement.belowTop, placement.left), position: preference };
 				}
 				if (preference === ContentWidgetPositionPreference.EXACT) {
-					return { kind: 'inViewport', coordinate: this.exactCoordinate(anchor, context), position: preference };
+					return { kind: 'inViewport', coordinate: this.exactCoordinate(anchor, context, placement.left), position: preference };
 				}
 			}
 		}
 		return null;
 	}
 
-	private updateDimensions(): void {
-		this.updateMaxWidth();
+	private updateDimensions(anchoredWidth?: number): void {
+		this.updateMaxWidth(anchoredWidth);
 		if (this.cachedWidth >= 0 && this.cachedHeight >= 0) return;
 		const preferred = safeInvoke(this.actual.beforeRender, this.actual);
 		if (preferred && validDimension(preferred)) {
@@ -288,20 +290,37 @@ class ContentWidget extends Disposable {
 		this.cachedHeight = Math.round(rectangle.height);
 	}
 
-	private updateMaxWidth(): void {
+	private updateMaxWidth(anchoredWidth?: number): void {
 		const layoutInfo = this.context.configuration.options.get(EditorOption.layoutInfo);
-		const nextMaxWidth = this.allowEditorOverflow
+		const nextMaxWidth = anchoredWidth ?? (this.allowEditorOverflow
 			? Math.max(0, getClientArea(this.viewDomNode.domNode.ownerDocument.body).width - 2 * overflowingWidgetHorizontalPadding)
-			: Math.max(0, layoutInfo.contentWidth);
-		if (nextMaxWidth !== this.maxWidth) {
+			: Math.max(0, layoutInfo.contentWidth));
+		if (nextMaxWidth !== this.maxWidth || anchoredWidth !== this.anchoredWidth) {
+			if (anchoredWidth !== this.anchoredWidth) {
+				this.domNode.setWidth(anchoredWidth ?? '');
+				this.anchoredWidth = anchoredWidth;
+			}
 			this.maxWidth = nextMaxWidth;
-			this.domNode.setMaxWidth(nextMaxWidth);
+			const availableWidth = `${nextMaxWidth}px`;
+			this.domNode.domNode.style.setProperty('--stanza-content-widget-available-width', availableWidth);
+			this.domNode.setMaxWidth(anchoredWidth ?? `min(${availableWidth}, var(--stanza-content-widget-preferred-max-width, ${availableWidth}))`);
 			this.cachedWidth = -1;
 			this.cachedHeight = -1;
 		}
 	}
 
-	private layoutBoxInPage(anchor: AnchorCoordinate, context: RenderingContext): BoxLayoutResult {
+	private getHorizontalBounds(element: HTMLElement | undefined): { left: number; width: number; } | undefined {
+		if (!this.allowEditorOverflow || !element) return undefined;
+		const document = this.viewDomNode.domNode.ownerDocument;
+		const bounds = element.getBoundingClientRect();
+		const left = Math.max(0, bounds.left);
+		const right = Math.min(bounds.right, getClientArea(document.body).width);
+		if (right <= left) return undefined;
+		const scrollLeft = this.fixedOverflowWidgets ? 0 : document.defaultView?.scrollX ?? 0;
+		return { left: left + scrollLeft, width: right - left };
+	}
+
+	private layoutBoxInPage(anchor: AnchorCoordinate, context: RenderingContext, anchoredLeft?: number): BoxLayoutResult {
 		const viewPosition = getDomNodePagePosition(this.viewDomNode.domNode);
 		const ownerWindow = this.viewDomNode.domNode.ownerDocument.defaultView;
 		const windowScrollLeft = ownerWindow?.scrollX ?? 0;
@@ -313,9 +332,9 @@ class ContentWidget extends Disposable {
 		const anchorTop = viewPosition.top + anchor.top - context.scrollTop - (fixed ? windowScrollTop : 0);
 		const minimumLeft = (fixed ? 0 : windowScrollLeft) + overflowingWidgetHorizontalPadding;
 		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - overflowingWidgetHorizontalPadding;
-		const left = Math.min(Math.max(anchorLeft, minimumLeft), Math.max(minimumLeft, maximumRight - this.cachedWidth));
-		const viewportTop = (fixed ? 0 : windowScrollTop) + 22;
-		const viewportBottom = (fixed ? viewport.height : windowScrollTop + viewport.height) - 22;
+		const left = anchoredLeft ?? Math.min(Math.max(anchorLeft, minimumLeft), Math.max(minimumLeft, maximumRight - this.cachedWidth));
+		const viewportTop = (fixed ? 0 : windowScrollTop) + contentWidgetViewportVerticalPadding;
+		const viewportBottom = (fixed ? viewport.height : windowScrollTop + viewport.height) - contentWidgetViewportVerticalPadding;
 		return {
 			fitsAbove: anchorTop - this.cachedHeight >= viewportTop,
 			aboveTop: Math.max(viewportTop, anchorTop - this.cachedHeight),
@@ -325,14 +344,13 @@ class ContentWidget extends Disposable {
 		};
 	}
 
-	private exactCoordinate(anchor: AnchorCoordinate, context: RenderingContext): RenderedCoordinate {
+	private exactCoordinate(anchor: AnchorCoordinate, context: RenderingContext, overflowingLeft: number): RenderedCoordinate {
 		if (!this.allowEditorOverflow) return new RenderedCoordinate(anchor.top, anchor.left);
-		const placement = this.layoutBoxInPage(anchor, context);
 		const viewPosition = getDomNodePagePosition(this.viewDomNode.domNode);
 		const ownerWindow = this.viewDomNode.domNode.ownerDocument.defaultView;
 		return new RenderedCoordinate(
 			viewPosition.top + anchor.top - context.scrollTop - (this.fixedOverflowWidgets ? ownerWindow?.scrollY ?? 0 : 0),
-			placement.left,
+			overflowingLeft,
 		);
 	}
 }

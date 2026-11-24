@@ -67,7 +67,6 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly completionProviders?: readonly LanguageCompletionProvider[];
-	readonly completionWidgetContainer?: HTMLElement;
 	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
@@ -419,6 +418,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const view = modelStore.add(new View({
 				container: options.container,
 				rootDomNode: this.rootDomNode,
+				overflowWidgetsDomNode: options.overflowWidgetsDomNode,
 				viewModel,
 				commandDelegate: {
 					type: text => this.type('keyboard', text),

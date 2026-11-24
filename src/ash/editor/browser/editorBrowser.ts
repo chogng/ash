@@ -325,9 +325,14 @@ export const enum ContentWidgetPositionPreference {
 	BELOW,
 }
 
+/** Vertical clearance between overflowing content widgets and the window edge. */
+export const contentWidgetViewportVerticalPadding = 22;
+
 export interface IContentWidgetPosition {
 	readonly position: IPosition | null;
 	readonly secondaryPosition?: IPosition | null;
+	/** An overflowing widget can match this element's horizontal bounds while following its text position vertically. */
+	readonly horizontalAnchor?: HTMLElement;
 	readonly preference: ContentWidgetPositionPreference[];
 	readonly positionAffinity?: PositionAffinity;
 }

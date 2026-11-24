@@ -2092,7 +2092,7 @@ fn mention_popup_keeps_its_layout_and_highlights_fuzzy_matches() {
     let popup_top = layout(&app, terminal_area)
         .input
         .y
-        .saturating_sub(popup.matches.len().min(2) as u16);
+        .saturating_sub(popup.matches.len().min(6) as u16);
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
         let screen_row = popup_top + row as u16;
         assert_eq!(buffer[(2, screen_row)].symbol(), "+");
@@ -2582,7 +2582,10 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             file_search.stop();
         }
         for snapshot in file_search.poll() {
-            app.update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
+            app.update(ThreadEvent::FileSearchSnapshotReceived {
+                root: dir.to_path_buf(),
+                snapshot,
+            });
         }
         if matches!(
             app.completion(),

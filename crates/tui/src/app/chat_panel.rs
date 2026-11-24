@@ -85,15 +85,8 @@ impl ChatPanel {
         &mut self,
         input: &mut ChatInput,
         index: usize,
-        new_session: bool,
     ) -> Option<ChatComposerOutcome> {
-        let availability = if new_session || self.input_mode == InputMode::Start {
-            SlashCommandAvailability::Idle
-        } else {
-            SlashCommandAvailability::ActiveTurn
-        };
-        self.composer
-            .activate_completion(input, index, availability)
+        self.composer.activate_completion(input, index)
     }
 
     #[cfg(test)]

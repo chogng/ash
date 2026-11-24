@@ -97,6 +97,11 @@ pub(crate) enum ChatInputItem {
         name: String,
         content: String,
     },
+    WorkspaceResource {
+        name: String,
+        path: std::path::PathBuf,
+        is_directory: bool,
+    },
     ChatReference {
         name: String,
         session_id: ash_protocol::SessionId,
@@ -182,6 +187,10 @@ impl QueuedChatInput {
                     let element = input.textarea.insert_element(&format!("[Context: {name}]"));
                     input.contexts.push((element, item.clone()));
                 }
+                ChatInputItem::WorkspaceResource { name, .. } => {
+                    let element = input.textarea.insert_element(name);
+                    input.contexts.push((element, item.clone()));
+                }
                 ChatInputItem::Skill { .. } => {}
             }
         }
@@ -244,7 +253,7 @@ pub(crate) struct ChatInput {
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
-    contexts: Vec<(TextElementId, ChatInputItem)>,
+    pub(super) contexts: Vec<(TextElementId, ChatInputItem)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
     history: HistoryRecall,
@@ -303,7 +312,7 @@ impl ChatInput {
             self.apply_history_effect(RecallEffect::Restore);
             return ChatInputOutcome::Consumed;
         }
-        if let Some(outcome) = self.handle_completion_key(key, availability) {
+        if let Some(outcome) = self.handle_completion_key(key) {
             return outcome;
         }
         if self.input_mode == ChatInputMode::Vim

@@ -31,15 +31,19 @@ impl FileSearchManager {
         }
     }
 
+    pub(crate) fn root(&self) -> &std::path::Path {
+        &self.search_root
+    }
+
     pub(crate) fn update_query(&mut self, query: &str) {
         if self.latest_query.as_deref() == Some(query) && self.handle.is_some() {
             return;
         }
         if self.handle.is_none() {
-            let (handle, snapshots) = match self
-                .service
-                .start(self.search_root.clone(), PathSearchOptions::default())
-            {
+            let (handle, snapshots) = match self.service.start(
+                self.search_root.clone(),
+                PathSearchOptions::default().with_directories(),
+            ) {
                 Ok(started) => started,
                 Err(_) => {
                     self.latest_query = Some(query.to_owned());

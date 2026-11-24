@@ -69,7 +69,10 @@ pub(crate) enum Event {
     },
     FailureReported(String),
     ProductNotice(String),
-    FileSearchSnapshotReceived(ash_file_search::PathSearchSnapshot),
+    FileSearchSnapshotReceived {
+        root: std::path::PathBuf,
+        snapshot: ash_file_search::PathSearchSnapshot,
+    },
     InterruptFailed(String),
     ApprovalRequested(interaction::approval::Approval),
     QueryRequested(interaction::query::Query),

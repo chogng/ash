@@ -4,6 +4,13 @@ mod mention {
     use crate::render::RenderContext;
     use crate::render::bottom_anchored_area;
     use crate::render::horizontal_margin;
+    use crate::widgets::list_selection;
+    use crate::widgets::list_selection::ListSelectionGroup;
+    use crate::widgets::list_selection::ListSelectionItem;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionModel;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use crate::widgets::list_selection::ListSelectionState;
     use ratatui::Frame;
     use ratatui::layout::Rect;
     use ratatui::style::Modifier;
@@ -30,16 +37,32 @@ mod mention {
         let Some(popup) = popup else {
             return;
         };
+        if let Some((list_area, mut list)) = grouped_list(area, popup) {
+            list.localize(context.language());
+            super::clear_popup(frame, area, list_area, context);
+            list_selection::draw_body_with_pointer(
+                frame,
+                list_area,
+                &list,
+                hovered.map(item_target).as_ref(),
+                pressed.map(item_target).as_ref(),
+                context,
+            );
+            return;
+        }
         let Some(layout) = popup_layout(area, popup.matches.len(), popup.selected) else {
             return;
         };
         let lines = if popup.matches.is_empty() {
             vec![Line::from(Span::styled(
-                if popup.searching {
-                    "Searching files and plugins…"
-                } else {
-                    "No matching files or plugins"
-                },
+                crate::nls::localize(
+                    context.language(),
+                    if popup.searching {
+                        "Searching context…"
+                    } else {
+                        "No matching context"
+                    },
+                ),
                 Style::default().fg(context.muted()),
             ))]
         } else {
@@ -67,8 +90,17 @@ mod mention {
                             Span::styled(character.to_string(), style)
                         },
                     ));
-                    if mention_match.kind == MentionMatchKind::Plugin {
-                        spans.push(Span::styled("  plugin", base_style));
+                    let category = match mention_match.kind {
+                        MentionMatchKind::Conversation => Some("Conversation"),
+                        MentionMatchKind::Folder => Some("Folder"),
+                        MentionMatchKind::Plugin => Some("plugin"),
+                        MentionMatchKind::File => None,
+                    };
+                    if let Some(category) = category {
+                        spans.push(Span::styled(
+                            format!("  {}", crate::nls::localize(context.language(), category)),
+                            base_style,
+                        ));
                     }
                     Line::from(spans)
                 })
@@ -88,6 +120,15 @@ mod mention {
         if popup.matches.is_empty() {
             return None;
         }
+        if let Some((list_area, list)) = grouped_list(area, popup) {
+            let target = list_selection::pointer_target_at(
+                &list,
+                Rect::default(),
+                list_area,
+                ratatui::layout::Position::new(column, row),
+            )?;
+            return (0..popup.matches.len()).find(|index| item_target(*index) == target);
+        }
         let layout = popup_layout(area, popup.matches.len(), popup.selected)?;
         if column < layout.area.x
             || column >= layout.area.right()
@@ -98,6 +139,62 @@ mod mention {
         }
         let index = layout.first_path + usize::from(row - layout.area.y);
         (index < popup.matches.len()).then_some(index)
+    }
+
+    fn item_target(index: usize) -> ListSelectionPointerTarget {
+        ListSelectionPointerTarget::Item(item_id(index))
+    }
+
+    fn item_id(index: usize) -> ListSelectionItemId {
+        ListSelectionItemId::new(index.to_string())
+    }
+
+    fn grouped_list(area: Rect, popup: MentionPopupView<'_>) -> Option<(Rect, ListSelectionState)> {
+        if !popup.show_groups
+            || !popup
+                .matches
+                .windows(2)
+                .any(|items| items[0].kind != items[1].kind)
+        {
+            return None;
+        }
+        let mut items = Vec::new();
+        let mut groups = 0;
+        let mut selected = 0;
+        let mut kind = None;
+        for (index, item) in popup.matches.iter().enumerate() {
+            if kind != Some(item.kind) {
+                kind = Some(item.kind);
+                groups += 1;
+                let label = match item.kind {
+                    MentionMatchKind::Conversation => "Conversations",
+                    MentionMatchKind::File => "Files",
+                    MentionMatchKind::Folder => "Folders",
+                    MentionMatchKind::Plugin => "Plugins",
+                };
+                items.push(ListSelectionItem::new(label).as_section_divider());
+            }
+            if index == popup.selected {
+                selected = items.len();
+            }
+            items.push(
+                ListSelectionItem::new(crate::nls::Text::literal(item.label.clone()))
+                    .with_id(item_id(index)),
+            );
+        }
+        let height = (items.len() + groups - 1)
+            .min(8)
+            .min(usize::from(area.height.saturating_sub(2)));
+        if height == 0 {
+            return None;
+        }
+        let list_area = horizontal_margin(bottom_anchored_area(area, height as u16), 2);
+        let view = ListSelectionState::new(
+            ListSelectionModel::new("", vec![ListSelectionGroup::new("", items)])
+                .without_scroll_counts()
+                .with_initial_selected(selected),
+        );
+        Some((list_area, view))
     }
 
     fn popup_layout(area: Rect, path_count: usize, selected: usize) -> Option<PopupLayout> {

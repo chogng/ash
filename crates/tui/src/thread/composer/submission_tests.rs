@@ -116,10 +116,11 @@ fn busy_compact_keeps_the_draft_for_queue_steer_and_completion() {
     ));
     composer.insert_text(&mut input, "/compac");
     assert_eq!(
-        composer.activate_completion(&mut input, 0, SlashCommandAvailability::ActiveTurn),
-        Some(rejected),
+        composer.activate_completion(&mut input, 0),
+        Some(ChatComposerOutcome::Consumed),
     );
     assert_eq!(input.text().trim(), "/compact");
+    assert_eq!(composer.handle_active_turn_key(&mut input, enter), rejected);
     let ChatComposerOutcome::Command(invocation) = composer.handle_key(&mut input, enter) else {
         panic!("an idle conversation should accept /compact");
     };

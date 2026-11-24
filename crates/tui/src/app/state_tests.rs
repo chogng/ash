@@ -2756,13 +2756,18 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
 }
 
 #[test]
-fn activating_a_slash_command_by_index_uses_the_command_dispatch_path() {
+fn activating_a_slash_command_by_index_fills_the_draft_before_dispatch() {
     let mut app = App::new();
     app.insert_text("/q");
 
     let action = app.activate_input_completion(0);
 
-    assert_eq!(action, Some(AppCommand::Quit));
+    assert_eq!(action, None);
+    assert_eq!(app.input(), "/quit ");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Quit)
+    );
     assert!(app.input().is_empty());
     assert!(app.messages().is_empty());
 }
@@ -2801,13 +2806,18 @@ fn unknown_slash_suggestion_uses_the_selected_language() {
 }
 
 #[test]
-fn slash_popup_selection_executes_without_an_exact_query() {
+fn slash_popup_selection_waits_for_submission() {
     let mut app = App::new();
     app.insert_text("/q");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::Quit));
+    assert_eq!(action, None);
+    assert_eq!(app.input(), "/quit ");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Quit)
+    );
     assert!(app.input().is_empty());
     assert!(app.messages().is_empty());
 }
@@ -3010,9 +3020,104 @@ fn at_file_popup_completes_an_atomic_path_before_submission() {
     assert_eq!(app.input(), "review src/lib.rs ");
     assert_eq!(app.status(), &Status::Ready);
 
-    let submission = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_text_submission(submission, "review src/lib.rs");
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected a submission with a file reference");
+    };
+    assert_eq!(submission.display_text, "review src/lib.rs");
+    assert!(
+        submission
+            .input
+            .contains(&ChatInputItem::WorkspaceResource {
+                name: "src/lib.rs".into(),
+                path: dir.join("src/lib.rs"),
+                is_directory: false,
+            })
+    );
     let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn at_composer_groups_and_attaches_conversations_with_workspace_context() {
+    let mut app = App::for_dir(std::path::Path::new("/workspace"));
+    let mut source = manager_state_session("earlier-design");
+    source.threads.push(ash_protocol::SessionThread {
+        thread_id: ThreadId::new("earlier-design").unwrap(),
+        title: "Earlier design".into(),
+        recap: None,
+        manager: None,
+        created_at_unix_ms: 1,
+        last_activity_at_unix_ms: None,
+        completed_turn_duration_ms: 0,
+        active_turn_started_at_unix_ms: None,
+        usage: Default::default(),
+        parent_thread_id: None,
+        forked_from_id: None,
+        status: ash_protocol::ThreadStatus::Active,
+    });
+    let identity = (
+        source.session_id.clone(),
+        source.threads[0].thread_id.clone(),
+    );
+    enter_test_session(&mut app);
+    app.update(crate::sessions::Event::CatalogReceived(vec![
+        manager_state_session("test-session"),
+        source,
+    ]));
+    app.insert_text("@");
+    app.update(ThreadEvent::FileSearchSnapshotReceived {
+        root: "/workspace".into(),
+        snapshot: ash_file_search::PathSearchSnapshot {
+            query: String::new(),
+            matches: vec![ash_file_search::PathMatch {
+                path: "notes.txt".into(),
+                indices: Vec::new(),
+                score: 1,
+            }],
+            directory_matches: vec![ash_file_search::PathMatch {
+                path: "empty".into(),
+                indices: Vec::new(),
+                score: 1,
+            }],
+            search_complete: true,
+            ..Default::default()
+        },
+    });
+    let Some(CompletionView::Mention(view)) = app.completion() else {
+        panic!("expected context completion");
+    };
+    assert_eq!(
+        view.matches
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Earlier design", "notes.txt", "empty"]
+    );
+    assert!(view.show_groups);
+    let render = render_dictation_frame(&app)
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(render.contains("Conversations"));
+    assert!(render.contains("Files"));
+    assert!(render.contains("Folders"));
+    crate::tui_assert_snapshot!(app = &app; "grouped_context_completion", render);
+    assert!(app.activate_input_completion(0).is_none());
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected a submission with a conversation reference");
+    };
+    assert_eq!(
+        submission.input,
+        vec![ChatInputItem::ChatReference {
+            name: "Earlier design".into(),
+            session_id: identity.0,
+            thread_id: identity.1,
+        }]
+    );
 }
 
 #[test]
@@ -3939,7 +4044,10 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             file_search.stop();
         }
         for snapshot in file_search.poll() {
-            app.update(ThreadEvent::FileSearchSnapshotReceived(snapshot));
+            app.update(ThreadEvent::FileSearchSnapshotReceived {
+                root: dir.to_path_buf(),
+                snapshot,
+            });
         }
         if matches!(
             app.completion(),

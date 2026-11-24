@@ -35,10 +35,71 @@ impl JsonRpcTransport for RecordingTransport {
         if message["method"] == "ide/request" {
             return Ok(serde_json::json!({"jsonrpc":"2.0", "id":message["id"], "result":{"type":"context", "window":null, "context":null}}).to_string());
         }
+        if message["method"] == "fs/resolvePath" {
+            let path = message["params"]["path"].as_str().unwrap();
+            assert!(std::path::Path::new(path).starts_with("/launch-workspace"));
+            return Ok(serde_json::json!({"jsonrpc":"2.0", "id":message["id"], "result":{
+                "root":"/launch-workspace", "target":{"type":"environment", "dirId":"launch-workspace"}
+            }}).to_string());
+        }
         *self.request.lock().expect("request lock is available") = Some(request.into());
         let mut response: serde_json::Value = serde_json::from_str(&self.response).unwrap();
         response["id"] = message["id"].clone();
         Ok(response.to_string())
+    }
+}
+
+#[test]
+fn workspace_mentions_materialize_through_the_app_server_before_submission() {
+    use ash_app_server_protocol::protocol::turn::InputItem;
+    for (name, is_directory, method, result, content) in [
+        (
+            "notes.md",
+            false,
+            "fs/readFile",
+            serde_json::json!({"content":"captured notes", "revision":"r"}),
+            "captured notes",
+        ),
+        (
+            "docs",
+            true,
+            "fs/readDirectory",
+            serde_json::json!({"entries":[{"name":"nested", "fileType":"directory"}, {"name":"guide.md", "fileType":"file"}]}),
+            "Directory: docs\nguide.md\nnested/",
+        ),
+    ] {
+        let recorded = Arc::new(Mutex::new(None));
+        let mut client = AppServerClient::new(RecordingTransport {
+            request: Arc::clone(&recorded),
+            response: serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}).to_string(),
+        });
+        let input = super::materialize_submission(
+            &mut client,
+            ChatSubmission {
+                mode: Default::default(),
+                command_id: ash_protocol::CommandId::new("submission").unwrap(),
+                display_text: name.into(),
+                input: vec![ChatInputItem::WorkspaceResource {
+                    name: name.into(),
+                    path: std::path::Path::new("/launch-workspace").join(name),
+                    is_directory,
+                }],
+            },
+        )
+        .unwrap();
+        let request: serde_json::Value =
+            serde_json::from_str(recorded.lock().unwrap().as_ref().unwrap()).unwrap();
+        assert_eq!(request["method"], method);
+        assert_eq!(request["params"]["dirId"], "launch-workspace");
+        assert_eq!(request["params"]["path"], name);
+        assert_eq!(
+            input,
+            vec![InputItem::Context {
+                name: name.into(),
+                content: content.into(),
+                source_url: None
+            }]
+        );
     }
 }
 

@@ -209,7 +209,7 @@ test('URL opener settings suggest built-in IDs and their names', { tag: ['@brows
 	await group.editor.input.press('ArrowLeft');
 	await group.editor.input.press('ArrowLeft');
 	await group.editor.input.press('Control+Space');
-	const choices = group.content.locator('.stanza-editor-completion-option');
+	const choices = workbench.page.locator('.stanza-editor-completion-option');
 	await expect(choices.filter({ hasText: 'ash.browser.open' })).toContainText('Open in Ash browser');
 	await expect(choices.filter({ hasText: 'default' })).toContainText('Open in default browser');
 	await choices.filter({ hasText: 'default' }).click();

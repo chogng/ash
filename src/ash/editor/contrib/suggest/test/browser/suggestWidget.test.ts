@@ -24,7 +24,7 @@ const { EditorTextDirection, View } = await import('../../../../browser/view.js'
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 
-test('Completion widget projects named options, focus, ARIA, and content coordinates', () => {
+test('Completion widget projects named options, focus and ARIA into the content widget layer', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
@@ -56,12 +56,10 @@ test('Completion widget projects named options, focus, ARIA, and content coordin
 
 	assert.equal(widget.visible, true);
 	assert.equal(widget.element.hidden, false);
-	const coordinates = viewport.getPositionContentCoordinates(editor.getPosition()!);
-	assert.equal(widget.element.style.left, `${coordinates.left}px`);
-	assert.equal(widget.element.style.top, `${coordinates.top + coordinates.height}px`);
+	assert.equal(widget.element.parentElement?.className, 'stanza-editor-overflowing-content-widgets');
 	assert.equal(input.element.getAttribute('aria-autocomplete'), 'list');
 	assert.equal(input.element.getAttribute('aria-haspopup'), 'true');
-	assert.equal(input.element.getAttribute('aria-controls'), null);
+	assert.equal(input.element.getAttribute('aria-controls'), widget.element.id);
 	assert.equal(input.element.getAttribute('aria-activedescendant'), options[1]!.id);
 	assert.deepEqual(options.map(option => ({
 		selected: option.getAttribute('aria-selected'),

@@ -1515,6 +1515,53 @@ function createChatInputServices(
 
 suite('Chat command hint browser behavior', () => {
 	const browser = useBrowserTests();
+	test('Slash completion spans the composer and fits above or below it', async () => {
+		const { page } = browser;
+		await page.setViewportSize({ width: 360, height: 240 });
+		await page.goto('/chatInput.html?inlineCode=1&locale=zh-CN&theme=light');
+		await page.evaluate(() => window.ashChatInputIntegration.setSlashCommands(
+			Array.from({ length: 30 }, (_, index) => ({ name: `review-${index}`, description: 'Review code', argumentMode: 'none' })),
+		));
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		const composer = page.locator('.ash-chat-input-container').filter({ has: message });
+		const popup = page.locator('.stanza-editor-completion.visible');
+		await composer.evaluate(element => Object.assign(element.style, { position: 'fixed', bottom: '12px', left: '4px', width: '340px' }));
+		await message.pressSequentially('/');
+		await expect(popup).toBeVisible();
+		await expect(message).toHaveAttribute('aria-controls', (await popup.getAttribute('id'))!);
+
+		const bounds = () => popup.evaluate(element => {
+			const list = element.getBoundingClientRect();
+			const form = element.closest('.ash-chat-input-container')!;
+			const composer = form.getBoundingClientRect();
+			const caret = form.querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect();
+			return {
+				fits: list.top >= 0 && list.bottom <= innerHeight && list.left >= 0 && list.right <= innerWidth,
+				fillsComposer: Math.abs(list.left - composer.left) < 1 && Math.abs(list.right - composer.right) < 1,
+				above: list.bottom <= caret.top + 1,
+				below: list.top >= caret.bottom - 1,
+				scrollable: element.scrollHeight > element.clientHeight,
+			};
+		});
+		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, above: true, scrollable: true });
+		await composer.evaluate(element => element.style.width = '245px');
+		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, above: true, scrollable: true });
+		for (let count = 0; count < 15; count++) await message.press('ArrowDown');
+		const selected = popup.getByRole('option', { selected: true });
+		await expect(selected).toBeInViewport();
+		await expect(message).toHaveAttribute('aria-activedescendant', (await selected.getAttribute('id'))!);
+		await message.press('Escape');
+		await expect(popup).toHaveCount(0);
+		await expect(message).toBeFocused();
+		await expect(message).not.toHaveAttribute('aria-controls', /.+/);
+
+		await message.press('Backspace');
+		await composer.evaluate(element => Object.assign(element.style, { bottom: '', top: '12px' }));
+		await message.pressSequentially('/');
+		await expect(popup).toBeVisible();
+		await expect.poll(bounds).toMatchObject({ fits: true, fillsComposer: true, below: true, scrollable: true });
+	});
+
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
 		test(`command hints preserve text, focus, undo and theme in ${locale}, ${theme}`, async () => {
 			const { page } = browser;

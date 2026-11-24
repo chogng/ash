@@ -10,7 +10,7 @@ import { ChatOtherClientToolProgressPart } from '../chatContentParts/toolInvocat
 import { ToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.js';
 import { ChatToolPostExecuteConfirmationPart } from '../chatContentParts/toolInvocationParts/chatToolPostExecuteConfirmationPart.js';
 import { ChatTerminalToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.js';
-import { BuiltinDynamicCompletions } from './editor/chatInputCompletions.js';
+import { BuiltinDynamicCompletions, ChatConversationCompletions, type ChatConversationCompletionHost } from './editor/chatInputCompletions.js';
 import { InputEditorDecorations } from './editor/chatInputEditorContrib.js';
 import { IChatSlashCommandService } from '../../../common/participants/chatSlashCommands.js';
 import { IChatService, type QueuedMessage } from '../../../../../services/chat/common/chatService.js';
@@ -99,6 +99,7 @@ import { projectChatDraftReferences } from '../../../common/attachments/chatInli
 import { ChatWidgetPasteTarget } from '../../attachments/chatWidgetPasteTarget.js';
 import { createChatFileAttachments, IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { SuggestController } from '../../../../../../editor/contrib/suggest/browser/suggestController.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../../services/chat/common/chatContextService.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
@@ -609,6 +610,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}));
 		}
 		if (!delegate.draft && this.input.codeEditor && this.input.getModel) {
+			this._register(instantiationService.createInstance(ChatConversationCompletions, this.input, {
+				getDestination: () => {
+					const { conversation, draftIdentity, draftReferenceProviderId } = this.state;
+					return conversation ?? (draftIdentity && draftReferenceProviderId ? { providerId: draftReferenceProviderId, draft: draftIdentity } : undefined);
+				},
+				accept: async (replacement, attachment, signal) => {
+					const accepted = await this.acceptContextCompletion(replacement, async () => [attachment], signal);
+					if (accepted?.length && !signal.aborted) announceStatus(localize('chat.context.added', 'Added {0}', attachment.name));
+				},
+			} satisfies ChatConversationCompletionHost));
 			this._register(instantiationService.createInstance(ChatPasteProvidersFeature, this.input, () => this.inputLifecycle.signal, () => this.supportsImages()));
 			const completions = this._register(instantiationService.createInstance(AgentHostInputCompletions, this.input.getModel(), {
 				currentLifecycle: () => this.inputLifecycle.signal,
@@ -874,7 +885,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.showHistorySearch();
 			return;
 		}
-		if (event.key === 'Escape' && this.input.element.querySelector('.stanza-editor-completion:not([hidden])')) return;
+		const codeEditor = this.input.codeEditor;
+		const completing = codeEditor && SuggestController.get(codeEditor)?.widget.visible;
+		if (event.key === 'Escape' && completing) return;
 		if (event.key === 'Escape' && this.dictationSession.isActive) {
 			stopEvent(event);
 			void this.dictationSession.cancel().catch(() => undefined);
@@ -888,7 +901,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		if (!this.history.available || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
 		const direction = event.key === 'ArrowUp' ? 'previous' : event.key === 'ArrowDown' ? 'next' : undefined;
-		if (!direction || this.input.element.querySelector('.stanza-editor-completion:not([hidden])')) return;
+		if (!direction || completing) return;
 		if (!this.history.active && !this.input.isAtHistoryBoundary(direction)) return;
 		stopEvent(event);
 		const revision = this.historyInputRevision;
