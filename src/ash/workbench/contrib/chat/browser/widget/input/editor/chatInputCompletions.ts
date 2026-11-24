@@ -38,29 +38,34 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 			if (lines.slice(0, lineNumber - 1).some(line => line.trim())) return emptyCompletionResult();
 			const line = lines[lineNumber - 1] ?? '';
 			const commandStart = line.search(/\S/u);
-			const prefix = line.slice(commandStart, request.position.column - 1);
+			const cursor = request.position.column - 1;
+			const prefix = line.slice(commandStart, cursor);
 			if (!prefix.startsWith('/') || /\s/.test(prefix)) return emptyCompletionResult();
 			const query = prefix.slice(1);
 			const matches = catalog.matching(query).filter(command => !localOnly || catalog.binding(command.name)?.origin === 'local' || catalog.binding(command.name)?.origin === 'client');
 			// Weak name and description matches need an explicit choice before Enter can accept them.
 			const selectFirst = !query || (matches[0]?.name.startsWith(query.toLowerCase()) ?? false);
-			const commandEnd = commandStart + line.slice(commandStart).search(/\s|$/);
-			const replacementEnd = commandEnd + (/[ \t]/u.test(line[commandEnd] ?? '') ? 1 : 0);
-			const range = Range.fromPositions(new Position(lineNumber, commandStart + 1), new Position(lineNumber, replacementEnd + 1));
+			const commandEnd = commandStart + line.slice(commandStart).search(/\s|$/u);
+			const existingCommand = query ? line.slice(commandStart + 1, commandEnd) : undefined;
 			return Object.freeze({
-				items: Object.freeze(matches.map((command, index) => Object.freeze({
-					id: command.name,
-					label: `/${command.name}`,
-					labelMatchIndices: matchedCharacterIndices(command.name, query).map(position => position + 1),
-					kind: LanguageCompletionItemKind.Function,
-					range,
-					insertText: `/${command.name} `,
-					detail: command.description,
-					detailMatchIndices: matchedCharacterIndices(command.description, query),
-					filterText: `/${command.name}`,
-					sortText: command.name,
-					preselect: selectFirst && index === 0,
-				}))),
+				items: Object.freeze(matches.map((command, index) => {
+					const end = command.name === existingCommand ? commandEnd : cursor;
+					const replacementEnd = end + (/\s/u.test(line[end] ?? '') ? 1 : 0);
+					const range = new Range(lineNumber, commandStart + 1, lineNumber, replacementEnd + 1);
+					return Object.freeze({
+						id: command.name,
+						label: `/${command.name}`,
+						labelMatchIndices: matchedCharacterIndices(command.name, query).map(position => position + 1),
+						kind: LanguageCompletionItemKind.Function,
+						range,
+						insertText: `/${command.name} `,
+						detail: command.description,
+						detailMatchIndices: matchedCharacterIndices(command.description, query),
+						filterText: `/${command.name}`,
+						sortText: command.name,
+						preselect: selectFirst && index === 0,
+					});
+				})),
 				isIncomplete: true,
 			});
 		},

@@ -41,6 +41,27 @@ fn query_completion_and_submission_share_one_grammar() {
 }
 
 #[test]
+fn completion_at_the_front_of_a_draft_keeps_the_suffix() {
+    let catalog = catalog();
+    for (draft, cursor, prefix) in [("/Existing draft", 1, ""), ("/moExisting draft", 3, "mo")] {
+        let input = SlashCommandInput::at_cursor(draft, cursor, &catalog);
+        assert_eq!(input.query().unwrap().text, prefix);
+        let command = input.matching_commands().unwrap().remove(0);
+        let completion = input.completion(&command).unwrap();
+        assert_eq!(completion.range, 0..cursor);
+        assert_eq!(
+            format!("{}{}", completion.replacement, &draft[cursor..]),
+            "/model Existing draft"
+        );
+    }
+    assert!(
+        SlashCommandInput::at_cursor("/model", 0, &catalog)
+            .query()
+            .is_none()
+    );
+}
+
+#[test]
 fn commands_without_arguments_reject_extra_text() {
     let catalog = catalog();
     assert!(

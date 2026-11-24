@@ -8,7 +8,6 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlashCommandQuery<'a> {
     pub text: &'a str,
-    command_range: Range<usize>,
 }
 
 /// Text replacement required to complete one selected Slash Command.
@@ -48,23 +47,9 @@ impl<'a, 'c> SlashCommandInput<'a, 'c> {
     }
 
     pub fn query(self) -> Option<SlashCommandQuery<'a>> {
-        let command_range = command_name_range(self.text)?;
-        let first_line_end = self.text.find('\n').unwrap_or(self.text.len());
-        if self.cursor > first_line_end || !self.text.is_char_boundary(self.cursor) {
-            return None;
-        }
-        let query_end = if self.cursor <= 1 {
-            command_range.end
-        } else {
-            self.cursor
-        };
-        if query_end > command_range.end {
-            return None;
-        }
-        Some(SlashCommandQuery {
-            text: &self.text[1..query_end],
-            command_range,
-        })
+        self.text.strip_prefix('/')?;
+        let text = self.text.get(1..self.cursor)?;
+        (!text.contains(char::is_whitespace)).then_some(SlashCommandQuery { text })
     }
 
     pub fn matching_commands(self) -> Option<Vec<SlashCommandDefinition>> {
@@ -72,22 +57,29 @@ impl<'a, 'c> SlashCommandInput<'a, 'c> {
     }
 
     pub fn completion(self, command: &SlashCommandDefinition) -> Option<SlashCommandCompletion> {
-        let query = self.query()?;
-        let mut range = query.command_range;
-        let mut replacement = format!("/{}", command.name);
-        if let Some(next) = self.text[range.end..].chars().next() {
-            if next == '\n' {
-                replacement.push(' ');
-            } else if next.is_whitespace() {
-                range.end += next.len_utf8();
-                replacement.push(' ');
-            } else {
-                return None;
-            }
+        self.query()?;
+        let accepted_end = 1 + command.name.len();
+        // Accepting an already spelled command moves across its existing token.
+        // Any other text after the cursor remains part of the draft.
+        let end = if self.cursor > 1
+            && self.text.get(1..accepted_end) == Some(command.name.as_str())
+            && self.text[accepted_end..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+        {
+            accepted_end
         } else {
-            replacement.push(' ');
-        }
-        Some(SlashCommandCompletion { range, replacement })
+            self.cursor
+        };
+        let separator = self.text[end..]
+            .chars()
+            .next()
+            .filter(|next| *next != '\n' && next.is_whitespace());
+        Some(SlashCommandCompletion {
+            range: 0..end + separator.map_or(0, char::len_utf8),
+            replacement: format!("/{} ", command.name),
+        })
     }
 
     pub fn invocation(self) -> Option<SlashCommandInvocation> {

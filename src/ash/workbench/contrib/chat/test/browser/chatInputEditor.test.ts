@@ -1349,17 +1349,21 @@ test('Command completion respects whitespace trimmed by submission and rejects l
 	const composer = createSnapshotComposer(resources);
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
 	const provider = createChatCommandCompletionProvider(catalog);
-	for (const text of ['  /ne', '\n\t/ne', '\n  /ne']) {
+	for (const [text, cursor, expected] of [
+		['  /ne', 5, '  /new '], ['\n\t/ne', 5, '\n\t/new '], ['\n  /ne', 6, '\n  /new '],
+		['  /neExisting draft', 5, '  /new Existing draft'], ['  /Existing draft', 3, '  /new Existing draft'],
+	] as const) {
 		composer.editor.value = text;
 		const model = composer.editor.getModel();
-		const position = model.getPositionAt(text.length);
+		const position = model.getPositionAt(cursor);
 		const result = await provider.provideCompletions({
 			requestId: 1, languageId: 'ash-chat-input', position,
 			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
 		}, new AbortController().signal);
-		assert.equal(result?.items[0]?.insertText, '/new ');
-		composer.editor.codeEditor.executeEdits('completion', [{ range: result!.items[0]!.range, text: result!.items[0]!.insertText }]);
-		assert.equal(composer.editor.value, text.slice(0, text.indexOf('/')) + '/new ');
+		const command = result?.items.find(item => item.insertText === '/new ');
+		assert.ok(command);
+		composer.editor.codeEditor.executeEdits('completion', [{ range: command.range, text: command.insertText }]);
+		assert.equal(composer.editor.value, expected);
 	}
 	composer.editor.value = 'Message\n/ne';
 	const result = await provider.provideCompletions({
