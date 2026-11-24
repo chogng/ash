@@ -5,14 +5,15 @@ import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Event } from '../../../../../base/common/event.js';
-import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAppServerApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -42,15 +43,26 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILifecycleService, lifecycle as ILifecycleService);
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService(workspace)));
+	const trustChanged = resources.add(new Emitter<void>());
+	let connectionState: AppServerConnectionState = 'ready';
+	const trustReads: string[] = [];
+	services.registerInstance(IAppServerApi, {
+		isAvailable: true, connectionGeneration: 1, getConnectionState: async () => connectionState,
+		getSlashCommands: async () => [], onConnectionState: () => Disposable.None,
+	});
 	services.registerInstance(IWorkspacesService, {
 		onDidChangeRecentlyOpened: Event.None,
 		getRecentlyOpened: async () => ({ workspaces: [{ folderUri: URI.file('/trusted') }, { folderUri: URI.file('/untrusted') }] }),
 	} as unknown as IWorkspacesService);
 	services.registerInstance(IWorkspaceTrustManagementService, {
-		onDidChangeTrustedFolders: Event.None,
+		onDidChangeTrustedFolders: trustChanged.event,
 		workspaceTrustInitialized: Promise.resolve(),
 		isWorkspaceTrusted: () => workspaceTrusted,
-		getUriTrustInfo: async (uri: URI) => ({ trusted: uri.path === '/trusted', uri }),
+		getUriTrustInfo: async (uri: URI) => {
+			trustReads.push(uri.path);
+			if (connectionState !== 'ready') throw new Error(`App Server is not ready: ${connectionState}`);
+			return { trusted: uri.path === '/trusted', uri };
+		},
 	} as unknown as IWorkspaceTrustManagementService);
 	const requests: unknown[] = [];
 	let failOpen = false;
@@ -85,10 +97,14 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	page.create(dom.window.document.body);
 	page.setVisible(true);
 	return {
-		page, requests, draft, configuration, services, whenPrefilled: prefilled.p,
+		page, requests, draft, configuration, services, trustReads, whenPrefilled: prefilled.p,
 		attachments: draft.contexts.map(context => ({ ...context, resolve: async () => ({ name: context.name, content: context.content }) })),
 		storage: services.get(IStorageService), get options() { assert.ok(options); return options; }, get restored() { return restored; }, get released() { return released; },
 		fail() { failOpen = true; },
+		setConnectionState(state: AppServerConnectionState): void {
+			connectionState = state;
+			trustChanged.fire();
+		},
 		showChatPart() { chatPartVisible = true; },
 		get chatCloseCount() { return chatCloseCount; },
 		async open() { await page.setInput(new AgentSessionsWelcomeInput(), new AbortController().signal); },
@@ -115,6 +131,30 @@ test('Welcome exposes only trusted targets and opens a chosen workspace with its
 	const key = getAgentSessionsWelcomePrefillKey({ id: 'target', folders: [{ id: 'root', name: 'trusted', index: 0, uri: URI.file('/trusted') }] })!;
 	assert.deepEqual(JSON.parse(f.storage.get(key, StorageScope.APPLICATION)!).payload.draft, JSON.parse(JSON.stringify(f.draft)));
 	assert.equal(f.requests.length, 1);
+});
+
+test('Welcome refreshes recent workspace trust only after the connection is ready', async () => {
+	using f = fixture();
+	await f.open();
+	const delegate = f.options.workspacePickerDelegate!;
+	const selected = delegate.getWorkspaces()[0];
+	delegate.setSelectedWorkspace(selected);
+	f.trustReads.length = 0;
+
+	for (const state of ['stopped', 'initializing'] as const) {
+		f.setConnectionState(state);
+		await f.open();
+		assert.deepEqual(f.trustReads, []);
+		assert.deepEqual(delegate.getWorkspaces(), [selected]);
+		assert.equal(delegate.getSelectedWorkspace(), selected);
+	}
+
+	const refreshed = new DeferredPromise<void>();
+	using listener = Event.once(delegate.onDidChangeWorkspaces)(() => { void refreshed.complete(); });
+	f.setConnectionState('ready');
+	await refreshed.p;
+	assert.deepEqual(f.trustReads, ['/trusted', '/untrusted']);
+	assert.deepEqual(delegate.getWorkspaces().map(item => item.uri.path), ['/trusted']);
 });
 
 test('Failed Welcome handoff rejects instead of falling through to a local send, and keeps the source draft', async () => {

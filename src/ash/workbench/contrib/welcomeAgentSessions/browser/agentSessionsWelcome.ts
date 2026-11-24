@@ -6,6 +6,7 @@ import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -52,6 +53,7 @@ export class AgentSessionsWelcomePage extends EditorPane {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspacesService private readonly history: IWorkspacesService,
 		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
+		@IAppServerApi private readonly appServer: IAppServerApi,
 		@IHostService private readonly host: IHostService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -177,20 +179,23 @@ export class AgentSessionsWelcomePage extends EditorPane {
 
 	private async refreshWorkspaces(): Promise<void> {
 		const generation = ++this.historyGeneration;
+		const isCurrent = (): boolean => !this.isDisposed && generation === this.historyGeneration;
 		try {
 			const recent = await this.history.getRecentlyOpened();
+			// Trust invalidation also fires during reconnect. Keep the picker stable until the ready event refreshes it.
+			if (await this.appServer.getConnectionState() !== 'ready' || !isCurrent()) { return; }
 			const trusted = await Promise.all(recent.workspaces.map(async item => {
 				const uri = recentWorkspaceUri(item);
 				return (await this.trust.getUriTrustInfo(uri)).trusted ? [{ uri, label: item.label || basename(uri), isFolder: 'folderUri' in item }] : [];
 			}));
-			if (this.isDisposed || generation !== this.historyGeneration) { return; }
+			if (!isCurrent()) { return; }
 			this.workspaces = trusted.flat();
 			if (this.selectedWorkspace && !this.workspaces.some(item => item.uri.toString() === this.selectedWorkspace!.uri.toString())) {
 				this.selectedWorkspace = undefined;
 				this.selectedChanged.fire(undefined);
 			}
 			this.workspacesChanged.fire();
-		} catch (error) { if (!this.isDisposed && generation === this.historyGeneration) { this.notifications.error(error instanceof Error ? error : String(error)); } }
+		} catch (error) { if (isCurrent()) { this.notifications.error(error instanceof Error ? error : String(error)); } }
 	}
 
 	private async applyPrefill(): Promise<void> {
