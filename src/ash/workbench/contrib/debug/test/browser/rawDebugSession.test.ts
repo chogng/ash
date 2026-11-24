@@ -65,6 +65,28 @@ test('RawDebugSession detects an observation gap before forwarding any inline si
 	} finally { await session.close(); }
 });
 
+test('RawDebugSession keeps the inline cursor until the backend accepts the page', async () => {
+	const offsets: number[] = [];
+	const page = { ...empty, messages: [{ sequence: 1, message: { type: 'event', event: 'stopped' } }], nextSequence: 1 };
+	let attempts = 0;
+	const session = new RawDebugSession(backend({
+		acceptInput: async (_id, input) => {
+			assert.deepEqual(input, page);
+			if (++attempts === 1) throw new Error('Page rejected');
+		},
+	}), {
+		read: async after => { offsets.push(after); return after === 0 ? page : empty; },
+		send: async () => { }, close: async () => { },
+	});
+	try {
+		await session.start({ arguments: [], connection: { type: 'client' } });
+		await assert.rejects(session.read(0, 128), /Page rejected/);
+		await session.read(0, 128);
+		await session.read(0, 128);
+		assert.deepEqual({ offsets, attempts }, { offsets: [0, 0, 1], attempts: 2 });
+	} finally { await session.close(); }
+});
+
 test('RawDebugSession waits for both backend and inline close even when one close rejects', async () => {
 	const released = new DeferredPromise<void>();
 	const entered = new DeferredPromise<void>();

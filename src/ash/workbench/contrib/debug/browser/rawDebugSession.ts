@@ -99,8 +99,8 @@ export class RawDebugSession {
 		if (this.inline) {
 			const input = await this.inline.read(this.inlineSequence, 128);
 			if (this.closed) throw new CancellationError();
-			this.inlineSequence = input.nextSequence;
 			if (input.messages.length || input.stderr || input.exited || input.outputGap || input.protocolError) await this.processes.acceptInput(id, input);
+			this.inlineSequence = input.nextSequence;
 		}
 		const read = await this.processes.read(id, afterSequence, maxMessages);
 		if (this.closed) throw new CancellationError();

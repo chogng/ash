@@ -33,7 +33,9 @@ async function checkDebugPorts(args: readonly string[]): Promise<void> {
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const child = spawn(process.execPath, [resolve(import.meta.dirname, 'supervisor.ts'), ...process.argv.slice(2)], {
 		cwd: resolve(import.meta.dirname, '../../..'),
-		env: process.env,
+		// The supervisor closes its registry on exit. A nested launch must never
+		// inherit one that also owns the Ash instance running this debugger.
+		env: { ...process.env, ASH_SMOKE_RUN_DIRECTORY: undefined },
 		stdio: ['inherit', 'pipe', 'pipe', 'ipc'],
 		// Windows also needs the supervisor outside the launcher's kill-on-close job.
 		// Its IPC disconnect handler must survive a forcibly terminated launcher.

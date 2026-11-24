@@ -12,7 +12,7 @@
 		},
 		{
 			"label": "Build Ash Debug Backend",
-			"dependsOn": "Prepare Ash Backend",
+			"dependsOn": "Prepare Ash Desktop Debug",
 			"type": "shell",
 			"command": "pnpm debug:backend",
 			"options": {
@@ -117,6 +117,23 @@
 				"panel": "dedicated",
 				"group": "ash-browser-ui"
 			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Prepare Ash Desktop Debug",
+			"dependsOrder": "sequence",
+			"dependsOn": ["Prepare Ash Desktop", "Prepare Ash Backend"]
+		},
+		{
+			"label": "Prepare Ash Desktop",
+			"type": "shell",
+			"command": "pnpm prepare:desktop",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
 			"runOptions": {
 				"instanceLimit": 1
 			}

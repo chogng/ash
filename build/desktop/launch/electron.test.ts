@@ -7,7 +7,7 @@ import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { isProcessRunning, ProcessRun } from '../../processes.ts';
+import { isProcessRunning, ProcessRun, registerRunResource } from '../../processes.ts';
 import { pythonCommand } from '../../python.ts';
 import { resolveElectronConfiguration } from '../../../test/automation/electron.ts';
 
@@ -82,20 +82,28 @@ test('real Ash development services exit after worker death or launcher loss wit
 	}
 });
 
-test('F5 reports a busy debug port before starting development services', { timeout: 30_000 }, async t => {
+test('F5 reports busy debug ports and leaves the parent run alive', { timeout: 30_000 }, async t => {
 	const repository = resolve(import.meta.dirname, '../../..');
+	const directory = await mkdtemp(join(tmpdir(), 'ash-parent-run-'));
+	const parent = new ProcessRun(repository, directory, 100);
+	t.after(async () => { await parent.close(); await rm(directory, { recursive: true, force: true }); });
+	const peer = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });
+	await parent.own(peer);
+	const resource = await registerRunResource(undefined, directory);
+	await resource.process(peer);
 	const occupied = createServer();
 	t.after(() => new Promise<void>(resolveClosed => occupied.close(() => resolveClosed())));
 	await new Promise<void>((resolveReady, reject) => occupied.once('error', reject).listen(0, '127.0.0.1', resolveReady));
 	const port = (occupied.address() as import('node:net').AddressInfo).port;
 	for (const argument of [`--inspect-brk=127.0.0.1:${port}`, `--remote-debugging-port=${port}`]) {
 		await assert.rejects(promisify(execFile)(process.execPath, ['build/desktop/launch/electron.ts', '--watch', '--dev-services', argument], {
-			cwd: repository, timeout: 15_000, env: { ...process.env, ASH_RENDERER_URL: undefined, ASH_DESKTOP_UI_ONLY: undefined },
+			cwd: repository, timeout: 15_000, env: { ...process.env, ASH_RENDERER_URL: undefined, ASH_DESKTOP_UI_ONLY: undefined, ASH_SMOKE_RUN_DIRECTORY: directory },
 		}), {
 			code: 1,
 			stderr: new RegExp(`Ash desktop debug port 127[.]0[.]0[.]1:${port} is already in use`, 'u'),
 			stdout: '',
 		});
+		assert.equal(isProcessRunning(peer.pid!), true);
 	}
 	assert.equal(occupied.listening, true);
 });

@@ -30,6 +30,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { DebugSession } from '../../browser/debugSession.js';
 import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from '../../common/debug.js';
@@ -497,6 +498,25 @@ test('DebugSession drains output after a terminated event before closing its tra
 		await waitFor(() => session.state === 'terminated');
 		assert.equal(session.output, lines.join(''));
 		assert.equal(processes.closed, true);
+	} finally { await session.disconnect(); }
+});
+
+test('DebugSession preserves a live adapter when an observation is rejected for overload', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	const read = processes.read.bind(processes);
+	let rejected = false;
+	processes.read = async (...args) => {
+		if (!rejected) {
+			rejected = true;
+			throw new AppServerRemoteError(-32000, 'ServerOverloaded', { kind: 'ServerOverloaded' });
+		}
+		return read(...args);
+	};
+	try {
+		processes.event('stopped', { threadId: 7 });
+		await waitFor(() => session.state === 'stopped' || session.state === 'error');
+		assert.deepEqual({ rejected, state: session.state, thread: session.threadId, closed: processes.closed }, { rejected: true, state: 'stopped', thread: 7, closed: false });
 	} finally { await session.disconnect(); }
 });
 

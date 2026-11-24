@@ -38,11 +38,12 @@
 			"presentation": { "group": "0_ash", "order": 23 }
 		},
 		{
-			"name": "Ash Launcher",
+			"name": "Ash",
 			"type": "node",
 			"request": "launch",
 			"cwd": "${workspaceFolder}",
-			"presentation": { "hidden": true },
+			"presentation": { "group": "0_ash", "order": 1 },
+			"preLaunchTask": "Prepare Ash Desktop Debug",
 			"runtimeExecutable": "node",
 			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
 			"args": [
@@ -62,14 +63,21 @@
 				"ASH_HOME": "${workspaceFolder}/.build/desktop/dev/profile",
 				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
-			"outputCapture": "std"
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Debugger listening on (ws://127[.]0[.]0[.]1:9229/[^\\s]+)",
+				"action": "startDebugging",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
+			}
 		},
 		{
-			"name": "Ash Agents Launcher",
+			"name": "Ash Agents",
 			"type": "node",
 			"request": "launch",
 			"cwd": "${workspaceFolder}",
-			"presentation": { "hidden": true },
+			"presentation": { "group": "0_ash", "order": 2 },
+			"preLaunchTask": "Prepare Ash Desktop Debug",
 			"runtimeExecutable": "node",
 			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
 			"args": [
@@ -90,14 +98,21 @@
 				"ASH_DEV_AGENTS_WINDOW": "1",
 				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
-			"outputCapture": "std"
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Debugger listening on (ws://127[.]0[.]0[.]1:9229/[^\\s]+)",
+				"action": "startDebugging",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
+			}
 		},
 		{
-			"name": "Ash (Hot Reload) Launcher",
+			"name": "Ash (Hot Reload)",
 			"type": "node",
 			"request": "launch",
 			"cwd": "${workspaceFolder}",
-			"presentation": { "hidden": true },
+			"presentation": { "group": "0_ash", "order": 3 },
+			"preLaunchTask": "Prepare Ash Desktop Debug",
 			"runtimeExecutable": "node",
 			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
 			"args": [
@@ -117,7 +132,13 @@
 				"ASH_HOME": "${workspaceFolder}/.build/desktop/dev/profile",
 				"ASH_DEV_APP_SERVER_RELOAD": "0"
 			},
-			"outputCapture": "std"
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Debugger listening on (ws://127[.]0[.]0[.]1:9229/[^\\s]+)",
+				"action": "startDebugging",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
+			}
 		},
 		{
 			"name": "Ash Main Process",
@@ -125,8 +146,6 @@
 			"request": "attach",
 			"address": "127.0.0.1",
 			"port": 9229,
-			// The launcher can wait on Cargo before Electron opens the Inspector.
-			"timeout": 0,
 			"continueOnAttach": true,
 			"autoAttachChildProcesses": false,
 			"sourceMaps": true,
@@ -172,7 +191,7 @@
 			}
 		},
 		{
-			"name": "Ash (Native Debug) Launcher",
+			"name": "Ash (Native Debug)",
 			"type": "node",
 			"request": "launch",
 			"runtimeExecutable": "node",
@@ -196,8 +215,15 @@
 			"autoAttachChildProcesses": false,
 			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
 			"console": "integratedTerminal",
-			"presentation": { "hidden": true },
-			"outputCapture": "std"
+			"presentation": { "group": "0_ash", "order": 6 },
+			"preLaunchTask": "Build Ash Debug Backend",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Debugger listening on (ws://127[.]0[.]0[.]1:9229/[^\\s]+)",
+				"action": "startDebugging",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
+			}
 		},
 		{
 			"name": "Ash App Server (Attach)",
@@ -615,39 +641,6 @@
 			"osx": {
 				"runtimeArgs": ["--use-mock-keychain"]
 			}
-		}
-	],
-	"compounds": [
-		{
-			"name": "Ash",
-			"preLaunchTask": "Prepare Ash Backend",
-			"configurations": ["Ash Launcher", "Ash Main Process"],
-			"stopAll": true,
-			"presentation": { "group": "0_ash", "order": 1 }
-		},
-		{
-			"name": "Ash Agents",
-			"preLaunchTask": "Prepare Ash Backend",
-			"configurations": ["Ash Agents Launcher", "Ash Main Process"],
-			"stopAll": true,
-			"presentation": { "group": "0_ash", "order": 2 }
-		},
-		{
-			"name": "Ash (Hot Reload)",
-			"preLaunchTask": "Prepare Ash Backend",
-			"configurations": ["Ash (Hot Reload) Launcher", "Ash Main Process"],
-			"stopAll": true,
-			"presentation": { "group": "0_ash", "order": 3 }
-		},
-		{
-			"name": "Ash (Native Debug)",
-			"preLaunchTask": "Build Ash Debug Backend",
-			"configurations": [
-				"Ash (Native Debug) Launcher",
-				"Ash Main Process"
-			],
-			"stopAll": true,
-			"presentation": { "group": "0_ash", "order": 6 }
 		}
 	],
 	"inputs": [

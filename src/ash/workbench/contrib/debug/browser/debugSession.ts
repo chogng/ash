@@ -12,6 +12,7 @@ import { Disposable, toDisposable, type IDisposable } from '../../../../base/com
 import { URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { type DebugExceptionsSnapshot, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugBreakpointUnsupported, type DebugConsoleSnapshot, type DebugSessionSnapshot, type IDebugAdapterProcessService } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 
@@ -19,6 +20,8 @@ interface DapResponse { readonly seq: number; readonly type: 'response'; readonl
 interface DapEvent { readonly seq: number; readonly type: 'event'; readonly event: string; readonly body?: unknown; }
 
 const POLL_DELAY_MS = 40;
+const OVERLOADED_POLL_DELAY_MS = 200;
+const OVERLOADED_POLL_LIMIT_MS = 5_000;
 const TRACKER_CALLBACK_TIMEOUT_MS = 1_000;
 
 export interface DebugSessionStartOptions {
@@ -740,9 +743,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private async poll(): Promise<void> {
+		let retryUntil: number | undefined;
 		while (this.polling && !this.isDisposed) {
 			try {
 				const read = await this.readAdapterPage(true);
+				retryUntil = undefined;
 				if (this.isDisposed || !this.polling) return;
 				if (read.outputGap) throw new Error('Debug Adapter output exceeded the retained buffer');
 
@@ -759,6 +764,15 @@ export class DebugSession extends Disposable implements IDebugSession {
 				// browser attach. Drain full pages before polling an idle adapter again.
 				if (read.messages.length === 128) continue;
 			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'ServerOverloaded') {
+					// A rejected observation does not retire the adapter or its debuggee.
+					const now = performance.now();
+					retryUntil ??= now + OVERLOADED_POLL_LIMIT_MS;
+					if (now < retryUntil) {
+						await timeout(OVERLOADED_POLL_DELAY_MS);
+						continue;
+					}
+				}
 				this._reason = getErrorMessage(error);
 				void this.reportTrackerError(error);
 				this.setState('error');
