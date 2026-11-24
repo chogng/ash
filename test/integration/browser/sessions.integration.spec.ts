@@ -1273,15 +1273,14 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await page.keyboard.press('Tab');
 	await expect(workspace).toBeFocused();
 	await page.keyboard.press('Tab');
-	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-agent-action')).toBeFocused();
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-model-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
 	await expect(voice).toHaveCount(0);
 	await expect(send.locator('[data-ash-icon-id="enter"]')).toBeVisible();
 	await expect(send).toBeDisabled();
 	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-status'))
-		.toHaveText('Choose a project before sending.');
+	await expect(workspace).toHaveAccessibleName('Choose project');
 	await input.press('Enter');
 	await expect(page.locator('.ash-sessions-chat-slot.active .stanza-editor-line-text')).toContainText('Draft');
 	await expect.poll(() => actions.evaluate(element => {
@@ -1319,20 +1318,29 @@ for (const locale of ['en', 'zh-CN']) {
 			label.clientWidth > 0 && label.scrollWidth === label.clientWidth,
 		))).toEqual([true, true]);
 		const footer = active.locator('.ash-sessions-chat-input-footer');
+		await expect(footer.locator('.ash-chat-input-agent-action')).toHaveCount(0);
 		const controls = footer.locator(
-			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-agent-action, .ash-chat-input-permission-picker',
+			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-permission-picker',
 		);
-		await expect(controls).toHaveCount(4);
+		await expect(controls).toHaveCount(3);
 		for (const control of await controls.all()) {
-			await expect(control).toHaveCSS('padding-inline-start', '4px');
-			await expect(control).toHaveCSS('padding-inline-end', '4px');
+			await expect(control).toHaveCSS('padding-inline-start', '8px');
+			await expect(control).toHaveCSS('padding-inline-end', '8px');
 		}
-		await expect.poll(() => controls.evaluateAll(buttons => {
+		await expect.poll(() => footer.locator(
+			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-model-action, .ash-chat-input-permission-picker',
+		).evaluateAll(buttons => {
 			const bounds = buttons.map(button => button.getBoundingClientRect());
-			return bounds.slice(1).map((bound, index) => bound.left - bounds[index]!.right);
-		})).toEqual([2, 2, 2]);
+			return bounds.length === 4 && bounds.slice(1).every((bound, index) => bound.left >= bounds[index]!.right);
+		})).toBe(true);
 		await expect(picker.locator('[data-ash-icon-id="local"]')).toBeVisible();
-		await active.locator('.ash-chat-input-editor').getByRole('textbox').focus();
+		const input = active.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.press('Alt+F1');
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(locale === 'en' ? /Use Chat: Open Model Picker or Chat: Open Permission Picker/ : /在命令面板中打开模型或权限选择器/);
+		await expect(help).not.toHaveValue(/Open Agent Picker|打开智能体选择器|附件、Agent/);
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
 		await page.keyboard.type('Draft survives changing host');
 		await picker.focus();
 		await picker.press('ArrowDown');
@@ -1356,10 +1364,9 @@ for (const locale of ['en', 'zh-CN']) {
 		await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
 		await expect(page.locator('.ash-sessions-chat-slot.active')).toContainText('Host B model');
 		await picker.press('ArrowDown');
-		await expect(menu.getByRole('status').filter({ hasText: locale === 'en' ? 'Sandbox: Read only · Network blocked' : '沙箱：只读 · 网络已阻止' })).toBeVisible();
-		await menu.getByRole('menuitem', { name: locale === 'en' ? 'Sandbox Settings' : '沙箱设置', exact: true }).click();
-		await expect(page.getByRole('heading', { level: 3, name: locale === 'en' ? 'Environment' : '环境', exact: true })).toBeVisible();
-		await expect(page.getByRole('heading', { level: 4, name: locale === 'en' ? 'Execution and permissions' : '执行与权限', exact: true })).toBeVisible();
+		await expect(menu.getByRole('menuitemradio', { name: 'Host B', exact: true })).toBeChecked();
+		await page.keyboard.press('Escape');
+		await expect(picker).toBeFocused();
 	});
 }
 

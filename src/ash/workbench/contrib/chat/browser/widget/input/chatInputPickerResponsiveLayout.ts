@@ -15,7 +15,6 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 	private footer: {
 		readonly element: HTMLElement;
 		readonly getGroups: () => readonly (readonly IChatInputPickerResponsiveLayoutItem[])[];
-		readonly isEnabled: () => boolean;
 	} | undefined;
 
 	constructor(private readonly toolbar: HTMLElement) {
@@ -25,8 +24,8 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 		this._register(toDisposable(() => this.resizeObserver.disconnect()));
 	}
 
-	public setFooter(element: HTMLElement, getGroups: () => readonly (readonly IChatInputPickerResponsiveLayoutItem[])[], isEnabled: () => boolean): void {
-		this.footer = { element, getGroups, isEnabled };
+	public setFooter(element: HTMLElement, getGroups: () => readonly (readonly IChatInputPickerResponsiveLayoutItem[])[]): void {
+		this.footer = { element, getGroups };
 		this.toolbar.querySelector('.ash-chat-input-agent-selector.compact')?.classList.remove('compact');
 		this.resizeObserver.unobserve(this.toolbar);
 		this.resizeObserver.observe(element);
@@ -54,13 +53,12 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 		modeSelector.classList.toggle('compact', availableModelWidth + 1 < Math.min(preferredModelWidth, minimumReadableModelWidth));
 	}
 
-	private layoutFooter({ element, getGroups, isEnabled }: NonNullable<ChatInputPickerResponsiveLayout['footer']>): void {
+	private layoutFooter({ element, getGroups }: NonNullable<ChatInputPickerResponsiveLayout['footer']>): void {
 		if (!element.isConnected || element.clientWidth === 0) return;
 		const groups = getGroups();
 		for (const group of groups) {
 			for (const item of group) item.setCompact(false);
 		}
-		if (!isEnabled()) return;
 		// Measure the pickers at their intrinsic widths so flex shrink cannot hide overflow.
 		element.classList.add('ash-chat-input-footer-measuring');
 		try {

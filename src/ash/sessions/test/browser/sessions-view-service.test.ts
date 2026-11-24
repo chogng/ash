@@ -8,6 +8,7 @@ import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -707,12 +708,17 @@ test('closing the last draft does not reopen a previously closed durable Session
 	using view = createView(sessions, storage);
 	await view.initialize();
 	const draft = view.openNewSession('Draft task');
+	const draftKey = `untitled:${draft.untitledSessionId}`;
+	writeNewChatDraftState(storage, { text: 'Unsent draft', contexts: [] }, draftKey);
+	writeNewChatDraftState(storage, { text: 'Durable conversation draft', contexts: [] }, 'thread-1');
 
 	view.closeVisibleSelection(view.visibleSelections.find(selection => selection.kind === 'untitled' && selection.session.untitledSessionId === draft.untitledSessionId)!);
 
 	assert.equal(view.visibleSelections.length, 1);
 	assert.equal(view.visibleSelections[0]?.kind, 'untitled');
-	assert.notEqual(selectionId(view.visibleSelections[0]), `untitled:${draft.untitledSessionId}`);
+	assert.notEqual(selectionId(view.visibleSelections[0]), draftKey);
+	assert.equal(readNewChatDraftState(storage, draftKey), undefined);
+	assert.equal(readNewChatDraftState(storage, 'thread-1')?.text, 'Durable conversation draft');
 });
 
 test('an explicit draft chosen during catalog loading remains active', async () => {

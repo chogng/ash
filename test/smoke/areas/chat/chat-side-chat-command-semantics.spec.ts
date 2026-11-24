@@ -89,8 +89,11 @@ for (const surface of ['Code', 'native Chat'] as const) {
 					await page.keyboard.press('Escape');
 					await draft.press('Enter');
 				} else {
-					await composer.getByRole('button', { name: 'More Send Options' }).click();
-					await page.getByRole('menuitem', { name: 'Ask in Side Chat', exact: true }).click();
+					await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+					await composer.getByRole('button', { name: 'More Send Options' }).press('ArrowDown');
+					const sideChat = page.getByRole('menuitem', { name: 'Ask in Side Chat', exact: true });
+					await expect(page.getByRole('menu').filter({ has: sideChat }).getByRole('menuitem')).toHaveCount(1);
+					await sideChat.press('Enter');
 				}
 				await expect(chat).not.toHaveAttribute('data-thread-id', threadId);
 				const sideThreadId = (await chat.getAttribute('data-thread-id'))!;
@@ -107,7 +110,6 @@ for (const surface of ['Code', 'native Chat'] as const) {
 				expect(side.origin).toMatchObject({ type: 'sideChat', parentThreadId: threadId, sourceTurnId: source.turns[0].turnId });
 				expect(turn.items.filter(item => item.type === 'userMessage').map(item => item.text)).toEqual([`${query} `]);
 				expect(turn.items.filter(item => item.type === 'userContext').map(item => ({ name: item.name, content: item.content }))).toContainEqual({ name: 'side-context.txt', content: 'Frozen side question context' });
-				expect(turn.mode).toBeUndefined();
 				expect(turn.instructions?.taskCommand).toBe(query.startsWith('/ask ') ? 'ask' : undefined);
 				// Persisted instruction identity distinguishes /init Setup from ordinary Agent input.
 				if (!query.startsWith('/ask ')) expect(turn.instructions?.id).toBe(surface === 'Code' && query === '/init' ? 'instructions/init' : source.turns[0].instructions?.id);
@@ -116,6 +118,11 @@ for (const surface of ['Code', 'native Chat'] as const) {
 				outcomes.push({ entry, query, sideThreadId, turn });
 				await page.screenshot({ path: testInfo.outputPath(`${entry}-${query.startsWith('/init') ? 'init' : 'develop'}.png`) });
 				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
+				await expect(chat).toHaveAttribute('data-thread-id', threadId);
+				// Keep one side pane open at a time. The catalog assertion above checks retained branches.
+				const sidePane = page.locator('.ash-sessions-chat-slot:visible').filter({ has: page.locator(`[data-thread-id="${sideThreadId}"]`) });
+				await sidePane.getByRole('button', { name: 'Close Session', exact: true }).click();
+				await expect(sidePane).toHaveCount(0);
 			}
 			await client.request(methods['session/request'], { sessionId, commandId: 'stop-side-chat-source', request: { type: 'interruptTurn', threadId, turnId: source.turns[0].turnId, expectedSequence: (await readSource()).sequence } });
 			await expect.poll(async () => (await readSource()).turns[0].status).toBe('interrupted');

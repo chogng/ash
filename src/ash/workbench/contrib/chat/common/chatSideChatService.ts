@@ -6,6 +6,8 @@ import type { URI } from '../../../../base/common/uri.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 
+export const BtwSlashCommandName = 'btw';
+
 export interface IChatSideChatSelection { readonly text: string; }
 
 export interface IChatSideChatOrigin {

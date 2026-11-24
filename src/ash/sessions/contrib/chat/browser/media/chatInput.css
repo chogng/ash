@@ -101,38 +101,12 @@
 }
 
 .ash-sessions-chat-input
-	.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-agent-selector
-	.ash-chat-input-action.ash-chat-input-agent-action,
-.ash-sessions-chat-input
 	.ash-chat-model-picker-control
 	> .ash-chat-input-picker-button {
 	border-radius: var(
 		--ash-button-border-radius,
 		var(--ash-cornerRadius-small)
 	);
-}
-
-.ash-sessions-chat-input
-	.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-agent-selector
-	.ash-chat-input-action.ash-chat-input-agent-action {
-	background: transparent;
-}
-
-.ash-sessions-chat-input
-	.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-agent-selector
-	.ash-chat-input-action.ash-chat-input-agent-action[aria-haspopup]:is(
-		:hover,
-		[aria-expanded="true"]
-	):not(:disabled, [aria-disabled="true"], [aria-readonly="true"]) {
-	background-color: var(
-		--ash-popup-trigger-background,
-		var(--ash-toolbar-hoverBackground)
-	);
-	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
-		var(--ash-contrastBorder, transparent);
 }
 
 .ash-sessions-environment,

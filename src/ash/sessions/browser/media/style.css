@@ -399,13 +399,10 @@
 }
 
 .ash-sessions-window
-	:is(.ash-button-quiet, .ash-chat-input-picker-button):where(
-		:not(.ash-sessions-chat-input .ash-chat-input-agent-action)
-	)[aria-haspopup]:is(:hover, [aria-expanded="true"]):not(
-		:disabled,
-		[aria-disabled="true"],
-		[aria-readonly="true"]
-	) {
+	:is(.ash-button-quiet, .ash-chat-input-picker-button)[aria-haspopup]:is(
+		:hover,
+		[aria-expanded="true"]
+	):not(:disabled, [aria-disabled="true"], [aria-readonly="true"]) {
 	background-color: var(
 		--ash-popup-trigger-background,
 		var(--ash-toolbar-hoverBackground)

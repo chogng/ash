@@ -20,6 +20,7 @@ import { IActionViewItemService } from '../../../../../../platform/actions/brows
 import { MenuId, SubmenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ChatSubmitAction, type IChatExecuteActionContext } from '../../actions/chatExecuteActions.js';
+import type { IChatWidget } from '../../chat.js';
 import { ChatAskInSideChatAction, ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../actions/chatQueueActions.js';
 import { IChatSideChatService } from '../../../common/chatSideChatService.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
@@ -60,7 +61,10 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 		container.setAttribute('aria-label', localize('chat.queuePicker.label', 'Send a Follow-up Message'));
 		this.primary = this.createButton(container, {
 			label: this.action.label, icon: Lxicon.add, iconOnly: true,
-			onClick: () => this.execute(this.effectiveKind() === ChatRequestQueueKind.Queued ? ChatQueueMessageAction.ID : ChatSteerWithMessageAction.ID),
+			onClick: () => {
+				if (this.replyOnly) return this.execute(ChatSubmitAction.ID);
+				return this.execute(this.effectiveKind() === ChatRequestQueueKind.Queued ? ChatQueueMessageAction.ID : ChatSteerWithMessageAction.ID);
+			},
 		});
 		const moreLabel = localize('chat.queuePicker.more', 'More Send Options');
 		this.more = this.createButton(container, {
@@ -96,11 +100,19 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 
 	override setActionContext(context: unknown): void {
 		super.setActionContext(context ?? this.options.actionContext);
+		this.refresh();
 	}
 
 	override setTabbable(tabbable: boolean): void {
 		if (this.primary) this.primary.domNode.tabIndex = tabbable && this.canSubmit() ? 0 : -1;
-		if (this.more) this.more.domNode.tabIndex = tabbable && this.canSubmit() ? 0 : -1;
+		if (this.more) this.more.domNode.tabIndex = tabbable && this.more.enabled ? 0 : -1;
+	}
+
+	private get replyOnly(): boolean { return this.contextKeys.getValue(ChatContextKeys.replyOnlyInput.key) === true; }
+
+	private canAskInSideChat(widget: IChatWidget | undefined): boolean {
+		return !!widget?.visible && !!widget.sessionId && !!widget.threadId
+			&& this.sideChats.canAskInSideChat(LocalChatSessionUri.forSession(widget.sessionId, widget.threadId));
 	}
 
 	private canSubmit(): boolean {
@@ -118,12 +130,15 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 
 	private refresh(): void {
 		if (!this.primary || !this.more) return;
-		const queue = this.effectiveKind() === ChatRequestQueueKind.Queued;
-		this.primary.label = queue ? localize('chat.queuePicker.queue', 'Add to Queue') : localize('chat.queuePicker.steer', 'Steer with Message');
+		const queue = !this.replyOnly && this.effectiveKind() === ChatRequestQueueKind.Queued;
+		this.primary.label = this.replyOnly ? localize('chat.input.send', 'Send')
+			: queue ? localize('chat.queuePicker.queue', 'Add to Queue') : localize('chat.queuePicker.steer', 'Steer with Message');
 		this.primary.icon = queue ? Lxicon.add : Lxicon.enter;
 		this.primary.setTitle(this.primary.label);
-		this.primary.enabled = this.more.enabled = this.canSubmit();
-		if (!this.canSubmit()) this.closeMenu();
+		const context = this.actionContext as IChatExecuteActionContext | undefined;
+		this.primary.enabled = this.canSubmit();
+		this.more.enabled = this.primary.enabled && (!this.replyOnly || this.canAskInSideChat(context?.widget));
+		if (!this.more.enabled) this.closeMenu();
 	}
 
 	private async execute(commandId: string, current: () => boolean = () => true): Promise<void> {
@@ -132,7 +147,7 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 		this.closeMenu();
 		await this.runActionWithContext({
 			...this.action,
-			run: () => current() ? this.commands.executeCommand(commandId, commandId === ChatSubmitAction.ID
+			run: () => current() ? this.commands.executeCommand(commandId, commandId === ChatSubmitAction.ID && !this.replyOnly
 				? { ...context, acceptInputOptions: { cancelCurrentRequest: true } }
 				: context) : undefined,
 		});
@@ -148,7 +163,7 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 		const lookup: Context = {
 			getValue: <T extends ContextKeyValue>(key: string) => (key === ChatContextKeys.inChatInput.key ? true : this.contextKeys.getValue(key)) as T | undefined,
 		};
-		const items: IActionListItem<string>[] = [
+		const items: IActionListItem<string>[] = this.replyOnly ? [] : [
 			{
 				kind: ActionListItemKind.Action, label: localize('chat.queuePicker.stop', 'Stop and Send'),
 				description: localize('chat.queuePicker.stopDescription', 'Stop the current task and send this message.'),
@@ -160,19 +175,20 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 				group: { title: '', icon: Lxicon.add }, item: ChatQueueMessageAction.ID, keybinding: this.keybindings.lookupKeybinding(ChatQueueMessageAction.ID, lookup),
 			},
 		];
-		if (!startsTaskCommand) {
+		if (!this.replyOnly && !startsTaskCommand) {
 			items.push({
 				kind: ActionListItemKind.Action, label: localize('chat.queuePicker.steer', 'Steer with Message'), checked: !queueDefault,
 				description: localize('chat.queuePicker.steerDescription', 'Give the running task additional instructions at its next opportunity.'),
 				group: { title: '', icon: Lxicon.enter }, item: ChatSteerWithMessageAction.ID, keybinding: this.keybindings.lookupKeybinding(ChatSteerWithMessageAction.ID, lookup),
 			});
 		}
-		if (editing === undefined && widget.sessionId && widget.threadId && this.sideChats.canAskInSideChat(LocalChatSessionUri.forSession(widget.sessionId, widget.threadId))) {
+		if (editing === undefined && this.canAskInSideChat(widget)) {
 			items.push({
 				kind: ActionListItemKind.Action, label: localize('chat.askInSideChat', 'Ask in Side Chat'), item: ChatAskInSideChatAction.ID,
 				description: localize('chat.btw.description', 'Ask a side question without adding it to this conversation'), group: { title: '', icon: Lxicon.chat },
 			});
 		}
+		if (items.length === 0) return;
 		this.more.focus();
 		const lifetime = new DisposableStore();
 		let active = true;

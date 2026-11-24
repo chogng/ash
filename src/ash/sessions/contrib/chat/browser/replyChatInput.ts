@@ -104,6 +104,7 @@ export class ReplyChatInputFactory {
 			},
 		}, { placeholder: '', height: SESSIONS_COMPACT_INPUT_HEIGHT }, {
 			replyOnly: true,
+			replySideChat: true,
 			accessibilityHelp: () => `${getNativeChatAccessibilityHelp()}\n${getChatCreationHelp()}`,
 			statusText: (state, _contexts, text) => !state.aiDisabled && model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error ? '' : text,
 		});

@@ -1256,8 +1256,6 @@ export abstract class Workbench extends Disposable {
 		const layout = this.layoutService;
 		const view = this.sessionsView;
 		const storage = services.get(IStorageService);
-		const commandService = services.get(ICommandService);
-		const notificationService = services.get(INotificationService);
 		const conversationVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sessions'));
 		const draftChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
 			const active = view.activeSelection;
@@ -1292,9 +1290,8 @@ export abstract class Workbench extends Disposable {
 				activateSelection: selection => view.activateSelection(selection),
 				markVisibleThreadViewed: entry => view.markVisibleThreadViewed(entry),
 				closeSelection: selection => {
-					if (view.activeSelection !== selection) view.activateSelection(selection);
-					void commandService.executeCommand('sessionsViewPane.closeSession')
-						.then(() => this.sessionsPart?.focus(), error => notificationService.error(getErrorMessage(error)));
+					view.closeVisibleSelection(selection);
+					this.sessionsPart?.focus();
 				},
 				createNewSession: () => {
 					view.openNewSession();

@@ -18,7 +18,6 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
-import { writeNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { pickSessionDestination } from '../sessionsPicker.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -47,9 +46,6 @@ registerAction2(class CloseSessionAction extends Action2 {
 		const selection = sessions.activeSelection;
 		if (!selection) return;
 		sessions.closeVisibleSelection(selection);
-		if (selection.kind === 'untitled') {
-			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`);
-		}
 	}
 });
 

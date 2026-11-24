@@ -40,6 +40,7 @@ export namespace ChatContextKeys {
 	export const inChatInput = new RawContextKey<boolean>('inChatInput', false);
 	/** The selected composer accepts replies without local task controls. */
 	export const replyOnlyInput = new RawContextKey<boolean>('chatReplyOnlyInput', false);
+	export const replySideChatInput = new RawContextKey<boolean>('chatReplySideChatInput', false);
 	export const inQuickChat = new RawContextKey<boolean>('quickChatHasFocus', false);
 	export const findSupported = new RawContextKey<boolean>('chatFindSupported', false);
 	export const findWidgetVisible = new RawContextKey<boolean>('chatFindWidgetVisible', false);

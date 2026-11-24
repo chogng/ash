@@ -17,6 +17,7 @@ test('Chat and Code scope the command palette and user shortcuts to the active m
 	await writeFile(join(profile, 'keybindings.json'), JSON.stringify([
 		{ key: 'ctrl+alt+shift+f8', command: 'sessions.open.bots' },
 		{ key: 'ctrl+alt+shift+f9', command: 'sessions.artifacts.open.design' },
+		{ key: 'ctrl+alt+shift+f10', command: 'workbench.action.chat.openAgentPicker' },
 	]));
 	const page = await workbench.openAgentsWindow(target.kind);
 	const mode = page.locator('.ash-window-mode-control');
@@ -40,14 +41,15 @@ test('Chat and Code scope the command palette and user shortcuts to the active m
 		'ash.sessions.toggleSessionActivityBar',
 		'workbench.files.action.refreshFilesExplorer',
 		'workbench.action.files.newUntitledFile',
-		'workbench.action.chat.openAgentPicker',
 		'workbench.action.chat.openPermissionPicker',
 		'workbench.action.chat.sendPendingImmediately',
 	];
 	const chatCommands = ['sessions.artifacts.open.design', 'sessions.toggleArchivedProjects', 'workbench.action.document.new', 'sessions.docs.chooseEditor'];
 	const serverCommands = ['workbench.action.terminal.new', 'workbench.action.terminal.newInNewWindow'];
+	const removedAgentPicker = 'workbench.action.chat.openAgentPicker';
 	for (const id of [...codeCommands, ...serverCommands]) await checkCommand(id, 0);
 	for (const id of chatCommands) await checkCommand(id, 1);
+	await checkCommand(removedAgentPicker, 0);
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+E' : 'Control+Shift+E');
 	await expect(page.locator('.ash-sessions-files-view')).toBeHidden();
 	await page.keyboard.press('Control+Alt+Shift+F8');
@@ -58,6 +60,14 @@ test('Chat and Code scope the command palette and user shortcuts to the active m
 	for (const id of codeCommands) await checkCommand(id, 1);
 	if (target.appServerMode !== 'disabled') for (const id of serverCommands) await checkCommand(id, 1);
 	for (const id of chatCommands) await checkCommand(id, 0);
+	await checkCommand(removedAgentPicker, 0);
+	const composer = page.locator('.ash-sessions-chat-slot.active:visible .chat-composer');
+	const input = new Editor(composer).input;
+	await input.focus();
+	await expect(composer.locator('[data-action-id="ash.chat.input.agent"]')).toHaveCount(0);
+	await input.press('Control+Alt+Shift+F10');
+	await expect(page.locator('.ash-chat-input-agent-menu')).toHaveCount(0);
+	await expect(input).toBeFocused();
 	await page.keyboard.press('Control+Alt+Shift+F9');
 	await expect(code).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.locator('.ash-sessions-design-view')).toBeHidden();
@@ -281,7 +291,7 @@ test('Artifacts creation cards select a Chat draft type without creating an arti
 	const mode = page.locator('.ash-window-mode-control');
 	await mode.getByRole('button', { name: 'Code', exact: true }).click();
 	const code = sessions.locator('.ash-sessions-chat-slot.active:visible .chat-composer');
-	await expect(code.locator('.ash-chat-input-agent-action')).toBeVisible();
+	await expect(code.locator('.ash-chat-input-model-action')).toBeVisible();
 	await expect(code.locator('.ash-chat-input-artifact-pill')).toHaveCount(0);
 	await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(pill).toHaveAttribute('data-artifact-kind', 'docs');

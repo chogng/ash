@@ -85,7 +85,7 @@ export class SharedChatInputComposer extends Disposable {
 			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			stageImages: true,
 			contextUsageInFooter: true,
-			agentPicker: 'visible',
+			agentPicker: 'hidden',
 			accessibilityHelp: getSessionsChatAccessibilityHelp,
 			statusText: (state, contexts, status) => {
 				// The host exposes catalog loading through aria-busy. Keep actionable draft status visible.

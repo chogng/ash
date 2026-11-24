@@ -103,6 +103,7 @@ import type { ModelReasoningEffort } from '../../../../../services/chat/common/m
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../../services/chat/common/chatContextService.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type SlashCommandInput } from '../../../common/slashCommands.js';
+import { BtwSlashCommandName } from '../../../common/chatSideChatService.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
 import { ChatElicitationContentPart } from '../chatContentParts/chatElicitationContentPart.js';
@@ -179,8 +180,10 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 /** Picker composition is selected by the host; input state and operations keep one owner. */
 export interface ChatInputPartOptions {
 	readonly agentPicker: 'visible' | 'hidden';
-	/** A reply composer sends messages without local execution controls or client commands. */
+	/** A reply composer sends messages without local task controls. */
 	readonly replyOnly?: true;
+	/** Lets a reply composer expose the Side Chat controls for an Ash conversation. */
+	readonly replySideChat?: true;
 	readonly modelPickerPosition: 'leading' | 'trailing';
 	readonly configureModelInMenu?: boolean;
 	/** The host supplies its own catalog and model settings when false. */
@@ -426,9 +429,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachAction.label = delegate.draft ? localize('chat.input.attachFiles', 'Attach files') : localize('chat.context.add', 'Add context');
 		this.attachAction.tooltip = this.attachAction.label;
 		this.attachAction.icon = Lxicon.add;
-		if (!this.replyOnly) {
-			this.slashCommands.setClientCommands(clientCommands.getCommands());
-			this._register(clientCommands.onDidChangeCommands(() => this.slashCommands.setClientCommands(clientCommands.getCommands())));
+		if (!this.replyOnly || options.replySideChat) {
+			const updateClientCommands = () => {
+				const commands = clientCommands.getCommands();
+				this.slashCommands.setClientCommands(this.replyOnly ? commands.filter(command => command.command === BtwSlashCommandName) : commands);
+			};
+			updateClientCommands();
+			this._register(clientCommands.onDidChangeCommands(updateClientCommands));
 		}
 		this.history = this._register(instantiationService.createInstance(ChatHistoryNavigator<InputHistoryDraft>));
 		this.element = h(ownerDocument, 'div');
@@ -449,6 +456,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.element.append(this.voiceOnboardingContainer);
 		const context = this._register(contextKeys.createScoped(this.element));
 		ChatContextKeys.replyOnlyInput.bindTo(context).set(this.replyOnly);
+		ChatContextKeys.replySideChatInput.bindTo(context).set(this.replyOnly && options.replySideChat === true);
 		this.executeContext = context;
 		this.queueContextKeys = {
 			hasText: ChatContextKeys.inputHasText.bindTo(context), running: ChatContextKeys.requestInProgress.bindTo(context),
@@ -1018,7 +1026,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.pickerResponsiveLayout.setFooter(this.inputFooter, () => [
 			getLeadingPickers(),
 			[this.agentPickerActionItem, this.modelPickerActionItem, this.permissionWidget].flatMap(item => item && !item.isDisposed ? [item] : []),
-		], () => this.options.agentPicker === 'visible');
+		]);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -1302,7 +1310,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	async acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
 		if (this.isDisposed || !this.visible) { return; }
-		if (this.replyOnly && isTaskSubmission(options)) return;
+		if (this.replyOnly && isTaskSubmission(options, this.options.replySideChat)) return;
 		const queue = options?.queue;
 		const intent = this.parseInput(value ?? this.commandText());
 		const sendInBackground = options?.background ? this.delegate.sendInBackground : undefined;
@@ -1368,7 +1376,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				const offset = input.kind === 'command' ? Math.max(0, draft.text.indexOf(input.argumentsText, input.command.name.length + 1)) : 0;
 				const query = draft.text.slice(offset);
 				const attachedContext = requestContexts.map(context => context.reference ? { ...context, reference: context.reference.start >= offset ? { start: context.reference.start - offset, end: context.reference.end - offset } : undefined } : context);
-				await this.submit(draft, textRevision, lifecycle, () => this.clientCommands.executeCommand(input.kind === 'command' ? input.command.name : 'btw', query, LocalChatSessionUri.forSession(widget.sessionId!, widget.threadId!), { attachedContext, signal: lifecycle }));
+				await this.submit(draft, textRevision, lifecycle, () => this.clientCommands.executeCommand(input.kind === 'command' ? input.command.name : BtwSlashCommandName, query, LocalChatSessionUri.forSession(widget.sessionId!, widget.threadId!), { attachedContext, signal: lifecycle }));
 				return;
 			}
 			if (input.kind === 'command' && input.binding.origin === 'local') {
@@ -1506,8 +1514,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.replyOnly
 				? getReplyInputAccessibilityHelp(!!this.delegate.draft)
 				: getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0,
-					this.delegate.readWorkspaceChanges ? 'workspace' : this.delegate.openChanges ? 'conversation' : undefined,
-					this.executeContext.getValue(ChatContextKeys.messageActionSurface.key) !== 'chat'),
+					{
+						changes: this.delegate.readWorkspaceChanges ? 'workspace' : this.delegate.openChanges ? 'conversation' : undefined,
+						canEditCode: this.executeContext.getValue(ChatContextKeys.messageActionSurface.key) !== 'chat',
+						agentPicker: this.options.agentPicker,
+					}),
 			this.delegate.draft?.readImage ? localize('chat.input.stagedImageHelp', 'Pasted images appear above the message text inside the input. Use Tab to reach Preview or Remove, and Enter or Space to activate. Escape closes the preview and returns focus to the image.') : '',
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.toolConfirmation instanceof ChatToolAuthenticationSubPart ? localize('chat.tool.authHelp', 'Use Tab to reach Sign in. The sign-in result appears in the approval. Review the tool and choose whether to approve it afterwards.') : '',
@@ -2640,8 +2651,8 @@ class DictationCancelActionViewItem extends ChatInputButtonViewItem {
 	}
 }
 
-function isTaskSubmission(options: IChatAcceptInputOptions | undefined): boolean {
-	return options?.queue === ChatRequestQueueKind.Steering || options?.sideChat === true || options?.cancelCurrentRequest === true;
+function isTaskSubmission(options: IChatAcceptInputOptions | undefined, allowSideChat = false): boolean {
+	return options?.queue === ChatRequestQueueKind.Steering || options?.cancelCurrentRequest === true || (!allowSideChat && options?.sideChat === true);
 }
 
 /** One paused queue revision owns its editor; the regular composer and frozen attachments stay intact. */

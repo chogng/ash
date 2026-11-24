@@ -6,6 +6,7 @@ import { autorun, observableFromEvent, observableValue, transaction, type IObser
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { canOpenThreadInCode, type IUntitledChatSession, type ModelRef, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
@@ -334,6 +335,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.slots.publish(this.catalogUnavailable);
 		this.saveState();
 		this._onDidChange.fire();
+		if (selection.kind === 'untitled') {
+			// Clear persisted input after the closed composer has been released.
+			writeNewChatDraftState(this.storage, undefined, `untitled:${selection.session.untitledSessionId}`);
+		}
 	}
 	async reopenLastClosedItem(): Promise<void> {
 		const item = this.closedItems.lastClosedItem;

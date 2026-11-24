@@ -1,6 +1,6 @@
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { Keybinding, physicalKey } from '../../../../../base/common/keybindings.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
@@ -11,6 +11,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IChatService, type RewriteChatRequestOptions } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 
 export interface IChatExecuteActionContext {
 	readonly widget?: IChatWidget;
@@ -78,12 +79,17 @@ export class OpenAgentPickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openAgentPicker';
 	constructor() {
 		super({
-			id: OpenAgentPickerAction.ID, title: localize2('chat.execute.agentPicker', 'Chat: Open Agent Picker'), f1: true, precondition: taskInputEnabled, keybinding: {
+			id: OpenAgentPickerAction.ID,
+			title: localize2('chat.execute.agentPicker', 'Chat: Open Agent Picker'),
+			f1: true,
+			precondition: ContextKeyExpr.and(taskInputEnabled, ContextKeyExpr.not(IsSessionsWindowContext.key)),
+			keybinding: {
 				primary: Keybinding.single(physicalKey('Period', { primaryKey: true })), weight: KeybindingWeight.WorkbenchContrib, when: ChatContextKeys.inChatInput.isEqualTo(true),
 			}
 		});
 	}
 	public override run(accessor: ServicesAccessor): void {
+		if (accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key)) return;
 		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
 		if (widget?.visible && !widget.input.replyOnly) widget.input.openAgentPicker();
 	}

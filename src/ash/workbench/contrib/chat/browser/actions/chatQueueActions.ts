@@ -34,12 +34,13 @@ const queueAvailable = ContextKeyExpr.and(
 	ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.inputBlocked.isEqualTo(false),
 	ChatContextKeys.transcriptProgressActive.isEqualTo(false),
 );
-const queueVisible = ContextKeyExpr.and(
-	taskInput,
-	ContextKeyExpr.or(ChatContextKeys.requestInProgress.isEqualTo(true), editingPending),
+const followUpInput = ContextKeyExpr.and(
 	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Sent),
 	ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.transcriptProgressActive.isEqualTo(false),
 );
+const requestInProgress = ChatContextKeys.requestInProgress.isEqualTo(true);
+const queueVisible = ContextKeyExpr.and(taskInput, ContextKeyExpr.or(requestInProgress, editingPending), followUpInput);
+const replySideChatVisible = ContextKeyExpr.and(ChatContextKeys.replySideChatInput.isEqualTo(true), requestInProgress, notEditingPending, followUpInput);
 
 export class ChatQueueMessageAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.queueMessage';
@@ -211,6 +212,6 @@ export function registerChatQueueActions(): void {
 		command: { id: ChatSteerWithMessageAction.ID, title: localize2('chat.queuePicker.steer', 'Steer with Message'), icon: Lxicon.enter, precondition: queueAvailable }, group: 'navigation', order: 2,
 	});
 	MenusRegistry.appendMenuItem(MenuId.ChatExecute, {
-		submenu: MenuId.ChatExecuteQueue, title: localize2('chat.queuePicker.label', 'Send a Follow-up Message'), when: queueVisible, group: 'navigation',
+		submenu: MenuId.ChatExecuteQueue, title: localize2('chat.queuePicker.label', 'Send a Follow-up Message'), when: ContextKeyExpr.or(queueVisible, replySideChatVisible), group: 'navigation',
 	});
 }

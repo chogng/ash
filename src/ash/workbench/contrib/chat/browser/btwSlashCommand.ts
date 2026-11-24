@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IChatSideChatService } from '../common/chatSideChatService.js';
+import { BtwSlashCommandName, IChatSideChatService } from '../common/chatSideChatService.js';
 import { IChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
 import { LocalChatSessionUri } from '../common/model/chatUri.js';
 import { IChatWidgetService } from './chat.js';
@@ -17,7 +17,7 @@ export class BtwSlashCommandContribution extends Disposable {
 	) {
 		super();
 		this._register(commands.registerSlashCommand({
-			command: 'btw', detail: localize('chat.btw.description', 'Ask a side question without adding it to this conversation'), executeDuringRequest: true,
+			command: BtwSlashCommandName, detail: localize('chat.btw.description', 'Ask a side question without adding it to this conversation'), executeDuringRequest: true,
 		}, async (prompt, resource, options) => {
 			if (!prompt.trim()) throw new Error(localize('chat.btw.missingPrompt', 'Enter a question after /btw.'));
 			const source = LocalChatSessionUri.parse(resource);

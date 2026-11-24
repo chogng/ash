@@ -2032,7 +2032,7 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	}
 }
 
-test('Code Sessions mode selection updates its shared composer', async ({ target, workbench }) => {
+test('Code Sessions opens its environment picker and restores focus', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const environment = page.getByRole('button', { name: 'Run on: This Computer', exact: true });
@@ -2070,13 +2070,6 @@ test('Code Sessions mode selection updates its shared composer', async ({ target
 	await page.keyboard.press('Escape');
 	await expect(environmentMenu).toBeHidden();
 	await expect(environment).toBeFocused();
-	const agent = page.locator('[data-action-id="ash.chat.input.agent"] button').first();
-	await agent.press('ArrowDown');
-	const menu = page.locator('.ash-chat-input-agent-menu');
-	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveCount(0);
-	await page.keyboard.press('Escape');
-	await expect(agent).toBeFocused();
 });
 
 test('Sessions navigation retains its own selection and hover skin across navigation positions', async ({
