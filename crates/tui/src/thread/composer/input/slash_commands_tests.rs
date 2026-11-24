@@ -75,6 +75,7 @@ fn builtins_follow_enum_presentation_order() {
                 "memories",
                 "mcp",
                 "hooks",
+                "btw",
                 "resume",
                 "archive",
                 "connectors",
@@ -113,7 +114,6 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 39 + usize::from(cfg!(debug_assertions)));
 }
 
 #[test]

@@ -1,5 +1,8 @@
 {
   "ash": {
+    "chat.permission.choose": "权限",
+    "chat.permission.usage": "使用 /permission manual|auto|bypassPermissions。",
+    "chat.compact.waitForTurn": "请等待当前回合结束后再压缩上下文。",
     "chat.planReview.title": "审核提议的计划",
     "chat.planReview.feedback": "计划修改意见（选填）",
     "chat.planReview.revise": "继续规划",
@@ -61,7 +64,6 @@
     "chat.diff.unnamedFile": "文件 {0}",
     "chat.turnChanges.open": "打开本轮变更：{0}，新增 {1} 行，删除 {2} 行",
     "chat.askInSideChat": "在旁支对话中提问",
-    "chat.btw.description": "另开旁支提问，不将问题加入当前对话",
     "chat.btw.unavailable": "请先在当前对话发送消息，再开始旁支对话。",
     "chat.btw.missingPrompt": "请在 /btw 后输入问题。",
     "chat.btw.selection": "选中的对话文本",
@@ -100,7 +102,7 @@
     "chat.execute.agentPicker": "聊天：打开智能体选择器",
     "chat.execute.permissionPicker": "聊天：打开权限选择器",
     "chat.execute.workspacePicker": "聊天：打开工作区选择器",
-    "chat.pickers.commandHelp": "在命令面板中打开模型或权限选择器。使用 {0} 选择模型。输入 /ask、/plan、/debug 或 /swarm 启动任务。/ask 和 /plan 只读调查。实施计划时发送新请求。按 Escape 关闭选择器。打开或取消选择器会保留草稿和附件，不会发送消息；切换对话后，尚未完成的选择或权限确认不会修改新的对话。",
+    "chat.pickers.commandHelp": "在命令面板中打开模型或权限选择器。使用 {0} 选择模型。按 Escape 关闭选择器。打开或取消选择器会保留草稿和附件，不会发送消息；切换对话后，尚未完成的选择或权限确认不会修改新的对话。",
     "chat.execute.submit": "聊天：发送消息",
     "chat.execute.cancel": "聊天：停止任务",
     "chat.execute.invalid": "聊天执行上下文无效。",
@@ -309,6 +311,7 @@
     "color.chat.tabBackground": "非活动聊天会话标签页的背景色。",
     "slash.permission.description": "选择下一轮的权限",
     "slash.guardian.description": "准备和检查 Guardian 的项目背景",
+    "slash.btw.description": "另开旁支提问，不将问题加入当前对话",
     "chat.editor.fontFamily.title": "字体",
     "chat.editor.fontFamily.default": "跟随编辑器",
     "chat.editor.fontFamily.description": "设置回复中代码块的字体。默认跟随编辑器字体。",

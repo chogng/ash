@@ -498,8 +498,9 @@ impl App {
                 self.handle_slash_command(command)
             }
             ChatComposerOutcome::SubmissionRejected(error) => {
+                let message = crate::nls::localize_owned(self.language(), error);
                 self.thread
-                    .update(ThreadPresentationEvent::FailureReported(error));
+                    .update(ThreadPresentationEvent::FailureReported(message));
                 None
             }
             ChatComposerOutcome::UnknownCommand(command) => {
@@ -1080,8 +1081,9 @@ impl App {
         if !self.accepts_input() {
             return None;
         }
+        let new_session = self.starts_new_session();
         let (panel, input) = self.composer_parts_mut();
-        let outcome = panel.activate_completion(input, index)?;
+        let outcome = panel.activate_completion(input, index, new_session)?;
         self.handle_chat_composer_outcome(outcome, Instant::now())
     }
 
@@ -3765,6 +3767,7 @@ impl App {
             && !matches!(
                 action,
                 TuiSlashCommandAction::Quit
+                    | TuiSlashCommandAction::Btw
                     | TuiSlashCommandAction::Permission
                     | TuiSlashCommandAction::Effort
             )
@@ -3862,7 +3865,11 @@ impl App {
             && invocation.origin == SlashCommandOrigin::Local
             && !matches!(
                 local,
-                Some(TuiSlashCommandAction::Export | TuiSlashCommandAction::Voice)
+                Some(
+                    TuiSlashCommandAction::Btw
+                        | TuiSlashCommandAction::Export
+                        | TuiSlashCommandAction::Voice
+                )
             )
         {
             self.thread.update(ThreadPresentationEvent::CommandFailed {
@@ -3872,6 +3879,32 @@ impl App {
             return None;
         }
         match (invocation.origin, local) {
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Btw)) => {
+                let error = if invocation.display_arguments.trim().is_empty() {
+                    Some("Enter a question after /btw.")
+                } else if self.starts_new_session() {
+                    Some("Send a message in this conversation before starting a side chat.")
+                } else {
+                    None
+                };
+                if let Some(error) = error {
+                    self.thread
+                        .update(ThreadPresentationEvent::FailureReported(error.into()));
+                    return None;
+                }
+                Some(
+                    SessionCommand::SideChat {
+                        source_turn_id: self.active_turn().cloned(),
+                        submission: crate::thread::composer::ChatSubmission {
+                            mode: invocation.mode,
+                            command_id: crate::client::new_command_id("side-question"),
+                            display_text: invocation.display_arguments,
+                            input: invocation.arguments,
+                        },
+                    }
+                    .into(),
+                )
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Voice)) => {
                 self.toggle_dictation()
             }
@@ -3962,30 +3995,28 @@ impl App {
             }
             (SlashCommandOrigin::Server, _)
                 if invocation.command.name == "advisor"
-                    && is_advisor_config_argument(invocation.display_arguments.trim()) =>
+                    && crate::thread::composer::is_advisor_config_argument(
+                        invocation.display_arguments.trim(),
+                    ) =>
             {
                 Some(
                     ConfigCommand::SelectAdvisor(invocation.display_arguments.trim().to_owned())
                         .into(),
                 )
             }
-            (SlashCommandOrigin::Server, _)
-                if invocation.command.name == "advisor" && self.chat_panel.is_steering() =>
-            {
-                self.thread.update(ThreadPresentationEvent::NoticeReceived(
-                    "Wait for the active Turn before consulting the advisor".into(),
-                ));
-                None
-            }
             (SlashCommandOrigin::Server, _) => {
                 let task_command =
                     ash_slash_commands::TaskSlashCommand::from_name(&invocation.command.name)
                         .is_some();
+                let workflow_command = matches!(
+                    invocation.command.name.as_str(),
+                    "init" | "team" | "develop"
+                );
                 let mut submission = invocation.into_forwarded_submission();
-                if task_command {
+                if task_command || workflow_command {
                     submission.mode = ash_protocol::TaskExecution::Agent;
                     return self.handle_chat_composer_outcome(
-                        if self.chat_panel.is_steering() && !self.starts_new_session() {
+                        if self.chat_panel.turn_pending() && !self.starts_new_session() {
                             ChatComposerOutcome::Queued(
                                 crate::thread::composer::QueuedChatInput::from_submission(
                                     submission,
@@ -4061,13 +4092,6 @@ impl App {
             Status::Cancelling | Status::Ready | Status::Error => None,
         }
     }
-}
-
-fn is_advisor_config_argument(argument: &str) -> bool {
-    matches!(argument, "off" | "clear")
-        || argument.split_once('/').is_some_and(|(provider, model)| {
-            !provider.is_empty() && !model.is_empty() && !argument.chars().any(char::is_whitespace)
-        })
 }
 
 fn model_progress_text(

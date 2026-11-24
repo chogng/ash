@@ -1,6 +1,7 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
-import { applyDefaultTaskCommand, ChatHistoryAnchorError, ChatRequestQueueKind, isTaskSlashCommand } from '../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, ChatRequestQueueKind, isTaskSlashCommand } from '../../workbench/services/chat/common/chatService.js';
+import { isCodeWorkflowSlashCommand } from '../../workbench/contrib/chat/common/slashCommands.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
@@ -134,6 +135,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly selectedReasoningEfforts = new Map<string, { effort: ModelReasoningEffort | undefined; }>();
 	private readonly recapViews = new Map<string, { sessionId: SessionId; threadId: ThreadId; focused: boolean; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
+	private slashCatalogRequest = 0;
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
 	private readonly skillSelectorsLoading = observableValue(this, false);
@@ -849,6 +851,7 @@ export class ChatWidgetModel extends Disposable {
 			if (options?.signal?.aborted || options?.source && (active.session.sessionId !== options.source.sessionId || active.threadId !== options.source.threadId)) throw canceled();
 			const turn = activeTurn(thread);
 			const taskCommand = isTaskSlashCommand(text);
+			const startsSeparateTurn = taskCommand || this.commandInterpretation !== 'literal' && isCodeWorkflowSlashCommand(text);
 			const submission = {
 				isNewSession: thread.turns.length === 0,
 				sessionId: active.session.sessionId,
@@ -874,8 +877,8 @@ export class ChatWidgetModel extends Disposable {
 				if (this.isCurrentTarget(operation)) this.setState('ready');
 				return active;
 			}
-			const needsNewTurn = !!turn && (taskCommand || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.execution !== 'agent' || !!skills?.length);
-			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn && !taskCommand) {
+			const needsNewTurn = !!turn && (startsSeparateTurn || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.execution !== 'agent' || !!skills?.length);
+			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn && !startsSeparateTurn) {
 				throw new Error(localize('chat.steer.incompatible', 'The current request has a different task command, Skill or task type. Add this message to the queue instead.'));
 			}
 			if (turn && (options?.queue === ChatRequestQueueKind.Queued || needsNewTurn)) {
@@ -939,7 +942,7 @@ export class ChatWidgetModel extends Disposable {
 		return this.chatService.setRecapPresence?.(sessionId, threadId, surface, focused) ?? Promise.resolve();
 	}
 
-	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal, defaultTaskCommand?: 'ask'): Promise<void | string> {
+	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string> {
 		this.assertAIEnabled();
 		if (this.commandInterpretation !== 'literal' && name === 'recap') {
 			const operation = this.captureOperation({ signal: submissionSignal });
@@ -951,7 +954,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 		if (this.commandInterpretation === 'literal' || (name !== 'compact' && name !== 'advisor')) {
 			const text = `/${name}${argumentsText ? ` ${argumentsText}` : ''}`;
-			await this.send(applyDefaultTaskCommand(text, defaultTaskCommand).text, undefined, undefined, { signal: submissionSignal });
+			await this.send(text, undefined, undefined, { signal: submissionSignal });
 			return;
 		}
 		const operation = this.captureOperation({ signal: submissionSignal });
@@ -1011,7 +1014,7 @@ export class ChatWidgetModel extends Disposable {
 				return;
 			}
 			if (activeTurn(thread)) {
-				throw new Error('Context can be compacted only when the active Turn has finished');
+				throw new Error(localize('chat.compact.waitForTurn', 'Wait for the active turn to finish before compacting context.'));
 			}
 			await this.chatService.compactContext({
 				sessionId: active.session.sessionId,
@@ -1134,19 +1137,24 @@ export class ChatWidgetModel extends Disposable {
 
 	private async loadCatalogs(): Promise<void> {
 		const generation = ++this.modelsGeneration;
-		const slashCatalog = this.chatService.listSlashCommands().then(commands => this.commandInterpretation === 'literal'
-			? commands.filter(command => isTaskSlashCommand(`/${command.name}`))
-			: commands);
-		const [models, slashCommands] = await Promise.allSettled([this.languageModels.listModelCatalog(), slashCatalog, this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
+		const [models] = await Promise.allSettled([this.languageModels.listModelCatalog(), this.loadSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
 		if (this.isDisposed) return;
 		if (generation === this.modelsGeneration && models.status === 'fulfilled') {
 			this.acceptModelCatalog(models.value);
 		} else if (generation === this.modelsGeneration && models.status === 'rejected') {
 			this.modelsError = String(models.reason);
 		}
-		if (slashCommands.status === 'fulfilled') this._slashCommands = slashCommands.value;
 		this._onDidChange.fire();
 		await this.refreshModelAvailability();
+	}
+
+	private async loadSlashCommands(): Promise<void> {
+		if (this.commandInterpretation === 'literal') return;
+		const request = ++this.slashCatalogRequest;
+		const commands = await this.chatService.listSlashCommands();
+		if (this.isDisposed || request !== this.slashCatalogRequest) return;
+		this._slashCommands = commands;
+		this._onDidChange.fire();
 	}
 
 	private async loadModels(): Promise<void> {

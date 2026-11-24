@@ -47,11 +47,16 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     message.status = ::queue::QueueStatus::Paused;
     message.request.task_command = Some(ash_protocol::TaskExecution::Debug);
     queue.apply(vec![message.clone()]).unwrap();
-    let mut input = ChatInput::new();
+    let mut input = ChatInput::with_catalog(
+        crate::thread::composer::ChatInputCatalog::with_slash_commands(
+            ash_slash_commands::SlashCommandCatalog::default(),
+        ),
+    );
     queue.restore(id, &mut input).unwrap();
     assert_eq!(input.text(), "/debug first");
     input.insert_text(" updated");
-    let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
+    let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) =
+        input.queue_current(crate::thread::composer::SlashCommandAvailability::ActiveTurn)
     else {
         panic!("queued draft")
     };
@@ -263,7 +268,8 @@ fn restored_audio_queue_keeps_its_attachment_when_the_draft_is_resubmitted() {
     let mut input = ChatInput::new();
     queue.restore(id, &mut input).unwrap();
     insta::assert_snapshot!(input.text(), @"[Audio #1] ");
-    let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
+    let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) =
+        input.queue_current(crate::thread::composer::SlashCommandAvailability::ActiveTurn)
     else {
         panic!("expected queued audio")
     };

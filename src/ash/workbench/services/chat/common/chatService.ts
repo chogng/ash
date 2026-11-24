@@ -106,10 +106,14 @@ export interface SlashCommandDefinition {
 /** Shared product metadata; execution bindings remain with each client. */
 export const ProductSlashCommands: Readonly<Record<keyof typeof PRODUCT_SLASH_COMMANDS, SlashCommandDefinition>> = PRODUCT_SLASH_COMMANDS;
 
+export function isTaskSlashCommandName(name: string): boolean {
+	return TASK_SLASH_COMMAND_NAMES.some(command => command === name);
+}
+
 /** Task commands use the ordinary submission path, including attachments and queueing. */
 export function isTaskSlashCommand(text: string): boolean {
 	const command = text.trimStart().split(/\s/, 1)[0];
-	return TASK_SLASH_COMMAND_NAMES.some(name => command === `/${name}`);
+	return command.startsWith('/') && isTaskSlashCommandName(command.slice(1));
 }
 
 /** Applies the host's default command to plain input and keeps attachment spans aligned. */

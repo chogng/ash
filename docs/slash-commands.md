@@ -8,9 +8,20 @@
 > Instructions/Skills/Agents artifact 的关系由
 > [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
-## 快速理解
+## 共享命令与入口扩展
 
-Code 提供完整的产品和服务端命令目录。Cowork 与 Projects 提供 `/ask`、`/plan`、`/debug`、`/swarm` 和各自注册的客户端命令。其余斜杠文本以 `commandInterpretation: literal` 作为普通消息提交，队列保留该解释规则。`/btw <问题>` 在 Code 和 Cowork 中从当前轮次建立独立分支，原任务继续运行，问题和回答可返回来源轮次查看。`$name` Skills 和 `@/#` 上下文补全独立保留。
+本节覆盖 TUI、独立 IDE 和 Agents Window Code。每个入口组合一份可执行目录。App Server 发布任务和 Code 命令，客户端按输入框能力选择可用的服务端命令，再加入本地绑定。
+
+| 命令                                                                                                                                                                                                                                                                                                                                                              | 可用入口                     | 定义与执行                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `/ask`、`/plan`、`/debug`、`/swarm`                                                                                                                                                                                                                                                                                                                               | TUI、IDE、Agents Window Code | `TaskSlashCommand` 提供共享定义，App Server 解析任务请求                                     |
+| `/btw`                                                                                                                                                                                                                                                                                                                                                            | TUI、IDE、Agents Window Code | `ProductSlashCommand` 提供共享定义。各端通过 App Server 从来源轮次创建旁支，再在旁支提交问题 |
+| `/advisor`、`/compact`、`/init`、`/team`、`/develop`                                                                                                                                                                                                                                                                                                              | TUI、IDE、Agents Window Code | App Server 目录，客户端使用对应的执行绑定                                                    |
+| `/extensions`、`/guardian`、`/lsp`、`/permission`、`/plugins`、`/skills`                                                                                                                                                                                                                                                                                          | TUI、IDE、Agents Window Code | `ProductSlashCommand` 提供共享定义，各端打开自己的控件。桌面 `/extensions` 保留手输兼容      |
+| `/new`、`/config`、`/recap`                                                                                                                                                                                                                                                                                                                                       | TUI、IDE、Agents Window Code | 客户端绑定。`/config` 在 TUI 显示配置，在桌面打开聊天设置。`/recap` 调用 App Server 生成回顾 |
+| `/add-dir`、`/archive`、`/branch`、`/cd`、`/connectors`、`/context`、`/dashboard`、`/desktop`、`/effort`、`/export`、`/fork`、`/help`、`/home`、`/hooks`、`/ide`、`/issue`、`/mcp`、`/memories`、`/model`、`/pr`、`/quit`、`/resume`、`/rewind`、`/shortcuts`、`/status`、`/statusline`、`/subagents`、`/theme`、`/usage`、`/voice`、`/debug-context`（调试构建） | TUI                          | 终端按能力注册。`/ide` 切换 IDE 上下文，`/desktop` 打开桌面继续会话                          |
+
+IDE 的 Quick Chat 使用同一份桌面 Code 目录，普通问题默认以 `/ask` 提交。Agents Window 的 **Open IDE** 是窗口操作，Code 标题栏还可在 IDE 中打开当前会话。
 
 Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
 
@@ -22,9 +33,9 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 | app 展示文件或 Plugin 上下文   | `@` context selector     | 对应上下文来源            |
 | 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner       |
 
-App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个客户端再与自身真正可执行的本地命令合并。TUI 的 `/` 补全和 `/help` 同时投影这份合并目录，因此本地与服务端命令使用同一名称、描述和参数声明。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源匹配和面板选择属于 Slash Launcher；行布局、DOM、WGPU、Ratatui 绘制和平台输入事件仍留在各呈现层。默认服务端快照包含 `/compact`，允许保留可选的行内提示。
+App Server 在 `initialize.slashCommands` 发布服务端命令。TUI 的 `/` 补全、`/help` 和提交读取同一份合并目录。桌面的 `/` 补全、输入帮助和提交也读取各输入框的同一份目录。桌面继续从 App Server 获取 Skill 与文件候选。行布局、DOM、WGPU、Ratatui 绘制和平台输入事件留在各呈现层。
 
-命令候选先按名称相关程度排序：完整名称、开头、连字符后的词首、连续片段、有序字符；然后按 description 的词首、连续片段、有序字符排序。`/cofig` 因而能找到 `/config`，`/settings` 也能找到描述中写有 settings 的命令。单字符仍只匹配名称开头，避免候选过多。候选检索忽略 ASCII 大小写；命中字符逐字加粗，未选中候选使用主题前景色，选中候选使用选中色。名称开头匹配可默认选中；词中、跳字和 description 命中只展示候选，需先用方向键或点击选择。每个命令只有一个名称；`/chats` 不再作为 `/history` 的别名。只有补全为完整规范名称后才会执行。
+命令候选先按名称相关程度排序：完整名称、开头、连字符后的词首、连续片段、有序字符；然后按 description 的词首、连续片段、有序字符排序。`/cofig` 因而能找到 `/config`，`/settings` 也能找到描述中写有 settings 的命令。单字符仍只匹配名称开头，避免候选过多。候选检索忽略 ASCII 大小写；命中字符逐字加粗，未选中候选使用主题前景色，选中候选使用选中色。名称开头匹配可默认选中；词中、跳字和 description 命中只展示候选，需先用方向键或点击选择。每个命令只有一个名称。桌面使用 Sessions Manager 搜索和恢复会话，TUI 使用 `/resume`。只有补全为完整规范名称后才会执行。
 
 ## Launcher 分层
 
@@ -54,13 +65,13 @@ TUI 与 Desktop 的 Skill adapter 独立消费 `skills/list` metadata，并为 `
 ```text
 App Server composition
   → initialize.slashCommands (immutable server snapshot)
-  → client merges executable local commands
+  → client selects supported server commands and adds executable local commands
   → validated SlashCommandCatalog
   → input/query/matches/selection/completion
   → renderer projection
   → activation
       local  → client product command
-      server → name-specific binding（`/compact` → CompactContext；prompt command → StartTurn text）
+      server → task message or command binding（`/plan` → task message，`/compact` → CompactContext）
 ```
 
 `SlashCommandDefinition` 是三端共享的 Slash Command catalog entry model，不是被调用对象的领域
@@ -72,9 +83,8 @@ Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origi
 作为普通 `StartTurn.input`。当前 `/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；当前 `/team` 管理的是一次协作任务，持久成员组织另见 [Agent Team](../crates/teams/README.md)。命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Agent 树](core-multi-agent.md)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 
 `/ask`、`/plan`、`/debug`、`/swarm` 通过普通消息和队列提交，保留附件。App Server 受理时解析任务命令，队列保存命令身份，Core 在 Turn 中冻结指令和权限约束。只读请求不能通过追加消息转为执行。见 [Agent 任务命令](../crates/task-command-templates/README.md)。
-Desktop 的 `/new`、`/history` 属于
-Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
-device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code
+活跃回合中的 `/compact` 保留草稿，等回合结束后可重新提交。
+Ash TUI 的 `/theme` 是设备本地设置。无参数时打开由 `theme` 拥有的固定 Ash Code
 Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通用 `ListSelection` 则以显式
 的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
@@ -110,7 +120,6 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 | `/fork`       | `optional` | `<prompt>`                          | 复制当前对话到独立 session，留在当前会话；有 prompt 时后台执行，无 prompt 时等待输入；结果不自动回传 |
 | `/new`        | `optional` | `<prompt>`                          | 新建会话，可选初始提示语                                                                             |
 | `/compact`    | `optional` | 无                                  | 压缩上下文，由服务端声明                                                                             |
-| `/clear`      | `none`     | 无                                  | 清空当前对话，不接受参数                                                                             |
 | `/help`       | `none`     | 无                                  | 显示帮助信息，不接受参数                                                                             |
 
 ### 3. 虚提示交互生命周期

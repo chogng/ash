@@ -24,6 +24,7 @@ import { registerConfigureSpeechInstructionsActions } from './actions/configureV
 import { registerChatModelFeedbackSurveyActions } from './actions/chatModelFeedbackSurveyActions.js';
 import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
 import { registerNewChatActions } from './actions/chatNewActions.js';
+import { registerOpenChatSettingsAction } from './actions/chatActions.js';
 import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CopyInlineResourceAction, OpenInlineResourceToSideAction } from './widget/chatContentParts/chatInlineAnchorWidget.js';
@@ -199,6 +200,7 @@ registerConfigureSpeechInstructionsActions();
 registerChatModelFeedbackSurveyActions();
 registerChatFileTreeActions();
 registerNewChatActions();
+registerOpenChatSettingsAction();
 registerAction2(ExportAgentHostDebugLogsAction);
 registerChatToolActions();
 registerChatTitleActions();

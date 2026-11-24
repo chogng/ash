@@ -71,6 +71,7 @@ where
 
     match command {
         TuiSlashCommandAction::Pr
+        | TuiSlashCommandAction::Btw
         | TuiSlashCommandAction::Voice
         | TuiSlashCommandAction::Issue
         | TuiSlashCommandAction::Dashboard

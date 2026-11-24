@@ -8,6 +8,7 @@ use super::editor::TextElementId;
 use super::pending_pastes::PendingPastes;
 use super::slash_commands::SlashCommandInvocation;
 use super::slash_commands::into_command_invocation;
+use super::slash_commands::is_advisor_config_argument;
 use super::vim::ChatInputMode;
 use super::vim::VimOutcome;
 use super::vim::VimState;
@@ -29,6 +30,7 @@ use std::time::Instant;
 pub(crate) enum ChatInputOutcome {
     Command(SlashCommandInvocation),
     Consumed,
+    SubmissionRejected(&'static str),
     Submit(ChatSubmission),
     UnknownCommand(UnknownSlashCommand),
     Unhandled,
@@ -38,8 +40,40 @@ pub(crate) enum ChatInputOutcome {
 pub(crate) enum ChatInputQueueOutcome {
     Command(SlashCommandInvocation),
     Consumed,
+    SubmissionRejected(&'static str),
     Queued(QueuedChatInput),
     UnknownCommand(UnknownSlashCommand),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SlashCommandAvailability {
+    Idle,
+    ActiveTurn,
+}
+
+impl SlashCommandAvailability {
+    fn rejection(
+        self,
+        command: Option<&ash_slash_commands::SlashCommandInvocation>,
+        text: &str,
+    ) -> Option<&'static str> {
+        let command = command.filter(|command| command.origin == SlashCommandOrigin::Server)?;
+        if matches!(self, Self::Idle) {
+            return None;
+        }
+        match command.command.name.as_str() {
+            "compact" => Some("Wait for the active turn to finish before compacting context."),
+            "advisor" => {
+                let argument = text[command.arguments_range.clone()].trim();
+                if argument.is_empty() || is_advisor_config_argument(argument) {
+                    None
+                } else {
+                    Some("Wait for the active turn to finish before consulting Advisor.")
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -244,7 +278,16 @@ impl ChatInput {
         }
     }
 
+    #[cfg(test)]
     pub(in crate::thread::composer) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        self.handle_key_in_turn(key, SlashCommandAvailability::Idle)
+    }
+
+    pub(in crate::thread::composer) fn handle_key_in_turn(
+        &mut self,
+        key: KeyEvent,
+        availability: SlashCommandAvailability,
+    ) -> ChatInputOutcome {
         self.reset_pointer_view();
         if self.history.query().is_some() {
             return self.handle_history_search_key(key);
@@ -260,7 +303,7 @@ impl ChatInput {
             self.apply_history_effect(RecallEffect::Restore);
             return ChatInputOutcome::Consumed;
         }
-        if let Some(outcome) = self.handle_completion_key(key) {
+        if let Some(outcome) = self.handle_completion_key(key, availability) {
             return outcome;
         }
         if self.input_mode == ChatInputMode::Vim
@@ -271,7 +314,7 @@ impl ChatInput {
             return ChatInputOutcome::Consumed;
         }
         if key.code == KeyCode::Enter && key.modifiers.is_empty() && self.accepts_submission_key() {
-            return self.submit_current();
+            return self.submit_current(availability);
         }
         if is_newline_key(key) && self.accepts_submission_key() {
             self.reset_history_navigation();
@@ -536,12 +579,18 @@ impl ChatInput {
         u16::try_from(rows.saturating_add(2)).unwrap_or(u16::MAX)
     }
 
-    pub(in crate::thread::composer) fn submit_current(&mut self) -> ChatInputOutcome {
+    pub(in crate::thread::composer) fn submit_current(
+        &mut self,
+        availability: SlashCommandAvailability,
+    ) -> ChatInputOutcome {
         let command = self.current_command();
         let unknown_command = self.unknown_command();
         let Some(submission) = self.prepare_submission() else {
             return ChatInputOutcome::Consumed;
         };
+        if let Some(message) = availability.rejection(command.as_ref(), &submission.display_text) {
+            return ChatInputOutcome::SubmissionRejected(message);
+        }
         self.record_submission_history(&submission);
         self.clear();
         if let Some(unknown_command) = unknown_command {
@@ -556,12 +605,18 @@ impl ChatInput {
         }
     }
 
-    pub(crate) fn queue_current(&mut self) -> ChatInputQueueOutcome {
+    pub(crate) fn queue_current(
+        &mut self,
+        availability: SlashCommandAvailability,
+    ) -> ChatInputQueueOutcome {
         let command = self.current_command();
         let unknown_command = self.unknown_command();
         let Some(submission) = self.prepare_submission() else {
             return ChatInputQueueOutcome::Consumed;
         };
+        if let Some(message) = availability.rejection(command.as_ref(), &submission.display_text) {
+            return ChatInputQueueOutcome::SubmissionRejected(message);
+        }
         if let Some(unknown_command) = unknown_command {
             self.record_submission_history(&submission);
             self.clear();
@@ -569,7 +624,14 @@ impl ChatInput {
         }
         if let Some(command) = command {
             match into_command_invocation(submission.clone(), command) {
-                Ok(invocation) if invocation.origin == SlashCommandOrigin::Local => {
+                Ok(invocation)
+                    if invocation.origin == SlashCommandOrigin::Local
+                        || invocation.command.name == "advisor"
+                            && (invocation.display_arguments.trim().is_empty()
+                                || is_advisor_config_argument(
+                                    invocation.display_arguments.trim(),
+                                )) =>
+                {
                     self.record_submission_history(&submission);
                     self.clear();
                     return ChatInputQueueOutcome::Command(invocation);

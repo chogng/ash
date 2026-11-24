@@ -25,6 +25,7 @@ test('Product Slash Commands preserve shared definitions and local panel argumen
 	assert.deepEqual(catalog.binding('skills'), { origin: 'local', actionId: 'workbench.action.chat.configure.skills' });
 	assert.equal(catalog.get('chats'), undefined);
 	for (const definition of Object.values(ProductSlashCommands)) {
+		if (definition.name === ProductSlashCommands.btw.name) continue;
 		assert.deepEqual(catalog.get(definition.name), definition);
 		assert.equal(catalog.binding(definition.name)?.origin, 'local');
 		assert.equal(parseSlashCommandInput(`/${definition.name}`, catalog).kind, 'command');
@@ -68,6 +69,21 @@ test('Slash Command catalog rejects invalid and colliding definitions', () => {
 	assert.throws(() => new SlashCommandCatalog(local, [{ name: 'history', description: 'Collision', argumentMode: 'none' }]), /Duplicate/);
 	assert.throws(() => new SlashCommandCatalog([], [{ name: 'Invalid', description: 'Bad name', argumentMode: 'none' }]), /Invalid/);
 	assert.throws(() => new SlashCommandCatalog([], [{ name: 'valid', description: ' ', argumentMode: 'none' }]), /description/);
+});
+
+test('Code exposes task commands and Side Chat through the same slash catalog', () => {
+	const server: SlashCommandDefinition[] = ['ask', 'plan', 'debug', 'swarm', 'develop'].map(name => ({ name, description: name, argumentMode: 'optional' }));
+	const code = new SlashCommandCatalog(DesktopSlashCommands, server);
+	const sideChat = ProductSlashCommands.btw;
+	code.setClientCommands([{ command: sideChat.name, detail: sideChat.description, argumentHint: sideChat.argumentHint }]);
+
+	assert.deepEqual(code.get('btw'), sideChat);
+	assert.deepEqual(code.binding('plan'), { origin: 'server', delivery: 'message' });
+	assert.deepEqual(code.binding('develop'), { origin: 'server', delivery: 'command' });
+	for (const name of ['ask', 'btw', 'debug', 'plan', 'swarm']) {
+		assert.ok(code.matching(name).some(command => command.name === name));
+		assert.equal(parseSlashCommandInput(`/${name} Check it`, code).kind, 'command');
+	}
 });
 
 test('Desktop adapter matches the shared Slash Commands conformance fixture', () => {

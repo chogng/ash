@@ -5,7 +5,6 @@ import { Action2, registerAction2 } from '../../../platform/actions/common/actio
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -24,19 +23,6 @@ registerAction2(class extends ForkConversationAction {
 			primaryWhen: ChatContextKeys.messageActionSurface.isEqualTo('chat'),
 			secondaryWhen: ContextKeyExpr.notEquals(ChatContextKeys.messageActionSurface.key, 'chat'),
 		});
-	}
-});
-
-registerAction2(class ChoosePermission extends Action2 {
-	constructor() { super({ id: OPEN_CHAT_PERMISSIONS_COMMAND_ID, title: localize2('sessions.chat.permissions', 'Permissions') }); }
-	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
-		const generation = model.composerGeneration;
-		const commands = accessor.get(ICommandService);
-		const value = argument.trim();
-		const definition = value ? approvalModeDefinitions.find(mode => mode.id === value) : undefined;
-		if (value && !definition) { throw new Error(localize('sessions.chat.permission.commandUsage', 'Use /permission manual|auto|bypassPermissions.')); }
-		const selected = definition?.id ?? (await selectReviewItem(accessor.get(IQuickInputService), localize('sessions.chat.permissions', 'Permissions'), approvalModeDefinitions.map(mode => ({ id: mode.id, label: localize(mode.label.key, mode.label.text), description: localize(mode.description.key, mode.description.text) }))))?.id;
-		if (selected && generation === model.composerGeneration && !model.inputState.aiDisabled) { await commands.executeCommand(`sessions.chat.permission.${selected}`, model); }
 	}
 });
 

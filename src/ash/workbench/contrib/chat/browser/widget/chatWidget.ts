@@ -21,7 +21,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import { autorun } from '../../../../../base/common/observable.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
-import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -60,7 +60,8 @@ import type { IEditorService } from '../../../../services/editor/common/editorSe
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
+import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
+import { CONFIGURE_ADVISOR_COMMAND_ID } from '../../../advisor/browser/advisor.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
@@ -110,7 +111,7 @@ export interface IChatWidgetModel extends IDisposable {
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal, defaultTaskCommand?: IChatWidgetViewOptions['defaultTaskCommand']): Promise<void | string>;
+	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string>;
 	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
@@ -217,6 +218,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Detached Markdown fragments still inherit this conversation's command scope.
 		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
 		this.scopedInstantiation = scopedInstantiation;
+		const sideChats = scopedInstantiation.getOptional(IChatSideChatService);
 		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
 		if (model.reportRecapPresence) {
 			this.recapBlurListener = this._register(new ChatWindowBlurListener(this.element, () => this.syncRecapPresence()));
@@ -306,7 +308,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				const { sessionId, threadId, composerGeneration } = model;
 				if (!sessionId || !threadId || model.inputState.aiDisabled || this.isTranscriptProgressActive) return undefined;
 				const resource = LocalChatSessionUri.forSession(sessionId, threadId);
-				if (!scopedInstantiation.getOptional(IChatSideChatService)?.canAskInSideChat(resource)) return undefined;
+				if (!sideChats?.canAskInSideChat(resource)) return undefined;
 				return {
 					resource,
 					turnId,
@@ -391,8 +393,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
 			send: (text, skills, contexts, submissionSignal, queue) => this.send(text, skills, contexts, undefined, submissionSignal, queue),
-			executeCommand: ({ commandId, argumentsText }) => {
-				if (commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID) {
+			isLocalSlashActionAvailable: actionId => CommandsRegistry.hasCommand(actionId)
+				&& (actionId !== OPEN_CHAT_PERMISSIONS_COMMAND_ID || !!model.selectApprovalMode),
+			executeCommand: ({ commandId, argumentsText }, signal) => {
+				if (commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID) return commandService.executeCommand(commandId, this.model, argumentsText, signal);
+				if (commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID) {
 					return commandService.executeCommand(commandId, this.model, argumentsText);
 				}
 				if (commandId === NEW_CHAT_COMMAND_ID) return commandService.executeCommand(commandId, { preserveFocus: true });
@@ -400,10 +405,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			},
 			executeServerCommand: model.executeServerCommand && (async (invocation, submissionSignal) => {
 				if (invocation.name === 'advisor' && !invocation.argumentsText.trim()) {
-					await commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+					await commandService.executeCommand(CONFIGURE_ADVISOR_COMMAND_ID);
 					return;
 				}
-				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal, this.defaultTaskCommand);
+				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal);
 				if (typeof recap === 'string') {
 					this.notifications.info(recap);
 				}

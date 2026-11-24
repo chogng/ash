@@ -103,7 +103,6 @@ import type { ModelReasoningEffort } from '../../../../../services/chat/common/m
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../../services/chat/common/chatContextService.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type SlashCommandInput } from '../../../common/slashCommands.js';
-import { BtwSlashCommandName } from '../../../common/chatSideChatService.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
 import { ChatElicitationContentPart } from '../chatContentParts/chatElicitationContentPart.js';
@@ -137,7 +136,7 @@ import { AgentPickerActionItem } from './agentPickerActionItem.js';
 import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
 import { IChatWidgetService } from '../../chat.js';
-import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { CHAT_SETUP_ACTION_ID } from '../../actions/chatActions.js';
 import { ServiceCollection } from '../../../../../../platform/instantiation/common/serviceCollection.js';
 import type { IMenu } from '../../../../../../platform/actions/common/actions.js';
@@ -145,7 +144,7 @@ import { SubmenuItemAction } from '../../../../../../platform/actions/common/act
 import { ChatSubmitAction, type IChatExecuteActionContext } from '../../actions/chatExecuteActions.js';
 import { ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../actions/chatQueueActions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
-import { ChatRequestQueueKind, isTaskSlashCommand } from '../../../../../services/chat/common/chatService.js';
+import { ChatRequestQueueKind, isTaskSlashCommand, ProductSlashCommands } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 
@@ -423,7 +422,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	) {
 		super();
 		// Client commands have their own host-neutral handlers; product and server commands belong to Code.
-		this.slashCommands = new SlashCommandCatalog(delegate.executeServerCommand ? DesktopSlashCommands : [], []);
+		const localCommands = () => delegate.executeServerCommand
+			? DesktopSlashCommands.filter(command => delegate.isLocalSlashActionAvailable?.(command.actionId) !== false)
+			: [];
+		this.slashCommands = new SlashCommandCatalog(localCommands(), []);
+		if (delegate.executeServerCommand && delegate.isLocalSlashActionAvailable) {
+			this._register(CommandsRegistry.onDidChangeCommands(() => this.slashCommands.setLocalCommands(localCommands())));
+		}
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
 		this.attachAction.label = delegate.draft ? localize('chat.input.attachFiles', 'Attach files') : localize('chat.context.add', 'Add context');
@@ -432,7 +437,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.replyOnly || options.replySideChat) {
 			const updateClientCommands = () => {
 				const commands = clientCommands.getCommands();
-				this.slashCommands.setClientCommands(this.replyOnly ? commands.filter(command => command.command === BtwSlashCommandName) : commands);
+				this.slashCommands.setClientCommands(this.replyOnly ? commands.filter(command => command.command === ProductSlashCommands.btw.name) : commands);
 			};
 			updateClientCommands();
 			this._register(clientCommands.onDidChangeCommands(updateClientCommands));
@@ -515,8 +520,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				});
 			},
 			submit: () => {
-				if (this.delegate.draft) void this.acceptInput().catch(error => this.notifications.error(error));
-				else void this.commands.executeCommand(this.followUpCommand(), this.executionContext()).catch(() => undefined);
+				const lifecycle = this.inputLifecycle.signal;
+				const submit = this.delegate.draft ? this.acceptInput() : this.commands.executeCommand(this.followUpCommand(), this.executionContext());
+				void submit.catch(error => {
+					if (!this.isDisposed && !lifecycle.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+				});
 			},
 			modelPickerPosition: options.modelPickerPosition,
 			layout: options.layout,
@@ -606,7 +614,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				currentLifecycle: () => this.inputLifecycle.signal,
 				getContext: () => this.state.conversation ?? {},
 				acceptSkill: skill => this.captureSkill(skill),
-				commands: this.delegate.executeServerCommand !== undefined,
 				skills: !this.replyOnly,
 				isEnabled: () => this.visible && !this.state.aiDisabled,
 				acceptResource: async (resource, isDirectory, replacement, signal) => {
@@ -1319,7 +1326,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
 		}
 		// Local product settings must remain available while the model catalog is loading.
-		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
+		const localCommand = this.isManagementCommand(intent);
 		if (this.submitting || this.isSubmissionBlocked(localCommand) || intent.kind === 'command' && intent.binding.origin === 'client' && this.state.canInterrupt && !intent.binding.executeDuringRequest) return;
 		if (value !== undefined) {
 			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
@@ -1363,7 +1370,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					resolve: async () => ({ name: item.name, content: item.modelDescription ? `${item.modelDescription}\n\n${item.value}` : item.value }),
 				}))] : contexts;
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
-			const localCommand = input.kind === 'command' && input.binding.origin === 'local';
+			const localCommand = this.isManagementCommand(input);
 			// Preparation can outlast the permission to send. Recheck before consuming the draft or recording history.
 			if (this.isSubmissionBlocked(localCommand)) return;
 			if (!this.commandText(draft.text, contexts).trim() && !this.state.draft?.files.length && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
@@ -1376,12 +1383,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				const offset = input.kind === 'command' ? Math.max(0, draft.text.indexOf(input.argumentsText, input.command.name.length + 1)) : 0;
 				const query = draft.text.slice(offset);
 				const attachedContext = requestContexts.map(context => context.reference ? { ...context, reference: context.reference.start >= offset ? { start: context.reference.start - offset, end: context.reference.end - offset } : undefined } : context);
-				await this.submit(draft, textRevision, lifecycle, () => this.clientCommands.executeCommand(input.kind === 'command' ? input.command.name : BtwSlashCommandName, query, LocalChatSessionUri.forSession(widget.sessionId!, widget.threadId!), { attachedContext, signal: lifecycle }));
+				await this.submit(draft, textRevision, lifecycle, () => this.clientCommands.executeCommand(input.kind === 'command' ? input.command.name : ProductSlashCommands.btw.name, query, LocalChatSessionUri.forSession(widget.sessionId!, widget.threadId!), { attachedContext, signal: lifecycle }));
 				return;
 			}
 			if (input.kind === 'command' && input.binding.origin === 'local') {
 				const invocation = { commandId: input.binding.actionId, argumentsText: input.argumentsText };
-				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeCommand(invocation));
+				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeCommand(invocation, lifecycle));
 				return;
 			}
 			if (input.kind === 'command' && input.binding.origin === 'server') {
@@ -1449,7 +1456,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.permissionWidget.show();
 		} else {
 			// Hosts without a permission trigger already provide the /permission flow.
-			void this.runSecondaryAction(() => this.delegate.executeCommand({ commandId: OPEN_CHAT_PERMISSIONS_COMMAND_ID, argumentsText: '' }));
+			void this.runSecondaryAction(() => this.delegate.executeCommand({ commandId: OPEN_CHAT_PERMISSIONS_COMMAND_ID, argumentsText: '' }, this.inputLifecycle.signal));
 		}
 	}
 
@@ -1510,15 +1517,23 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	/** Compose product help inside this provider so registry priority cannot hide it. */
 	protected getAccessibilityHelpContent(): string {
 		const request = this.state.interaction?.request;
+		const commands = this.slashCommands.commands;
+		const taskCommands = commands.flatMap(command => {
+			const binding = this.slashCommands.binding(command.name);
+			return binding?.origin === 'server' && binding.delivery === 'message' ? [`/${command.name}`] : [];
+		});
 		return [
 			this.replyOnly
-				? getReplyInputAccessibilityHelp(!!this.delegate.draft)
-				: getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0,
+				? getReplyInputAccessibilityHelp(!!this.delegate.draft, commands.length > 0)
+				: getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, commands.length > 0,
 					{
 						changes: this.delegate.readWorkspaceChanges ? 'workspace' : this.delegate.openChanges ? 'conversation' : undefined,
 						canEditCode: this.executeContext.getValue(ChatContextKeys.messageActionSurface.key) !== 'chat',
 						agentPicker: this.options.agentPicker,
 					}),
+			taskCommands.length > 0 && localize('chat.input.taskSlashCommandsHelp', 'Type / to find available task commands ({0}).', taskCommands.join(', ')),
+			taskCommands.includes('/plan') && localize('chat.input.planCommandHelp', 'Use /plan to investigate and propose a plan. Send a separate request to implement it.'),
+			this.slashCommands.binding('permission') && localize('chat.input.permissionCommandHelp', 'Use /permission to choose the next turn’s permissions. You can also type the exact permission name after the command.'),
 			this.delegate.draft?.readImage ? localize('chat.input.stagedImageHelp', 'Pasted images appear above the message text inside the input. Use Tab to reach Preview or Remove, and Enter or Space to activate. Escape closes the preview and returns focus to the image.') : '',
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.toolConfirmation instanceof ChatToolAuthenticationSubPart ? localize('chat.tool.authHelp', 'Use Tab to reach Sign in. The sign-in result appears in the approval. Review the tool and choose whether to approve it afterwards.') : '',
@@ -1806,10 +1821,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private parseInput(text: string): SlashCommandInput {
 		const input = parseSlashCommandInput(text, this.slashCommands);
-		if (input.kind === 'command' && input.binding.origin === 'server' && isTaskSlashCommand(text)) {
+		if (input.kind === 'command' && input.binding.origin === 'server' && input.binding.delivery === 'message'
+			|| input.kind === 'unknown' && !this.delegate.executeServerCommand) {
 			return { kind: 'message', text };
 		}
-		return this.delegate.executeServerCommand || input.kind === 'command' && input.binding.origin === 'client' ? input : { kind: 'message', text };
+		return input;
 	}
 
 	private commandText(text = this.input.value, contexts = this.contexts): string {
@@ -1817,6 +1833,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (context.kind === 'toolSelection' && context.reference) text = text.slice(0, context.reference.start) + text.slice(context.reference.end);
 		}
 		return text.trim();
+	}
+
+	private isManagementCommand(input: SlashCommandInput): boolean {
+		return input.kind === 'command' && (input.binding.origin === 'local'
+			|| input.binding.origin === 'server' && input.command.name === 'advisor' && !input.argumentsText.trim());
 	}
 
 	private isSubmissionBlocked(localCommand: boolean): boolean {
@@ -1828,7 +1849,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const input = this.parseInput(this.commandText());
 		this.queueContextKeys.startsTaskCommand.set(!!this.delegate.executeServerCommand && input.kind === 'message' && isTaskSlashCommand(input.text));
 		const canSubmitIntent = input.kind === 'message' ? input.text.trim().length > 0 || !!this.state.draft?.files.length || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
-		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
+		const localCommand = this.isManagementCommand(input);
 		const state: ChatInputToolbarState = {
 			voiceAvailable: !this.state.aiDisabled && this.delegate.voiceConversation?.isAvailable === true,
 			voiceActive: this.delegate.voiceConversation?.isActive === true,

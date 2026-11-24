@@ -203,7 +203,7 @@ export class SessionsPreferences extends Disposable {
 			await this.showEditor();
 			return;
 		}
-		const categoryId = validated.section;
+		const categoryId = validated.section === 'chat-appearance' ? 'appearance' : validated.section;
 		const query = validated.query ?? (validated.revealSetting ? `@id:${validated.revealSetting.key}` : undefined);
 		if (this.dialogVisible) {
 			if (validated.sectionQuery !== undefined) { this.applySectionQuery?.(validated); return; }

@@ -1,5 +1,8 @@
 {
   "ash": {
+    "chat.input.permissionCommandHelp": "使用 /permission 选择下一回合的权限。也可以在命令后输入准确的权限名称。",
+    "chat.input.taskSlashCommandsHelp": "输入 / 查看可用的任务命令（{0}）。",
+    "chat.input.planCommandHelp": "使用 /plan 调查并提出计划。实施计划时发送新请求。",
     "chat.input.attachFiles": "添加文件",
     "chat.input.stopReply": "停止",
     "chat.input.stagedFiles": "附件",
@@ -162,7 +165,7 @@
     "quickChat.unavailable": "此窗口暂不支持快捷聊天。",
     "quickChat.failed": "无法打开快捷聊天：{0}",
     "quickChat.accessibilityHint": "快捷聊天。使用无障碍帮助命令查看键盘操作说明。",
-    "quickChat.accessibilityHelp": "快捷聊天是一段独立对话，不会改变主聊天视图的当前选择。输入消息后按 Enter 发送，按 Shift+Enter 换行。使用 Tab 和 Shift+Tab 切换到附件、模型控件、“在聊天视图中打开”和“关闭”。按 Escape 关闭浮层并返回之前的编辑器。使用 <keybinding:workbench.action.quickchat.toggle> 重新打开并继续对话。“在聊天视图中打开”会继续同一段对话，保留草稿、附件和正在生成的回答。使用无障碍视图命令以纯文本阅读对话。",
+    "quickChat.accessibilityHelp": "快捷聊天是一段独立对话，不会改变主聊天视图的当前选择。输入消息后按 Enter 发送，按 Shift+Enter 换行。输入 / 查看可用命令。使用 Tab 和 Shift+Tab 切换到附件、模型控件、“在聊天视图中打开”和“关闭”。按 Escape 关闭浮层并返回之前的编辑器。使用 <keybinding:workbench.action.quickchat.toggle> 重新打开并继续对话。“在聊天视图中打开”会继续同一段对话，保留草稿、附件和正在生成的回答。使用无障碍视图命令以纯文本阅读对话。",
     "quickChat.verbosityTitle": "快捷聊天无障碍帮助",
     "quickChat.verbosityDescription": "当快捷聊天获得焦点时，提示如何打开无障碍帮助。",
     "chat.voice.startCommand": "启动语音模式",
@@ -610,7 +613,8 @@
     "prompt.import.allowAccess": "允许目录访问"
   },
   "ash.workbench": {
-    "chat.input.replyHelp": "按 Enter 发送，按 Shift+Enter 换行。按 Tab 聚焦附件、听写和模型控件。按 Enter 或空格打开菜单，按 Escape 返回。以斜杠开头的文字会作为普通消息发送。",
+    "chat.input.replyHelp": "按 Enter 发送，按 Shift+Enter 换行。按 Tab 聚焦附件、听写和模型控件。按 Enter 或空格打开菜单，按 Escape 返回。",
+    "chat.input.literalSlashHelp": "以斜杠开头的文字会作为普通消息发送。",
     "chat.input.replyContextHelp": "使用“添加上下文”上传文件或搜索附件。按方向键选择结果，按 Enter 添加。回复进行时发送的后续消息会排队，等当前回复结束后发送。",
     "chat.queue.replyEditHint": "编辑期间此消息将暂停。按 Ctrl 或 Command+Enter 保存，按 Escape 取消。附加输入和未发送的草稿会保留。原来已暂停或失败的消息取消编辑后仍保持暂停。",
     "chat.input.conversationChangesHelp": "会话有变更时，按 Tab 到达输入框上方的“更改”，按 Enter 或空格打开当前检查点的净变更。撤销和重做会更新摘要。"

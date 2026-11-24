@@ -17,6 +17,7 @@ use ash_protocol::ApprovalMode;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
 use std::path::Path;
 
 pub(crate) struct ConversationCompletion {
@@ -51,6 +52,11 @@ pub(crate) enum SessionCompletion {
 }
 
 pub(crate) enum CommandRequest {
+    SideChat {
+        source_turn_id: Option<TurnId>,
+        submission: ChatSubmission,
+        approval_mode: ApprovalMode,
+    },
     Fork {
         prompt: String,
         mode: ash_protocol::TaskExecution,
@@ -88,7 +94,8 @@ impl Command {
         match self {
             Self::Fork { prompt, .. } => Some(fork_command(prompt)),
             Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
-            Self::Preview { .. }
+            Self::SideChat { .. }
+            | Self::Preview { .. }
             | Self::Restore { .. }
             | Self::Delete { .. }
             | Self::Archive { .. }
@@ -101,6 +108,7 @@ impl Command {
 impl CommandRequest {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
+            Self::SideChat { .. } => "ash-tui-side-chat",
             Self::Fork { .. } => "ash-tui-fork-session",
             Self::Preview { .. } => "ash-tui-preview-session",
             Self::Restore { .. } => "ash-tui-restore-session",
@@ -119,6 +127,53 @@ impl CommandRequest {
         root: &Path,
     ) -> SessionCompletion {
         match self {
+            Self::SideChat {
+                source_turn_id,
+                submission,
+                approval_mode,
+            } => {
+                let result = current
+                    .ok_or_else(|| {
+                        "Send a message in this conversation before starting a side chat."
+                            .to_owned()
+                    })
+                    .and_then(|current| {
+                        let title = submission
+                            .display_text
+                            .split_whitespace()
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        let branch = current
+                            .conversation
+                            .create_side_chat(
+                                &mut client,
+                                source_turn_id,
+                                title.chars().take(100).collect(),
+                            )
+                            .map_err(|error| error.to_string())?;
+                        crate::thread::submit_side_question(
+                            &mut client,
+                            ThreadRequestScope::new(
+                                branch.session_id(),
+                                branch.thread_id(),
+                                branch.thread_sequence(),
+                            ),
+                            submission,
+                            approval_mode,
+                        )
+                        .map_err(|error| error.to_string())?;
+                        finish_conversation_request(
+                            &mut client,
+                            branch,
+                            Some(current.subscription),
+                            ConversationChange {
+                                notice: "Opened a side chat.".into(),
+                                transcript: super::ConversationTranscript::Replace,
+                            },
+                        )
+                    });
+                SessionCompletion::ThreadChanged(result)
+            }
             Self::Fork {
                 prompt,
                 mode,
@@ -214,6 +269,14 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
+        Command::SideChat {
+            source_turn_id,
+            submission,
+        } => CommandRequest::SideChat {
+            source_turn_id,
+            submission,
+            approval_mode,
+        },
         Command::Fork { prompt, mode } => CommandRequest::Fork {
             prompt,
             mode,

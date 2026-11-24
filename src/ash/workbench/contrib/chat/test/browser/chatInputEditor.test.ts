@@ -1156,7 +1156,8 @@ test('Chat input completes slash commands before submitting', async () => {
 	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
 	assert.equal(editor.value, '/');
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
-	for (const command of ['/new', '/history', '/config']) assert.ok(completionLabels(editor.element).includes(command));
+	for (const command of ['/new', '/config']) assert.ok(completionLabels(editor.element).includes(command));
+	assert.ok(!completionLabels(editor.element).includes('/history'));
 	assert.equal(editor.element.querySelector('.stanza-editor-line-number'), null);
 
 	input.dispatchEvent(beforeInputEvent(dom.window, 'n'));
@@ -1281,7 +1282,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	using editor = services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
-	editor.value = '/history argument';
+	editor.value = '/config argument';
 	editor.focus();
 	const input = requiredElement<HTMLElement>(editor.element, '.stanza-editor-input');
 	input.dispatchEvent(keyboardEvent(dom.window, 'Home'));
@@ -1289,10 +1290,10 @@ test('Chat command completion replaces the whole command and preserves arguments
 		input.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	}
 	await services.get(ICommandService).executeCommand('editor.action.triggerSuggest');
-	await waitFor(() => completionLabels(editor.element)[0] === '/history');
-	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/history');
+	await waitFor(() => completionLabels(editor.element)[0] === '/config');
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/config');
 	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));
-	assert.equal(editor.value, '/history argument');
+	assert.equal(editor.value, '/config argument');
 });
 
 test('Command hints follow catalog updates without entering the draft or undo history', async () => {

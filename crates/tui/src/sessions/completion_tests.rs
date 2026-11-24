@@ -87,6 +87,93 @@ fn switch_request_preserves_the_selected_thread() {
 
 #[test]
 #[cfg(feature = "in-process-tests")]
+fn btw_starts_a_turn_on_a_side_chat_in_the_same_session() {
+    use ash_app_server_client::AppServerSession;
+    use ash_app_server_protocol::protocol::common::ClientInfo;
+    use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
+    use ash_protocol::ThreadItem;
+    use ash_protocol::ThreadOrigin;
+
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(
+        crate::test_support::in_process_options(
+            root.path(),
+            ClientInfo {
+                name: "side-chat-flow-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_model_operation_client(std::sync::Arc::new(OfflineModel)),
+    )
+    .unwrap();
+    let mut client = session.client();
+    let source = super::ActiveConversation::start(&mut client, "source".into()).unwrap();
+    let session_id = source.session_id().clone();
+    let source_id = source.thread_id().clone();
+    let prompt = |text: &str| ChatSubmission {
+        mode: Default::default(),
+        command_id: crate::client::new_command_id("test-input"),
+        display_text: text.into(),
+        input: vec![ChatInputItem::Text(text.into())],
+    };
+    let source_turn = crate::thread::submit_prompt(
+        &mut client,
+        super::ThreadRequestScope::new(&session_id, &source_id, source.thread_sequence()),
+        prompt("Source conversation"),
+        ApprovalMode::Manual,
+    )
+    .unwrap();
+    let (subscription, _, _) =
+        super::ThreadSubscription::start(&mut client, &session_id, &source_id).unwrap();
+    let command = Command::SideChat {
+        source_turn_id: Some(source_turn.turn_id.clone()),
+        submission: prompt("/ask Why is this value cached?"),
+    };
+    let result = prepare_command(ApprovalMode::Manual, command).execute(
+        client.clone(),
+        Some(super::Conversation {
+            conversation: source,
+            subscription,
+        }),
+        root.path(),
+    );
+    let super::SessionCompletion::ThreadChanged(result) = result else {
+        panic!("expected conversation change");
+    };
+    let next = result.unwrap();
+    assert_eq!(next.conversation.session_id(), &session_id);
+    assert_ne!(next.conversation.thread_id(), &source_id);
+    let mut read = |thread_id| {
+        client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session_id.clone(),
+                thread_id,
+                history: None,
+            })
+            .unwrap()
+            .thread
+    };
+    let branch = read(next.conversation.thread_id().clone());
+    assert!(
+        matches!(branch.origin, ThreadOrigin::SideChat { parent_thread_id, source_turn_id, .. }
+        if parent_thread_id == source_id && source_turn_id == source_turn.turn_id)
+    );
+    let side_turn = branch.turns.last().unwrap();
+    assert_eq!(
+        side_turn.instructions.as_ref().unwrap().task_command(),
+        Some(ash_protocol::TaskExecution::Ask)
+    );
+    assert!(side_turn.items.iter().any(|item| matches!(item,
+        ThreadItem::UserMessage { text, .. } if text == "/ask Why is this value cached?"
+    )));
+    let original = read(source_id);
+    assert_eq!(original.turns.len(), 1);
+    assert_eq!(original.turns[0].turn_id, source_turn.turn_id);
+}
+
+#[test]
+#[cfg(feature = "in-process-tests")]
 fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     use super::ForkStatus;
     use super::SessionCompletion;

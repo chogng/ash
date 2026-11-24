@@ -135,22 +135,69 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
+    submit_input(
+        client,
+        scope,
+        submission,
+        approval_mode,
+        SubmissionSource::Composer,
+    )
+}
+
+pub(crate) fn submit_side_question<T>(
+    client: &mut AppServerClient<T>,
+    scope: ThreadRequestScope,
+    submission: ChatSubmission,
+    approval_mode: ApprovalMode,
+) -> Result<TurnStartResult, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    submit_input(
+        client,
+        scope,
+        submission,
+        approval_mode,
+        SubmissionSource::SideChat,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum SubmissionSource {
+    Composer,
+    SideChat,
+}
+
+fn submit_input<T>(
+    client: &mut AppServerClient<T>,
+    scope: ThreadRequestScope,
+    submission: ChatSubmission,
+    approval_mode: ApprovalMode,
+    source: SubmissionSource,
+) -> Result<TurnStartResult, ClientError>
+where
+    T: JsonRpcTransport,
+{
     let command_id = submission.command_id.clone();
-    let text = match submission.input.as_slice() {
-        [ChatInputItem::Text(text)] => Some(text.trim()),
-        _ => None,
+    let text = match (source, submission.input.as_slice()) {
+        (SubmissionSource::Composer, [ChatInputItem::Text(text)]) => Some(text.trim()),
+        (SubmissionSource::Composer | SubmissionSource::SideChat, _) => None,
     };
     let command = text.and_then(|text| {
         let (name, arguments) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
         matches!(name, "/advisor" | "/compact").then_some((name, arguments.trim()))
     });
     // These commands use typed operations; attachments cannot be retained in a compaction prompt.
-    if text.is_none()
+    if matches!(source, SubmissionSource::Composer)
+        && text.is_none()
         && submission.display_text.trim().split_whitespace().next() == Some("/compact")
     {
         return Err(ClientError::Protocol("Compaction retention instructions must be text; send attachments to the conversation before compacting.".into()));
     }
-    if text.is_none() && submission.display_text.trim().starts_with("/advisor ") {
+    if matches!(source, SubmissionSource::Composer)
+        && text.is_none()
+        && submission.display_text.trim().starts_with("/advisor ")
+    {
         return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into()));
     }
     let (ide_window_id, ide) = if command.is_none() {

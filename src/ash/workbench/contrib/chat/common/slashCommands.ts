@@ -2,8 +2,8 @@ import type { IChatSlashCommandData } from './participants/chatSlashCommands.js'
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
 import { localize } from '../../../../nls.js';
 import { observableValue } from '../../../../base/common/observable.js';
-import { ProductSlashCommands, type SlashCommandDefinition } from '../../../services/chat/common/chatService.js';
-import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from './chat.js';
+import { isTaskSlashCommandName, ProductSlashCommands, type SlashCommandDefinition } from '../../../services/chat/common/chatService.js';
+import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from './chat.js';
 
 import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
@@ -11,7 +11,7 @@ const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
 	| { readonly origin: 'local'; readonly actionId: string; }
-	| { readonly origin: 'server'; }
+	| { readonly origin: 'server'; readonly delivery: 'message' | 'command'; }
 	| { readonly origin: 'client'; readonly executeDuringRequest: boolean; };
 
 export type SlashCommandInput =
@@ -23,6 +23,7 @@ export type SlashCommandInput =
 export interface LocalSlashCommandRegistration {
 	readonly definition: SlashCommandDefinition;
 	readonly actionId: string;
+	readonly suggest?: false;
 }
 
 interface CatalogEntry {
@@ -32,7 +33,7 @@ interface CatalogEntry {
 
 /** Owns the current validated Slash Commands snapshot shared by parsing and completion. */
 export class SlashCommandCatalog {
-	private readonly local: readonly LocalSlashCommandRegistration[];
+	private local: readonly LocalSlashCommandRegistration[];
 	private client: readonly IChatSlashCommandData[] = [];
 	private server: readonly SlashCommandDefinition[] = Object.freeze([]);
 	private entriesByName: ReadonlyMap<string, CatalogEntry> = new Map();
@@ -49,6 +50,12 @@ export class SlashCommandCatalog {
 		return this.commandSnapshot.get();
 	}
 
+	setLocalCommands(local: readonly LocalSlashCommandRegistration[]): void {
+		if (local.length === this.local.length && local.every((entry, index) => entry === this.local[index])) return;
+		this.local = Object.freeze([...local]);
+		this.rebuild();
+	}
+
 	setServerCommands(server: readonly SlashCommandDefinition[]): void {
 		this.server = Object.freeze([...server]);
 		this.rebuild();
@@ -62,22 +69,27 @@ export class SlashCommandCatalog {
 	private rebuild(): void {
 		const entriesByName = new Map<string, CatalogEntry>();
 		const commands: SlashCommandDefinition[] = [];
-		const append = (command: SlashCommandDefinition, binding: SlashCommandBinding): void => {
+		const append = (command: SlashCommandDefinition, binding: SlashCommandBinding, suggest = true): void => {
 			const normalized = validateDefinition(command);
 			if (entriesByName.has(normalized.name)) throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
 			const entry = Object.freeze({ command: normalized, binding });
 			entriesByName.set(normalized.name, entry);
-			// Extensions discovery belongs in the sidebar; retain the old slash binding for compatibility.
-			if (binding.origin !== 'local' || binding.actionId !== OPEN_EXTENSIONS_COMMAND_ID) {
+			if (suggest) {
 				commands.push(normalized);
 			}
 		};
 		for (const local of this.local) {
 			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
-			append(local.definition, Object.freeze({ origin: 'local', actionId: local.actionId }));
+			append(local.definition, Object.freeze({ origin: 'local', actionId: local.actionId }), local.suggest);
 		}
-		for (const command of this.client) append({ name: command.command, description: command.detail, argumentMode: 'optional' }, Object.freeze({ origin: 'client', executeDuringRequest: command.executeDuringRequest === true }));
-		for (const command of this.server) append(command, Object.freeze({ origin: 'server' }));
+		for (const command of this.client) {
+			append({ name: command.command, description: command.detail, argumentMode: 'optional', argumentHint: command.argumentHint },
+				Object.freeze({ origin: 'client', executeDuringRequest: command.executeDuringRequest === true }));
+		}
+		for (const command of this.server) {
+			const delivery = isTaskSlashCommandName(command.name) ? 'message' : 'command';
+			append(command, Object.freeze({ origin: 'server', delivery }));
+		}
 		this.entriesByName = entriesByName;
 		this.commandSnapshot.set(Object.freeze(commands));
 	}
@@ -192,7 +204,7 @@ export function matchedCharacterIndices(text: string, query: string): readonly n
 	return best?.indices ?? [];
 }
 
-const productActions: Record<keyof typeof ProductSlashCommands, string> = {
+const productActions: Record<Exclude<keyof typeof ProductSlashCommands, 'btw'>, string> = {
 	extensions: OPEN_EXTENSIONS_COMMAND_ID,
 	plugins: OPEN_INSTALLED_EXTENSIONS_COMMAND_ID,
 	skills: 'workbench.action.chat.configure.skills',
@@ -203,9 +215,8 @@ const productActions: Record<keyof typeof ProductSlashCommands, string> = {
 
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
 	localCommand('new', 'Start a new chat', NEW_CHAT_COMMAND_ID),
-	localCommand('history', 'Show chat history', SHOW_CHAT_HISTORY_COMMAND_ID),
 	localCommand('config', localize('chat.settings.openCommand', 'Open chat settings'), OPEN_CHAT_SETTINGS_COMMAND_ID),
-	...Object.entries(productActions).map(([id, actionId]) => {
+	...Object.entries(productActions).map(([id, actionId]): LocalSlashCommandRegistration => {
 		const definition = ProductSlashCommands[id as keyof typeof ProductSlashCommands];
 		let description = definition.description;
 		if (id === 'permission') {
@@ -213,9 +224,17 @@ export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Ob
 		} else if (id === 'guardian') {
 			description = localize('slash.guardian.description', description);
 		}
-		return { definition: { ...definition, description }, actionId };
+		// The sidebar owns Extensions discovery. The typed command remains available.
+		return id === 'extensions'
+			? { definition: { ...definition, description }, actionId, suggest: false }
+			: { definition: { ...definition, description }, actionId };
 	}),
 ]);
+
+export function isCodeWorkflowSlashCommand(text: string): boolean {
+	const command = text.trimStart().split(/\s/, 1)[0];
+	return command === '/init' || command === '/team' || command === '/develop';
+}
 
 export function parseSlashCommandInput(value: string, catalog: SlashCommandCatalog): SlashCommandInput {
 	if (!value.startsWith('/')) return { kind: 'message', text: value };

@@ -170,6 +170,37 @@ fn enter_test_session(app: &mut App) {
         thread_id: ThreadId::new("test-thread").unwrap(),
     });
 }
+
+#[test]
+fn btw_dispatches_the_question_to_a_separate_chat_while_the_source_turn_runs() {
+    let mut app = App::new();
+    enter_test_session(&mut app);
+    let source_turn_id = ash_protocol::TurnId::new("source-turn").unwrap();
+    app.set_active_turn(source_turn_id.clone());
+    app.set_status(Status::Working);
+    app.insert_text("/btw Why is this value cached?");
+    let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let Some(AppCommand::Sessions(SessionCommand::SideChat {
+        source_turn_id: Some(source),
+        submission,
+    })) = command
+    else {
+        panic!("expected side chat command");
+    };
+    assert_eq!(source, source_turn_id);
+    assert_eq!(submission.display_text, "Why is this value cached?");
+    assert_eq!(
+        submission.input,
+        vec![ChatInputItem::Text("Why is this value cached?".into())],
+    );
+    assert_eq!(app.active_turn(), Some(&source_turn_id));
+    assert_eq!(app.status(), &Status::Working);
+    assert!(
+        app.messages()
+            .iter()
+            .all(|message| !message.text().contains("Why is this value cached?"))
+    );
+}
 use ash_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
@@ -2572,6 +2603,9 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
     let mut app = App::for_dir_with_slash_commands(&dir, registry);
     app.insert_text("/diag logs");
     app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    for _ in 0.."/diag".len() {
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    }
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(app.input(), "/diagnose logs");

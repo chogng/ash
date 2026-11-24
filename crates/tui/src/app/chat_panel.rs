@@ -10,6 +10,7 @@ use crate::thread::composer::ChatComposer;
 use crate::thread::composer::ChatComposerOutcome;
 use crate::thread::composer::ChatComposerView;
 use crate::thread::composer::ChatInput;
+use crate::thread::composer::SlashCommandAvailability;
 use crate::thread::composer::SteerId;
 use crate::thread::interaction::approval::Approval;
 use crate::thread::interaction::approval::ApprovalOutcome;
@@ -57,7 +58,11 @@ impl ChatPanel {
     ) -> ChatComposerOutcome {
         match self.input_mode {
             InputMode::Start => self.composer.handle_key(input, key),
-            InputMode::Queue => self.composer.handle_queued_turn_key(input, key),
+            InputMode::Queue => self.composer.handle_queued_turn_key(
+                input,
+                key,
+                SlashCommandAvailability::ActiveTurn,
+            ),
             InputMode::Steer => self.composer.handle_active_turn_key(input, key),
         }
     }
@@ -72,15 +77,23 @@ impl ChatPanel {
         key: KeyEvent,
     ) -> ChatComposerOutcome {
         // Keep the complete draft until session creation succeeds, including attachment bindings.
-        self.composer.handle_queued_turn_key(input, key)
+        self.composer
+            .handle_queued_turn_key(input, key, SlashCommandAvailability::Idle)
     }
 
     pub(crate) fn activate_completion(
         &mut self,
         input: &mut ChatInput,
         index: usize,
+        new_session: bool,
     ) -> Option<ChatComposerOutcome> {
-        self.composer.activate_completion(input, index)
+        let availability = if new_session || self.input_mode == InputMode::Start {
+            SlashCommandAvailability::Idle
+        } else {
+            SlashCommandAvailability::ActiveTurn
+        };
+        self.composer
+            .activate_completion(input, index, availability)
     }
 
     #[cfg(test)]
@@ -118,6 +131,10 @@ impl ChatPanel {
 
     pub(crate) fn is_steering(&self) -> bool {
         self.input_mode == InputMode::Steer
+    }
+
+    pub(crate) fn turn_pending(&self) -> bool {
+        self.input_mode != InputMode::Start
     }
 
     pub(crate) fn start_input(&mut self) {

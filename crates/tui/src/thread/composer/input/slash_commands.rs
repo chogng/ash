@@ -27,6 +27,7 @@ pub(crate) enum TuiSlashCommandAction {
     Memories,
     Mcp,
     Hooks,
+    Btw,
     Resume,
     Archive,
     Connectors,
@@ -107,6 +108,7 @@ impl TuiSlashCommandAction {
             Self::Skills => return ProductSlashCommand::Skills.definition(),
             Self::Mcp => "list configured MCP tools",
             Self::Hooks => "browse and manage Hooks",
+            Self::Btw => return ProductSlashCommand::Btw.definition(),
             Self::Connectors => "show external service connections",
             Self::Ide => "turn Ash IDE context on or off",
             Self::Desktop => "continue this conversation in Ash desktop",
@@ -286,6 +288,13 @@ pub(super) fn into_command_invocation(
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),
         arguments: submission.input,
     })
+}
+
+pub(crate) fn is_advisor_config_argument(argument: &str) -> bool {
+    matches!(argument, "off" | "clear")
+        || argument.split_once('/').is_some_and(|(provider, model)| {
+            !provider.is_empty() && !model.is_empty() && !argument.chars().any(char::is_whitespace)
+        })
 }
 
 #[cfg(test)]

@@ -74,16 +74,17 @@ function getChatMermaidAccessibilityHelp(): string {
 	return localize('chat.mermaid.help', 'When a Mermaid diagram is rendered, use Tab to reach its preview button or Mermaid source. Press Enter or Space to open the image preview or expand the code. Escape closes the preview and returns focus to the diagram.');
 }
 
-export function getReplyInputAccessibilityHelp(providerManagesDraft: boolean): string {
+export function getReplyInputAccessibilityHelp(providerManagesDraft: boolean, hasCommands: boolean): string {
 	return [
-		localize({ bundle: 'ash.workbench', key: 'chat.input.replyHelp' }, 'Press Enter to send and Shift+Enter for a new line. Use Tab to reach the attachment, dictation, and model controls. Press Enter or Space to open a menu and Escape to return. Slash-prefixed text is sent as a normal message.'),
+		localize({ bundle: 'ash.workbench', key: 'chat.input.replyHelp' }, 'Press Enter to send and Shift+Enter for a new line. Use Tab to reach the attachment, dictation, and model controls. Press Enter or Space to open a menu and Escape to return.'),
+		!hasCommands && localize({ bundle: 'ash.workbench', key: 'chat.input.literalSlashHelp' }, 'Slash-prefixed text is sent as a normal message.'),
 		providerManagesDraft ? undefined : localize({ bundle: 'ash.workbench', key: 'chat.input.replyContextHelp' }, 'Use Add context to upload files or search for attachments. Use the arrow keys to choose a result and Enter to add it. While a reply is running, sending a follow-up queues it until the reply finishes.'),
 		getChatInputNoticeHelp(),
 	].filter(Boolean).join('\n');
 }
 
 export function getChatPickerAccessibilityHelp(agentPicker: 'visible' | 'hidden'): string {
-	const pickerHelp = localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker or Chat: Open Permission Picker in the Command Palette. Use {0} for models. Type /ask, /plan, /debug, or /swarm for a task command. Ask and Plan only investigate. Send a separate request to implement a plan. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>');
+	const pickerHelp = localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker or Chat: Open Permission Picker in the Command Palette. Use {0} for models. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>');
 	if (agentPicker === 'hidden') {
 		return pickerHelp;
 	}

@@ -9,6 +9,7 @@ use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_app_server_protocol::protocol::session::SessionRequestResult;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::SessionThreadResult;
+use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use ash_protocol::Session;
 use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
@@ -269,6 +270,68 @@ impl ActiveConversation {
         Ok(ConversationChange {
             notice: format!("Switched to branch {}.", self.thread_id),
             transcript: ConversationTranscript::Replace,
+        })
+    }
+
+    pub(super) fn create_side_chat<T>(
+        &self,
+        client: &mut AppServerClient<T>,
+        source_turn_id: Option<TurnId>,
+        title: String,
+    ) -> Result<Self, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let source_turn_id = match source_turn_id {
+            Some(turn_id) => turn_id,
+            None => {
+                client
+                    .read_session_thread(SessionThreadReadParams {
+                        session_id: self.session_id().clone(),
+                        thread_id: self.thread_id().clone(),
+                        history: Some(ThreadSnapshotHistory::Latest {
+                            preview_tool_results: None,
+                            turn_limit: 1,
+                        }),
+                    })?
+                    .thread
+                    .turns
+                    .pop()
+                    .ok_or_else(|| {
+                        SessionsError(
+                            "Send a message in this conversation before starting a side chat."
+                                .into(),
+                        )
+                    })?
+                    .turn_id
+            }
+        };
+        let result = client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("side-chat"),
+                session_id: self.session_id().clone(),
+                request: SessionRequest::CreateSideChat {
+                    parent_thread_id: self.thread_id().clone(),
+                    source_turn_id,
+                    title,
+                    selection: None,
+                },
+            })
+            .and_then(expect_thread_result)?;
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: result.session.session_id.clone(),
+                thread_id: result.thread_id.clone(),
+                history: Some(ThreadSnapshotHistory::Latest {
+                    preview_tool_results: None,
+                    turn_limit: 1,
+                }),
+            })?
+            .thread;
+        Ok(Self {
+            session: result.session,
+            thread_id: result.thread_id,
+            thread_sequence: snapshot.sequence,
         })
     }
 

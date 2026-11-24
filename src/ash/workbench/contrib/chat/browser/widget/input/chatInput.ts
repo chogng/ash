@@ -102,7 +102,9 @@ export interface ChatInputDelegate {
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
 	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void>;
 	sendInBackground?(text: string, skills: readonly SkillReference[] | undefined, contexts: readonly ChatContextAttachment[], submissionSignal: AbortSignal): Promise<void>;
-	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
+	/** Local actions can be registered or retired by the Workbench during this composer's lifetime. */
+	isLocalSlashActionAvailable?(actionId: string): boolean;
+	executeCommand(invocation: ChatInputCommandInvocation, signal?: AbortSignal): Promise<void>;
 	/** Code supplies this capability; other hosts keep slash text literal and install no command UI. */
 	executeServerCommand?(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;

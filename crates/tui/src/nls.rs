@@ -1084,6 +1084,43 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Afficher les raccourcis lorsque la saisie est vide",
     ),
     translation(
+        "Wait for the active turn to finish before compacting context.",
+        "現在のターンが終了してからコンテキストを圧縮してください。",
+        "请等待当前回合结束后再压缩上下文。",
+        "Attendez la fin du tour en cours avant de compacter le contexte.",
+    ),
+    translation(
+        "Wait for the active turn to finish before consulting Advisor.",
+        "現在のターンが終了してから Advisor に相談してください。",
+        "请等待当前回合结束后再咨询 Advisor。",
+        "Attendez la fin du tour en cours avant de consulter Advisor.",
+    ),
+    translation(
+        "Ask a side question without adding it to this conversation",
+        "この会話には追加せず、別のチャットで質問する",
+        "另开旁支对话提问",
+        "Poser une question dans une conversation parallèle",
+    ),
+    translation("<question>", "<質問>", "<问题>", "<question à poser>"),
+    translation(
+        "Enter a question after /btw.",
+        "/btw の後に質問を入力してください。",
+        "请在 /btw 后输入问题。",
+        "Saisissez une question après /btw.",
+    ),
+    translation(
+        "Send a message in this conversation before starting a side chat.",
+        "別のチャットを開始する前に、この会話でメッセージを送信してください。",
+        "请先在当前对话发送消息，再开始旁支对话。",
+        "Envoyez un message dans cette conversation avant d’en ouvrir une en parallèle.",
+    ),
+    translation(
+        "Opened a side chat.",
+        "別のチャットを開きました。",
+        "已打开旁支对话。",
+        "Une conversation parallèle a été ouverte.",
+    ),
+    translation(
         "Compaction retention instructions must be text; send attachments to the conversation before compacting.",
         "圧縮時の保持指示はテキストで指定してください。添付ファイルは先に会話へ送信してください。",
         "压缩时的保留指令必须是文字；请先把附件发送到会话中。",

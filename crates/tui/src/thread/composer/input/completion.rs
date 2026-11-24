@@ -7,6 +7,7 @@ mod view;
 use super::slash_commands::built_in_slash_command_definitions;
 use super::state::ChatInput;
 use super::state::ChatInputOutcome;
+use super::state::SlashCommandAvailability;
 use crate::keymap::KeyEvent;
 use ash_file_search::PathSearchSnapshot;
 use ash_protocol::SkillRef;
@@ -353,14 +354,22 @@ impl ChatInput {
         self.completion.apply_file_search_snapshot(snapshot);
     }
 
-    pub(crate) fn activate_completion(&mut self, index: usize) -> Option<ChatInputOutcome> {
+    pub(crate) fn activate_completion(
+        &mut self,
+        index: usize,
+        availability: SlashCommandAvailability,
+    ) -> Option<ChatInputOutcome> {
         let outcome = self.completion.activate(index)?;
-        self.apply_completion_outcome(outcome)
+        self.apply_completion_outcome(outcome, availability)
     }
 
-    pub(super) fn handle_completion_key(&mut self, key: KeyEvent) -> Option<ChatInputOutcome> {
+    pub(super) fn handle_completion_key(
+        &mut self,
+        key: KeyEvent,
+        availability: SlashCommandAvailability,
+    ) -> Option<ChatInputOutcome> {
         let outcome = self.completion.handle_key(key);
-        self.apply_completion_outcome(outcome)
+        self.apply_completion_outcome(outcome, availability)
     }
 
     pub(super) fn sync_completion(&mut self) {
@@ -388,6 +397,7 @@ impl ChatInput {
     fn apply_completion_outcome(
         &mut self,
         outcome: CompletionInputOutcome,
+        availability: SlashCommandAvailability,
     ) -> Option<ChatInputOutcome> {
         match outcome {
             CompletionInputOutcome::Completed(edit) => {
@@ -397,7 +407,7 @@ impl ChatInput {
             CompletionInputOutcome::Consumed => Some(ChatInputOutcome::Consumed),
             CompletionInputOutcome::Submit(edit) => {
                 self.apply_completion_edit(edit);
-                Some(self.submit_current())
+                Some(self.submit_current(availability))
             }
             CompletionInputOutcome::Unhandled => None,
         }

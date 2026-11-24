@@ -316,7 +316,7 @@ async function generate(check: boolean, reportMissing = false): Promise<boolean>
 	}
 	// The clients translate these shared product descriptions; their English
 	// originals are owned by protocol metadata and follow its generation lifecycle.
-	for (const id of ['permission', 'guardian'] as const) {
+	for (const id of ['permission', 'guardian', 'btw'] as const) {
 		addMessage(english, 'ash', `slash.${id}.description`, PRODUCT_SLASH_COMMANDS[id].description, 'ProductSlashCommands');
 		recordLocation(`ash/slash.${id}.description`, 'crates/slash-commands/src/definition.rs');
 	}

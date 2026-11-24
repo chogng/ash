@@ -21,7 +21,7 @@ export interface ChatInputEditorOptions {
 	readonly slashCommands?: SlashCommandCatalog;
 	readonly skills?: SkillSelectorCatalog;
 	readonly submitWithModifier?: boolean;
-	/** Backend discovery is registered by the owning composer. */
+	/** The owning composer registers backend Skill and context providers. */
 	readonly hostCompletions?: boolean;
 	readonly imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined;
 	readonly height?: { readonly minimum?: number; readonly maximum?: number; };

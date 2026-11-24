@@ -235,7 +235,9 @@ export function registerChatActions(): void {
 			await accessor.get(ICommandService).executeCommand(BrowserViewCommandId.Open);
 		}
 	});
+}
 
+export function registerOpenChatSettingsAction(): void {
 	registerAction2(class OpenChatSettingsAction extends Action2 {
 		constructor() {
 			super({

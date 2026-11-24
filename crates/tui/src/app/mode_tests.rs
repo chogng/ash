@@ -198,8 +198,11 @@ fn modes_restore_their_own_scroll_while_sharing_the_draft_and_queue() {
         app.update(ThreadEvent::FailureReported(format!("message {index:02}")));
     }
     app.insert_text("queued message");
-    let ChatInputQueueOutcome::Queued(queued) =
-        app.thread_presentations.active_mut().input.queue_current()
+    let ChatInputQueueOutcome::Queued(queued) = app
+        .thread_presentations
+        .active_mut()
+        .input
+        .queue_current(crate::thread::composer::SlashCommandAvailability::ActiveTurn)
     else {
         panic!("the draft must become a queue entry");
     };
@@ -318,8 +321,11 @@ fn modes_restore_independent_queue_and_transcript_focus() {
     ] {
         let mut app = focus_app();
         app.insert_text("queued message");
-        let ChatInputQueueOutcome::Queued(queued) =
-            app.thread_presentations.active_mut().input.queue_current()
+        let ChatInputQueueOutcome::Queued(queued) = app
+            .thread_presentations
+            .active_mut()
+            .input
+            .queue_current(crate::thread::composer::SlashCommandAvailability::ActiveTurn)
         else {
             panic!("queued input expected");
         };

@@ -74,8 +74,9 @@ for (const commandInterpretation of [undefined, 'literal'] as const) {
 				await f.commands.executeCommand('btw', query, f.resource, { attachedContext: [{ id: 'attachment', kind: 'context', name: 'frozen', resolve: async () => ({ name: 'frozen', content: 'attachment bytes' }) }] });
 				const submission = f.calls.start[0] as Record<string, unknown>;
 				const explicitTask = query.startsWith('/debug ');
+				const codeWorkflow = !commandInterpretation && !explicitTask;
 				assert.equal(submission.commandInterpretation, !explicitTask && !command ? commandInterpretation : undefined);
-				assert.equal(submission.text, explicitTask || !command ? query : `/${command} ${query}`);
+				assert.equal(submission.text, explicitTask || codeWorkflow || !command ? query : `/${command} ${query}`);
 				assert.equal(submission.mode, undefined);
 				assert.deepEqual(submission.contexts, [{ name: 'frozen', content: 'attachment bytes' }]);
 				assert.deepEqual(f.calls.navigate, [['session', 'side']]);

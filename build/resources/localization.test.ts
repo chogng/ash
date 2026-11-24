@@ -187,7 +187,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/generated/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored generated directory');`,
 		'src/ash/platform/languagePacks/common/languagePackContract.ts': await readFile(join(repository, 'src/ash/platform/languagePacks/common/languagePackContract.ts'), 'utf8'),
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
-		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' } };`,
+		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' }, btw: { description: 'Ask a side question' } };`,
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
 		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
@@ -261,7 +261,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	run(['build/resources/localization.ts']);
 	await assert.rejects(stat(join(generated, 'localizationCatalog.fr.ts')), { code: 'ENOENT' });
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose permissions"/u);
-	await writeFile(join(root, '.build/protocol/typescript/ProductSlashCommands.ts'), `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose next-turn permissions' }, guardian: { description: 'Prepare project background' } };`);
+	await writeFile(join(root, '.build/protocol/typescript/ProductSlashCommands.ts'), `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose next-turn permissions' }, guardian: { description: 'Prepare project background' }, btw: { description: 'Ask a side question' } };`);
 	run(['build/resources/localization.ts', '--check']);
 	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Choose next-turn permissions/u);
 	run(['build/resources/localization.ts']);

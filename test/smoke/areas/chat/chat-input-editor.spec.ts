@@ -256,6 +256,74 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 	expect(restoredBounds).toEqual(initialBounds);
 });
 
+for (const host of ['IDE', 'Agents Window'] as const) {
+	test(`Local slash commands run in ${host}`, { tag: ['@electron-ui'] }, async ({ workbench, target }) => {
+		const page = host === 'IDE' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		if (host === 'Agents Window') {
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		} else if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+			await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
+		}
+		const composer = page.locator(host === 'IDE' ? '.ash-chat-view-pane:visible .ash-chat-input-part' : '.ash-sessions-chat-slot.active:visible .ash-chat-input-part').first();
+		const input = composer.locator('.stanza-editor-input');
+		const completion = composer.locator('.stanza-editor-completion-label');
+		await input.pressSequentially('/');
+		await expect(completion.getByText('/config', { exact: true })).toBeVisible();
+		await expect(completion.getByText('/permission', { exact: true })).toBeVisible();
+		await expect(completion.getByText('/history', { exact: true })).toHaveCount(0);
+		const run = async (command: string) => {
+			await input.focus();
+			await input.press('ControlOrMeta+a');
+			await page.keyboard.insertText(command);
+			await input.press('Escape');
+			await composer.getByRole('button', { name: 'Send', exact: true }).click();
+		};
+		await run('/permission auto');
+		await expect(composer.locator('.ash-chat-input-permission-picker')).toContainText('Auto');
+		await run('/config');
+		if (host === 'IDE') {
+			await expect(page.getByRole('dialog', { name: 'Ash Settings', exact: true })).toBeVisible();
+			await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'chat-appearance');
+		} else {
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+			await expect(settings.getByRole('region', { name: 'Appearance', exact: true })).toBeVisible();
+		}
+	});
+}
+
+test('Desktop Code composers share the same slash command catalog', { tag: ['@electron-app-server'] }, async ({ workbench, target }) => {
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Toggle Chat', exact: true }).click();
+	}
+	const readCommands = async (composer: ReturnType<typeof page.locator>, advertised: string): Promise<string[]> => {
+		const input = composer.locator('.stanza-editor-input');
+		const labels = composer.locator('.stanza-editor-completion-label');
+		await input.pressSequentially('/');
+		await expect(async () => {
+			await input.press('Control+Space');
+			await expect(labels.getByText(advertised, { exact: true })).toBeVisible({ timeout: 1_000 });
+		}).toPass({ timeout: 10_000 });
+		const commands = await labels.allTextContents();
+		await input.press('Escape');
+		await input.press('Backspace');
+		return commands;
+	};
+	const ideCommands = await readCommands(page.locator('.ash-chat-view-pane:visible .ash-chat-input-part').first(), '/develop');
+	expect(ideCommands).toEqual(expect.arrayContaining(['/ask', '/btw', '/debug', '/plan', '/swarm', '/config', '/permission', '/init', '/team', '/develop']));
+	expect(ideCommands).not.toContain('/history');
+
+	await workbench.quickaccess.runCommand('workbench.action.openQuickChat');
+	const quickChat = page.getByRole('dialog', { name: 'Quick Chat', exact: true });
+	expect(await readCommands(quickChat.locator('.ash-chat-input-part'), '/develop')).toEqual(ideCommands);
+	await quickChat.getByRole('button', { name: 'Close', exact: true }).click();
+	await expect(quickChat).toBeHidden();
+
+	const agents = await workbench.openAgentsWindow(target.kind);
+	await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	expect(await readCommands(agents.locator('.ash-sessions-chat-slot.active:visible .ash-chat-input-part').first(), '/develop')).toEqual(ideCommands);
+});
+
 test('Chat completes catalog commands from the keyboard and restores the empty input', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -264,13 +332,16 @@ test('Chat completes catalog commands from the keyboard and restores the empty i
 	const editor = page.locator('.ash-chat-view-pane .ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
-	await page.keyboard.insertText('/history argument');
+	await page.keyboard.insertText('/ argument');
 	await page.keyboard.press('Escape');
 	await page.keyboard.press('Home');
-	for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowRight');
-	await page.keyboard.press('Control+Space');
-	await expect(editor.locator('.stanza-editor-completion-label').getByText('/history', { exact: true })).toBeVisible();
-	await editor.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }).click();
+	await page.keyboard.press('ArrowRight');
+	const labels = editor.locator('.stanza-editor-completion-label');
+	await expect(async () => {
+		await input.press('Control+Space');
+		await expect(labels.getByText('/new', { exact: true })).toBeVisible({ timeout: 1_000 });
+	}).toPass({ timeout: 10_000 });
+	await labels.getByText('/config', { exact: true }).click();
 	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/config argument');
 	await input.press('ControlOrMeta+a');
 	await input.press('Backspace');

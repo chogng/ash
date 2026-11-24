@@ -15,7 +15,11 @@ fn switching_threads_restores_draft_and_queue_together() {
     let child = thread_id("child");
     let mut store = ThreadPresentationStore::new(main.clone());
     store.active_mut().input.insert_text("main draft");
-    let ChatInputQueueOutcome::Queued(queued) = store.active_mut().input.queue_current() else {
+    let ChatInputQueueOutcome::Queued(queued) = store
+        .active_mut()
+        .input
+        .queue_current(crate::thread::composer::SlashCommandAvailability::ActiveTurn)
+    else {
         panic!("expected queued input");
     };
     store.active_mut().queue.push(queued);

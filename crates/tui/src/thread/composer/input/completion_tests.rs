@@ -83,6 +83,9 @@ fn cursor_aware_completion_preserves_an_existing_argument_tail() {
     let mut chat_input = ChatInputHarness::new();
     chat_input.insert_text("/mod provider/model");
     chat_input.handle_key(key(KeyCode::Home));
+    for _ in 0.."/mod".len() {
+        chat_input.handle_key(key(KeyCode::Right));
+    }
 
     chat_input.handle_key(key(KeyCode::Tab));
 
@@ -214,6 +217,9 @@ fn dynamic_commands_share_popup_completion_and_submission() {
     let mut chat_input = ChatInputHarness::with_slash_commands(registry);
     chat_input.insert_text("/diag logs");
     chat_input.handle_key(key(KeyCode::Home));
+    for _ in 0.."/diag".len() {
+        chat_input.handle_key(key(KeyCode::Right));
+    }
 
     chat_input.handle_key(key(KeyCode::Tab));
     assert_eq!(chat_input.text(), "/diagnose logs");
@@ -337,7 +343,10 @@ fn queued_input_preserves_exact_text_image_paste_and_skill_bindings() {
         .unwrap();
     chat_input.handle_paste("p".repeat(1001)).unwrap();
 
-    let ChatInputQueueOutcome::Queued(queued) = chat_input.input.queue_current() else {
+    let ChatInputQueueOutcome::Queued(queued) = chat_input
+        .input
+        .queue_current(super::SlashCommandAvailability::Idle)
+    else {
         panic!("expected Queue content");
     };
     assert!(chat_input.text().is_empty());
@@ -389,7 +398,9 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
     let mut input = super::state::ChatInput::new();
     input.restore_queued(queued).unwrap();
     assert_eq!(input.text().matches("$commit").count(), 1);
-    let ChatInputQueueOutcome::Queued(restored) = input.queue_current() else {
+    let ChatInputQueueOutcome::Queued(restored) =
+        input.queue_current(super::SlashCommandAvailability::Idle)
+    else {
         panic!("restored input")
     };
     assert_eq!(

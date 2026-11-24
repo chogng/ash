@@ -6,6 +6,8 @@ import { updateAdvisorConfig, type AdvisorConfigChange } from '../../../services
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { modelRefIdentity } from '../../../services/chat/common/modelCatalog.js';
 
+export const CONFIGURE_ADVISOR_COMMAND_ID = 'workbench.action.chat.configureAdvisor';
+
 /** Host navigation entries shown alongside the feature's Advisor choices. */
 export interface AdvisorNavigationItem extends IQuickPickItem {
 	readonly run: () => void | Promise<void>;

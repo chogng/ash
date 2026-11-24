@@ -1,8 +1,11 @@
 use super::ChatComposer;
 use super::ChatComposerOutcome;
+use super::SlashCommandAvailability;
 use crate::keymap::KeyEvent;
 use crate::thread::composer::ChatInput;
+use crate::thread::composer::ChatInputCatalog;
 use crate::thread::composer::ChatInputItem;
+use ash_slash_commands::SlashCommandCatalog;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
 
@@ -34,6 +37,7 @@ fn queue_target_returns_content_to_the_feature_owner() {
     let outcome = composer.handle_queued_turn_key(
         &mut input,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        SlashCommandAvailability::ActiveTurn,
     );
 
     let ChatComposerOutcome::Queued(queued) = outcome else {
@@ -53,6 +57,7 @@ fn queued_unknown_command_is_rejected_before_it_becomes_a_follow_up() {
     let outcome = composer.handle_queued_turn_key(
         &mut input,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        SlashCommandAvailability::ActiveTurn,
     );
 
     let ChatComposerOutcome::UnknownCommand(command) = outcome else {
@@ -86,4 +91,44 @@ fn active_turn_queues_enter_and_steers_ctrl_enter() {
         panic!("expected a one-shot steer submission");
     };
     assert_eq!(submission.display_text, "steered");
+}
+
+#[test]
+fn busy_compact_keeps_the_draft_for_queue_steer_and_completion() {
+    let mut composer = ChatComposer::new();
+    let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+    let steer = KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL);
+    let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    let mut input = ChatInput::with_catalog(ChatInputCatalog::with_slash_commands(
+        SlashCommandCatalog::default(),
+    ));
+    composer.insert_text(&mut input, "/compact keep paths");
+    let _ = composer.handle_active_turn_key(&mut input, escape);
+    let rejected = ChatComposerOutcome::SubmissionRejected(
+        "Wait for the active turn to finish before compacting context.".into(),
+    );
+    assert_eq!(composer.handle_active_turn_key(&mut input, enter), rejected);
+    assert_eq!(composer.handle_active_turn_key(&mut input, steer), rejected);
+    assert_eq!(input.text(), "/compact keep paths");
+
+    let mut input = ChatInput::with_catalog(ChatInputCatalog::with_slash_commands(
+        SlashCommandCatalog::default(),
+    ));
+    composer.insert_text(&mut input, "/compac");
+    assert_eq!(
+        composer.activate_completion(&mut input, 0, SlashCommandAvailability::ActiveTurn),
+        Some(rejected),
+    );
+    assert_eq!(input.text().trim(), "/compact");
+    let ChatComposerOutcome::Command(invocation) = composer.handle_key(&mut input, enter) else {
+        panic!("an idle conversation should accept /compact");
+    };
+    assert_eq!(invocation.command.name, "compact");
+    assert_eq!(
+        crate::nls::localize(
+            crate::nls::Language::Chinese,
+            "Wait for the active turn to finish before compacting context."
+        ),
+        "请等待当前回合结束后再压缩上下文。",
+    );
 }

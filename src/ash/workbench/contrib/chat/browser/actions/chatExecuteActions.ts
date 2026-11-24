@@ -12,6 +12,12 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IChatService, type RewriteChatRequestOptions } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { approvalModeDefinitions, type ApprovalMode } from '../../../../../platform/agentHost/common/approvalModes.js';
+import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../common/chat.js';
+import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
+import type { IChatWidgetModel } from '../widget/chatWidget.js';
 
 export interface IChatExecuteActionContext {
 	readonly widget?: IChatWidget;
@@ -106,6 +112,52 @@ export class OpenPermissionPickerAction extends Action2 {
 	}
 }
 
+class ChooseChatPermissionAction extends Action2 {
+	constructor() {
+		super({ id: OPEN_CHAT_PERMISSIONS_COMMAND_ID, title: localize2('chat.permission.choose', 'Permissions') });
+	}
+
+	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = '', signal?: AbortSignal): Promise<void> {
+		if (!model?.selectApprovalMode || model.inputState.aiDisabled || signal?.aborted) return;
+		const generation = model.composerGeneration;
+		const dialogs = accessor.get(IDialogService);
+		const value = argument.trim();
+		const definition = approvalModeDefinitions.find(mode => mode.id === value);
+		if (value && !definition) {
+			throw new Error(localize('chat.permission.usage', 'Use /permission manual|auto|bypassPermissions.'));
+		}
+		const mode = definition?.id ?? await this.pickMode(accessor.get(IQuickInputService), model.inputState.approvalMode);
+		const current = () => !signal?.aborted && generation === model.composerGeneration && !model.inputState.aiDisabled;
+		if (mode && current()) {
+			await applyAgentHostCompletionAction(mode, confirmation => dialogs.confirm(confirmation), current, selected => model.selectApprovalMode?.(selected));
+		}
+	}
+
+	private pickMode(input: IQuickInputService, current: ApprovalMode): Promise<ApprovalMode | undefined> {
+		return new Promise(resolve => {
+			const resources = new DisposableStore();
+			const picker = resources.add(input.createQuickPick<IQuickPickItem & { readonly id: ApprovalMode; }>());
+			picker.ariaLabel = picker.placeholder = localize('chat.permission.choose', 'Permissions');
+			const items = approvalModeDefinitions.map(mode => ({
+				id: mode.id,
+				label: localize(mode.label.key, mode.label.text),
+				description: localize(mode.description.key, mode.description.text),
+			}));
+			picker.items = items;
+			picker.activeItems = items.filter(item => item.id === current);
+			resources.add(picker.onDidAccept(() => {
+				resolve(picker.selectedItems[0]?.id);
+				picker.hide();
+			}));
+			resources.add(picker.onDidHide(() => {
+				resolve(undefined);
+				resources.dispose();
+			}));
+			picker.show();
+		});
+	}
+}
+
 export class OpenWorkspacePickerAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.openWorkspacePicker';
 
@@ -168,6 +220,7 @@ export function registerChatExecuteActions(): DisposableStore {
 	store.add(registerAction2(OpenModelPickerAction));
 	store.add(registerAction2(OpenAgentPickerAction));
 	store.add(registerAction2(OpenPermissionPickerAction));
+	store.add(registerAction2(ChooseChatPermissionAction));
 	store.add(registerAction2(OpenWorkspacePickerAction));
 	store.add(registerAction2(class ResendRequestAction extends Action2 {
 		constructor() {

@@ -11,6 +11,7 @@ import { IChatSessionNavigationService } from '../../../services/chat/common/cha
 import { resolveChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import { LocalChatSessionUri } from '../common/model/chatUri.js';
 import { IChatSideChatService, type IChatSideChatOrigin, type IChatSideChatProvider, type IChatSideChatRequestOptions, type IChatSideChatSelection } from '../common/chatSideChatService.js';
+import { isCodeWorkflowSlashCommand } from '../common/slashCommands.js';
 import { IChatWidgetService, type IChatWidget } from './chat.js';
 
 /** Uses the host's existing domain and navigation services in IDE and Agents windows. */
@@ -68,7 +69,8 @@ export class ChatSideChatProvider extends Disposable implements IChatSideChatPro
 		current();
 		const { thread } = await this.chat.readThread(branch.sessionId, branch.threadId, { type: 'latest', turnLimit: 1 });
 		current();
-		const input = applyDefaultTaskCommand(query, widget.defaultTaskCommand, contexts);
+		const codeWorkflow = model.commandInterpretation !== 'literal' && isCodeWorkflowSlashCommand(query);
+		const input = applyDefaultTaskCommand(query, codeWorkflow ? undefined : widget.defaultTaskCommand, contexts);
 		// Submit to the captured branch before navigation can replace the source composer's lifetime.
 		await this.chat.startTurn({
 			...branch, commandId: createUuid(), expectedSequence: thread.sequence, ...input,

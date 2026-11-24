@@ -10,7 +10,7 @@ import { localize } from '../../../../../../nls.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../../../platform/actionWidget/browser/actionWidget.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
+import { ChatRequestQueueKind, ProductSlashCommands } from '../../../../../services/chat/common/chatService.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -185,7 +185,7 @@ export class ChatQueuePickerActionItem extends ActionViewItem {
 		if (editing === undefined && this.canAskInSideChat(widget)) {
 			items.push({
 				kind: ActionListItemKind.Action, label: localize('chat.askInSideChat', 'Ask in Side Chat'), item: ChatAskInSideChatAction.ID,
-				description: localize('chat.btw.description', 'Ask a side question without adding it to this conversation'), group: { title: '', icon: Lxicon.chat },
+				description: localize('slash.btw.description', ProductSlashCommands.btw.description), group: { title: '', icon: Lxicon.chat },
 			});
 		}
 		if (items.length === 0) return;

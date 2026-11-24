@@ -35,7 +35,7 @@ fn persistent_history_recalls_after_reopening_without_replaying_a_submission() {
     first.connect_history(client, "first-thread".into());
     first.insert_text("older submitted input");
     assert!(matches!(
-        first.submit_current(),
+        first.submit_current(super::SlashCommandAvailability::Idle),
         ChatInputOutcome::Submit(_)
     ));
     wake.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -82,7 +82,7 @@ fn persistent_history_recalls_after_reopening_without_replaying_a_submission() {
 fn cancelling_recall_restores_images_large_pastes_and_the_exact_editable_draft() {
     let mut input = ChatInput::new();
     input.insert_text("recall this");
-    input.submit_current();
+    input.submit_current(super::SlashCommandAvailability::Idle);
     input.insert_text("before ");
     input
         .attach_image_bytes(b"\x89PNG\r\n\x1a\npayload".to_vec())
@@ -104,7 +104,7 @@ fn cancelling_recall_restores_images_large_pastes_and_the_exact_editable_draft()
 fn search_accepts_text_without_queueing_or_steering_it() {
     let mut input = ChatInput::new();
     input.insert_text("saved input");
-    input.submit_current();
+    input.submit_current(super::SlashCommandAvailability::Idle);
     let mut composer = crate::thread::composer::ChatComposer::new();
     composer.handle_active_turn_key(
         &mut input,
@@ -138,7 +138,7 @@ fn freezing_history_search_restores_the_original_draft_and_dismisses_completion(
     input.connect_history(history, "thread".into());
     input.insert_text("older submitted input");
     assert!(matches!(
-        input.submit_current(),
+        input.submit_current(super::SlashCommandAvailability::Idle),
         ChatInputOutcome::Submit(_)
     ));
     wake.recv_timeout(Duration::from_secs(5)).unwrap();

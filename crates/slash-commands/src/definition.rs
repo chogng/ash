@@ -86,7 +86,7 @@ impl TaskSlashCommand {
     }
 }
 
-/// Shared management commands. Clients bind these to their own panels, outside Turn input.
+/// Shared commands that clients bind to product actions outside ordinary Turn input.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProductSlashCommand {
@@ -96,16 +96,18 @@ pub enum ProductSlashCommand {
     Lsp,
     Permission,
     Guardian,
+    Btw,
 }
 
 impl ProductSlashCommand {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Extensions,
         Self::Plugins,
         Self::Skills,
         Self::Lsp,
         Self::Permission,
         Self::Guardian,
+        Self::Btw,
     ];
 
     pub fn definition(self) -> SlashCommandDefinition {
@@ -136,12 +138,17 @@ impl ProductSlashCommand {
                 "prepare and review project background for Guardian",
                 Some("[setup]"),
             ),
+            Self::Btw => (
+                "btw",
+                "Ask a side question without adding it to this conversation",
+                Some("<question>"),
+            ),
         };
         SlashCommandDefinition {
             name: name.into(),
             description: description.into(),
             argument_mode: match self {
-                Self::Extensions | Self::Lsp | Self::Permission | Self::Guardian => {
+                Self::Extensions | Self::Lsp | Self::Permission | Self::Guardian | Self::Btw => {
                     SlashCommandArgumentMode::Optional
                 }
                 Self::Plugins | Self::Skills => SlashCommandArgumentMode::None,

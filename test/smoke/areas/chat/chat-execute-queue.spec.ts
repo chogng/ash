@@ -249,6 +249,7 @@ for (const surface of ['IDE', 'Agents Code'] as const) {
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('running');
 			await expect.poll(() => calls).toBe(1);
 			const initialTurn = (await read()).turns.at(-1)!;
+			expect(initialTurn.instructions?.taskCommand).toBeUndefined();
 			expect(initialTurn.approvalMode).toBe('auto');
 			await expect(chat.locator('.ash-chat-list-widget')).toContainText('Controlled execution is running.');
 			await window.quickaccess.runCommand('workbench.action.chat.nextCodeBlock');

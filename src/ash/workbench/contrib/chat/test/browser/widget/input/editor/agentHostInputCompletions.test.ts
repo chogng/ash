@@ -21,7 +21,7 @@ import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from '..
 suite('AgentHostInputCompletions', () => {
 	const resource = URI.parse('vscode-remote://ssh-remote+test/project/src/main.ts');
 	const file: AgentHostInputCompletionItem = { label: '#src/main.ts', insertText: '#src/main.ts ', start: 7, end: 17, preselect: true, value: { kind: 'resource', resource, isDirectory: false } };
-	function fixture(resources: DisposableStore, complete: IAgentHostInputCompletionService['complete'], capabilities = { commands: true, skills: true }) {
+	function fixture(resources: DisposableStore, complete: IAgentHostInputCompletionService['complete'], capabilities = { skills: true }) {
 		const services = resources.add(new InstantiationService());
 		const features = resources.add(new LanguageFeaturesService());
 		const model = resources.add(new TextModel('Review #src/ma.ts after', { languageId: 'ash-chat-input' }));
@@ -58,20 +58,20 @@ suite('AgentHostInputCompletions', () => {
 		using features = new LanguageFeaturesService();
 		using model = new TextModel('', { languageId: 'ash-chat-input' });
 		services.registerInstance(ILanguageFeaturesService, features);
-		assert.throws(() => services.createInstance(AgentHostInputCompletions, model, { commands: true, skills: true, currentLifecycle: () => new AbortController().signal, getContext: () => ({}), isEnabled: () => true, acceptSkill: () => { }, acceptResource: async () => { } }), /Unknown service: agentHostInputCompletionService/u);
+		assert.throws(() => services.createInstance(AgentHostInputCompletions, model, { skills: true, currentLifecycle: () => new AbortController().signal, getContext: () => ({}), isEnabled: () => true, acceptSkill: () => { }, acceptResource: async () => { } }), /Unknown service: agentHostInputCompletionService/u);
 	});
 
-	test('a reply composer keeps resource completions and excludes host commands and Skills', async () => {
+	for (const skills of [false, true]) test(`host discovery keeps resources, excludes slash commands and respects Skills capability (${skills})`, async () => {
 		using resources = new DisposableStore();
 		const skill = { id: { source: 'host', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'original' } };
 		const value = fixture(resources, async () => [
 			file,
 			{ ...file, label: '/init', value: { kind: 'command' } },
 			{ ...file, label: '$review', value: { kind: 'skill', skill } },
-		], { commands: false, skills: false });
-		assert.deepEqual(value.provider.triggerCharacters, ['@', '#']);
+		], { skills });
+		assert.deepEqual(value.provider.triggerCharacters, skills ? ['$', '@', '#'] : ['@', '#']);
 		const result = await value.provider.provideCompletions(value.request(), new AbortController().signal);
-		assert.deepEqual(result?.items.map(item => item.label), [file.label]);
+		assert.deepEqual(result?.items.map(item => item.label), skills ? [file.label, '$review'] : [file.label]);
 	});
 
 	test('sends full context and UTF-16 cursor to the host and admits a remote resource without an early edit', async () => {
@@ -116,7 +116,7 @@ suite('AgentHostInputCompletions', () => {
 			['Review #src/main.ts ', 20, false],
 			['Review\t@src/main.ts', 12, true],
 			['中文 😀\n  $review', 15, true],
-			['  /mcp enable server', 20, true],
+			['  /mcp enable server', 20, false],
 			['say /mcp enable server', 22, false],
 			['/mcp enable\nordinary text', 25, false],
 		];
@@ -138,13 +138,13 @@ suite('AgentHostInputCompletions', () => {
 			value.changeTriggers([...triggers]);
 			await service.request('ash-chat-input', value.model.getPositionAt(value.model.length), createLanguageCompletionInvokeContext());
 		}
-		assert.equal(queries, 1);
+		assert.equal(queries, 0);
 		value.changeTriggers(['[', ']', '-', '^', '\\']);
 		for (const trigger of ['[', ']', '-', '^', '\\']) {
 			value.model.setValue(`Review ${trigger}source`);
 			await service.request('ash-chat-input', value.model.getPositionAt(value.model.length), createLanguageCompletionInvokeContext());
 		}
-		assert.equal(queries, 6);
+		assert.equal(queries, 5);
 	});
 
 	test('rejects an outdated input snapshot before querying the host', async () => {

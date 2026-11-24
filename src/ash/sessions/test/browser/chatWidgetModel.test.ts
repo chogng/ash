@@ -1591,6 +1591,19 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} submits a task com
 	}
 });
 
+test('Code workflows start a new turn after active work', async () => {
+	for (const name of ['init', 'team', 'develop']) {
+		const f = fixture('Code', undefined, true);
+		using resources = f.resources;
+		await f.model.initialize();
+		await f.model.executeServerCommand(name, 'Synthetic arguments');
+		assert.equal(f.starts.length, 0);
+		assert.equal(f.steers.length, 0);
+		assert.equal(f.queues.length, 1);
+		assert.deepEqual(f.queues[0]!.input, [{ type: 'text', text: `/${name} Synthetic arguments` }]);
+	}
+});
+
 test('Cowork submits slash text literally for start and queue', async () => {
 	for (const route of ['start', 'queue'] as const) {
 		const f = fixture('Cowork', undefined, route === 'queue');

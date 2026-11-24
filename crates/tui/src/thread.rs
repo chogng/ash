@@ -46,6 +46,7 @@ pub(crate) use request::read_thread_history;
 pub(crate) use request::resolve_interaction;
 pub(crate) use request::steer_prompt;
 pub(crate) use request::submit_prompt;
+pub(crate) use request::submit_side_question;
 pub(crate) use state::ThreadState;
 pub(crate) use state::TurnApprovalModes;
 pub(crate) use subscription::ThreadSubscription;

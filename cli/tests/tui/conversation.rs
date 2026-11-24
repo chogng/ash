@@ -6,11 +6,76 @@ use crate::tui_process::LARGE_SIZE;
 use crate::tui_process::TuiProcess;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_protocol::TaskExecution;
+use ash_protocol::TurnKind;
 use ash_protocol::TurnStatus;
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
+
+#[test]
+fn actual_tui_compact_waits_for_the_active_turn_without_sending_the_draft() {
+    let fixture = Fixture::new();
+    let first_turn = Gate::new();
+    let server = ScenarioServer::start([
+        HttpResponse::streaming(
+            [
+                "Initial response is streaming.",
+                "Initial response finished.",
+            ],
+            Some(first_turn.clone()),
+        ),
+        HttpResponse::streaming(["A synthetic context summary."], None),
+    ]);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Ash Code v");
+    process.submit("Start a synthetic conversation");
+    first_turn.wait_until_reached();
+    process.wait_for_screen("Initial response is streaming.");
+
+    let compact = "/compact Keep the project paths";
+    process.submit(compact);
+    process.wait_for_screen("Wait for the active turn to finish before compacting context.");
+    assert!(process.screen().contains(compact));
+    assert_eq!(server.request_count(), 1);
+
+    let inspector = fixture.connect();
+    let mut client = inspector.client();
+    let session = client.list_sessions().unwrap().sessions.remove(0);
+    let thread_request = || SessionThreadReadParams {
+        session_id: session.session_id.clone(),
+        thread_id: session.threads[0].thread_id.clone(),
+        history: None,
+    };
+    first_turn.release();
+    process.wait_for_stable_screen("Initial response finished.");
+    assert_eq!(
+        client
+            .read_session_thread(thread_request())
+            .unwrap()
+            .thread
+            .turns
+            .len(),
+        1
+    );
+    process.enter();
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let thread = client.read_session_thread(thread_request()).unwrap().thread;
+        if let [first, second] = thread.turns.as_slice() {
+            assert_eq!(first.status, TurnStatus::Completed);
+            assert_eq!(second.kind, TurnKind::ContextCompaction);
+            break;
+        }
+        assert!(Instant::now() < deadline, "expected a compaction turn");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    inspector.shutdown().unwrap();
+    process.quit();
+}
 
 #[test]
 fn actual_tui_swarm_delegates_and_restores_the_completed_turn() {

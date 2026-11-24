@@ -72,7 +72,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
 		const completionProviders = [
-			...(options.slashCommands ? [createChatCommandCompletionProvider(options.slashCommands, options.hostCompletions)] : []),
+			...(options.slashCommands ? [createChatCommandCompletionProvider(options.slashCommands)] : []),
 			...(!options.hostCompletions && options.skills ? [createChatSkillCompletionProvider(options.skills)] : []),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.

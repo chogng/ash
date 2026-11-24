@@ -7,6 +7,7 @@ import type { IChatSideChatRequestOptions } from '../chatSideChatService.js';
 export interface IChatSlashCommandData {
 	readonly command: string;
 	readonly detail: string;
+	readonly argumentHint?: string;
 	readonly executeDuringRequest?: boolean;
 }
 

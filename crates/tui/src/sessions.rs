@@ -65,6 +65,10 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    SideChat {
+        source_turn_id: Option<ash_protocol::TurnId>,
+        submission: crate::thread::composer::ChatSubmission,
+    },
     Fork {
         prompt: String,
         mode: ash_protocol::TaskExecution,

@@ -5,7 +5,7 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
-import { AdvisorConfigurationPicker } from './advisor.js';
+import { AdvisorConfigurationPicker, CONFIGURE_ADVISOR_COMMAND_ID } from './advisor.js';
 import { AdvisorSettingsModel } from './advisorSettingsModel.js';
 
 registerSettingsSection({
@@ -17,7 +17,7 @@ registerSettingsSection({
 registerAction2(class ConfigureAdvisorAction extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.action.chat.configureAdvisor',
+			id: CONFIGURE_ADVISOR_COMMAND_ID,
 			title: localize2('advisor.configure', 'Configure Advisor'),
 			precondition: ChatContextKeys.enabled.isEqualTo(true),
 			f1: true,

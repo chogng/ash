@@ -5,6 +5,7 @@ use crate::thread::composer::ChatInputQueueOutcome;
 use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::CompletionView;
 use crate::thread::composer::QueuedChatInput;
+use crate::thread::composer::SlashCommandAvailability;
 use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::Steer;
 use crate::thread::composer::SteerId;
@@ -91,7 +92,12 @@ impl ChatComposer {
         input: &mut ChatInput,
         key: KeyEvent,
     ) -> ChatComposerOutcome {
-        self.handle_key_with_submission_target(input, key, SubmissionTarget::Start)
+        self.handle_key_with_submission_target(
+            input,
+            key,
+            SubmissionTarget::Start,
+            SlashCommandAvailability::Idle,
+        )
     }
 
     pub(crate) fn handle_active_turn_key(
@@ -107,15 +113,16 @@ impl ChatComposer {
         {
             return self.steer_current_input(input);
         }
-        self.handle_key_with_submission_target(input, key, SubmissionTarget::Queue)
+        self.handle_queued_turn_key(input, key, SlashCommandAvailability::ActiveTurn)
     }
 
     pub(crate) fn handle_queued_turn_key(
         &mut self,
         input: &mut ChatInput,
         key: KeyEvent,
+        availability: SlashCommandAvailability,
     ) -> ChatComposerOutcome {
-        self.handle_key_with_submission_target(input, key, SubmissionTarget::Queue)
+        self.handle_key_with_submission_target(input, key, SubmissionTarget::Queue, availability)
     }
 
     fn handle_key_with_submission_target(
@@ -123,6 +130,7 @@ impl ChatComposer {
         input: &mut ChatInput,
         key: KeyEvent,
         submission_target: SubmissionTarget,
+        availability: SlashCommandAvailability,
     ) -> ChatComposerOutcome {
         if !input.searching_history()
             && submission_target == SubmissionTarget::Queue
@@ -131,9 +139,9 @@ impl ChatComposer {
             && input.completion().is_none()
             && input.accepts_submission_key()
         {
-            return self.queue_current_input(input);
+            return self.queue_current_input(input, availability);
         }
-        map_chat_input_outcome(input.handle_key(key))
+        map_chat_input_outcome(input.handle_key_in_turn(key, availability))
     }
 
     fn steer_current_input(&mut self, input: &mut ChatInput) -> ChatComposerOutcome {
@@ -143,7 +151,7 @@ impl ChatComposer {
                     .into(),
             );
         }
-        map_chat_input_outcome(input.submit_current())
+        map_chat_input_outcome(input.submit_current(SlashCommandAvailability::ActiveTurn))
     }
 
     #[cfg(test)]
@@ -175,8 +183,11 @@ impl ChatComposer {
         &mut self,
         input: &mut ChatInput,
         index: usize,
+        availability: SlashCommandAvailability,
     ) -> Option<ChatComposerOutcome> {
-        input.activate_completion(index).map(map_chat_input_outcome)
+        input
+            .activate_completion(index, availability)
+            .map(map_chat_input_outcome)
     }
 
     pub(crate) fn begin_steer(&mut self, text: String) -> SteerId {
@@ -191,10 +202,17 @@ impl ChatComposer {
         self.steer.clear();
     }
 
-    fn queue_current_input(&mut self, input: &mut ChatInput) -> ChatComposerOutcome {
-        match input.queue_current() {
+    fn queue_current_input(
+        &mut self,
+        input: &mut ChatInput,
+        availability: SlashCommandAvailability,
+    ) -> ChatComposerOutcome {
+        match input.queue_current(availability) {
             ChatInputQueueOutcome::Command(command) => ChatComposerOutcome::Command(command),
             ChatInputQueueOutcome::Consumed => ChatComposerOutcome::Consumed,
+            ChatInputQueueOutcome::SubmissionRejected(message) => {
+                ChatComposerOutcome::SubmissionRejected(message.into())
+            }
             ChatInputQueueOutcome::Queued(input) => ChatComposerOutcome::Queued(input),
             ChatInputQueueOutcome::UnknownCommand(command) => {
                 ChatComposerOutcome::UnknownCommand(command)
@@ -213,6 +231,9 @@ fn map_chat_input_outcome(outcome: ChatInputOutcome) -> ChatComposerOutcome {
     match outcome {
         ChatInputOutcome::Command(command) => ChatComposerOutcome::Command(command),
         ChatInputOutcome::Consumed => ChatComposerOutcome::Consumed,
+        ChatInputOutcome::SubmissionRejected(message) => {
+            ChatComposerOutcome::SubmissionRejected(message.into())
+        }
         ChatInputOutcome::Submit(prompt) => ChatComposerOutcome::Submit(prompt),
         ChatInputOutcome::UnknownCommand(command) => ChatComposerOutcome::UnknownCommand(command),
         ChatInputOutcome::Unhandled => ChatComposerOutcome::Unhandled,

@@ -185,6 +185,7 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
+import { BtwSlashCommandContribution } from '../../../workbench/contrib/chat/browser/btwSlashCommand.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 
@@ -558,12 +559,19 @@ test('registered Chat host rejects missing service registrations before creating
 	assert.throws(() => services.createInstance(descriptor, browserEnvironment.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }), /chatService/u);
 });
 
-test('Quick Chat retains its independent composer through hide, materialization and reveal', async () => {
+for (const [query, submission] of [
+	['A quick question', '/ask A quick question'],
+	['/develop Explain the parser', '/develop Explain the parser'],
+] as const) test(`Quick Chat retains its composer through hide, submission of "${query}" and reveal`, async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	using browserOwner = toDisposable(() => dom.window.close());
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextView = new BrowserContextViewService(dom.window.document.body);
-	const fake = fakeApi({ sessions: [session('existing', 'existing-thread')], createSession: session('session-1', 'thread-1') });
+	const fake = fakeApi({
+		sessions: [session('existing', 'existing-thread')],
+		createSession: session('session-1', 'thread-1'),
+		slashCommands: [{ name: 'develop', description: 'Develop a change', argumentMode: 'optional' }],
+	});
 	using sessions = new SessionsManagementService(fake.api);
 	using chat = createChatService(fake.api);
 	const layout = {
@@ -629,12 +637,12 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	const widget = services.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode === original)!;
 	const borrowed = widget as InstanceType<typeof ChatWidget>;
 	borrowed.addContext({ id: 'floating-file', kind: 'file', name: 'floating.txt', resolve: async () => ({ name: 'floating.txt', content: 'floating context' }) });
-	quick.open({ query: 'A quick question' });
+	quick.open({ query });
 	await waitFor(() => fake.turnStartRequests.length === 1);
 	await nextTask();
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.ok(!('mode' in fake.turnStartRequests[0]!));
-	assert.ok(fake.turnStartRequests[0]!.input.some(item => item.type === 'text' && item.text.startsWith('/ask ')));
+	assert.ok(fake.turnStartRequests[0]!.input.some(item => item.type === 'text' && item.text === submission));
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	quick.close();
 	fake.emit({
@@ -1288,7 +1296,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const getContext = canvas.getContext;
 		canvas.getContext = () => null;
 		resources.add(toDisposable(() => { canvas.getContext = getContext; }));
-		const fake = fakeApi({ sessions: [] });
+		const fake = fakeApi({ sessions: [], slashCommands: ['ask', 'plan', 'debug', 'swarm'].map(name => ({ name, description: name, argumentMode: 'optional' })) });
 		const sessions = resources.add(new SessionsManagementService(fake.api));
 		await sessions.initialize();
 		const draft = sessions.createUntitledSession();
@@ -3055,6 +3063,7 @@ interface FakeOptions {
 		readonly threadId: string;
 	};
 	readonly thread?: () => Thread;
+	readonly slashCommands?: Awaited<ReturnType<IAppServerApi['getSlashCommands']>>;
 	readonly skills?: readonly {
 		readonly id: { readonly source: string; readonly name: string; };
 		readonly description: string;
@@ -4376,6 +4385,7 @@ for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help follows Code
 		codeHelp.dispose();
 		assert.equal(document.activeElement, codeInput);
 		using inputOwner = new DisposableStore();
+		using sideChat = fixture.services.createInstance(BtwSlashCommandContribution);
 		using input = fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
 		input.render(fixture.model.inputState);
 		input.focus();
@@ -4384,7 +4394,8 @@ for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help follows Code
 		assert.match(provider.provideContent(), locale === 'en' ? /Chat input/ : /聊天输入/);
 		assert.doesNotMatch(provider.provideContent(), /New worktree asks|新建 worktree/);
 		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|聊天：配置工具/);
-		assert.match(provider.provideContent(), locale === 'en' ? /Slash-prefixed text is sent as a normal message/ : /斜杠.*普通消息/u);
+		assert.match(provider.provideContent(), locale === 'en' ? /type \/btw followed by a question/ : /输入 \/btw 和问题/u);
+		assert.doesNotMatch(provider.provideContent(), /\/ask|\/plan|\/debug|\/swarm/u);
 		provider.dispose();
 		assert.equal(document.activeElement, focused);
 	} finally { resetNlsResolver(); }
@@ -4407,17 +4418,6 @@ test('ChatWidgetModel keeps ordinary requests independent of restored task histo
 	await model.send('Continue planning');
 	assert.ok(!('mode' in fake.turnStartRequests[0]!));
 	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: 'Continue planning' }]);
-});
-
-test('Quick Chat keeps /ask when a server command starts a request', async () => {
-	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
-	using chat = createChatService(fake.api);
-	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
-	await model.initialize();
-	await model.executeServerCommand('init', '', undefined, 'ask');
-	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/ask /init' }]);
 });
 
 test('ChatWidgetModel retries a Debug request with its task command', async () => {
@@ -4536,7 +4536,7 @@ function fakeApi(options: FakeOptions = {}): {
 			isAvailable: true,
 			get connectionGeneration() { return connectionGeneration; },
 			getConnectionState: async () => 'ready' as const,
-			getSlashCommands: async () => [],
+			getSlashCommands: async () => options.slashCommands ?? [],
 			onConnectionState: (next: (state: 'ready') => void) => {
 				connectionListeners.add(next);
 				return { dispose: () => { connectionListeners.delete(next); } };
