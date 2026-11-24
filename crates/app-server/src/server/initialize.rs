@@ -185,6 +185,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if file_system {
+            capabilities.contracts.insert(
+                "fileImport".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self
             .artifact_catalog_processor
             .is_available(connection.authority)

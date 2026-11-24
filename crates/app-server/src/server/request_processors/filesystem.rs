@@ -1,10 +1,13 @@
 use super::ConnectionState;
 use super::RpcError;
+use super::connection_state;
 use super::decode;
 use super::resources_processor::resource_rpc_error;
 use super::result;
+use crate::resource_store::MAX_FILE_TRANSFER_BYTES;
 use crate::resource_store::ResourceError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsCancelBinaryReadParams;
 use ash_app_server_protocol::protocol::fs::FsCancelElevatedWriteParams;
 use ash_app_server_protocol::protocol::fs::FsCopyParams;
 use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
@@ -35,6 +38,9 @@ use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
 use ash_app_server_protocol::protocol::fs::FsResolvePathParams;
 use ash_app_server_protocol::protocol::fs::FsResolvePathResult;
+use ash_app_server_protocol::protocol::fs::FsUploadParams;
+use ash_app_server_protocol::protocol::fs::FsUploadStartParams;
+use ash_app_server_protocol::protocol::fs::FsUploadWriteParams;
 use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileElevatedParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
@@ -61,7 +67,10 @@ use ash_file_system::encode_text;
 use ash_file_system::file_revision;
 use base64::Engine;
 use serde_json::Value;
+use std::io::Seek;
+use std::io::Write;
 use std::time::Duration;
+use std::time::Instant;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 // Matches the text model resolver's limit, without a separate broad editor stat.
@@ -70,6 +79,35 @@ const MAX_DOCUMENT_FILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_BINARY_EDITOR_FILE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES: usize = 8 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
+const MAX_FILE_IMPORT_BYTES: u64 = MAX_FILE_TRANSFER_BYTES as u64;
+const MAX_FILE_IMPORT_CHUNK_BYTES: usize = 192 * 1024;
+const FILE_IMPORT_IDLE_LIMIT: Duration = Duration::from_secs(300);
+
+#[derive(Debug)]
+pub(super) struct FileUpload {
+    request: FsUploadStartParams,
+    staged: std::fs::File,
+    offset: u64,
+    last_activity: Instant,
+}
+
+struct SnapshotWriter<'a> {
+    file: &'a mut std::fs::File,
+    cancellation: &'a CancellationToken,
+}
+
+impl Write for SnapshotWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.cancellation.is_cancelled() {
+            return Err(std::io::Error::other("file snapshot cancelled"));
+        }
+        self.file.write(bytes)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
 
 /// Coordinates the existing owners needed by the filesystem adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
@@ -263,6 +301,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         &self,
         connection: &ConnectionState,
         params: &Value,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: FsReadBinaryFileParams = decode(params)?;
         if params.max_bytes == Some(0) {
@@ -275,19 +314,27 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         )?;
         // The bounded read checks the size of the opened file. A separate metadata
         // request would require browse permission even for a read-only grant.
+        let transfer = params.transfer.unwrap_or_default();
+        let ceiling = if transfer {
+            MAX_FILE_TRANSFER_BYTES
+        } else {
+            MAX_BINARY_EDITOR_FILE_BYTES
+        };
         let limit = params
             .max_bytes
-            .map_or(MAX_BINARY_EDITOR_FILE_BYTES, |bytes| {
-                MAX_BINARY_EDITOR_FILE_BYTES.min(bytes as usize)
-            });
+            .map_or(ceiling, |bytes| ceiling.min(bytes as usize));
         let memory_limit = limit.min(MAX_IN_MEMORY_BINARY_SNAPSHOT_BYTES);
-        let small = match files.read_file_with_revision(&params.path, memory_limit) {
-            Ok(content) => Some(content),
-            Err(FileSystemError::ReadLimitExceeded { .. }) if memory_limit == limit => {
-                return Err(resource_rpc_error(ResourceError::TooLarge));
+        let small = if transfer {
+            None
+        } else {
+            match files.read_file_with_revision(&params.path, memory_limit) {
+                Ok(content) => Some(content),
+                Err(FileSystemError::ReadLimitExceeded { .. }) if memory_limit == limit => {
+                    return Err(resource_rpc_error(ResourceError::TooLarge));
+                }
+                Err(FileSystemError::ReadLimitExceeded { .. }) => None,
+                Err(error) => return Err(file_system_error(error)),
             }
-            Err(FileSystemError::ReadLimitExceeded { .. }) => None,
-            Err(error) => return Err(file_system_error(error)),
         };
         let owner = connection.connection_id;
         let mime_type = "application/octet-stream".into();
@@ -311,13 +358,28 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
             let mut snapshot = tempfile::tempfile()
                 .map_err(|error| file_system_error(FileSystemError::Io(error.to_string())))?;
             let (size, revision) = files
-                .copy_file_with_revision(&params.path, limit, &mut snapshot)
+                .copy_file_with_revision(
+                    &params.path,
+                    limit,
+                    &mut SnapshotWriter {
+                        file: &mut snapshot,
+                        cancellation,
+                    },
+                )
                 .map_err(|error| match error {
-                    FileSystemError::ReadLimitExceeded { .. } if params.max_bytes.is_some() => {
+                    _ if cancellation.is_cancelled() => {
+                        file_system_error(FileSystemError::Cancelled)
+                    }
+                    FileSystemError::ReadLimitExceeded { .. }
+                        if params.max_bytes.is_some() || transfer =>
+                    {
                         resource_rpc_error(ResourceError::TooLarge)
                     }
                     error => file_system_error(error),
                 })?;
+            if cancellation.is_cancelled() {
+                return Err(file_system_error(FileSystemError::Cancelled));
+            }
             let metadata = self
                 .resources
                 .lock()
@@ -329,6 +391,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                     size,
                     &revision,
                     BINARY_PREVIEW_RESOURCE_TTL,
+                    transfer,
                 )
                 .map_err(resource_rpc_error)?;
             (metadata, revision)
@@ -342,6 +405,18 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
             },
             revision,
         })
+    }
+
+    pub(super) fn fs_cancel_binary_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsCancelBinaryReadParams = decode(params)?;
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id.to_string());
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
     }
 
     pub(super) fn fs_write_file(
@@ -485,6 +560,156 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
             metadata: metadata_result(metadata),
             revision: file_revision(&bytes),
         })
+    }
+
+    pub(super) fn fs_upload_start(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let request: FsUploadStartParams = decode(params)?;
+        self.file_system_for_request(
+            request.upload.dir_id.as_deref(),
+            request.upload.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
+        let mut state = connection_state(connection);
+        if state.closed {
+            return Err(file_system_error(FileSystemError::Cancelled));
+        }
+        state
+            .file_uploads
+            .retain(|_, upload| upload.last_activity.elapsed() < FILE_IMPORT_IDLE_LIMIT);
+        if state.file_uploads.contains_key(&request.upload.upload_id) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let reserved: u64 = state
+            .file_uploads
+            .values()
+            .map(|upload| upload.request.size_bytes)
+            .sum();
+        if state.file_uploads.len() >= 4 || request.size_bytes > MAX_FILE_IMPORT_BYTES - reserved {
+            return Err(resource_rpc_error(ResourceError::TooLarge));
+        }
+        let staged = tempfile::tempfile().map_err(upload_io_error)?;
+        state.file_uploads.insert(
+            request.upload.upload_id.clone(),
+            FileUpload {
+                request,
+                staged,
+                offset: 0,
+                last_activity: Instant::now(),
+            },
+        );
+        result(&())
+    }
+
+    pub(super) fn fs_upload_write(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsUploadWriteParams = decode(params)?;
+        if params.data_base64.len() > MAX_FILE_IMPORT_CHUNK_BYTES.div_ceil(3) * 4 {
+            return Err(resource_rpc_error(ResourceError::InvalidChunkSize));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        if bytes.is_empty() || bytes.len() > MAX_FILE_IMPORT_CHUNK_BYTES {
+            return Err(resource_rpc_error(ResourceError::InvalidChunkSize));
+        }
+        let mut state = connection_state(connection);
+        let upload = state
+            .file_uploads
+            .get_mut(&params.upload.upload_id)
+            .filter(|upload| {
+                upload.request.upload == params.upload
+                    && upload.last_activity.elapsed() < FILE_IMPORT_IDLE_LIMIT
+            })
+            .ok_or_else(|| resource_rpc_error(ResourceError::NotFound))?;
+        let end = upload.offset + bytes.len() as u64;
+        if params.offset != upload.offset || end > upload.request.size_bytes {
+            return Err(resource_rpc_error(ResourceError::InvalidOffset));
+        }
+        if let Err(error) = upload.staged.write_all(&bytes) {
+            state.file_uploads.remove(&params.upload.upload_id);
+            return Err(upload_io_error(error));
+        }
+        upload.offset = end;
+        upload.last_activity = Instant::now();
+        result(&())
+    }
+
+    pub(super) fn fs_upload_finish(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: FsUploadParams = decode(params)?;
+        let mut upload = {
+            let mut state = connection_state(connection);
+            if !state
+                .file_uploads
+                .get(&params.upload_id)
+                .is_some_and(|upload| upload.request.upload == params)
+            {
+                return Err(resource_rpc_error(ResourceError::NotFound));
+            }
+            state
+                .file_uploads
+                .remove(&params.upload_id)
+                .expect("checked upload")
+        };
+        if upload.offset != upload.request.size_bytes
+            || upload.last_activity.elapsed() >= FILE_IMPORT_IDLE_LIMIT
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        upload.staged.rewind().map_err(upload_io_error)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .import_file(
+                &upload.request.path,
+                &mut upload.staged,
+                upload.offset,
+                cancellation,
+            )
+            .map_err(|error| match error {
+                FileSystemError::AlreadyExists(path) => {
+                    file_system_error(FileSystemError::RevisionConflict(path))
+                }
+                other => file_system_error(other),
+            })?;
+        result(&metadata_result(metadata))
+    }
+
+    pub(super) fn fs_upload_cancel(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsUploadParams = decode(params)?;
+        {
+            let mut state = connection_state(connection);
+            if state
+                .file_uploads
+                .get(&params.upload_id)
+                .is_some_and(|upload| upload.request.upload != params)
+            {
+                return Err(resource_rpc_error(ResourceError::NotFound));
+            }
+            state.file_uploads.remove(&params.upload_id);
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.upload_id.to_string());
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
     }
 
     pub(super) fn fs_create_file(&self, params: &Value) -> Result<Value, RpcError> {
@@ -672,6 +897,10 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
             }
         }
     }
+}
+
+fn upload_io_error(error: std::io::Error) -> RpcError {
+    file_system_error(FileSystemError::Io(error.to_string()))
 }
 
 fn existing_behavior(value: FsExistingTargetBehavior) -> ExistingTargetBehavior {

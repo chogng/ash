@@ -414,6 +414,67 @@ impl FileSystem for LocalFileSystem {
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
         self.execute(Permission::BrowseFiles, |files| files.get_metadata(path))
     }
+    fn import_file(
+        &self,
+        path: &Path,
+        source: &mut dyn Read,
+        size: u64,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<FileMetadata, FileSystemError> {
+        self.execute(Permission::WriteFiles, |files| {
+            if cancellation.is_cancelled() {
+                return Err(FileSystemError::Cancelled);
+            }
+            let resolved = files.resolve_for_write(path)?;
+            let parent = open_write_parent(files.handle(), &resolved).map_err(io_error)?;
+            let target = resolved
+                .file_name()
+                .ok_or_else(|| FileSystemError::InvalidPath(path.into()))?;
+            let staged = PreparedWrite::stage(
+                parent.try_clone().map_err(io_error)?,
+                target,
+                &[],
+                None,
+                |file| {
+                    let mut buffer = [0; 64 * 1024];
+                    let mut remaining = size;
+                    while remaining > 0 {
+                        if cancellation.is_cancelled() {
+                            return Err(std::io::Error::other("file import cancelled"));
+                        }
+                        let count = remaining.min(buffer.len() as u64) as usize;
+                        source.read_exact(&mut buffer[..count])?;
+                        file.write_all(&buffer[..count])?;
+                        remaining -= count as u64;
+                    }
+                    Ok(())
+                },
+            )
+            .map_err(|error| {
+                if cancellation.is_cancelled() {
+                    FileSystemError::Cancelled
+                } else {
+                    io_error(error)
+                }
+            })?;
+            let _guard = files
+                .dir
+                .directory()
+                .lock_writes()
+                .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
+            if cancellation.is_cancelled() {
+                return Err(FileSystemError::Cancelled);
+            }
+            staged.publish(WritePublication::Create).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    FileSystemError::AlreadyExists(path.into())
+                } else {
+                    io_error(error)
+                }
+            })?;
+            metadata(&parent, Path::new(target))
+        })
+    }
     fn read_path_case_sensitivity(
         &self,
         path: &Path,
@@ -2166,6 +2227,18 @@ impl<'a> PreparedWrite<'a> {
         content: &'a [u8],
         permissions: Option<cap_std::fs::Permissions>,
     ) -> std::io::Result<Self> {
+        Self::stage(parent, target, content, permissions, |file| {
+            file.write_all(content)
+        })
+    }
+
+    fn stage(
+        parent: Directory,
+        target: &OsStr,
+        content: &'a [u8],
+        permissions: Option<cap_std::fs::Permissions>,
+        write: impl FnOnce(&mut cap_std::fs::File) -> std::io::Result<()>,
+    ) -> std::io::Result<Self> {
         static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let (temporary, mut file) = loop {
             let name = format!(
@@ -2194,7 +2267,7 @@ impl<'a> PreparedWrite<'a> {
             }
         };
         let result = (|| {
-            file.write_all(content)?;
+            write(&mut file)?;
             if let Some(permissions) = permissions {
                 file.set_permissions(permissions)?;
             }

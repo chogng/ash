@@ -109,6 +109,15 @@ impl FileSystem for ExactFileSystem {
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
         self.ensure_file(path)
     }
+    fn import_file(
+        &self,
+        _path: &Path,
+        _source: &mut dyn std::io::Read,
+        _size: u64,
+        _cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<FileMetadata, FileSystemError> {
+        Self::denied()
+    }
     fn read_path_case_sensitivity(
         &self,
         path: &Path,

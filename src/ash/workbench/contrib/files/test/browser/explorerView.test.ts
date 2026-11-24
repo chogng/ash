@@ -5,6 +5,7 @@ import { LabelService } from '../../../../services/label/common/labelService.js'
 import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
@@ -264,6 +265,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		using labels = new LabelService(workspaceContextService, paths, testAppServerApi(createDisconnectedRendererApi()));
 		services.registerInstance(ILabelService, labels);
 		services.registerInstance(IPathService, paths);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 		using storageService = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: workspaceContextService.getWorkspace().id, flushInterval: 0, onError: () => { } });
 		using commands = new CommandService(services);
 		services.registerInstance(IContextKeyService, contextKeyService);

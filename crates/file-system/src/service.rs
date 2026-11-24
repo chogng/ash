@@ -95,6 +95,15 @@ pub trait FileSystem: Send + Sync {
         condition: &FileWriteCondition,
     ) -> Result<FileMetadata, FileSystemError>;
 
+    /// Publishes a streamed file at a new path. Cancellation before publication discards the staged bytes.
+    fn import_file(
+        &self,
+        path: &Path,
+        source: &mut dyn std::io::Read,
+        size: u64,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<FileMetadata, FileSystemError>;
+
     /// Returns metadata for one existing path.
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError>;
 

@@ -15,6 +15,7 @@ pub const MAX_RESOURCE_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_READ_CHUNK_BYTES: usize = 262_144;
 const MAX_RESOURCES_PER_CONNECTION: usize = 128;
 const MAX_RESOURCE_BYTES_PER_CONNECTION: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_FILE_TRANSFER_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 pub struct ResourceStore {
     next_id: AtomicU64,
@@ -40,6 +41,7 @@ struct Resource {
     payload: Payload,
     sha256: String,
     expires_at: Instant,
+    transfer_idle_limit: Option<Duration>,
 }
 
 enum Payload {
@@ -74,15 +76,20 @@ impl Payload {
 struct ConnectionResourceUsage {
     count: usize,
     bytes: usize,
+    transfer_bytes: usize,
 }
 
 impl ConnectionResourceUsage {
-    fn can_add(&self, incoming_bytes: usize) -> bool {
+    fn can_add(&self, incoming_bytes: usize, transfer: bool) -> bool {
+        let (used, limit) = if transfer {
+            (self.transfer_bytes, MAX_FILE_TRANSFER_BYTES)
+        } else {
+            (self.bytes, MAX_RESOURCE_BYTES_PER_CONNECTION)
+        };
         self.count < MAX_RESOURCES_PER_CONNECTION
-            && self
-                .bytes
+            && used
                 .checked_add(incoming_bytes)
-                .is_some_and(|total| total <= MAX_RESOURCE_BYTES_PER_CONNECTION)
+                .is_some_and(|total| total <= limit)
     }
 }
 
@@ -132,6 +139,7 @@ impl ResourceStore {
             Payload::Memory(bytes),
             sha256,
             ttl,
+            false,
         )
     }
 
@@ -144,6 +152,7 @@ impl ResourceStore {
         size: usize,
         revision: &str,
         ttl: Duration,
+        transfer: bool,
     ) -> Result<ResourceMetadata, ResourceError> {
         self.create_payload(
             owner_connection_id,
@@ -151,6 +160,7 @@ impl ResourceStore {
             Payload::File { file, size },
             format!("sha256:{revision}"),
             ttl,
+            transfer,
         )
     }
 
@@ -161,6 +171,7 @@ impl ResourceStore {
         payload: Payload,
         sha256: String,
         ttl: Duration,
+        transfer: bool,
     ) -> Result<ResourceMetadata, ResourceError> {
         self.cleanup();
         let usage = self
@@ -168,7 +179,7 @@ impl ResourceStore {
             .get(&owner_connection_id)
             .copied()
             .unwrap_or_default();
-        if !usage.can_add(payload.len()) {
+        if !usage.can_add(payload.len(), transfer) {
             return Err(ResourceError::TooLarge);
         }
         let resource_id = format!(
@@ -189,13 +200,15 @@ impl ResourceStore {
                 payload,
                 sha256,
                 expires_at: Instant::now() + ttl,
+                transfer_idle_limit: transfer.then_some(ttl),
             },
         );
         self.usage_by_connection.insert(
             owner_connection_id,
             ConnectionResourceUsage {
                 count: usage.count + 1,
-                bytes: usage.bytes + metadata.size,
+                bytes: usage.bytes + if transfer { 0 } else { metadata.size },
+                transfer_bytes: usage.transfer_bytes + if transfer { metadata.size } else { 0 },
             },
         );
         Ok(metadata)
@@ -231,11 +244,18 @@ impl ResourceStore {
             return Err(ResourceError::InvalidOffset);
         }
         let end = (offset + max_bytes).min(size);
-        Ok(ResourceChunk {
+        let chunk = ResourceChunk {
             offset,
             data: resource.payload.read(offset, end)?,
             eof: end == size,
-        })
+        };
+        if let Some(idle_limit) = resource.transfer_idle_limit {
+            self.resources
+                .get_mut(resource_id)
+                .expect("read resource")
+                .expires_at = Instant::now() + idle_limit;
+        }
+        Ok(chunk)
     }
 
     pub fn release(
@@ -245,7 +265,7 @@ impl ResourceStore {
     ) -> Result<(), ResourceError> {
         self.resource(owner_connection_id, resource_id)?;
         if let Some(resource) = self.resources.remove(resource_id) {
-            self.remove_usage(resource.owner_connection_id, resource.payload.len());
+            self.remove_usage(&resource);
         }
         Ok(())
     }
@@ -262,7 +282,7 @@ impl ResourceStore {
             .remove(resource_id)
             .ok_or(ResourceError::NotFound)?;
         let size = resource.payload.len();
-        self.remove_usage(owner_connection_id, size);
+        self.remove_usage(&resource);
         let reader: Box<dyn Read> = match resource.payload {
             Payload::Memory(bytes) => Box::new(Cursor::new(bytes)),
             Payload::File { mut file, .. } => {
@@ -295,12 +315,19 @@ impl ResourceStore {
         Ok(resource)
     }
 
-    fn remove_usage(&mut self, owner_connection_id: u64, bytes: usize) {
+    fn remove_usage(&mut self, resource: &Resource) {
+        let owner_connection_id = resource.owner_connection_id;
+        let bytes = resource.payload.len();
         let Some(usage) = self.usage_by_connection.get_mut(&owner_connection_id) else {
             return;
         };
         usage.count = usage.count.saturating_sub(1);
-        usage.bytes = usage.bytes.saturating_sub(bytes);
+        let charged = if resource.transfer_idle_limit.is_some() {
+            &mut usage.transfer_bytes
+        } else {
+            &mut usage.bytes
+        };
+        *charged = charged.saturating_sub(bytes);
         if usage.count == 0 {
             self.usage_by_connection.remove(&owner_connection_id);
         }
@@ -316,7 +343,7 @@ impl ResourceStore {
             .collect::<Vec<_>>();
         for resource_id in expired {
             if let Some(resource) = self.resources.remove(&resource_id) {
-                self.remove_usage(resource.owner_connection_id, resource.payload.len());
+                self.remove_usage(&resource);
             }
         }
     }

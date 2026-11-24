@@ -1,4 +1,5 @@
 import { CancellationToken, CancellationTokenSource } from './cancellation.js';
+import { DeferredPromise } from './async.js';
 import { canceled } from './errors.js';
 import { DisposableStore, toDisposable } from './lifecycle.js';
 
@@ -144,6 +145,36 @@ export function consumeStream<T, R>(stream: ReadableStreamEvents<T>, reducer?: I
 			},
 		});
 	});
+}
+
+/** Pauses a readable until the consumer requests another chunk and owns its disposal. */
+export async function* iterateStream<T>(stream: ReadableStreamEvents<T>, token: CancellationToken): AsyncIterable<T> {
+	const readable = stream as Partial<ReadableStream<T>>;
+	using cancellation = new CancellationTokenSource(token);
+	const chunks: T[] = [];
+	let ready = new DeferredPromise<void>();
+	let ended = false;
+	let failure: Error | undefined;
+	try {
+		listenStream(stream, {
+			onData: data => { readable.pause?.(); chunks.push(data); void ready.complete(); },
+			onError: error => { failure = error; void ready.complete(); },
+			onEnd: () => { ended = true; void ready.complete(); },
+		}, cancellation.token);
+		while (true) {
+			if (failure) throw failure;
+			if (chunks.length) { yield chunks.shift()!; }
+			else if (ended) { return; }
+			else {
+				ready = new DeferredPromise<void>();
+				readable.resume?.();
+				await ready.p;
+			}
+		}
+	} finally {
+		cancellation.cancel();
+		readable.destroy?.();
+	}
 }
 
 /** Keeps transformation buffering bounded and propagates consumer destruction to the source. */

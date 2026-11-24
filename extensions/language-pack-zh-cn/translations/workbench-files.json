@@ -1,6 +1,8 @@
 {
   "ash": {
     "files.download.progress": "正在下载 {0}",
+    "files.import.progress": "正在导入 {0}",
+    "files.copy.progress": "正在复制 {0}",
     "accessibility.explorerDownloadHelp": "在 Ash 桌面版中，从远程文件的上下文菜单选择“下载文件”。选择保存位置后，可在进度通知中选择“取消”停止下载。",
     "workspaceTrust.revisionChanged": "目录授权已更改。请刷新后再保存。",
     "workspaceTrust.requestMessage": "你是否信任此工作区中文件的作者？",

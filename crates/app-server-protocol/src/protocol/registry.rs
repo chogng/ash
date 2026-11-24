@@ -1222,6 +1222,8 @@ use crate::protocol::extensions::ExtensionRuntimeBindingDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionSourceKindDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsCancelBinaryReadParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCancelElevatedWriteParams;
 use crate::protocol::fs::FsChanged;
 #[cfg(any(test, feature = "export"))]
@@ -1284,6 +1286,12 @@ use crate::protocol::fs::FsRenameParams;
 use crate::protocol::fs::FsResolvePathParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsResolvePathResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsUploadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsUploadStartParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsUploadWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteBinaryFileParams;
 #[cfg(any(test, feature = "export"))]
@@ -3481,6 +3489,9 @@ pub enum CancellationDefinition {
     OperationId(&'static str),
     /// Once dispatch starts, the domain reports confirmed effects or an uncertain submission.
     OperationIdPreserveOutcome(&'static str),
+    /// Older clients can omit the identity. A successful response may return
+    /// a resource that the client must release even if cancellation raced it.
+    OptionalOperationIdPreserveOutcome(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -3511,14 +3522,19 @@ impl ClientMethodDefinition {
         &self,
         params: &serde_json::Value,
     ) -> Result<Option<String>, CancellationScopeResolutionError> {
-        let parameter = match self.cancellation {
+        let (parameter, optional) = match self.cancellation {
             CancellationDefinition::None => return Ok(None),
             CancellationDefinition::OperationId(parameter)
-            | CancellationDefinition::OperationIdPreserveOutcome(parameter) => parameter,
+            | CancellationDefinition::OperationIdPreserveOutcome(parameter) => (parameter, false),
+            CancellationDefinition::OptionalOperationIdPreserveOutcome(parameter) => {
+                (parameter, true)
+            }
         };
-        let operation_id = params
-            .as_object()
-            .and_then(|params| params.get(parameter))
+        let field = params.as_object().and_then(|params| params.get(parameter));
+        if optional && field.is_none() {
+            return Ok(None);
+        }
+        let operation_id = field
             .and_then(serde_json::Value::as_str)
             .filter(|operation_id| {
                 let length = operation_id.chars().count();
@@ -3883,6 +3899,9 @@ macro_rules! client_methods {
 }
 
 macro_rules! cancellation_definition {
+    ($parameter:literal, OptionalPreserveOutcome) => {
+        CancellationDefinition::OptionalOperationIdPreserveOutcome($parameter)
+    };
     ($parameter:literal, PreserveOutcome) => {
         CancellationDefinition::OperationIdPreserveOutcome($parameter)
     };
@@ -5340,6 +5359,10 @@ client_methods! {
         params: FsReadBinaryFileParams,
         response: FsReadBinaryFileResult,
         serialization: GlobalSharedRead,
+        cancellation: "operationId" => OptionalPreserveOutcome,
+    },
+    FsCancelBinaryRead => "fs/readBinaryFile/cancel" {
+        params: FsCancelBinaryReadParams, response: (), serialization: None,
     },
     DiffCompute => "diff/compute" {
         params: DiffComputeParams,
@@ -5608,6 +5631,19 @@ client_methods! {
         params: FsWriteBinaryFileParams,
         response: FsWriteFileResult,
         serialization: GlobalExclusive,
+    },
+    FsUploadStart => "fs/upload/start" {
+        params: FsUploadStartParams, response: (), serialization: ResourceExclusive("uploadId"),
+    },
+    FsUploadWrite => "fs/upload/write" {
+        params: FsUploadWriteParams, response: (), serialization: ResourceExclusive("uploadId"),
+    },
+    FsUploadFinish => "fs/upload/finish" {
+        params: FsUploadParams, response: FsGetMetadataResult, serialization: ResourceExclusive("uploadId"),
+        cancellation: "uploadId" => PreserveOutcome,
+    },
+    FsUploadCancel => "fs/upload/cancel" {
+        params: FsUploadParams, response: (), serialization: None,
     },
     FsCreateFile => "fs/createFile" {
         params: FsCreateFileParams,
@@ -8010,6 +8046,7 @@ typescript_bindings! {
     FsReadDirectoryEntry,
     FsReadDirectoryResult,
     FsReadBinaryFileParams,
+    FsCancelBinaryReadParams,
     FsReadBinaryFileResult,
     FsReadFileParams,
     FsReadFileResult,
@@ -8160,6 +8197,9 @@ typescript_bindings! {
     FsWriteFileElevatedParams,
     FsCancelElevatedWriteParams,
     FsWriteBinaryFileParams,
+    FsUploadParams,
+    FsUploadStartParams,
+    FsUploadWriteParams,
     FsWriteFileResult,
     FsExistingTargetBehavior,
     FsMissingTargetBehavior,

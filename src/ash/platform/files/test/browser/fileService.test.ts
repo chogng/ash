@@ -1262,7 +1262,9 @@ for (const sameAuthority of [false, true]) {
 		await files.copy(source, target);
 		assert.deepEqual(Uint8Array.from((await files.readFileBytes(URI.joinPath(target, 'nested', '100% ready.bin'))).bytes), bytes);
 		const direct = URI.joinPath(targetRoot, 'direct.bin');
-		await files.copy(sourceFile, direct);
+		const progress: [number, number][] = [];
+		await files.copy(sourceFile, direct, CancellationToken.None, (increment, total) => progress.push([increment, total]));
+		assert.deepEqual(progress, [[bytes.byteLength, bytes.byteLength]]);
 		assert.deepEqual(Uint8Array.from((await files.readFileBytes(direct)).bytes), bytes);
 		await assert.rejects(files.copy(sourceFile, direct), /already exists/);
 		assert.deepEqual(Uint8Array.from((await targetStorage.readFile(direct)).bytes), bytes);

@@ -42,6 +42,7 @@ import { ICommandService } from '../../../../../../platform/commands/common/comm
 import { ExplorerView } from '../../../browser/views/explorerView.js';
 import { ExplorerService } from '../../../browser/explorerService.js';
 import { IExplorerService } from '../../../browser/files.js';
+import { IProgressService } from '../../../../../../platform/progress/common/progress.js';
 import { VIEW_ID } from '../../../common/files.js';
 import { ResourceSchemeContext } from '../../../../../common/contextkeys.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
@@ -152,6 +153,7 @@ class Editors extends TestEditorService {
 	}
 }
 services.registerInstance(IEditorService, new Editors());
+services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 services.registerInstance(IExplorerService, lifetime.add(services.createInstance(ExplorerService)));
 lifetime.add(bindTestColorTheme(services.get(IThemeService), document.body));
 const explorer = lifetime.add(services.createInstance(ExplorerView, document.getElementById('explorer')!, { id: VIEW_ID, title: 'Explorer' }));

@@ -3,7 +3,7 @@ import { localize } from '../../../nls.js';
 import { Schemas } from '../../../base/common/network.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
-import { assertFileReadSize, createFileSystemProviderError, FileSystemProviderErrorCode, type IFileReadLimits } from '../../files/common/files.js';
+import { assertFileReadSize, bufferFileImport, createFileSystemProviderError, FileSystemProviderErrorCode, type IFileReadLimits } from '../../files/common/files.js';
 import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from './appServerApi.js';
 import { AppServerRemoteError } from './appServerError.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
@@ -269,6 +269,18 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			stat: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.statOnConnection(uri, check), operationToken),
 			readDirectory: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.readDirectoryOnConnection(uri, check), operationToken),
 			readFile: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.readFileOnConnection(uri, check), operationToken),
+			readFileStream: (uri: URI, operationToken: CancellationToken) => {
+				const check = () => assertCurrent(uri, operationToken);
+				check();
+				return provider.readFileStream(uri, {}, operationToken, check);
+			},
+			importFile: async (uri: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, operationToken: CancellationToken) => {
+				const check = () => assertCurrent(uri, operationToken);
+				check();
+				using pending = new CancellationTokenSource(token);
+				using cancelled = operationToken.onCancellationRequested(() => pending.cancel());
+				await provider.importOnConnection(uri, contents, sizeBytes, pending.token, check);
+			},
 			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions, operationToken?: CancellationToken) => run(uri, check => provider.writeContents(uri, bytes, undefined, options, undefined, check), operationToken),
 			createDirectory: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.createDirectoryOnConnection(uri, check), operationToken),
 			rename: (source: URI, target: URI, existing: FileExistingTargetBehavior, operationToken?: CancellationToken) => run(source, check => {
@@ -628,7 +640,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
-	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStream<Uint8Array> {
+	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken, assertScope?: () => void): ReadableStream<Uint8Array> {
 		const route = this.connectionRoute(resource);
 		if (route) {
 			const provider = route.provider;
@@ -684,16 +696,19 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			let snapshot: BinaryFile | undefined;
 			try {
 				if (cancellation.token.isCancellationRequested) { throw canceled(); }
-				// The allocation request has no backend cancel method; retain its late response so it can be released.
+				// Keep the allocation response even if cancellation races it so any snapshot is released.
 				const known = this.knownDirectory(resource);
 				const target = known ? this.directoryTarget(known, resource) : await this.fileTarget(resource);
 				if (cancellation.token.isCancellationRequested) { throw canceled(); }
 				this.assertResourceConnection(generation, epoch);
-				snapshot = await this.api.readBinaryFile(target);
+				assertScope?.();
+				snapshot = await this.api.readBinaryFile(assertScope ? { ...target, transfer: true } : target, cancellation.token);
 				this.assertResourceConnection(generation, epoch);
 				for await (const chunk of this.resourceChunks(snapshot.resource, options, cancellation.token, generation, epoch)) {
+					assertScope?.();
 					await raceCancellationError(Promise.resolve(stream.write(chunk)), cancellation.token);
 				}
+				assertScope?.();
 			} catch (error) {
 				const failure = fileReadError(resource, error);
 				stream.error(failure instanceof Error ? failure : new Error(String(failure)));
@@ -722,6 +737,32 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.writeFile(resource, content, options, signal)); }
 		return this.writeContents(resource, content, undefined, options, signal);
+	}
+
+	async importFile(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void> {
+		using scope = this.acquireCopyScope(resource);
+		await scope.importFile!(resource, contents, sizeBytes, token);
+	}
+
+	private async importOnConnection(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken, check: () => void): Promise<void> {
+		const target = this.isConfiguration(resource) ? undefined : await this.fileTarget(resource);
+		check();
+		const upload = this.api.importFile;
+		if (!target || !upload) {
+			const bytes = await bufferFileImport(contents, sizeBytes, token);
+			await this.writeContents(resource, bytes, undefined, { create: true, overwrite: false }, undefined, check);
+			return;
+		}
+		async function* guardedContents(): AsyncIterable<Uint8Array> {
+			for await (const chunk of contents) { check(); yield chunk; }
+			check();
+		}
+		try {
+			await upload(target, guardedContents(), sizeBytes, token);
+		} catch (error) {
+			if (isRevisionConflict(error)) throw createFileSystemProviderError(error instanceof Error ? error.message : String(error), FileSystemProviderErrorCode.FileExists);
+			throw fileReadError(resource, error);
+		}
 	}
 
 	async writeTextFile(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {

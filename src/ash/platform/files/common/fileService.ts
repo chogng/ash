@@ -4,7 +4,7 @@ import { bufferToStream, VSBuffer, type VSBufferReadableStream } from '../../../
 import { raceCancellationError } from '../../../base/common/async.js';
 import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
-import { transform } from '../../../base/common/stream.js';
+import { iterateStream, transform } from '../../../base/common/stream.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { dirname, extUri } from '../../../base/common/resources.js';
@@ -12,6 +12,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import {
 	assertFileReadSize,
+	bufferFileImport,
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
 	toFileSystemProviderErrorCode,
@@ -290,6 +291,15 @@ export class FileService extends Disposable implements IFileService {
 		return provider.writeFile(resource, bytes, options, signal);
 	}
 
+	public async importFile(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void> {
+		if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) throw new RangeError('Invalid file import size');
+		throwIfCancelled(token);
+		const provider = this.writableProvider(resource, 'importFile');
+		if (provider.importFile) return provider.importFile(resource, contents, sizeBytes, token);
+		const bytes = await bufferFileImport(contents, sizeBytes, token);
+		await provider.writeFile(resource, bytes, { create: true, overwrite: false });
+	}
+
 	public createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		return this.writableProvider(resource, 'createFile').createFile(resource, existing);
 	}
@@ -298,7 +308,8 @@ export class FileService extends Disposable implements IFileService {
 		return this.writableProvider(resource, 'createDirectory').createDirectory(resource);
 	}
 
-	public async copy(source: URI, target: URI): Promise<void> {
+	public async copy(source: URI, target: URI, token = CancellationToken.None, onProgress?: (increment: number, total: number) => void): Promise<void> {
+		throwIfCancelled(token);
 		const sourceProvider = this.provider(source);
 		const targetProvider = this.writableProvider(target, 'copy');
 		if (sourceProvider === targetProvider && this.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy)) {
@@ -308,7 +319,8 @@ export class FileService extends Disposable implements IFileService {
 		using targetScope = acquireCopyScope(targetProvider, target);
 		using cancellation = new CancellationTokenSource(sourceScope.token);
 		using targetRetired = targetScope.token.onCancellationRequested(() => cancellation.cancel());
-		await this.copyBetweenProviders(sourceScope, targetScope, source, target, sourceProvider === targetProvider, cancellation.token);
+		using cancelled = token.onCancellationRequested(() => cancellation.cancel());
+		await this.copyBetweenProviders(sourceScope, targetScope, source, target, sourceProvider === targetProvider, cancellation.token, false, onProgress);
 	}
 
 	public rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
@@ -358,7 +370,7 @@ export class FileService extends Disposable implements IFileService {
 		return registration.provider;
 	}
 
-	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken, staged = false): Promise<void> {
+	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken, staged = false, onProgress?: (increment: number, total: number) => void): Promise<void> {
 		const run = <T>(operation: () => Promise<T>): Promise<T> => {
 			throwIfCancelled(token);
 			return raceCancellationError(operation(), token);
@@ -377,6 +389,17 @@ export class FileService extends Disposable implements IFileService {
 			}
 		}
 		if (sourceStat.kind === FileKind.File) {
+			if (targetProvider.importFile && sourceProvider.readFileStream) {
+				const stream = sourceProvider.readFileStream;
+				async function* contents(): AsyncIterable<Uint8Array> {
+					for await (const chunk of iterateStream(stream(source, token), token)) {
+						yield chunk;
+						onProgress?.(chunk.byteLength, sourceStat.sizeBytes);
+					}
+				}
+				await targetProvider.importFile(target, contents(), sourceStat.sizeBytes, token);
+				return;
+			}
 			const { bytes } = await run(() => sourceProvider.readFile(source, token));
 			// Storage owns failed publication cleanup; deleting here could remove an intervening writer's file.
 			await run(() => targetProvider.writeFile(target, bytes, { create: true, overwrite: false }, token));
@@ -426,6 +449,8 @@ function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSy
 		stat: provider.stat.bind(provider),
 		readDirectory: provider.readDirectory.bind(provider),
 		readFile: (uri: URI) => provider.readFile(uri),
+		readFileStream: hasFileReadStreamCapability(provider) ? (uri: URI, token: CancellationToken) => provider.readFileStream(uri, {}, token) : undefined,
+		importFile: provider.importFile?.bind(provider),
 		writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
 		createDirectory: provider.createDirectory.bind(provider),
 		rename: provider.rename.bind(provider),

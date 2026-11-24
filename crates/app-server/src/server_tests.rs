@@ -7423,6 +7423,70 @@ fn account_rpc_projects_login_completion_without_credentials() {
 }
 
 #[test]
+fn file_import_only_publishes_exact_bytes_from_the_owning_connection() {
+    let root = tempfile::tempdir().unwrap();
+    let server = server().with_file_system(Arc::new(LocalFileSystem::new(
+        ash_file_access::Grant::for_environment(
+            Dir::open_local(root.path()).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([ash_file_access::Permission::WriteFiles]),
+        ),
+    )));
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    initialize(&server, &mut owner);
+    initialize(&server, &mut other);
+    let request = |connection: &mut _, id, method, params| {
+        call(
+            &server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        )
+    };
+    for (id, upload_id) in [(3, "publish"), (4, "cancel")] {
+        let started = request(
+            &mut owner,
+            id,
+            "fs/upload/start",
+            serde_json::json!({"uploadId":upload_id,"path":format!("{upload_id}.bin"),"sizeBytes":3}),
+        );
+        assert!(started.get("error").is_none(), "{started}");
+    }
+    let chunk = serde_json::json!({"uploadId":"publish","offset":0,"dataBase64":"AP8q"});
+    let foreign = request(&mut other, 5, "fs/upload/write", chunk.clone());
+    assert_eq!(foreign["error"]["data"]["kind"], "ResourceNotFound");
+    let written = request(&mut owner, 6, "fs/upload/write", chunk);
+    assert!(written.get("error").is_none(), "{written}");
+    assert!(!root.path().join("publish.bin").exists());
+    let finish = request(
+        &mut owner,
+        7,
+        "fs/upload/finish",
+        serde_json::json!({"uploadId":"publish"}),
+    );
+    assert_eq!(finish["result"]["sizeBytes"], 3, "{finish}");
+    assert_eq!(
+        std::fs::read(root.path().join("publish.bin")).unwrap(),
+        [0, 255, 42]
+    );
+    let cancelled = request(
+        &mut owner,
+        8,
+        "fs/upload/cancel",
+        serde_json::json!({"uploadId":"cancel"}),
+    );
+    assert!(cancelled.get("error").is_none(), "{cancelled}");
+    let discarded = request(
+        &mut owner,
+        9,
+        "fs/upload/finish",
+        serde_json::json!({"uploadId":"cancel"}),
+    );
+    assert_eq!(discarded["error"]["data"]["kind"], "RequestCancelled");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
 fn bounded_binary_read_does_not_require_browse_permission() {
     let root = tempfile::tempdir().unwrap();
     let bytes = b"read-only bytes";
@@ -7456,6 +7520,25 @@ fn bounded_binary_read_does_not_require_browse_permission() {
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"fs/readBinaryFile","params":{"path":"preview.bin","maxBytes":bytes.len()}}),
     );
     assert_eq!(admitted["result"]["resource"]["size"], bytes.len());
+
+    let transfer = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"fs/readBinaryFile","params":{"path":"preview.bin","transfer":true,"operationId":"snapshot"}}),
+    );
+    assert_eq!(transfer["result"]["resource"]["size"], bytes.len());
+    let cancel = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"fs/readBinaryFile/cancel","params":{"operationId":"cancelled-snapshot"}}),
+    );
+    assert!(cancel.get("error").is_none(), "{cancel}");
+    let cancelled = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"fs/readBinaryFile","params":{"path":"preview.bin","transfer":true,"operationId":"cancelled-snapshot"}}),
+    );
+    assert_eq!(cancelled["error"]["data"]["kind"], "RequestCancelled");
 }
 
 #[test]

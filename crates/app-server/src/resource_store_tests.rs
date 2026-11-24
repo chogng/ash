@@ -21,6 +21,7 @@ fn file_snapshot_preserves_random_reads_and_connection_ownership() {
             8,
             "revision",
             Duration::from_secs(60),
+            false,
         )
         .unwrap();
     assert_eq!(metadata.sha256, "sha256:revision");
@@ -54,6 +55,7 @@ fn transferring_a_file_snapshot_rewinds_it_and_releases_its_quota() {
             8,
             "revision",
             Duration::from_secs(60),
+            true,
         )
         .unwrap()
         .resource_id;
@@ -211,15 +213,19 @@ fn enforces_total_resource_bytes_per_connection() {
     let at_boundary = ConnectionResourceUsage {
         count: 1,
         bytes: MAX_RESOURCE_BYTES_PER_CONNECTION - 1,
+        transfer_bytes: 0,
     };
-    assert!(at_boundary.can_add(1));
-    assert!(!at_boundary.can_add(2));
+    assert!(at_boundary.can_add(1, false));
+    assert!(!at_boundary.can_add(2, false));
+    assert!(at_boundary.can_add(super::MAX_FILE_TRANSFER_BYTES, true));
+    assert!(!at_boundary.can_add(super::MAX_FILE_TRANSFER_BYTES + 1, true));
 
     let at_count_limit = ConnectionResourceUsage {
         count: MAX_RESOURCES_PER_CONNECTION,
         bytes: 0,
+        transfer_bytes: 0,
     };
-    assert!(!at_count_limit.can_add(0));
+    assert!(!at_count_limit.can_add(0, false));
 }
 
 #[test]

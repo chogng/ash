@@ -1,5 +1,6 @@
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -8,12 +9,14 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../../../platform/files/common/systemFileTransferService.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IFilesConfigurationService } from '../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { IExplorerService } from './files.js';
+import { copyFileWithProgress, importLocalFile } from './fileImportExport.js';
 import { IWorkspaceEditingService } from '../../../services/workspaces/common/workspaceEditing.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 import { extractSelection } from '../../../../platform/opener/common/opener.js';
@@ -101,13 +104,17 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	}
 	if (move && !resources.length) return;
 	if (!nativeFiles.length && !resources.length) return;
+	const progress = accessor.get(IProgressService);
+	using transfer = new CancellationTokenSource();
+	using changed = workspaceContext.onDidChangeWorkspace(() => {
+		if (workspaceContext.getWorkspace().id !== workspaceId) transfer.cancel();
+	});
 	for (const file of nativeFiles) {
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
 		if (!await paths.hasValidBasename(directory, file.name)) continue;
 		const target = await availablePasteTarget(files, directory, file.name);
-		const bytes = new Uint8Array(await file.arrayBuffer());
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
-		await files.writeFileBytes(target, bytes);
+		if (!await importLocalFile(files, progress, target, file, transfer.token)) return;
 	}
 	for (const resource of resources) {
 		if (workspaceContext.getWorkspace().id !== workspaceId) return;
@@ -134,7 +141,12 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		if (cut && sourceFolder && sourceFolder.id === workspaceContext.getWorkspaceFolder(target)?.id) {
 			await files.rename(resource, target, 'error');
 		} else {
-			await files.copy(resource, target);
+			if (kind === FileKind.File) {
+				if (!await copyFileWithProgress(files, progress, resource, target, transfer.token)) return;
+			} else {
+				await files.copy(resource, target);
+				if (transfer.token.isCancellationRequested) return;
+			}
 			if (cut) {
 				// Copying can outlive a policy change; recheck before removing the source.
 				assertWritable();

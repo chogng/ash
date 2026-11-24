@@ -157,9 +157,13 @@ test('Explorer drag policy moves a selection once, copies without overwrite, and
 		stat: async (uri: URI) => { if (!existing.has(uri.path)) throw new FileNotFoundError(uri); return { kind: FileKind.File }; },
 		copy: async (source: URI, target: URI) => { operations.push(`copy ${source.path} ${target.path}`); existing.add(target.path); },
 		rename: async (source: URI, target: URI) => { operations.push(`move ${source.path} ${target.path}`); existing.add(target.path); },
-		writeFileBytes: async (target: URI, bytes: Uint8Array) => { operations.push(`bytes ${target.path} ${[...bytes].join(',')}`); },
+		importFile: async (target: URI, contents: AsyncIterable<Uint8Array>) => {
+			const bytes: number[] = [];
+			for await (const chunk of contents) bytes.push(...chunk);
+			operations.push(`bytes ${target.path} ${bytes.join(',')}`);
+		},
 	} as unknown as IFileService;
-	using dnd = new FileDragAndDrop(error => errors.push(error), items => items, files, workspace, configuration, { confirm: async () => ({ confirmed }) } as unknown as IDialogService, { hasValidBasename: async (_uri, name) => name !== '..' } as IPathService);
+	using dnd = new FileDragAndDrop(error => errors.push(error), items => items, files, workspace, configuration, { confirm: async () => ({ confirmed }) } as unknown as IDialogService, { hasValidBasename: async (_uri, name) => name !== '..' } as IPathService, { withProgress: (_options, task) => task({ report() { } }) });
 	const folder = new ExplorerItem(root.joinPathSegment('folder'), 'folder', FileKind.Directory);
 	const child = new ExplorerItem(folder.resource.joinPathSegment('child.txt'), 'child.txt', FileKind.File);
 	const a = new ExplorerItem(root.joinPathSegment('a.txt'), 'a.txt', FileKind.File);
@@ -180,7 +184,7 @@ test('Explorer drag policy moves a selection once, copies without overwrite, and
 	dnd.drop({ ...data, elements: [a] }, dest, undefined, undefined, copy);
 	await waitForEffects(() => operations.length === 3);
 	assert.equal(operations[2], 'copy /project/a.txt /project/dest/a copy.txt');
-	const file = { name: 'binary.bin', arrayBuffer: async () => Uint8Array.from([0, 255, 239]).buffer } as File;
+	const file = new File([Uint8Array.from([0, 255, 239])], 'binary.bin');
 	dnd.drop({ kind: 'native', elements: [], types: ['Files'], files: [file] }, dest, undefined, undefined, move);
 	await waitForEffects(() => operations.length === 4);
 	assert.equal(operations[3], 'bytes /project/dest/binary.bin 0,255,239');

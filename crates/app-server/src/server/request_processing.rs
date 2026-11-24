@@ -560,11 +560,17 @@ impl AppServer {
             request_span.record_interval(process.kind.name(), process.started, process.elapsed);
             request_span.record_interval("git.spawn", process.started, process.spawn_elapsed);
         }
-        // A started remote write owns its outcome. Cancellation cannot erase an
-        // acknowledged effect or turn an uncertain submission into a safe retry.
-        let preserves_outcome = client_method_definition(&request.method).is_some_and(|definition| {
-            matches!(definition.cancellation, ash_app_server_protocol::protocol::registry::CancellationDefinition::OperationIdPreserveOutcome(_))
-        });
+        // A dispatched operation can own a side effect or a resource that the
+        // client must see even when cancellation races the response.
+        let preserves_outcome =
+            client_method_definition(&request.method).is_some_and(|definition| {
+                use ash_app_server_protocol::protocol::registry::CancellationDefinition;
+                matches!(
+                    definition.cancellation,
+                    CancellationDefinition::OperationIdPreserveOutcome(_)
+                        | CancellationDefinition::OptionalOperationIdPreserveOutcome(_)
+                )
+            });
         let cancelled =
             cancellation.is_cancelled() && (dispatch_result.is_none() || !preserves_outcome);
         let (response, outcome) = if cancelled {

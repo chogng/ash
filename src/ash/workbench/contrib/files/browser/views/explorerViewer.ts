@@ -6,6 +6,8 @@ import { IPathService } from '../../../../../platform/path/common/pathService.js
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { TreeDragAndDrop, TreeDragData, TreeDragOverReaction } from '../../../../../base/browser/ui/tree/tree.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import type { WorkbenchCompressibleAsyncDataTree } from '../../../../../platform/list/browser/listService.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../base/browser/dom.js';
@@ -16,6 +18,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels, IResourceIconRenderer } from '../../../../browser/labels.js';
@@ -23,6 +26,7 @@ import { ExplorerItem } from '../../common/explorerModel.js';
 import { ExplorerFileNestingSettingId, ExplorerFileNestingTrie } from '../../common/explorerFileNestingTrie.js';
 import { provideDecorations } from './explorerDecorationsProvider.js';
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
+import { copyFileWithProgress, importLocalFile } from '../fileImportExport.js';
 import type { IExpression } from '../../../../../base/common/glob.js';
 import { SortOrder, LexicographicOptions } from '../../common/files.js';
 import { ResourceGlobMatcher } from '../../../../common/resources.js';
@@ -294,6 +298,7 @@ export class FilesRenderer extends Disposable {
 
 /** Applies Explorer file operations to browser drag payloads; the tree owns drag feedback. */
 export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDrop<ExplorerItem> {
+	private readonly lifetime = new CancellationTokenSource();
 	constructor(
 		private readonly onError: (error: unknown) => void,
 		private readonly resolveItems: (items: readonly ExplorerItem[]) => readonly ExplorerItem[],
@@ -302,9 +307,10 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IPathService private readonly paths: IPathService,
+		@IProgressService private readonly progress: IProgressService,
 	) { super(); }
 
-	protected disposeCore(): void { }
+	protected disposeCore(): void { this.lifetime.dispose(true); }
 
 	public getDragURI(item: ExplorerItem): string | undefined {
 		const source = this.resolveItems([item])[0] ?? item;
@@ -336,7 +342,9 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		const copy = this.isCopy(event) || data.kind === 'native';
 		const workspaceId = this.workspace.getWorkspace().id;
 		const uris = data.kind === 'native' && !data.files.length ? event.dataTransfer?.getData('text/uri-list') ?? '' : '';
-		void this.performDrop({ ...data, elements: data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements }, directory, copy, workspaceId, uris).catch(this.onError);
+		void this.performDrop({ ...data, elements: data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements }, directory, copy, workspaceId, uris).catch(error => {
+			if (!isCancellationError(error)) this.onError(error);
+		});
 	}
 
 	private segmentTarget(item: ExplorerItem | undefined, event: DragEvent): ExplorerItem | undefined {
@@ -362,6 +370,10 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 	}
 
 	private async performDrop(data: TreeDragData<ExplorerItem>, directory: URI, copy: boolean, workspaceId: string, uriList: string): Promise<void> {
+		using transfer = new CancellationTokenSource(this.lifetime.token);
+		using changed = this.workspace.onDidChangeWorkspace(() => {
+			if (workspaceId !== this.workspace.getWorkspace().id) transfer.cancel();
+		});
 		const imported: ExplorerItem[] = [];
 		for (const line of uriList.split(/\r?\n/).filter(line => line && !line.startsWith('#'))) {
 			const resource = URI.parse(line);
@@ -381,16 +393,16 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 			if (!await this.paths.hasValidBasename(directory, item.name)) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', item.name));
 			const target = await this.copyTarget(directory, item.name, copy);
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			if (copy) await this.files.copy(item.resource, target);
-			else await this.files.rename(item.resource, target, 'error');
+			if (!copy) await this.files.rename(item.resource, target, 'error');
+			else if (item.kind !== FileKind.File) await this.files.copy(item.resource, target);
+			else if (!await copyFileWithProgress(this.files, this.progress, item.resource, target, transfer.token)) return;
 		}
 		for (const file of data.files) {
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
 			if (!await this.paths.hasValidBasename(directory, file.name)) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', file.name));
 			const target = await this.copyTarget(directory, file.name, true);
-			const bytes = new Uint8Array(await file.arrayBuffer());
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			await this.files.writeFileBytes(target, bytes, { create: true, overwrite: false });
+			if (!await importLocalFile(this.files, this.progress, target, file, transfer.token)) return;
 		}
 		status(localize('accessibility.explorerDropComplete', 'Finished transferring files.'));
 	}

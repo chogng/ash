@@ -328,7 +328,26 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	}
 
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		const stat = await this.writeContents(resource, options, async writable => writable.write(Uint8Array.from(bytes)));
+		return { stat, revision: await revision(bytes) };
+	}
+
+	public async importFile(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void> {
+		await this.writeContents(resource, { create: true, overwrite: false }, async writable => {
+			let written = 0;
+			for await (const chunk of contents) {
+				if (token.isCancellationRequested) throw canceled();
+				written += chunk.byteLength;
+				if (written > sizeBytes) throw new Error('File size changed during transfer');
+				await writable.write(Uint8Array.from(chunk));
+			}
+			if (written !== sizeBytes) throw new Error('File size changed during transfer');
+		}, token);
+	}
+
+	private async writeContents(resource: URI, options: IFileWriteOptions, write: (writable: FileSystemWritableFileStream) => Promise<void>, token?: CancellationToken): Promise<IFileStat> {
 		return this.withMutationLock(resource, async () => {
+			if (token?.isCancellationRequested) throw canceled();
 			const { parent, name } = await this.parent(resource);
 			let handle: FileSystemFileHandle;
 			let created = false;
@@ -347,15 +366,21 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 			let writable: FileSystemWritableFileStream | undefined;
 			try {
 				writable = await handle.createWritable();
-				await writable.write(Uint8Array.from(bytes));
+				await write(writable);
+				if (token?.isCancellationRequested) throw canceled();
 				await writable.close();
 			} catch (error) {
 				await writable?.abort().catch(() => undefined);
-				if (created) await parent.removeEntry(name).catch(() => undefined);
+				if (created) {
+					const current = await parent.getFileHandle(name).catch(() => undefined);
+					if (current && await current.isSameEntry(handle).catch(() => false) && (await current.getFile().catch(() => undefined))?.size === 0) {
+						await parent.removeEntry(name).catch(() => undefined);
+					}
+				}
 				throw error;
 			}
 			this.changes.fire({ resources: [resource] });
-			return { stat: await this.stat(resource), revision: await revision(bytes) };
+			return this.stat(resource);
 		});
 	}
 

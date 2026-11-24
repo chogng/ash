@@ -47,6 +47,7 @@ use core_api::ThreadUpdateSink;
 pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -504,6 +505,7 @@ struct ConnectionMutableState {
     request_ids: request_processing::RequestIds,
     extension_packages_leases: BTreeSet<String>,
     directory_grants_host: bool,
+    file_uploads: BTreeMap<ash_protocol::CommandId, fs_operations::FileUpload>,
     code_sessions_only: bool,
     window: Option<ash_protocol::WorkbenchWindow>,
 }
@@ -556,8 +558,10 @@ impl ConnectionState {
         let was_open = !state.closed;
         state.closed = true;
         let git_scope = state.session_git.take();
+        let uploads = std::mem::take(&mut state.file_uploads);
         drop(state);
         drop(git_scope);
+        drop(uploads);
         was_open
     }
 
@@ -4817,9 +4821,13 @@ impl AppServer {
             Some(ClientMethod::BackupDiscard) => self
                 .backup_processor
                 .discard(connection.authority, &request.params),
-            Some(ClientMethod::FsReadBinaryFile) => self
+            Some(ClientMethod::FsReadBinaryFile) => {
+                self.fs_processor()
+                    .fs_read_binary_file(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::FsCancelBinaryRead) => self
                 .fs_processor()
-                .fs_read_binary_file(connection, &request.params),
+                .fs_cancel_binary_read(connection, &request.params),
             Some(ClientMethod::DiffCompute) => self.diff_processor.diff_compute(&request.params),
             Some(ClientMethod::SyntaxOpen) => self
                 .syntax_processor
@@ -4966,6 +4974,19 @@ impl AppServer {
             Some(ClientMethod::FsWriteBinaryFile) => self
                 .fs_processor()
                 .fs_write_binary_file(connection, &request.params),
+            Some(ClientMethod::FsUploadStart) => self
+                .fs_processor()
+                .fs_upload_start(connection, &request.params),
+            Some(ClientMethod::FsUploadWrite) => self
+                .fs_processor()
+                .fs_upload_write(connection, &request.params),
+            Some(ClientMethod::FsUploadFinish) => {
+                self.fs_processor()
+                    .fs_upload_finish(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::FsUploadCancel) => self
+                .fs_processor()
+                .fs_upload_cancel(connection, &request.params),
             Some(ClientMethod::FsCreateFile) => self.fs_processor().fs_create_file(&request.params),
             Some(ClientMethod::FsCreateDirectory) => {
                 self.fs_processor().fs_create_directory(&request.params)

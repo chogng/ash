@@ -340,6 +340,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async () => false });
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { if (!existing.has(resource.path)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
+		hasCapability: () => true,
 		copy: async (source: URI, target: URI) => { copied.push(`${source.path} -> ${target.path}`); existing.add(target.path); },
 		rename: async (source: URI, target: URI) => { renamed.push(`${source.path} -> ${target.path}`); existing.delete(source.path); existing.add(target.path); },
 	} as unknown as FileServiceContract);
@@ -407,6 +408,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
 			throw new FileNotFoundError(resource);
 		},
+		hasCapability: () => true,
 		copy: async (from: URI, to: URI) => { operations.push(`copy ${from.path} -> ${to.path}`); },
 		rename: async (from: URI, to: URI) => { operations.push(`move ${from.path} -> ${to.path}`); },
 	} as unknown as FileServiceContract);
@@ -456,6 +458,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async () => false });
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
+		hasCapability: () => false,
 		copy: async () => { operations.push('copy'); },
 		delete: async () => { operations.push('delete'); },
 		rename: async () => { operations.push('rename'); },
@@ -519,7 +522,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		const root = URI.file('/project');
 		const destination = URI.file('/project/destination');
 		const bytes = new Uint8Array([0, 255, 42]);
-		const file = { name: 'picture.bin', arrayBuffer: async () => bytes.buffer } as File;
+		const file = new File([bytes], 'picture.bin');
 		const fileList = Object.create(browser.window.FileList.prototype) as FileList;
 		Object.defineProperties(fileList, {
 			0: { value: file },
@@ -547,9 +550,10 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async directory => { attemptedTransfers.push(directory.path); return false; } });
 		services.registerInstance(IFileService, {
 			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
-			writeFileBytes: async (resource: URI, content: Uint8Array) => {
-				writes.push({ resource: resource.path, bytes: [...content] });
-				return { stat: { resource, kind: FileKind.File, sizeBytes: content.length, readonly: false, modifiedAtMillis: undefined }, revision: 'copied' };
+			importFile: async (resource: URI, contents: AsyncIterable<Uint8Array>) => {
+				const bytes: number[] = [];
+				for await (const chunk of contents) bytes.push(...chunk);
+				writes.push({ resource: resource.path, bytes });
 			},
 		} as unknown as FileServiceContract);
 		using commands = new CommandService(services);
@@ -640,7 +644,6 @@ for (const fileRoot of fileCommandRoots) {
 			};
 			const services = createFileActionServices();
 			services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
-			services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 			services.registerInstance(IFileService, {
 				readFileBytes: async requested => {
 					reads.push(requested);
@@ -1017,6 +1020,7 @@ for (const scenario of [
 				if (resource.path !== source.path) throw new FileNotFoundError(resource);
 				return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 			},
+			hasCapability: () => true,
 			copy: async (_source: URI, target: URI) => { copied.push(target.path); },
 		} as unknown as FileServiceContract);
 		using commands = new CommandService(services);
@@ -1070,6 +1074,7 @@ test('Explorer paste keeps its original directory and stops after a workspace sw
 			if (resource.toString() !== source.toString()) throw new FileNotFoundError(resource);
 			return { resource, kind: FileKind.File };
 		},
+		hasCapability: () => true,
 		copy: async (_source: URI, target: URI) => { targets.push(target.path); },
 	} as unknown as FileServiceContract);
 	using commands = new CommandService(services);
@@ -1193,6 +1198,7 @@ for (const route of [
 						}
 						throw new FileNotFoundError(resource);
 					},
+					hasCapability: () => true,
 					copy: async () => {
 						operations.push('copy');
 						existing.add(target.path);
@@ -1253,6 +1259,7 @@ function createFileActionServices(os: OperatingSystem = OperatingSystem.Linux): 
 	const services = configurations.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
 	registerTestWorkbenchHostServices(services, { ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } });
 	services.registerInstance(IConfigurationService, configurations.add(new InMemoryConfigurationService()));
+	services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 	return services;
 }
 

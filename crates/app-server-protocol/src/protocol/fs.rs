@@ -199,6 +199,25 @@ pub struct FsReadBinaryFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub max_bytes: Option<u32>,
+    /// A disk-backed snapshot for copying a file between different providers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transfer: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub operation_id: Option<ash_protocol::CommandId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FsCancelBinaryReadParams {
+    pub operation_id: ash_protocol::CommandId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
 }
 
 /// Connection-owned binary resource opened from one directory file.
@@ -252,6 +271,40 @@ pub struct FsWriteBinaryFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub options: Option<FsFileWriteOptions>,
+}
+
+/// Transfer identifiers are connection-owned. The destination selector keeps every request
+/// on the same execution runtime when a gateway is present.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsUploadParams {
+    pub upload_id: ash_protocol::CommandId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsUploadStartParams {
+    #[serde(flatten)]
+    pub upload: FsUploadParams,
+    pub path: PathBuf,
+    #[ts(type = "number")]
+    pub size_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsUploadWriteParams {
+    #[serde(flatten)]
+    pub upload: FsUploadParams,
+    #[ts(type = "number")]
+    pub offset: u64,
+    pub data_base64: String,
 }
 
 /// One explicit administrator save. A missing revision may only create an absent file.

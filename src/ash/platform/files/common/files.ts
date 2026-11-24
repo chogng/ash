@@ -1,7 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
-import type { CancellationToken } from '../../../base/common/cancellation.js';
+import { throwIfCancelled, type CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
 import type { ReadableStreamEvents } from '../../../base/common/stream.js';
 import { localize } from '../../../nls.js';
@@ -256,6 +256,8 @@ export interface IFileSystemProvider {
 	readTextFile?(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent>;
 	writeTextFile?(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
+	/** Publishes a new file after consuming exactly the declared bytes. */
+	importFile?(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	/** Copies one file or directory, failing if the target exists. */
@@ -277,6 +279,8 @@ export interface IFileSystemProviderCopyScope extends IDisposable {
 	stat(resource: URI, token?: CancellationToken): Promise<IFileStat>;
 	readDirectory(resource: URI, token?: CancellationToken): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI, token?: CancellationToken): Promise<IFileBytes>;
+	readFileStream?(resource: URI, token: CancellationToken): ReadableStreamEvents<Uint8Array>;
+	importFile?(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void>;
 	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, token?: CancellationToken): Promise<IFileWriteResult>;
 	createDirectory(resource: URI, token?: CancellationToken): Promise<IFileStat>;
 	/** Publishes a staged copy without replacing an existing destination on the pinned connection. */
@@ -316,9 +320,10 @@ export interface IFileService {
 	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	/** Writes exact bytes; default import options reject existing files, including empty ones. */
 	writeFileBytes(resource: URI, bytes: Uint8Array, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
+	importFile(resource: URI, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<void>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
-	copy(source: URI, target: URI): Promise<void>;
+	copy(source: URI, target: URI, token?: CancellationToken, onProgress?: (increment: number, total: number) => void): Promise<void>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
 	deleteFileIfUnchanged(resource: URI, expectedRevision: string): Promise<void>;
@@ -327,6 +332,21 @@ export interface IFileService {
 	/** Reports routing availability, which does not imply that the provider's storage is currently accessible. */
 	hasProvider(resource: URI): boolean;
 	hasCapability(resource: URI, capability: FileSystemProviderCapabilities): boolean;
+}
+
+/** Compatibility path for providers that only implement ordinary binary writes. */
+export async function bufferFileImport(contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<Uint8Array> {
+	assertFileReadSize(sizeBytes, { size: 64 * 1024 * 1024 });
+	const bytes = new Uint8Array(sizeBytes);
+	let offset = 0;
+	for await (const chunk of contents) {
+		throwIfCancelled(token);
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	throwIfCancelled(token);
+	if (offset !== sizeBytes) throw new Error('File size changed during transfer');
+	return bytes;
 }
 
 export interface IFileSystemProviderRegistrationEvent {

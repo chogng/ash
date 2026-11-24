@@ -1,5 +1,6 @@
 import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { ResourceMetadataResult } from '../../agentHost/common/appServerApi.js';
 import type { FileDeleteMode, FileExistingTargetBehavior, FileMissingTargetBehavior, IFileReadOptions } from './files.js';
 
@@ -67,7 +68,7 @@ export interface IFileApi {
 		readonly readAccess?: string;
 		readonly encoding?: string;
 	}): Promise<{ readonly content: string; readonly revision: string; readonly encoding?: string; }>;
-	readBinaryFile(params: FileTarget & { readonly maxBytes?: number; }): Promise<{ readonly resource: ResourceMetadataResult; readonly revision: string; }>;
+	readBinaryFile(params: FileTarget & { readonly maxBytes?: number; readonly transfer?: boolean; }, token?: CancellationToken): Promise<{ readonly resource: ResourceMetadataResult; readonly revision: string; }>;
 	writeFile(params: FileTarget & {
 		readonly content: string;
 		readonly expectedRevision?: string | null;
@@ -78,6 +79,7 @@ export interface IFileApi {
 		readonly dataBase64: string;
 		readonly options?: FilePublicationOptions;
 	}): Promise<FilePublication>;
+	importFile?(target: FileTarget, contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken): Promise<FileMetadata>;
 	createFile(params: FileTarget & { readonly existing: FileExistingTargetBehavior; }): Promise<FileMetadata>;
 	createDirectory(params: FileTarget): Promise<FileMetadata>;
 	copy(params: {

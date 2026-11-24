@@ -81,6 +81,34 @@ class ProtocolTransport implements AppServerTransport {
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
 
+test('Cancelling a file upload discards its staging while a chunk reply is outstanding', async () => {
+	const transport = new ProtocolTransport(() => {
+		const initialized = createTestInitializeResult();
+		return { ...initialized, capabilities: { ...initialized.capabilities, contracts: { ...initialized.capabilities.contracts, fileImport: { version: 1 } } } };
+	});
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	using cancellation = new CancellationTokenSource();
+	async function* contents() { yield Uint8Array.of(1, 2, 3); }
+	const upload = createAppServerFileApi(client).importFile!({ dirId: 'workspace', path: 'new.bin' }, contents(), 3, cancellation.token);
+	const rejected = assert.rejects(upload, CancellationError);
+	const start = transport.frames.at(-1)!;
+	assert.equal(start.method, 'fs/upload/start');
+	transport.frame({ id: start.id, result: null });
+	await flushHandlers();
+	const chunk = transport.frames.at(-1)!;
+	assert.equal(chunk.method, 'fs/upload/write');
+	cancellation.cancel();
+	const discard = transport.frames.at(-1)!;
+	assert.equal(discard.method, 'fs/upload/cancel');
+	assert.deepEqual(discard.params, { dirId: 'workspace', uploadId: (start.params as { uploadId: string; }).uploadId });
+	transport.frame({ id: discard.id, result: null });
+	await rejected;
+	transport.frame({ id: chunk.id, result: null });
+	assert.equal(transport.frames.some(frame => frame.method === 'fs/upload/finish'), false);
+});
+
 test('Transport hello is pipelined while domain requests wait for full initialization', async () => {
 	const transport = new ProtocolTransport();
 	transport.holdInitialize = true;

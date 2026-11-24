@@ -375,6 +375,8 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
         .unwrap();
     let binary = client
         .read_binary_file(FsReadBinaryFileParams {
+            operation_id: None,
+            transfer: None,
             dir_id: None,
             session_directory: None,
             path: "paper.pdf".into(),

@@ -1,5 +1,8 @@
 import { URI } from '../../../base/common/uri.js';
-import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import { throwIfCancelled, type CancellationToken } from '../../../base/common/cancellation.js';
+import { encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
+import { generateUuid } from '../../../base/common/uuid.js';
 import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { localize } from '../../../nls.js';
@@ -10,6 +13,8 @@ import { appServerRequest, voidResult } from '../../agentHost/browser/appServerR
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { FileInvalidation, IFileApi } from '../common/fileApi.js';
 import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath, withRemoteWorkspacePath } from '../../remote/common/remote.js';
+
+const fileImportChunkBytes = 192 * 1024;
 
 export function createDisconnectedFileApi(unavailable: UnavailableOperation): IFileApi {
 	return {
@@ -85,9 +90,16 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 			...params,
 			...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
 		}),
-		readBinaryFile: (params) => appServerRequest(connection, 'fs/readBinaryFile', params),
+		readBinaryFile: ({ transfer, ...params }, token) => transfer && connection.capabilities?.contracts.fileImport?.version === 1
+			? readTransferSnapshot(connection, params, token)
+			: appServerRequest(connection, 'fs/readBinaryFile', params),
 		writeFile: (params) => appServerRequest(connection, 'fs/writeFile', params),
 		writeBinaryFile: (params) => appServerRequest(connection, 'fs/writeBinaryFile', params),
+		get importFile() {
+			return connection.capabilities?.contracts.fileImport?.version === 1
+				? (...params: Parameters<NonNullable<IFileApi['importFile']>>) => importFile(connection, ...params)
+				: undefined;
+		},
 		createFile: (params) => appServerRequest(connection, 'fs/createFile', params),
 		createDirectory: (params) => appServerRequest(connection, 'fs/createDirectory', params),
 		copy: (params) => voidResult(appServerRequest(connection, 'fs/copy', params)),
@@ -101,4 +113,66 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 			}
 		},
 	};
+}
+
+async function readTransferSnapshot(connection: AppServerProtocolClient, params: Parameters<IFileApi['readBinaryFile']>[0], token?: CancellationToken) {
+	if (token) throwIfCancelled(token);
+	const operationId = generateUuid();
+	const generation = connection.generation;
+	const { dirId, sessionDirectory } = params;
+	const pending = connection.request(APP_SERVER_METHODS['fs/readBinaryFile'], { ...params, transfer: true, operationId }, { timeoutMs: 240_000 });
+	using cancelled = token?.onCancellationRequested(() => {
+		if (connection.state === 'ready' && generation === connection.generation) {
+			void appServerRequest(connection, 'fs/readBinaryFile/cancel', { operationId, dirId, sessionDirectory }).catch(() => undefined);
+		}
+	});
+	try {
+		// A successful allocation still needs its owner to release the resource.
+		return await pending;
+	} catch (error) {
+		if (error instanceof AppServerRemoteError && error.errorName === 'RequestCancelled') throw new CancellationError();
+		throw error;
+	}
+}
+
+async function importFile(connection: AppServerProtocolClient, target: Parameters<NonNullable<IFileApi['importFile']>>[0], contents: AsyncIterable<Uint8Array>, sizeBytes: number, token: CancellationToken) {
+	const generation = connection.generation;
+	const { path, ...scope } = target;
+	const upload = { ...scope, uploadId: generateUuid() };
+	const check = (): void => {
+		throwIfCancelled(token);
+		if (connection.state !== 'ready' || connection.generation !== generation) throw new CancellationError();
+	};
+	let cancellation: Promise<unknown> | undefined;
+	const cancel = (): Promise<unknown> | undefined => {
+		if (connection.state === 'ready' && generation === connection.generation) {
+			cancellation ??= appServerRequest(connection, 'fs/upload/cancel', upload).catch(() => undefined);
+		}
+		return cancellation;
+	};
+	check();
+	let published = false;
+	try {
+		await appServerRequest(connection, 'fs/upload/start', { ...upload, path, sizeBytes });
+		check();
+		using stop = token.onCancellationRequested(() => { void cancel(); });
+		let offset = 0;
+		for await (const chunk of contents) {
+			for (let start = 0; start < chunk.byteLength; start += fileImportChunkBytes) {
+				check();
+				const bytes = chunk.subarray(start, start + fileImportChunkBytes);
+				await raceCancellationError(appServerRequest(connection, 'fs/upload/write', { ...upload, offset, dataBase64: encodeBase64(VSBuffer.wrap(Uint8Array.from(bytes))) }), token);
+				offset += bytes.byteLength;
+			}
+		}
+		check();
+		const result = await connection.request(APP_SERVER_METHODS['fs/upload/finish'], upload, { timeoutMs: 240_000 });
+		published = true;
+		return result;
+	} catch (error) {
+		if (token.isCancellationRequested || error instanceof AppServerRemoteError && error.errorName === 'RequestCancelled') throw new CancellationError();
+		throw error;
+	} finally {
+		if (!published) await cancel();
+	}
 }
