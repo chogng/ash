@@ -619,36 +619,38 @@ export class PdfPreviewEditor extends EditorPane implements IEditorPaneWithViewS
 		this.pageInput.value = String(number);
 		this.updateControls();
 		try {
+			const continuous = this.continuous;
+			const returningToDisplayedPage = !continuous && !refinement && replacingTurn && number === this.displayedPage?.page;
+			if (!continuous && !refinement) {
+				// Draw while the virtual row still owns its decoded image, even if a previous raster is pending.
+				const thumbnail = number !== previous ? this.navigationPane.minimap.getThumbnail(number) : undefined;
+				if (thumbnail) {
+					this.pagedView.showThumbnail(thumbnail);
+					this.updateZoom();
+					this.pageScroll.scrollTo(0, scrollTarget === 'end' ? this.pageScroll.state.maximumTop : 0);
+				} else if (replacingTurn) {
+					this.pagedView.clearThumbnail();
+					this.updateZoom();
+					this.pageScroll.scrollTo(scrollBeforeTurn.left, scrollBeforeTurn.top);
+				}
+			}
 			// Keep coalescing repeated input. Continuous navigation can take over the
 			// viewport's existing renders, so it needs a shorter settling interval.
 			if (replacesPageRequest) {
-				await this.pageTurnDelay.trigger(() => undefined, this.continuous ? 40 : undefined);
+				await this.pageTurnDelay.trigger(() => undefined, continuous ? 40 : undefined);
 			}
 			// Only the latest request may start once the previous render has released its buffer.
 			await this.pagePaint;
 			if (signal.aborted) { return; }
 			const outlineTop = typeof scrollTarget === 'number' ? scrollTarget : undefined;
-			const continuous = this.continuous;
-			const thumbnail = refinement ? undefined : this.navigationPane.minimap.getThumbnail(number);
 			let paint: Promise<void> | undefined;
 			if (continuous && !refinement && (number !== previous || replacesPageRequest || outlineTop !== undefined)) {
+				const thumbnail = this.navigationPane.minimap.getThumbnail(number);
 				paint = continuous.reveal(number, outlineTop, thumbnail, signal).then(view => {
 					if (!signal.aborted) { this.activatePage(view); }
 				});
-			} else {
-				this.pagedView.clearThumbnail();
-				if (!continuous && number !== previous && thumbnail) {
-					this.pagedView.showThumbnail(thumbnail);
-					this.updateZoom();
-					this.pageScroll.scrollTo(0, scrollTarget === 'end' ? this.pageScroll.state.maximumTop : 0);
-				}
-				if (!continuous && replacingTurn && number === this.displayedPage?.page && !refinement) {
-					// Returning to the committed page can reuse its raster and text immediately.
-					this.updateZoom();
-					this.pageScroll.scrollTo(scrollBeforeTurn.left, scrollBeforeTurn.top);
-				} else {
-					paint = this.paint(undefined, number, dimension, signal);
-				}
+			} else if (!returningToDisplayedPage) {
+				paint = this.paint(undefined, number, dimension, signal);
 			}
 			if (paint) {
 				this.pagePaint = paint.catch(() => undefined);

@@ -175,7 +175,10 @@ const pdfTest = {
 		return toolResponse.resource.toString();
 	},
 	retireToolResponse() { toolResponse?.dispose(); toolResponse = undefined; },
-	async hasBackup(resource: string) { return (await services.get(IPdfEditorService).backups.list()).some(backup => backup.resource.toString() === resource); },
+	async hasBackup(resource: string, contents?: string) {
+		const backup = await services.get(IPdfEditorService).backups.resolve(URI.parse(resource));
+		return backup !== undefined && (contents === undefined || backup.content.includes(contents));
+	},
 	async restoreWorkspace() { await contributions.workspaceRestored(); },
 	resize(width: number, height: number) {
 		const host = document.getElementById('viewer')!; host.style.width = `${width}px`; host.style.height = `${height}px`;

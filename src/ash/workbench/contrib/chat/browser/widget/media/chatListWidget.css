@@ -362,6 +362,7 @@ article.ash-chat-user-message > pre {
 .ash-chat-fork-action[aria-busy="true"] {
 	display: inline-grid;
 }
+/* A universal child selector makes unrelated aria-busy changes invalidate entire subtrees. */
 .ash-chat-fork-action > :is(.ash-button-content, .ash-pixel-spinner) {
 	grid-area: 1 / 1;
 	justify-self: center;

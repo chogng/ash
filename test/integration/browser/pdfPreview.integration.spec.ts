@@ -84,12 +84,15 @@ test('A tool PDF restores unsaved annotations after its renderer crashes', async
 	await noteInput.fill('放弃的批注');
 	await addNote.click();
 	await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('放弃的批注');
+	const hasBackup = (contents?: string) => page.evaluate(({ resource, contents }) => window.aspdfTest.hasBackup(resource, contents), { resource, contents });
+	await expect.poll(() => hasBackup('放弃的批注')).toBe(true);
 	await page.evaluate(() => { window.aspdfTest.retireToolResponse(); return window.aspdfTest.revert(); });
 	await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(0);
+	await expect.poll(() => hasBackup()).toBe(false);
 	await noteInput.fill('崩溃前的批注');
 	await addNote.click();
 	await expect(viewer.getByRole('button', { name: '保存副本', exact: true })).toBeEnabled();
-	await expect.poll(() => page.evaluate(resource => window.aspdfTest.hasBackup(resource), resource)).toBe(true);
+	await expect.poll(() => hasBackup('崩溃前的批注')).toBe(true);
 	const debuggerSession = await context.newCDPSession(page);
 	const crashed = page.waitForEvent('crash');
 	void debuggerSession.send('Page.crash').catch(() => undefined);
@@ -175,14 +178,24 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	for (const pageNumber of [1, 2]) {
 		const row = option(pageNumber);
 		const image = row.locator('> img');
-		const [rowBounds, imageBounds, labelBounds, ratio] = await Promise.all([
-			row.boundingBox(), image.boundingBox(), row.locator('> .ash-sessions-pdf-thumbnail-number').boundingBox(),
-			image.evaluate((element: HTMLImageElement) => element.naturalWidth / element.naturalHeight),
+		const [rowBounds, labelBounds, imageMetrics] = await Promise.all([
+			row.boundingBox(), row.locator('> .ash-sessions-pdf-thumbnail-number').boundingBox(),
+			image.evaluate((element: HTMLImageElement) => {
+				const { top, bottom, width, height } = element.getBoundingClientRect();
+				const style = getComputedStyle(element);
+				const contentWidth = width - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
+				const contentHeight = height - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
+				return {
+					top, bottom,
+					contentRatio: contentWidth / contentHeight,
+					intrinsicRatio: element.naturalWidth / element.naturalHeight,
+				};
+			}),
 		]);
-		expect(imageBounds!.y).toBeGreaterThan(rowBounds!.y);
-		expect(imageBounds!.y + imageBounds!.height).toBeLessThan(labelBounds!.y);
+		expect(imageMetrics.top).toBeGreaterThan(rowBounds!.y);
+		expect(imageMetrics.bottom).toBeLessThan(labelBounds!.y);
 		expect(labelBounds!.y + labelBounds!.height).toBeLessThan(rowBounds!.y + rowBounds!.height);
-		expect(imageBounds!.width / imageBounds!.height).toBeCloseTo(ratio, 2);
+		expect(imageMetrics.contentRatio).toBeCloseTo(imageMetrics.intrinsicRatio, 2);
 	}
 	const tabs = rail.getByRole('tablist', { name: 'PDF 页面导航' });
 	const thumbnails = tabs.getByRole('tab', { name: '缩略图', exact: true });
@@ -250,14 +263,19 @@ for (const mode of ['continuous', 'paged']) {
 		const preview = readingArea.locator('.ash-sessions-pdf-page-thumbnail:visible');
 		let release!: () => void;
 		const gate = new Promise<void>(resolve => { release = resolve; });
+		let firstRasterPending = false;
 		await page.route('**/__aspdf_rpc', async route => {
 			const { method, params } = route.request().postDataJSON();
-			if (['pdf/page', 'pdf/renderPage'].includes(method) && params.page >= 8 && params.dimension === 1600) { await gate; }
+			if (['pdf/page', 'pdf/renderPage'].includes(method) && params.page >= 8 && params.dimension === 1600) {
+				if (params.page === 8) { firstRasterPending = true; }
+				await gate;
+			}
 			await route.fallback();
 		});
 		try {
 			await option(8).click();
 			await expect(preview).toHaveJSProperty('width', 192);
+			await expect.poll(() => firstRasterPending).toBe(true);
 			await option(9).click();
 			await expect(preview).toHaveJSProperty('width', 256);
 			await expect(preview).toBeInViewport();
@@ -565,6 +583,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await number.fill(invalid); await number.press('Enter'); await expect(number).toHaveValue('2');
 		}
 		await number.fill('1'); await number.press('Enter');
+		await expect(viewer.getByRole('status')).toHaveText(label('Page 1 of 2', '第 1 页，共 2 页'));
 		await expect(button('Previous page', '上一页')).toBeDisabled();
 		const surface = viewer.locator('.ash-sessions-pdf-page');
 		const stage = viewer.locator('.ash-sessions-pdf-stage');
@@ -572,8 +591,9 @@ for (const locale of ['en', 'zh-CN']) {
 			const bounds = await stage.boundingBox(); const container = await surface.boundingBox();
 			return bounds!.height <= container!.height && bounds!.width <= container!.width;
 		}).toBe(true);
-		const glyph = viewer.locator('.ash-sessions-pdf-text span').first();
+		const glyph = stage.locator('.ash-sessions-pdf-text span').first();
 		const glyphPosition = async () => {
+			await expect(glyph).toBeVisible();
 			const pageBounds = (await stage.boundingBox())!;
 			const glyphBounds = (await glyph.boundingBox())!;
 			return { x: (glyphBounds.x - pageBounds.x) / pageBounds.width, y: (glyphBounds.y - pageBounds.y) / pageBounds.height };
