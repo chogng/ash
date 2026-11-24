@@ -12,6 +12,8 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 
+const overflowingWidgetHorizontalPadding = 15;
+
 interface BoxLayoutResult {
 	readonly fitsAbove: boolean;
 	readonly aboveTop: number;
@@ -277,7 +279,7 @@ class ContentWidget extends Disposable {
 		if (this.cachedWidth >= 0 && this.cachedHeight >= 0) return;
 		const preferred = safeInvoke(this.actual.beforeRender, this.actual);
 		if (preferred && validDimension(preferred)) {
-			this.cachedWidth = preferred.width;
+			this.cachedWidth = this.allowEditorOverflow ? Math.min(preferred.width, this.maxWidth) : preferred.width;
 			this.cachedHeight = preferred.height;
 			return;
 		}
@@ -289,7 +291,7 @@ class ContentWidget extends Disposable {
 	private updateMaxWidth(): void {
 		const layoutInfo = this.context.configuration.options.get(EditorOption.layoutInfo);
 		const nextMaxWidth = this.allowEditorOverflow
-			? getClientArea(this.viewDomNode.domNode.ownerDocument.body).width
+			? Math.max(0, getClientArea(this.viewDomNode.domNode.ownerDocument.body).width - 2 * overflowingWidgetHorizontalPadding)
 			: Math.max(0, layoutInfo.contentWidth);
 		if (nextMaxWidth !== this.maxWidth) {
 			this.maxWidth = nextMaxWidth;
@@ -309,8 +311,8 @@ class ContentWidget extends Disposable {
 		const contentLeft = this.context.configuration.options.get(EditorOption.layoutInfo).contentLeft;
 		const anchorLeft = viewPosition.left + contentLeft + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
 		const anchorTop = viewPosition.top + anchor.top - context.scrollTop - (fixed ? windowScrollTop : 0);
-		const minimumLeft = (fixed ? 0 : windowScrollLeft) + 15;
-		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - 15;
+		const minimumLeft = (fixed ? 0 : windowScrollLeft) + overflowingWidgetHorizontalPadding;
+		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - overflowingWidgetHorizontalPadding;
 		const left = Math.min(Math.max(anchorLeft, minimumLeft), Math.max(minimumLeft, maximumRight - this.cachedWidth));
 		const viewportTop = (fixed ? 0 : windowScrollTop) + 22;
 		const viewportBottom = (fixed ? viewport.height : windowScrollTop + viewport.height) - 22;

@@ -1,5 +1,6 @@
 .stanza-editor-hover {
 	position: absolute;
+	box-sizing: border-box;
 	z-index: 8;
 	max-width: min(480px, calc(100vw - 32px));
 	max-height: calc(100vh - 48px);

@@ -19,6 +19,30 @@ import { type IModelTokensChangedEvent } from '../../common/textModelEvents.js';
 
 const { TestView: View } = await import('./viewModel/testViewModel.js');
 
+test('an overflowing content widget reserves the same viewport clearance when measuring and positioning', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	Object.defineProperty(dom.window, 'innerWidth', { value: 200 });
+	try {
+		using model = new TextModel('text');
+		using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
+		const node = dom.window.document.createElement('div');
+		view.addContentWidget({
+			allowEditorOverflow: true,
+			getId: () => 'overflowing',
+			getDomNode: () => node,
+			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.BELOW] }),
+			beforeRender: () => ({ width: 400, height: 20 }),
+		});
+		view.layout({ width: 200, height: 100 });
+		view.render(true, false);
+		assert.equal(node.style.maxWidth, '170px');
+		assert.equal(node.style.left, '15px');
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('resizing publishes geometry immediately and renders the final size in one frame', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
