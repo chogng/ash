@@ -23,7 +23,7 @@ import { CancellationTokenSource, throwIfCancelled } from '../../../../base/comm
 import { raceCancellationError, RunOnceScheduler } from '../../../../base/common/async.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
-import { ISessionChangesService } from '../common/sessionChangesService.js';
+import { ISessionChangesService, type SessionCommitCandidate } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { createGitComparisonEditorInput } from './gitComparisonEditorInput.js';
 import { getChangesViewMode, getCapturedTurnIds, type IChangesThreadFileItem } from '../common/changes.js';
@@ -42,6 +42,7 @@ import { ISessionProviderScopeService, type ISessionProviderScope } from '../../
 export type ChangesScope = 'all' | 'turn' | 'uncommitted' | 'branch';
 export const ChangesScopeContext = new RawContextKey<ChangesScope>('sessions.changes.scope', 'all');
 export const ChangesHasWorkspaceContext = new RawContextKey<boolean>('sessions.changes.hasWorkspace', false);
+export const ChangesCanPreviewCommitContext = new RawContextKey<boolean>('sessions.changes.canPreviewCommit', false);
 
 interface GitComparison {
 	readonly provider: ISessionProviderScope;
@@ -79,6 +80,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private readonly uncommittedRefresh = this._register(new RunOnceScheduler(() => { void this.refreshUncommitted(); }, 4_000));
 	private readonly scopeContext;
 	private readonly hasWorkspace;
+	private readonly canPreviewCommit;
+	private commitCandidates: readonly SessionCommitCandidate[] = [];
 	private gitComparison: GitComparison | undefined;
 
 	constructor(
@@ -97,6 +100,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		super(SessionChangesEditor.ID, themeService, storageService);
 		this.scopeContext = ChangesScopeContext.bindTo(contextKeys);
 		this.hasWorkspace = ChangesHasWorkspaceContext.bindTo(contextKeys);
+		this.canPreviewCommit = ChangesCanPreviewCommitContext.bindTo(contextKeys);
 		if (options.showFileList) {
 			getChangesViewMode(storageService);
 			this._register(instantiation.get(ISessionsService).onDidChange(() => this.updateWorkspaceContext()));
@@ -189,6 +193,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.updateUncommittedWatch();
 		this.scopeContext.reset();
 		this.clearComparison();
+		this.setCommitCandidates([]);
 		this.viewState = undefined;
 		this.revision++;
 		this.pending.clear();
@@ -227,11 +232,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.scopeRequest.clear();
 			this.pending.clear();
 			this.clearComparison();
+			this.setCommitCandidates([]);
 		}
-	}
-
-	private get hasThread(): boolean {
-		return !!this.input && !!new URLSearchParams(this.input.resource.query).get('thread');
 	}
 
 	private updateWorkspaceContext(): void {
@@ -246,13 +248,13 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public async previewCommit(): Promise<void> {
-		if (!this.visible || !this.hasThread || !this.input || this.gitComparison) return;
+		if (!this.visible || !this.input || !this.commitCandidates.length) return;
 		const cancellation = new CancellationTokenSource();
 		const request = toDisposable(() => cancellation.dispose(true));
 		this.scopeRequest.value = request;
 		try {
 			const input = this.input instanceof SessionChangesEditorInput ? this.input : new SessionChangesEditorInput(this.input.resource);
-			await this.changesService.previewCommit(input.sessionResource, cancellation.token, input.changesetSelection);
+			await this.changesService.previewCommit(input.sessionResource, this.commitCandidates, cancellation.token);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested) throw error;
 		} finally {
@@ -491,12 +493,28 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		return loading;
 	}
 
+	private setCommitCandidates(candidates: readonly SessionCommitCandidate[]): void {
+		this.commitCandidates = candidates;
+		this.canPreviewCommit.set(candidates.length > 0);
+	}
+
+	private async updateCommitCandidates(input: IResourceEditorInput, comparison: MultiDiffEditorInput, signal: AbortSignal): Promise<void> {
+		if (!this.options.showFileList || this.gitComparison) return;
+		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
+		// A capture lookup failure only affects commit eligibility. The loaded comparison is still readable.
+		const candidates = await this.changesService.resolveCommitCandidates(sessionResource, comparison.items.map(item => item.modified.resource), signal).catch(() => []);
+		if (!signal.aborted && this.comparisonInput === comparison) {
+			this.setCommitCandidates(candidates);
+		}
+	}
+
 	private async loadChanges(signal: AbortSignal | undefined, background: boolean): Promise<void> {
 		const input = this.input;
 		if (!input || !this.visible || this.isDisposed) {
 			return;
 		}
 		const revision = ++this.revision;
+		this.setCommitCandidates([]);
 		// The shared pane replaces the comparison model and restores this snapshot once it is ready.
 		this.viewState = this.saveViewState();
 		this.pending.clear();
@@ -601,6 +619,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			// navigation just as restoring an existing conversation's state does.
 			this.restoreViewState(this.viewState ?? { scrollTop: 0, collapsedItemIds: [], itemViewStates: [] });
 			pane.setVisible(true);
+			void this.updateCommitCandidates(input, comparison, controller.signal);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
 				const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);

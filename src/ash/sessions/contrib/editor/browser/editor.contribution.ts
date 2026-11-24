@@ -32,7 +32,7 @@ import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
-import { ChangesHasWorkspaceContext, ChangesScopeContext, SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
+import { ChangesCanPreviewCommitContext, ChangesHasWorkspaceContext, ChangesScopeContext, SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 
@@ -143,7 +143,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		}));
 		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
 			command: { id: previewCommitId, title: localize2('sessions.changes.previewCommit', 'Preview commit…') },
-			when: ContextKeyExpr.and(changesTool, ChangesHasWorkspaceContext.isEqualTo(true),
+			when: ContextKeyExpr.and(changesTool, ChangesHasWorkspaceContext.isEqualTo(true), ChangesCanPreviewCommitContext.isEqualTo(true),
 				ContextKeyExpr.or(ChangesScopeContext.isEqualTo('all'), ChangesScopeContext.isEqualTo('turn'))),
 			group: '1_changes', order: 0,
 		}));

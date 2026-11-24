@@ -157,6 +157,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	contextKeys.setContext('sessions.editorTool', 'changes');
 	contextKeys.setContext('sessions.changes.hasWorkspace', true);
 	contextKeys.setContext('sessions.changes.scope', 'all');
+	assert.ok(!desktopIds().includes('ash.sessions.changes.previewCommit'));
+	contextKeys.setContext('sessions.changes.canPreviewCommit', true);
 	contextKeys.setContext('multiDiffEditorFileListAvailable', true);
 	contextKeys.setContext('multiDiffEditorFileListEnabled', true);
 	assert.equal(headerActions().find(action => action.id === 'multiDiffEditor.toggleFileList')?.checked, true);
@@ -172,6 +174,9 @@ test('editor contributions follow layout state, serialize open commands without 
 		for (const [scope, canPreview] of [['all', true], ['turn', true], ['uncommitted', false], ['branch', false]] as const) {
 			contextKeys.setContext('sessions.changes.scope', scope);
 			assert.equal(desktopIds().includes('ash.sessions.changes.previewCommit'), canPreview);
+			contextKeys.setContext('sessions.changes.canPreviewCommit', false);
+			assert.ok(!desktopIds().includes('ash.sessions.changes.previewCommit'));
+			contextKeys.setContext('sessions.changes.canPreviewCommit', true);
 		}
 	}
 	contextKeys.setContext('sessions.changes.scope', 'all');

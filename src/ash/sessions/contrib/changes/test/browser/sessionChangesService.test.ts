@@ -6,7 +6,7 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
+import { createThreadChangeFileResource, IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeDetails } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { IDecorationsService, type IDecorationsProvider } from '../../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../../workbench/services/editor/common/editorService.js';
@@ -28,6 +28,43 @@ import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbenc
 
 suite('Session Changes opening and capture contract', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('commit candidates match the visible checkpoint repository and exact Turn capture revision', async () => {
+		using services = new InstantiationService();
+		const session = URI.parse('ash-session:/session?thread=thread');
+		const entry = (id: string, repositoryId: string, path: string): TurnChangeDetails => ({
+			summary: {
+				sessionId: 'session', threadId: 'thread', changeSetId: id, turnId: 'turn', repositoryId,
+				revision: 3, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
+				statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
+			},
+			files: [{ path, kind: 'added', binary: false, additions: 1, deletions: 0 }],
+		});
+		const repo = entry('visible', 'repo', 'main.ts');
+		const otherRepo = entry('other-repo', 'other', 'main.ts');
+		const reverted = entry('reverted', 'repo', 'reverted.ts');
+		const records = [repo, otherRepo, reverted];
+		const change = (record: TurnChangeDetails) => createSessionFileChange(record.summary, record.files[0]!);
+		services.registerInstance(IEditorService, {} as IEditorService);
+		services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+		services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
+		services.registerInstance(ISessionsManagementService, {
+			sessions: [{ sessionId: 'session', chats: [{ threadId: 'thread' }] }],
+		} as unknown as ISessionsManagementService);
+		services.registerInstance(IQuickInputService, { input: async () => assert.fail('Mixed repositories must not open a message prompt') } as unknown as IQuickInputService);
+		services.registerInstance(IChatService, {
+			listTurnChanges: async () => records.map(item => item.summary),
+			readTurnChange: async (_session: string, _thread: string, id: string) => records.find(item => item.summary.changeSetId === id)!,
+		} as unknown as IChatService);
+		using service = services.createInstance(SessionChangesService);
+		const checkpoint = createThreadChangeFileResource('session', 'thread', 'checkpoint', 'repo', 'main.ts');
+		assert.deepEqual((await service.resolveCommitCandidates(session, [checkpoint.with({ query: `${checkpoint.query}&side=after` })]))
+			.map(candidate => candidate.summary.changeSetId), ['visible']);
+		assert.deepEqual((await service.resolveCommitCandidates(session, [change(otherRepo).modifiedUri]))
+			.map(candidate => candidate.summary.changeSetId), ['other-repo']);
+		assert.deepEqual(await service.resolveCommitCandidates(session, [change({ ...repo, summary: { ...repo.summary, revision: 2 } }).modifiedUri]), []);
+		await assert.rejects(service.previewSelectedFiles(session, CancellationToken.None, [change(repo), change(otherRepo)]), /one repository/u);
+	});
 
 	test('deleted file identity matches both comparison sides but never another capture or conversation', () => {
 		const change = {

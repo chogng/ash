@@ -47,7 +47,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IChatService, type ThreadUpdateEnvelope } from '../../../../../../workbench/services/chat/common/chatService.js';
+import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope } from '../../../../../../workbench/services/chat/common/chatService.js';
 import type { ThreadChangesSummary, TurnChangeDetails } from '../../../../../../platform/turnChanges/common/turnChangesApi.js';
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../../workbench/test/common/testEditorService.js';
@@ -424,7 +424,7 @@ declare global {
 			activeTurn(value: boolean): void;
 			setLocale(): void;
 			opened(): number;
-			previewCommit(): void;
+			previewCommit(): Promise<void>;
 			checkoutAttempts(): readonly string[][];
 			reviews(): readonly { resource: string; changesetId?: string; }[];
 			content(): string;
@@ -561,9 +561,20 @@ window.ashChangesIntegration = {
 	setLocale: () => { setNlsMessages('zh-CN', chineseCatalog.bundles); changed.fire(); },
 	opened: () => opened,
 	checkoutAttempts: () => checkoutAttempts,
-	previewCommit: () => {
+	previewCommit: async () => {
 		const selected = services.get(ISessionsService).activeSelection;
-		if (selected?.kind === 'session') void services.get(ISessionChangesService).previewCommit(new SessionChangesEditorInput(selected).sessionResource, CancellationToken.None);
+		if (selected?.kind !== 'session') return;
+		const { session, threadId } = selected.active;
+		const chat = services.get(IChatService);
+		const changes = services.get(ISessionChangesService);
+		const sessionResource = new SessionChangesEditorInput(selected).sessionResource;
+		const checkpoint = await chat.readThreadChanges(session.sessionId, threadId);
+		const files = checkpoint.repositories.flatMap(repository => repository.files.map(file => {
+			const resource = createThreadChangeFileResource(session.sessionId, threadId, checkpoint.revision, repository.repositoryId, file.path);
+			return resource.with({ query: `${resource.query}&side=after` });
+		}));
+		const candidates = await changes.resolveCommitCandidates(sessionResource, files);
+		void changes.previewCommit(sessionResource, candidates, CancellationToken.None);
 	},
 	reviews: () => reviews,
 	content: () => view.getAccessibleContent(),

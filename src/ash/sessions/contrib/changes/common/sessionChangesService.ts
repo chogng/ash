@@ -4,6 +4,7 @@ import type { IMultiDiffEditorOptions } from '../../../../editor/common/multiDif
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
+import type { TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ISessionChangeset, ISessionFileChange } from '../../../services/sessions/common/session.js';
 
 export interface ISessionChangesEditorOptions extends IMultiDiffEditorOptions {
@@ -13,13 +14,20 @@ export interface ISessionChangesEditorOptions extends IMultiDiffEditorOptions {
 	| { readonly kind: 'transient'; readonly changeset: ISessionChangeset; };
 }
 
+export interface SessionCommitCandidate {
+	readonly path: string;
+	readonly summary: TurnChangeSetSummary;
+	readonly turnNumber: number;
+}
+
 /** Owns Changes editor identity, opening preferences and reconstructable tab decoration. */
 export interface ISessionChangesService {
 	getChangesEditorResource(sessionResource: URI): URI;
 	getSessionResource(editorResource: URI): URI | undefined;
 	openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<IEditorGroup | undefined>;
 	resolveChangeset(sessionResource: URI, id: string): Promise<ISessionChangeset>;
-	previewCommit(sessionResource: URI, token: CancellationToken, selection?: ISessionChangesEditorOptions['changesetSelection']): Promise<void>;
+	resolveCommitCandidates(sessionResource: URI, visibleFiles: readonly URI[], signal?: AbortSignal): Promise<readonly SessionCommitCandidate[]>;
+	previewCommit(sessionResource: URI, candidates: readonly SessionCommitCandidate[], token: CancellationToken): Promise<void>;
 	previewSelectedFiles(sessionResource: URI, token: CancellationToken, files: readonly ISessionFileChange[]): Promise<void>;
 	setChangesCount(editorResource: URI, count: number | undefined): void;
 }

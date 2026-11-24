@@ -22,7 +22,7 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { SessionsConfiguration } from '../../../../common/configuration.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import type { GitSessionComparisonSnapshot } from '../../../../../platform/git/common/localGitService.js';
-import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
+import { ChangesCanPreviewCommitContext, SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
 import '../../browser/changes.contribution.js';
 import { ISessionChangesService } from '../../common/sessionChangesService.js';
@@ -172,7 +172,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 			assert.ok(chinese);
 			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 			try {
-				assert.match(provider.provideContent(), /查看“全部更改”或回合更改时，可以使用“预览提交”/u);
+				assert.match(provider.provideContent(), /如果“全部更改”或回合更改中有可提交的文件，可以使用“预览提交”/u);
 				assert.match(provider.provideContent(), /“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏/u);
 				assert.match(provider.provideContent(), /打开“差异视图”.*“行内”“并排”或“自动”/u);
 			} finally {
@@ -331,21 +331,21 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
 		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
 	});
-	const captures = [capture('first', 'older', 'a'), capture('second', 'selected', 'a'), capture('third', 'selected', 'b')];
+	let captures = [capture('first', 'older', 'a'), capture('second', 'selected', 'a'), capture('third', 'selected', 'b')];
 	const file = { path: 'main.ts', kind: 'modified' as const, binary: false, additions: 1, deletions: 0 };
 	const fileReads: string[] = [];
-	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session' }] } as unknown as ISessionsManagementService);
-	services.registerInstance(ISessionChangesService, {
-		setChangesCount: () => { },
-		resolveChangeset: async (_resource: URI, id: string) => ({
-			isEnabled: constObservable(true),
-			capabilities: { review: id === 'second' },
-			changes: constObservable([createSessionFileChange(captures.find(summary => summary.changeSetId === id)!, file)]),
-		}),
-	} as unknown as ISessionChangesService);
+	using changes = new Emitter<{ sessionId: string; threadId: string; }>();
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session', chats: [{ threadId: 'thread' }] }] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as ISessionsService);
+	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
+	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+	services.registerInstance(IQuickInputService, {
+		createQuickPick: () => assert.fail('Unavailable preview must not open the picker'),
+	} as unknown as IQuickInputService);
+	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IChatService, {
-		onDidUpdateThread: Event.None, onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None,
+		onDidUpdateThread: Event.None, onDidUpdateTurnChanges: changes.event, onDidBecomeReady: Event.None,
 		listTurnChanges: async () => captures,
 		readTurnChange: async (_session: string, _thread: string, id: string) => ({ summary: captures.find(summary => summary.changeSetId === id)!, files: [file] }),
 		readTurnChangeFile: async (_session: string, _thread: string, id: string) => {
@@ -353,14 +353,28 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 			return { before: 'baseline', after: id, binary: false, truncated: false };
 		},
 	} as unknown as IChatService);
-	using pane = services.createInstance(SessionChangesEditor, {});
+	using pane = services.createInstance(SessionChangesEditor, { showFileList: true });
 	pane.create(dom.window.document.body);
 	pane.setVisible(true);
+	const canPreview = () => services.get(IContextKeyService).contextMatchesRules(ChangesCanPreviewCommitContext.isEqualTo(true));
+	assert.equal(canPreview(), false);
 	await pane.setInput(new SessionChangesEditorInput(URI.parse('ash-session-changes:/session?thread=thread'), { kind: 'turn', turnId: 'selected' }), new AbortController().signal);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(canPreview(), true);
 	assert.deepEqual(fileReads, ['second', 'third']);
 	assert.match(pane.getAccessibleContent(), /After:\nsecond[\s\S]*After:\nthird/u);
 	const second = createSessionFileChange(captures[1]!, file);
 	const third = createSessionFileChange(captures[2]!, file);
 	assert.equal((await pane.getFileChange(second.modifiedUri, { review: true }))?.file.path, file.path);
-	assert.equal(await pane.getFileChange(third.modifiedUri, { review: true }), undefined);
+	assert.equal((await pane.getFileChange(third.modifiedUri, { review: true }))?.file.path, file.path);
+
+	captures = captures.map(summary => summary.turnId === 'selected'
+		? { ...summary, committedPaths: [file.path], commitState: 'committed', revision: 2 }
+		: summary);
+	changes.fire({ sessionId: 'session', threadId: 'thread' });
+	assert.equal(canPreview(), false);
+	await pane.previewCommit();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(canPreview(), false);
+	assert.match(pane.getAccessibleContent(), /After:\nsecond[\s\S]*After:\nthird/u);
 });

@@ -1,13 +1,14 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { CancellationToken, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { constObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IChatService, canPreviewTurnChange } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, canPreviewTurnChange, createThreadChangeFileResource } from '../../../../workbench/services/chat/common/chatService.js';
 import type { TurnCommitSelection } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
@@ -19,7 +20,7 @@ import {
 } from '../../../services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
 import { getCapturedTurnIds } from '../common/changes.js';
-import type { ISessionChangesEditorOptions, ISessionChangesService } from '../common/sessionChangesService.js';
+import type { ISessionChangesEditorOptions, ISessionChangesService, SessionCommitCandidate } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 
 /** Editor preferences and tab counts are presentation state; captures are always read from ChatService. */
@@ -110,23 +111,45 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		};
 	}
 
-	public async previewCommit(sessionResource: URI, token: CancellationToken, selection?: ISessionChangesEditorOptions['changesetSelection']): Promise<void> {
+	public async resolveCommitCandidates(sessionResource: URI, visibleFiles: readonly URI[], signal?: AbortSignal): Promise<readonly SessionCommitCandidate[]> {
+		const first = visibleFiles[0];
+		if (!first || this.isDisposed) return [];
+		if (signal) throwIfCancelled(signal);
 		const { sessionId, threadId } = this.getConversation(sessionResource);
-		const captures = await this.chat.listTurnChanges(sessionId, threadId);
-		if (this.isDisposed || token.isCancellationRequested) return;
+		const read = <T>(promise: Promise<T>) => signal ? raceCancellationError(promise, signal) : promise;
+		const captures = await read(this.chat.listTurnChanges(sessionId, threadId));
+		if (this.isDisposed) return [];
+		if (signal) throwIfCancelled(signal);
 		const turnNumbers = new Map(getCapturedTurnIds(captures).map((id, index) => [id, index + 1]));
-		const selectedId = selection?.kind === 'transient' ? selection.changeset.id : selection?.kind === 'id' ? selection.id : undefined;
-		const items = (await Promise.all(captures.map(async capture => {
-			if (capture.captureState !== 'sealed' || !capture.statistics.files || capture.commitState === 'queued' || capture.commitState === 'committing') return [];
-			if ((selectedId && capture.changeSetId !== selectedId) || (selection?.kind === 'turn' && capture.turnId !== selection.turnId)) return [];
-			const { files, summary } = await this.chat.readTurnChange(sessionId, threadId, capture.changeSetId);
+		const visible = new Set(visibleFiles.map(resource => resource.toString()));
+		// All Changes is a checkpoint comparison. Match its repository and path; Turn views carry the exact capture revision.
+		const checkpoint = first.scheme === 'ash-thread-change' ? new URLSearchParams(first.query).get('revision') : null;
+		const visibleOwners = new Set(visibleFiles.map(resource => checkpoint === null
+			? resource.path.split('/')[1]
+			: new URLSearchParams(resource.query).get('repository')));
+		const candidates = await Promise.all(captures.map(async capture => {
+			const owner = checkpoint === null ? capture.changeSetId : capture.repositoryId;
+			if (!visibleOwners.has(owner) || capture.captureState !== 'sealed' || capture.statistics.files <= capture.committedPaths.length) return [];
+			const { files, summary } = await read(this.chat.readTurnChange(sessionId, threadId, capture.changeSetId));
 			if (summary.revision !== capture.revision) return [];
-			return files.filter(file => canPreviewTurnChange(summary, file.path)).map(file => ({
-				label: file.path, description: localize('sessions.changes.turn', 'Turn {0}', turnNumbers.get(capture.turnId)!), summary,
+			return files.filter(file => {
+				if (!canPreviewTurnChange(summary, file.path)) return false;
+				if (checkpoint === null) return visible.has(createSessionFileChange(summary, file).modifiedUri.toString());
+				const resource = createThreadChangeFileResource(sessionId, threadId, checkpoint, summary.repositoryId, file.path);
+				return visible.has(resource.with({ query: `${resource.query}&side=after` }).toString());
+			}).map(file => ({
+				path: file.path, summary, turnNumber: turnNumbers.get(capture.turnId)!,
 			}));
-		}))).flat();
-		if (this.isDisposed || token.isCancellationRequested) return;
-		if (!items.length) throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
+		}));
+		return this.isDisposed ? [] : candidates.flat();
+	}
+
+	public async previewCommit(sessionResource: URI, candidates: readonly SessionCommitCandidate[], token: CancellationToken): Promise<void> {
+		if (!candidates.length || this.isDisposed || token.isCancellationRequested) return;
+		const { sessionId, threadId } = this.getConversation(sessionResource);
+		const items = candidates.map(candidate => ({
+			...candidate, label: candidate.path, description: localize('sessions.changes.turn', 'Turn {0}', candidate.turnNumber),
+		}));
 		using resources = new DisposableStore();
 		const picker = resources.add(this.quickInput.createQuickPick<(typeof items)[number]>());
 		picker.items = items;
@@ -138,7 +161,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 			resources.add(picker.onDidAccept(() => {
 				const files = picker.selectedItems;
 				if (!files.length) return;
-				if (files.some(file => file.summary.repositoryId !== files[0]!.summary.repositoryId)) {
+				if (!this.isSingleRepository(files)) {
 					picker.description = localize('sessions.changes.previewOneRepository', 'Choose files from one repository at a time.');
 					return;
 				}
@@ -147,12 +170,19 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 			}));
 			picker.show();
 		});
-		await this.openCommitPreview(sessionId, threadId, this.groupCommitFiles(selected.map(file => ({ summary: file.summary, path: file.label }))), token);
+		await this.openCommitPreview(sessionId, threadId, this.groupCommitFiles(selected), token);
 	}
 
 	public async previewSelectedFiles(sessionResource: URI, token: CancellationToken, files: readonly ISessionFileChange[]): Promise<void> {
+		if (!this.isSingleRepository(files)) {
+			throw new Error(localize('sessions.changes.previewOneRepository', 'Choose files from one repository at a time.'));
+		}
 		const { sessionId, threadId } = this.getConversation(sessionResource);
 		await this.openCommitPreview(sessionId, threadId, this.groupCommitFiles(files.map(({ summary, file }) => ({ summary, path: file.path }))), token);
+	}
+
+	private isSingleRepository(files: readonly Pick<SessionCommitCandidate, 'summary'>[]): boolean {
+		return files.every(file => file.summary.repositoryId === files[0]?.summary.repositoryId);
 	}
 
 	private groupCommitFiles(files: readonly { readonly summary: ISessionFileChange['summary']; readonly path: string; }[]): TurnCommitSelection[] {

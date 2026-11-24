@@ -517,6 +517,8 @@ test('Changes editor exposes diff view modes and review help in Chinese', async 
 	await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 	const editor = page.locator('[data-editor-tool="changes"]');
 	const changesPane = editor.locator('.ash-sessions-changes-editor');
+	await expect(changesPane).toBeVisible();
+	await expect(editor.getByRole('button', { name: /预览提交/u })).toHaveCount(0);
 	await changesPane.focus();
 	const moreActions = editor.locator('.ash-editor-title-actions').getByRole('button', { name: '更多操作', exact: true });
 	const menus = new Menus(page);
@@ -525,6 +527,7 @@ test('Changes editor exposes diff view modes and review help in Chinese', async 
 		.filter(item => item.checked).map(item => item.label)).toEqual(['行内']);
 	await changesPane.focus();
 	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/如果“全部更改”或回合更改中有可提交的文件，可以使用“预览提交”/u);
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*按空格预览并保留列表焦点[\s\S]*“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏[\s\S]*打开“差异视图”/u);
 	await page.keyboard.press('Escape');
 	await expect(changesPane).toBeFocused();
