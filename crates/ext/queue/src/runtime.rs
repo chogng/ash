@@ -21,7 +21,7 @@ pub trait QueueExecutor: Send + Sync + 'static {
     fn accepts(&self, message: &QueuedMessage) -> bool;
     fn ready(&self, message: &QueuedMessage) -> Result<bool, String>;
     fn deliver(&self, message: &QueuedMessage) -> Result<Delivery, String>;
-    fn changed(&self);
+    fn changed(&self, changes: Option<&[crate::QueueChange]>);
     fn report_error(&self, error: &str);
 }
 
@@ -42,16 +42,22 @@ impl QueueRuntime {
             .name("ash-message-queue".into())
             .spawn(move || {
                 let store = worker_store;
-                let mut revision = None;
+                let mut revision = store.revision().ok();
                 loop {
                     if let Err(error) = tick(&store, executor.as_ref()) {
                         executor.report_error(&error.to_string());
                     }
                     match store.revision() {
-                        Ok(current) if revision != Some(current) => {
-                            revision = Some(current);
-                            executor.changed();
-                        }
+                        Ok(current) if revision != Some(current) => match revision
+                            .map(|previous| store.changes_since(previous, current))
+                            .transpose()
+                        {
+                            Ok(changes) => {
+                                revision = Some(current);
+                                executor.changed(changes.flatten().as_deref());
+                            }
+                            Err(error) => executor.report_error(&error.to_string()),
+                        },
                         Ok(_) => {}
                         Err(error) => executor.report_error(&error.to_string()),
                     }

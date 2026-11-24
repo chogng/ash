@@ -1035,7 +1035,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                     ash_app_server_protocol::protocol::error::AppServerErrorName::InternalError,
                 )
             })?;
-            self.updates.publish_queue_changed();
+            self.updates.publish_queue_changed(&session_id, None);
         }
         if let Some(notes) = &self.notes {
             notes

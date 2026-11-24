@@ -114,7 +114,7 @@ export class AppServerProtocolClient {
 			connectTimeoutMs: positiveInteger(options.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'connectTimeoutMs'),
 			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'initializeTimeoutMs'),
 			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, 'requestTimeoutMs'),
-			capabilities: { ...options.capabilities, notifications: true },
+			capabilities: { ...options.capabilities, notifications: true, scopedQueueNotifications: true },
 			transportHandshake: options.transportHandshake ?? false,
 		};
 		// Ownership transfers after options have been validated; reconnect resets

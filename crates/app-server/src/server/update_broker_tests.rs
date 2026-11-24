@@ -27,6 +27,38 @@ use core_api::HookEventDecision;
 struct RecordingHooks(std::sync::mpsc::Sender<HookEventRequest>);
 
 #[test]
+fn queue_changes_target_one_thread_and_keep_the_legacy_notification_shape() {
+    let broker = UpdateBroker::default();
+    let matching = NotificationQueue::default();
+    let other = NotificationQueue::default();
+    let legacy = NotificationQueue::default();
+    broker.register(1, false, &matching);
+    broker.register(2, false, &other);
+    broker.register(3, false, &legacy);
+    broker.enable_scoped_queue_notifications(1);
+    broker.enable_scoped_queue_notifications(2);
+    let session = SessionId::new("session").unwrap();
+    let thread = ThreadId::new("thread").unwrap();
+    broker.subscribe_session(1, session.clone());
+    broker.subscribe_session(2, session.clone());
+    assert!(broker.subscribe_session_thread(1, session.clone(), thread.clone(), 0));
+    broker.publish_queue_changed(&session, None);
+    assert_eq!(
+        matching.drain()[0]["params"],
+        serde_json::json!({"target":{"sessionId":"session"}})
+    );
+    assert_eq!(other.drain().len(), 1);
+    assert_eq!(legacy.drain()[0]["params"], serde_json::json!({}));
+    broker.publish_queue_changed(&session, Some(&thread));
+    assert_eq!(
+        matching.drain()[0]["params"],
+        serde_json::json!({"target":{"sessionId":"session","threadId":"thread"}})
+    );
+    assert!(other.drain().is_empty());
+    assert_eq!(legacy.drain()[0]["params"], serde_json::json!({}));
+}
+
+#[test]
 fn invocation_completion_is_sent_only_to_its_live_owning_connection() {
     let broker = UpdateBroker::default();
     let owner = NotificationQueue::default();

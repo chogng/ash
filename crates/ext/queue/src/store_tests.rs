@@ -181,7 +181,7 @@ fn concurrent_open_installs_an_empty_queue_once() {
             Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?))
         })
         .unwrap();
-    assert_eq!(metadata, (3, 0));
+    assert_eq!(metadata, (MIGRATIONS.len() as u32, 0));
 }
 
 #[test]
@@ -207,7 +207,8 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
     }
     drop(store);
     let connection = Connection::open(&path).unwrap();
-    connection.execute_batch("ALTER TABLE queued_messages DROP COLUMN profile_reference_reads;
+    connection.execute_batch("DROP TABLE queue_invalidations;
+        ALTER TABLE queued_messages DROP COLUMN profile_reference_reads;
         UPDATE queue_metadata SET version=1 WHERE id=1;
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','askPermissions') WHERE id='manual';
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','autoReview') WHERE id='auto';").unwrap();
@@ -238,11 +239,36 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
                             row.get::<_, u32>(0)
                         })
                         .unwrap(),
-                    3
+                    MIGRATIONS.len() as u32
                 );
             });
         }
     });
+}
+
+#[test]
+fn independent_workers_read_thread_changes_and_session_removals() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("queue.sqlite");
+    let writer = QueueStore::open(&path).unwrap();
+    let reader = QueueStore::open(&path).unwrap();
+    let since = reader.revision().unwrap();
+    let request = input("first");
+    writer.enqueue(&request).unwrap();
+    writer.enqueue(&input("second")).unwrap();
+    let revision = reader.revision().unwrap();
+    let changes = reader.changes_since(since, revision).unwrap().unwrap();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].session_id, request.session_id);
+    assert_eq!(changes[0].thread_id.as_ref(), Some(&request.thread_id));
+    writer.delete_session(&request.session_id).unwrap();
+    let changes = reader
+        .changes_since(revision, reader.revision().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].session_id, request.session_id);
+    assert_eq!(changes[0].thread_id, None);
 }
 
 fn input(id: &str) -> QueueInput {

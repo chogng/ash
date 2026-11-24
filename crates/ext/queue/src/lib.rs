@@ -7,6 +7,7 @@ mod store;
 pub use runtime::Delivery;
 pub use runtime::QueueExecutor;
 pub use runtime::QueueRuntime;
+pub use store::QueueChange;
 pub use store::QueueStore;
 
 pub use contract::QueueDelivery;

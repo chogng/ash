@@ -10,7 +10,7 @@ import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId } from '../../../../services/sessions/common/session.js';
-import { observableFromEvent, observableValue, type IObservable } from '../../../../../base/common/observable.js';
+import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import type { ISessionArtifact } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
 import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { agentHostSessionArtifacts } from '../../../../common/agentHostSessionArtifacts.js';
@@ -496,8 +496,8 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		// This window's document library belongs to the local provider. A remote host
 		// must publish its own artifacts instead of inheriting matching local IDs.
 		if (this.id !== LOCAL_AGENT_HOST_PROVIDER_ID) return undefined;
-		return observableFromEvent(this, this.artifactCatalog.onDidChange,
-			() => this.isDisposed ? [] : agentHostSessionArtifacts(this.artifactCatalog.files, sessionId));
+		return this.artifactCatalog.observeSessionFiles({ providerId: this.id, accountId: null, sessionId })
+			.map(files => this.isDisposed ? [] : agentHostSessionArtifacts(files));
 	}
 }
 

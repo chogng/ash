@@ -27,6 +27,8 @@ use ash_app_server_protocol::protocol::memory::MemoryChanged;
 use ash_app_server_protocol::protocol::plugins::PluginsChanged;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
 use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+use ash_app_server_protocol::protocol::queue::QueueChangeTarget;
+use ash_app_server_protocol::protocol::queue::QueueChanged;
 use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use ash_app_server_protocol::protocol::session::SessionChanged;
 use ash_app_server_protocol::protocol::session::SessionDeleted;
@@ -127,6 +129,7 @@ struct Subscriber {
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
     artifact_catalog: Option<bool>,
+    scoped_queue_notifications: bool,
     chat_project_memories: bool,
     collaboration_rooms: BTreeSet<String>,
     catalog: bool,
@@ -354,6 +357,7 @@ impl UpdateBroker {
                     agent_interactions: None,
                     product_host,
                     artifact_catalog: None,
+                    scoped_queue_notifications: false,
                     chat_project_memories: false,
                     collaboration_rooms: BTreeSet::new(),
                     catalog: false,
@@ -381,6 +385,14 @@ impl UpdateBroker {
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.chat_project_memories = true;
+        }
+    }
+
+    pub(super) fn enable_scoped_queue_notifications(&self, connection_id: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.scoped_queue_notifications = true;
         }
     }
 
@@ -1428,11 +1440,65 @@ impl UpdateBroker {
         self.broadcast_notification(ServerNotificationMethod::TurnChangesChanged, &changed);
     }
 
-    pub(crate) fn publish_queue_changed(&self) {
-        self.broadcast_notification(
-            ServerNotificationMethod::QueueChanged,
-            &serde_json::json!({}),
-        );
+    pub(crate) fn publish_queue_changed(
+        &self,
+        session_id: &SessionId,
+        thread_id: Option<&ThreadId>,
+    ) {
+        self.publish_queue_changes(Some(&[queue::QueueChange {
+            session_id: session_id.clone(),
+            thread_id: thread_id.cloned(),
+        }]));
+    }
+
+    pub(crate) fn publish_queue_changes(&self, changes: Option<&[queue::QueueChange]>) {
+        let Some(changes) = changes else {
+            self.broadcast_notification(
+                ServerNotificationMethod::QueueChanged,
+                &QueueChanged::default(),
+            );
+            return;
+        };
+        if changes.is_empty() {
+            return;
+        }
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.scoped_queue_notifications {
+                for change in changes {
+                    let observes = match &change.thread_id {
+                        Some(thread_id) => {
+                            subscriber.threads.get(thread_id).is_some_and(|thread| {
+                                thread.session_owners.contains(&change.session_id)
+                            })
+                        }
+                        None => subscriber_observes_session(subscriber, &change.session_id),
+                    };
+                    if observes {
+                        queue.push(notification(
+                            ServerNotificationMethod::QueueChanged,
+                            &QueueChanged {
+                                target: Some(QueueChangeTarget {
+                                    session_id: change.session_id.clone(),
+                                    thread_id: change.thread_id.clone(),
+                                }),
+                            },
+                        ));
+                    }
+                }
+            } else {
+                queue.push(notification(
+                    ServerNotificationMethod::QueueChanged,
+                    &QueueChanged::default(),
+                ));
+            }
+            true
+        });
     }
 
     pub(crate) fn publish_memory_changed(&self, changed: MemoryChanged) {

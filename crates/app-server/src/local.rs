@@ -1178,8 +1178,8 @@ impl LocalProfileRuntime {
         Ok(self.queue.clone())
     }
 
-    pub fn queue_changed(&self) {
-        self.updates.publish_queue_changed();
+    pub fn queue_changed(&self, changes: Option<&[queue::QueueChange]>) {
+        self.updates.publish_queue_changes(changes);
     }
 
     pub fn symphony_store(&self) -> Arc<ash_symphony::Store> {

@@ -217,7 +217,7 @@ test('Goal, queue and change ledger events stay on their owning connection throu
 	const observed: unknown[] = [];
 	using listeners = new DisposableStore();
 	listeners.add(threads.onDidUpdateGoal(event => observed.push(event)));
-	listeners.add(turns.onDidChangeQueue(() => observed.push('queue')));
+	listeners.add(turns.onDidChangeQueue(event => observed.push(event ?? 'queue')));
 	listeners.add(changes.onDidChange(event => observed.push(event)));
 	const goal = { threadId: 'thread', goalId: 'goal', objective: 'Complete the request', status: 'active', tokensUsed: 0 };
 	const notification = { method: 'thread/goal/updated', params: { threadId: 'thread', goal } };
@@ -225,9 +225,10 @@ test('Goal, queue and change ledger events stay on their owning connection throu
 	assert.deepEqual(observed, []);
 	transport.frame(notification);
 	transport.frame({ method: 'queue/changed', params: {} });
+	transport.frame({ method: 'queue/changed', params: { target: { sessionId: 'session', threadId: 'thread' } } });
 	transport.frame({ method: 'turnChanges/changed', params: { sessionId: 'session', threadId: 'thread', changeSets: [] } });
 	transport.frame({ method: 'thread/goal/cleared', params: { threadId: 'thread' } });
-	const expected = [{ threadId: 'thread', goal }, 'queue', { sessionId: 'session', threadId: 'thread', changeSets: [] }, { threadId: 'thread' }];
+	const expected = [{ threadId: 'thread', goal }, 'queue', { sessionId: 'session', threadId: 'thread' }, { sessionId: 'session', threadId: 'thread', changeSets: [] }, { threadId: 'thread' }];
 	assert.deepEqual(observed, expected);
 	client.disconnect();
 	transport.frame(notification);

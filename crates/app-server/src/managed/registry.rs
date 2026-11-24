@@ -932,8 +932,8 @@ impl queue::QueueExecutor for ProfileAppServerRegistry {
         );
         self.server_for(options)?.deliver_queued_message(message)
     }
-    fn changed(&self) {
-        self.profile_runtime.queue_changed();
+    fn changed(&self, changes: Option<&[queue::QueueChange]>) {
+        self.profile_runtime.queue_changed(changes);
     }
     fn report_error(&self, error: &str) {
         eprintln!("message queue: {error}");

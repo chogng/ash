@@ -40,6 +40,10 @@ pub struct ClientCapabilities {
     #[serde(default)]
     #[ts(optional)]
     pub notifications: Option<bool>,
+    /// The connection accepts a target in `queue/changed` notifications.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scoped_queue_notifications: Option<bool>,
     #[serde(default)]
     #[ts(optional = nullable)]
     pub agent_interactions: Option<AgentInteractionCapability>,

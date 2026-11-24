@@ -21,7 +21,16 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_queue.sql"),
     include_str!("../migrations/0002_approval_modes.sql"),
     include_str!("../migrations/0003_reference_read_scope.sql"),
+    include_str!("../migrations/0004_scoped_invalidations.sql"),
 ];
+
+const INVALIDATION_HISTORY: i64 = 2048;
+
+/// A persisted queue change, including deletion of all queue entries for a Session.
+pub struct QueueChange {
+    pub session_id: SessionId,
+    pub thread_id: Option<ThreadId>,
+}
 
 fn enable_wal(connection: &Connection) -> rusqlite::Result<()> {
     // The first WAL switch can report contention before SQLite invokes its busy handler.
@@ -122,7 +131,7 @@ impl QueueStore {
             [session.as_str()],
         )? > 0
         {
-            next_revision(&transaction)?;
+            next_revision(&transaction, session, None)?;
         }
         transaction.commit()?;
         self.wake();
@@ -196,7 +205,7 @@ impl QueueStore {
         ) {
             return Err(QueueError::Busy);
         }
-        let revision = next_revision(&transaction)?;
+        let revision = next_revision(&transaction, session, Some(thread))?;
         let mut status = match message.status {
             QueueStatus::Paused => "paused",
             QueueStatus::Rejected => "rejected",
@@ -402,7 +411,7 @@ impl QueueStore {
                 "a Thread can retain at most 128 pending messages".into(),
             ));
         }
-        let revision = next_revision(&transaction)?;
+        let revision = next_revision(&transaction, &input.session_id, Some(&input.thread_id))?;
         transaction.execute("INSERT INTO queued_messages(id,session_id,thread_id,request,status,revision,profile_reference_reads) VALUES(?1,?2,?3,?4,'pending',?5,?6)",
             params![input.command_id.as_str(), input.session_id.as_str(), input.thread_id.as_str(), encoded, revision, matches!(scope, ReferenceReadScope::Profile)])?;
         transaction.execute(
@@ -439,6 +448,46 @@ impl QueueStore {
             .query_row([], |row| row.get(0))?)
     }
 
+    /// None requests a full refresh when a reader has fallen behind the retained history.
+    pub(crate) fn changes_since(
+        &self,
+        previous: i64,
+        revision: i64,
+    ) -> Result<Option<Vec<QueueChange>>, QueueError> {
+        if previous < revision.saturating_sub(INVALIDATION_HISTORY) {
+            return Ok(None);
+        }
+        let connection = self.lock()?;
+        let mut statement = connection.prepare_cached(
+            "SELECT session_id, thread_id FROM queue_invalidations WHERE revision > ?1",
+        )?;
+        // A newer external writer can update a matching scope between reading the
+        // revision and querying the index. Include it now rather than skip it.
+        let changes = statement.query_map([previous], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        changes
+            .map(|value| {
+                let (session, thread) = value?;
+                let session_id = SessionId::new(session)
+                    .map_err(|error| QueueError::Storage(error.to_string()))?;
+                let thread_id = if thread.is_empty() {
+                    None
+                } else {
+                    Some(
+                        ThreadId::new(thread)
+                            .map_err(|error| QueueError::Storage(error.to_string()))?,
+                    )
+                };
+                Ok(QueueChange {
+                    session_id,
+                    thread_id,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some)
+    }
+
     pub fn needs_host(&self) -> Result<bool, QueueError> {
         Ok(self.lock()?.prepare_cached(
             "SELECT EXISTS(SELECT 1 FROM queued_messages WHERE status IN ('pending','delivering'))",
@@ -466,7 +515,7 @@ impl QueueStore {
             QueueStatus::Delivering | QueueStatus::Started => return Err(QueueError::Busy),
             QueueStatus::Rejected | QueueStatus::Paused | QueueStatus::Pending => {}
         }
-        let revision = next_revision(&transaction)?;
+        let revision = next_revision(&transaction, session, Some(thread))?;
         transaction.execute(
             "UPDATE queued_messages SET status='cancelled', revision=?2 WHERE id=?1",
             params![id.as_str(), revision],
@@ -504,7 +553,11 @@ impl QueueStore {
         if changed == 0 {
             return Ok(None);
         }
-        let revision = next_revision(&transaction)?;
+        let revision = next_revision(
+            &transaction,
+            &message.request.session_id,
+            Some(&message.request.thread_id),
+        )?;
         transaction.execute(
             "UPDATE queued_messages SET revision=?2 WHERE id=?1",
             params![message.request.command_id.as_str(), revision],
@@ -530,7 +583,11 @@ impl QueueStore {
         let changed = transaction.execute("UPDATE queued_messages SET status=?3,turn_id=?4,error=?5,lease_until=0,ready_at=?6 WHERE id=?1 AND revision=?2 AND status='delivering'",
             params![message.request.command_id.as_str(), message.revision, status, turn, error, now.saturating_add(500)])?;
         if changed == 1 {
-            let revision = next_revision(&transaction)?;
+            let revision = next_revision(
+                &transaction,
+                &message.request.session_id,
+                Some(&message.request.thread_id),
+            )?;
             transaction.execute(
                 "UPDATE queued_messages SET revision=?2 WHERE id=?1",
                 params![message.request.command_id.as_str(), revision],
@@ -541,16 +598,36 @@ impl QueueStore {
     }
 }
 
-fn next_revision(connection: &Connection) -> Result<i64, QueueError> {
+fn next_revision(
+    connection: &Connection,
+    session: &SessionId,
+    thread: Option<&ThreadId>,
+) -> Result<i64, QueueError> {
     connection.execute(
         "UPDATE queue_metadata SET revision=revision+1 WHERE id=1",
         [],
     )?;
-    Ok(connection.query_row(
+    let revision: i64 = connection.query_row(
         "SELECT revision FROM queue_metadata WHERE id=1",
         [],
         |row| row.get(0),
-    )?)
+    )?;
+    connection.execute(
+        "INSERT INTO queue_invalidations(session_id, thread_id, revision) VALUES(?1, ?2, ?3)
+         ON CONFLICT(session_id, thread_id) DO UPDATE SET revision = excluded.revision",
+        params![
+            session.as_str(),
+            thread.map_or("", ThreadId::as_str),
+            revision
+        ],
+    )?;
+    if revision % 256 == 0 {
+        connection.execute(
+            "DELETE FROM queue_invalidations WHERE revision <= ?1",
+            [revision - INVALIDATION_HISTORY],
+        )?;
+    }
+    Ok(revision)
 }
 fn read(connection: &Connection, id: &CommandId) -> Result<Option<QueuedMessage>, QueueError> {
     read_id(connection, id.as_str())

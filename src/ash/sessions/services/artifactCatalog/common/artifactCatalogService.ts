@@ -13,6 +13,7 @@ export interface IArtifactCatalogService {
 	readonly files: readonly ArtifactResource[];
 	readonly loading: boolean;
 	readonly error: string | undefined;
+	observeSessionFiles(source: Pick<ArtifactSource, 'providerId' | 'accountId' | 'sessionId'>): IObservable<readonly ArtifactResource[]>;
 	refresh(): Promise<void>;
 	/** The provider owns which authenticated account can see its imported files. */
 	trackAccount(scope: IObservable<string | undefined>): IDisposable;

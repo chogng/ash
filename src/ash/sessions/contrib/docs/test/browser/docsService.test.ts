@@ -96,6 +96,30 @@ test('delayed Docs construction allows catalog observers to read document recove
 	assert.deepEqual(errors, []);
 });
 
+test('artifact catalog only notifies the session whose indexed files changed', async () => {
+	using fixture = new Fixture();
+	const catalog = fixture.createCatalog();
+	await catalog.refresh();
+	const first = catalog.observeSessionFiles(source);
+	const other = catalog.observeSessionFiles({ ...source, sessionId: 'other' });
+	const changed: string[] = [];
+	using firstListener = first.onDidChange(() => changed.push('first'));
+	using otherListener = other.onDidChange(() => changed.push('other'));
+	const registration = { id: 'a'.repeat(64), resource: URI.file('/chart.svg'), title: 'Chart', contentType: 'image/svg+xml', source };
+	await catalog.register(registration);
+	assert.equal(first.get()[0]?.title, 'Chart');
+	assert.deepEqual(changed, ['first']);
+	const unchanged = first.get();
+	fixture.entries.set(registration.id, { ...first.get()[0]!, source: { ...source } });
+	await catalog.refresh();
+	assert.equal(first.get(), unchanged);
+	assert.deepEqual(changed, ['first']);
+	fixture.entries.delete(registration.id);
+	await catalog.refresh();
+	assert.deepEqual(first.get(), []);
+	assert.deepEqual(changed, ['first', 'first']);
+});
+
 test('artifact catalog metadata reads and registrations never materialize document files', async () => {
 	using fixture = new Fixture();
 	const catalog = fixture.createCatalog();

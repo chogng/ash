@@ -275,7 +275,7 @@ export class AgentThreadHistoryAnchorError extends Error { }
 export class AgentQueueConflictError extends Error { }
 
 export interface IAgentTurnService {
-	readonly onDidChangeQueue: Event<void>;
+	readonly onDidChangeQueue: Event<{ readonly sessionId: string; readonly threadId?: string; } | void>;
 	enqueue(params: Agent.QueueEnqueueParams, signal?: AbortSignal): Promise<Agent.QueuedMessage>;
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
 	editQueued(params: Agent.QueueMessageTarget, action: Agent.QueueMessageEdit, commandInterpretation?: Agent.CommandInterpretation): Promise<Agent.QueuedMessage>;

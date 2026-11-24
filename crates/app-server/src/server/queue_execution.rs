@@ -24,8 +24,8 @@ impl queue::QueueExecutor for AppServer {
     fn deliver(&self, message: &QueuedMessage) -> Result<Delivery, String> {
         self.queue_processor().deliver_queued_message(message)
     }
-    fn changed(&self) {
-        self.updates.publish_queue_changed();
+    fn changed(&self, changes: Option<&[queue::QueueChange]>) {
+        self.updates.publish_queue_changes(changes);
     }
     fn report_error(&self, error: &str) {
         log::error!("message queue: {error}");

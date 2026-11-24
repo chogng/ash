@@ -106,10 +106,8 @@ pub fn client_capabilities() -> ClientCapabilities {
             ],
             dynamic_tools: None,
         }),
-        browser: None,
-        app_tools: None,
         directory_grants_host: Some(DirectoryGrantsHostCapability { version: 1 }),
-        text_documents: None,
+        ..ClientCapabilities::default()
     }
 }
 

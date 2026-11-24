@@ -64,7 +64,8 @@ impl<'a> TaskDeliveryRequestProcessor<'a> {
                     .block_on(service.receive(&package))
                     .and_then(|value| {
                         self.updates.publish_session_changed(&value.session_id);
-                        self.updates.publish_queue_changed();
+                        self.updates
+                            .publish_queue_changed(&value.session_id, Some(&value.thread_id));
                         serde_json::to_value(value).map_err(Into::into)
                     })
             }

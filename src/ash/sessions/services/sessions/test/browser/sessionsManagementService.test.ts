@@ -7,6 +7,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { observableFromEvent } from '../../../../../base/common/observable.js';
 import { SessionArtifactType } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
 import type { ArtifactResource } from '../../../../../platform/artifactCatalog/common/artifactCatalog.js';
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as BackendSession } from '../../../../../../../.build/protocol/typescript/index.js';
@@ -432,11 +433,11 @@ test('the local provider projects live published artifacts without importing ano
 	const documents: IArtifactCatalogService = {
 		...createTestArtifactCatalogService(),
 		get files() { return files; },
-		onDidChange: listener => {
+		observeSessionFiles: source => observableFromEvent('fixture session files', listener => {
 			listeners++;
 			const subscription = changes.event(listener);
 			return toDisposable(() => { listeners--; subscription.dispose(); });
-		},
+		}, () => files.filter(file => file.source.providerId === source.providerId && file.source.accountId === source.accountId && file.source.sessionId === source.sessionId)),
 	};
 	using provider = createProvider(fake, undefined, undefined, undefined, { files: documents });
 	const [first, second] = await provider.list();

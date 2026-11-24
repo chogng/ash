@@ -1,5 +1,6 @@
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { Event } from '../../../base/common/event.js';
+import { constObservable } from '../../../base/common/observable.js';
 import type { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
 import type { IDocsService } from '../../contrib/docs/common/docsService.js';
 
@@ -8,6 +9,7 @@ export function createTestArtifactCatalogService(): IArtifactCatalogService {
 	return {
 		refresh: async () => { }, trackAccount: () => toDisposable(() => { }),
 		onDidChange: Event.None, files: [], loading: false, error: undefined,
+		observeSessionFiles: () => constObservable([]),
 		register: async () => { throw new Error('Unexpected artifact registration'); },
 		isVisible: source => source.accountId === null,
 		findBySource: () => undefined, hasResource: () => false,

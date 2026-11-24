@@ -231,7 +231,8 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 scope,
             )
             .map_err(error)?;
-        self.updates.publish_queue_changed();
+        self.updates
+            .publish_queue_changed(&session_id, Some(&thread_id));
         result(&message)
     }
 
@@ -377,7 +378,8 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         if existing.is_none() {
             self.analytics.record(analytics::UsageEvent::MessageQueued);
         }
-        self.updates.publish_queue_changed();
+        self.updates
+            .publish_queue_changed(&queued.request.session_id, Some(&queued.request.thread_id));
         result(&queued)
     }
 
@@ -406,7 +408,8 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 params.expected_revision,
             )
             .map_err(error)?;
-        self.updates.publish_queue_changed();
+        self.updates
+            .publish_queue_changed(&params.session_id, Some(&params.thread_id));
         result(&cancelled)
     }
 

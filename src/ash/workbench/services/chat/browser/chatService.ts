@@ -40,7 +40,7 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
-	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
+	private readonly _onDidChangeQueue = this._register(new Emitter<Parameters<Parameters<IChatService['onDidChangeQueue']>[0]>[0]>());
 	private readonly threadSubscriptions = new Map<string, SharedThreadSubscription>();
 
 	readonly onDidChangeSession = this._onDidChangeSession.event;
@@ -70,7 +70,9 @@ export class ChatService extends Disposable implements IChatService {
 			this._onDidUpdateThread.fire(event);
 		}));
 		this._register(threadApi.onDidUpdateThreadTranscript(event => this._onDidUpdateThreadTranscript.fire(event)));
-		this._register(turnApi.onDidChangeQueue(() => this._onDidChangeQueue.fire()));
+		this._register(turnApi.onDidChangeQueue(target => this._onDidChangeQueue.fire(target && {
+			affectsQueue: (sessionId, threadId) => target.sessionId === sessionId && (target.threadId === undefined || target.threadId === threadId),
+		})));
 		this._register(threadApi.onDidUpdateGoal(event => this._onDidUpdateGoal.fire(event)));
 		this._register(turnChangesApi.onDidChange(event => this._onDidUpdateTurnChanges.fire(event)));
 		const connection = appServerApi.onConnectionState((state) => {

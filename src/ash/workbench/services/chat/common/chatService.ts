@@ -282,7 +282,7 @@ export interface IChatService {
 	/** A routed service identifies the conversations whose host became ready. */
 	readonly onDidBecomeReady: Event<void | { affectsSession(sessionId?: SessionId, draftProviderId?: string): boolean; }>;
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
-	readonly onDidChangeQueue: Event<void>;
+	readonly onDidChangeQueue: Event<void | { affectsQueue(sessionId: SessionId, threadId: ThreadId): boolean; }>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	readThread(sessionId: SessionId, threadId: ThreadId, history?: ThreadSnapshotHistory): Promise<ThreadRead>;
 	readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage>;

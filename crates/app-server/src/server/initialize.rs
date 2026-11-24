@@ -93,6 +93,10 @@ impl AppServer {
             ));
         }
         connection.set_directory_grants_host(params.capabilities.directory_grants_host.is_some());
+        if params.capabilities.scoped_queue_notifications == Some(true) {
+            self.updates
+                .enable_scoped_queue_notifications(connection.connection_id);
+        }
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,

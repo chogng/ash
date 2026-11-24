@@ -631,8 +631,8 @@ function queueFailure(error: unknown): never {
 
 export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
-		onDidChangeQueue: Event.any<void>((listener, thisArgs) => connection.onNotification(event => {
-			if (event.method === 'queue/changed') listener.call(thisArgs);
+		onDidChangeQueue: Event.any<{ readonly sessionId: string; readonly threadId?: string; } | void>((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'queue/changed') listener.call(thisArgs, event.params.target);
 		})),
 		enqueue: (params, signal) =>
 			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then(queuedMessage),

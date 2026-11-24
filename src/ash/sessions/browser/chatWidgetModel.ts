@@ -217,7 +217,10 @@ export class ChatWidgetModel extends Disposable {
 			void this.refreshModelAvailability(true);
 			void this.loadModels();
 		}));
-		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
+		this._register(chatService.onDidChangeQueue(change => {
+			const active = this.activeSession;
+			if (active && (!change || change.affectsQueue(active.session.sessionId, active.threadId))) void this.loadQueue();
+		}));
 		this._register(this.skills.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
 			if (update.sessionId === this.sessionId && this.isCodeConversation) this.refreshRequestVersions.schedule();

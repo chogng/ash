@@ -2314,6 +2314,9 @@ use crate::protocol::provider::ProviderProbeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::queue::QueueCancelParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::queue::QueueChangeTarget;
+use crate::protocol::queue::QueueChanged;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::queue::QueueEditAction;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::queue::QueueEditParams;
@@ -6579,7 +6582,7 @@ server_notifications! {
     // Invalidation after the connection's environment tool catalog has been replaced.
     // Clients reread agent/capabilities/read; this carries no catalog version or tool state.
     AgentToolsChanged => "agent/tools/changed" { params: EmptyParams, },
-    QueueChanged => "queue/changed" { params: EmptyParams, },
+    QueueChanged => "queue/changed" { params: QueueChanged, },
     SymphonyChanged => "symphony/changed" { params: EmptyParams, },
     AutomationChanged => "automation/changed" {
         params: EmptyParams,
@@ -7779,6 +7782,8 @@ typescript_bindings! {
     QueueEnqueueParams,
     QueueListParams,
     QueueCancelParams,
+    QueueChangeTarget,
+    QueueChanged,
     QueueListResult,
     QueueInput,
     CodeSnapshot,
