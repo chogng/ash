@@ -427,7 +427,10 @@ function installTestNativeEditContext(dom: JSDOM) {
 		public selectionEnd = 0;
 		public selectionBounds: DOMRect | undefined;
 		public controlBounds: DOMRect | undefined;
-		public updateCharacterBounds(): void { }
+		public characterBounds: readonly DOMRect[] | undefined;
+		public updateCharacterBounds(_start: number, bounds: DOMRect[]): void {
+			this.characterBounds = bounds;
+		}
 		public updateText(start: number, end: number, text: string): void {
 			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
 		}
@@ -485,6 +488,81 @@ test('native input reuses the selected text across view notifications for the sa
 	}
 });
 
+test('native input measures scrolling geometry only with focus and answers requests before the first frame', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const TestEditContext = installTestNativeEditContext(dom);
+	try {
+		using model = new TextModel(Array.from({ length: 20 }, (_, index) => `line ${index + 1}`).join('\n'));
+		using services = new InstantiationService();
+		services.registerInstance(ILogService, new NullLoggerService());
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'),
+			model,
+			lineHeight: 20,
+			instantiationService: services,
+		});
+		const input = editor.controller.editContext.domNode.domNode;
+		assert.ok(input.editContext instanceof TestEditContext);
+		const context = input.editContext;
+		const scrollable = input.parentElement!;
+		let containerTop = 100;
+		let measurements = 0;
+		scrollable.getBoundingClientRect = () => {
+			measurements++;
+			return new dom.window.DOMRect(0, containerTop, 320, 80);
+		};
+
+		editor.layout({ width: 320, height: 80 });
+		editor.setPosition(new Position(5, 1));
+		editor.setScrollTop(60);
+		editor.view.render(true, false);
+		assert.equal(measurements, 0);
+		assert.deepEqual([context.selectionBounds, context.controlBounds], [undefined, undefined]);
+
+		const requestCharacterBounds = (): void => {
+			context.dispatchEvent(Object.assign(new dom.window.Event('characterboundsupdate'), {
+				rangeStart: context.selectionStart,
+				rangeEnd: context.selectionStart + 3,
+			}));
+		};
+		requestCharacterBounds();
+		assert.deepEqual({ bounds: context.characterBounds, measurements }, { bounds: undefined, measurements: 0 });
+
+		editor.focus();
+		requestCharacterBounds();
+		const expectedTop = containerTop + editor.getTopForLineNumber(5) - editor.getScrollTop();
+		assert.deepEqual(context.characterBounds?.map(bounds => bounds.top), [expectedTop, expectedTop, expectedTop]);
+		assert.equal(measurements, 1);
+
+		editor.view.render(true, false);
+		assert.equal(context.selectionBounds?.top, expectedTop);
+		assert.equal(context.controlBounds?.top, expectedTop);
+
+		input.blur();
+		containerTop = 300;
+		editor.setScrollTop(70);
+		const beforeUnfocusedRender = measurements;
+		const lastSelectionBounds = context.selectionBounds;
+		const lastCharacterBounds = context.characterBounds;
+		editor.view.render(true, false);
+		requestCharacterBounds();
+		assert.equal(measurements, beforeUnfocusedRender);
+		assert.strictEqual(context.selectionBounds, lastSelectionBounds);
+		assert.strictEqual(context.characterBounds, lastCharacterBounds);
+
+		editor.focus();
+		requestCharacterBounds();
+		const refocusedTop = containerTop + editor.getTopForLineNumber(5) - editor.getScrollTop();
+		assert.deepEqual(context.characterBounds?.map(bounds => bounds.top), [refocusedTop, refocusedTop, refocusedTop]);
+		editor.view.render(true, false);
+		assert.equal(context.selectionBounds?.top, refocusedTop);
+		assert.equal(context.controlBounds?.top, refocusedTop);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -504,10 +582,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	const editContext = editor.controller.editContext as InstanceType<typeof NativeEditContext>;
 	editor.layout({ width: 320, height: 80 });
 	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
-	assert.ok(editContext.nativeContext.updateSelectionBounds);
-	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).selectionBounds);
-	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).controlBounds);
-	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown; };
+	const input = editContext.domNode.domNode;
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editContext.focus();
 	let receivedKeyDown: IKeyboardEvent | undefined;

@@ -21,6 +21,8 @@ import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
 import { CopyOptions } from '../clipboardUtils.js';
 
+type BoundsOrigin = Pick<EditContextPosition, 'left' | 'top'>;
+
 export interface NativeEditContextOptions extends EditContextOptions {
 	readonly logService: ILogService;
 }
@@ -58,12 +60,9 @@ export class NativeEditContext extends AbstractEditContext {
 	private pendingLineBreakTextUpdate = false;
 	private pendingHighSurrogate: TextUpdateEvent | undefined;
 	private compositionPosition: EditContextPosition | undefined;
-	private lastPosition: EditContextPosition | undefined;
 	private lastRenderPosition: Position | null = null;
 	private renderPosition: EditContextPosition | undefined;
-	private parentBounds: DOMRect | undefined;
-	private parentScrollLeft = 0;
-	private parentScrollTop = 0;
+	private boundsOrigin: BoundsOrigin | undefined;
 	private readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
 	private readonly focusTracker: FocusTracker;
 	private readonly screenReaderSupport: ScreenReaderSupport;
@@ -390,10 +389,12 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	public override onBeforeRender(_viewportData: ViewportData): void {
-		this.parentBounds = this.container.getBoundingClientRect();
-		const position = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
-		this.parentScrollLeft = position.scrollLeft;
-		this.parentScrollTop = position.scrollTop;
+		// Measure before the view writes to the DOM, and only for the input that can use the bounds.
+		this.boundsOrigin = this.isFocused() ? this.readBoundsOrigin() : undefined;
+	}
+
+	public override onFocusChanged(event: viewEvents.ViewFocusChangedEvent): boolean {
+		return event.isFocused;
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
@@ -454,7 +455,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	public override prepareRender(context: RenderingContext): void {
-		this.renderPosition = this.readPosition();
+		this.renderPosition = this.isFocused() ? this.readPosition() : undefined;
 		this.screenReaderSupport.prepareRender(context);
 	}
 
@@ -479,6 +480,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private handleElementBlur(): void {
 		if (!this.focused) return;
 		this.focused = false;
+		this.boundsOrigin = undefined;
 		this._context.viewModel.setHasFocus(false);
 		this.blurEmitter.fire(undefined);
 	}
@@ -541,8 +543,10 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	updateBounds(position: EditContextPosition): void {
-		this.lastPosition = position;
-		const bounds = this.createBounds(position);
+		if (!this.isFocused()) {
+			return;
+		}
+		const bounds = this.createBounds(position, this.boundsOrigin ?? this.readBoundsOrigin());
 		if (!bounds) return;
 		this.nativeContext.updateSelectionBounds?.(bounds);
 		this.nativeContext.updateControlBounds?.(bounds);
@@ -559,7 +563,6 @@ export class NativeEditContext extends AbstractEditContext {
 
 	positionComposition(position: EditContextPosition): void {
 		this.compositionPosition = position;
-		this.lastPosition = position;
 		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
 		this.domNode.setLeft(position.left - scroll.scrollLeft);
 		this.domNode.setTop(position.top - scroll.scrollTop);
@@ -731,24 +734,26 @@ export class NativeEditContext extends AbstractEditContext {
 		const updateStart = event.rangeStart;
 		const updateEnd = event.rangeEnd;
 		if (
+			!this.isFocused() ||
 			!isValidOffset(updateStart, this.shadowText.length) ||
 			!isValidOffset(updateEnd, this.shadowText.length) ||
-			updateEnd < updateStart
+			updateEnd < updateStart ||
+			updateEnd - updateStart > MAX_CHARACTER_BOUNDS_REQUEST_LENGTH
 		) {
 			return;
 		}
-		if (updateEnd - updateStart > MAX_CHARACTER_BOUNDS_REQUEST_LENGTH) return;
-		const requestEnd = updateEnd;
 		const bounds: DOMRect[] = [];
-		for (let offset = updateStart; offset < requestEnd; offset += 1) {
-			const modelOffset = this.shadowOffset + offset;
-			const geometry = this.characterBoundsProvider?.(modelOffset);
-			const bound = geometry
-				? this.createBounds(geometry, geometry.width)
-				: this.createFallbackCharacterBounds();
+		// An IME can request character bounds before the first focused frame.
+		let origin = this.boundsOrigin;
+		let fallbackPosition = this.compositionPosition;
+		for (let offset = updateStart; offset < updateEnd; offset += 1) {
+			origin ??= this.readBoundsOrigin();
+			const geometry = this.characterBoundsProvider(this.shadowOffset + offset);
+			const position = geometry ?? (fallbackPosition ??= this.readPosition());
+			const bound = this.createBounds(position, origin, geometry?.width);
 			if (bound) bounds.push(bound);
 		}
-		if (bounds.length === requestEnd - updateStart) {
+		if (bounds.length === updateEnd - updateStart) {
 			this.nativeContext.updateCharacterBounds?.(updateStart, bounds);
 		}
 	}
@@ -763,11 +768,6 @@ export class NativeEditContext extends AbstractEditContext {
 		) {
 			this.nativeContext.updateSelection(this.shadowSelectionStart, this.shadowSelectionEnd);
 		}
-	}
-
-	private createFallbackCharacterBounds(): DOMRect | undefined {
-		const position = this.compositionPosition ?? this.lastPosition;
-		return position ? this.createBounds(position) : undefined;
 	}
 
 	private emitCompositionType(): void {
@@ -787,17 +787,18 @@ export class NativeEditContext extends AbstractEditContext {
 		this.compositionActiveOffset = activeOffset;
 	}
 
-	private createBounds(position: EditContextPosition, width = Math.max(1, position.height / 2)): DOMRect | undefined {
+	private readBoundsOrigin(): BoundsOrigin {
+		const bounds = this.container.getBoundingClientRect();
+		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
+		return { left: bounds.left - scroll.scrollLeft, top: bounds.top - scroll.scrollTop };
+	}
+
+	private createBounds(position: EditContextPosition, origin: BoundsOrigin, width = Math.max(1, position.height / 2)): DOMRect | undefined {
 		const Rect = this.domNode.domNode.ownerDocument.defaultView?.DOMRect;
 		if (typeof Rect !== 'function') return undefined;
-		const hasPreparedBounds = this.parentBounds !== undefined;
-		const parentBounds = this.parentBounds ?? this.container.getBoundingClientRect();
-		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
-		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : scroll.scrollLeft;
-		const scrollTop = hasPreparedBounds ? this.parentScrollTop : scroll.scrollTop;
 		return new Rect(
-			parentBounds.left + position.left - scrollLeft,
-			parentBounds.top + position.top - scrollTop,
+			origin.left + position.left,
+			origin.top + position.top,
 			Math.max(1, width),
 			Math.max(1, position.height),
 		);
