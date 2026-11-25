@@ -12,25 +12,20 @@ export interface IViewMenuActionsOptions {
 /** Resolves title and context actions against the scope owned by the hosting view. */
 export class ViewMenuActions extends Disposable {
 	private readonly titleMenu: IMenu;
-	private readonly contextMenu: IMenu | undefined;
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 
 	constructor(
 		public readonly menuId: MenuId,
-		contextMenuId: MenuId | undefined,
+		private readonly contextMenuId: MenuId | undefined,
 		private readonly options: IMenuActionOptions | undefined,
 		private readonly menuActionsOptions: IViewMenuActionsOptions | undefined,
-		@IContextKeyService contextKeyService: IContextKeyService,
-		@IMenuService menuService: IMenuService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IMenuService private readonly menuService: IMenuService,
 	) {
 		super();
 		this.titleMenu = this._register(menuService.createMenu(menuId, contextKeyService));
 		this._register(this.titleMenu.onDidChange(() => this.changed.fire()));
-		if (contextMenuId) {
-			this.contextMenu = this._register(menuService.createMenu(contextMenuId, contextKeyService));
-			this._register(this.contextMenu.onDidChange(() => this.changed.fire()));
-		}
 	}
 
 	public getPrimaryActions(): IAction[] {
@@ -42,7 +37,8 @@ export class ViewMenuActions extends Disposable {
 	}
 
 	public getContextMenuActions(): IAction[] {
-		return this.contextMenu ? getFlatContextMenuActions(this.contextMenu.getActions(this.options)) : [];
+		// The context menu is resolved when opened. Only the title menu needs live invalidation.
+		return this.contextMenuId ? getFlatContextMenuActions(this.menuService.getMenuActions(this.contextMenuId, this.options, this.contextKeyService)) : [];
 	}
 
 	private resolveTitleActions(): PrimaryAndSecondaryActions {

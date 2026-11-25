@@ -380,6 +380,11 @@ test('Pane Composite combines scoped container and View actions while retaining 
 		openComposite: async () => null, viewDescriptorService: descriptors, contextKeyService: context,
 		titleActions: { contextMenuProvider, menuId: MenuId.SidebarTitle, primaryGroup: 'navigation' },
 	}));
+	const openTitleContextMenu = () => {
+		shown = [];
+		part.domNode.querySelector('.ash-workbench-part-title')!.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		return shown;
+	};
 	const create = (descriptor: typeof active | typeof empty) => services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id),
 		mergeViewWithContainerWhenSingleView: descriptor === active,
@@ -399,7 +404,7 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	part.setVisible(true);
 	part.showComposite(active.id);
 	assert.equal(part.domNode.querySelectorAll('.ash-pane-composite-title [data-action-id="fixture.viewAction"]').length, 1, 'Reopening the retained Composite keeps its title actions attached');
-	part.domNode.querySelector('.ash-workbench-part-title')!.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	openTitleContextMenu();
 	assert.ok(shown.some(action => action.id === 'fixture.containerContext'));
 	assert.equal(shown.some(action => action.id === 'fixture.globalAction'), false);
 	resources.add(registry.registerViews(active.id, [{ id: 'fixture.toggleable', title: 'Toggleable', canToggleVisibility: true, hideByDefault: true, ctorDescriptor: new SyncDescriptor(ActionView) }]));
@@ -423,10 +428,19 @@ test('Pane Composite combines scoped container and View actions while retaining 
 		return submenu.actions[0]!;
 	};
 	assert.equal(nestedAction().enabled, false);
+	const beforeContextContribution = menuUpdates;
+	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, {
+		command: { id: 'fixture.contextAction', title: 'Context action', precondition: ContextKeyExpr.has('fixture.nestedEnabled') },
+		when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainer', active.id), ContextKeyExpr.has('fixture.showContextAction')),
+	}));
+	context.setContext('fixture.showContextAction', true);
+	assert.equal(menuUpdates, beforeContextContribution, 'Context-only changes do not rebuild the title toolbar');
+	assert.equal(openTitleContextMenu().find(action => action.id === 'fixture.contextAction')?.enabled, false);
 	const beforeEnable = menuUpdates;
 	context.setContext('fixture.nestedEnabled', true);
-	assert.ok(menuUpdates > beforeEnable, 'The injected context invalidates nested action enablement');
+	assert.equal(menuUpdates, beforeEnable + 1, 'A context key shared by both menus refreshes the title toolbar once');
 	assert.equal(nestedAction().enabled, true);
+	assert.equal(openTitleContextMenu().find(action => action.id === 'fixture.contextAction')?.enabled, true);
 	await nestedAction().run();
 	assert.deepEqual(argumentsReceived, [[active.id]], 'Container actions receive their owning container identity');
 	nestedItem.dispose();
@@ -435,9 +449,7 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	assert.equal(titleToolbar.getAttribute('aria-label'), 'Empty', 'The retained renderer releases the previous View accessible name');
 	assert.equal(part.domNode.querySelector('[data-action-id="fixture.viewAction"]'), null);
 	assert.equal(part.domNode.querySelectorAll('[data-action-id="fixture.globalAction"]').length, 1);
-	shown = [];
-	part.domNode.querySelector('.ash-workbench-part-title')!.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-	assert.equal(shown.some(action => action.id === 'fixture.containerContext'), false);
+	assert.equal(openTitleContextMenu().some(action => action.id === 'fixture.containerContext'), false);
 	part.showComposite(active.id);
 	assert.equal(part.getComposite(active.id), composite);
 	let titleChanges = 0;
