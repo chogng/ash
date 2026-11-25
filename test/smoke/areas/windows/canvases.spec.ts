@@ -94,14 +94,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
 							await commands.select('Interactive preview');
 							await expect(canvas).toBeVisible();
 							expect(await native.evaluate(contents => contents.executeJavaScript("document.querySelector('button').textContent"))).toBe('Clicked');
-							const updated = await open('Updated preview');
-							expect(updated.targetId).toBe(first.targetId);
-							await expect(page.getByRole('tab', { name: 'Updated preview', exact: true })).toHaveCount(1);
 							await select(other.title, other.threads[0]!.threadId);
+							if (mode === 'ide') {
+								await expect(page.getByRole('tab', { name: 'Interactive preview', exact: true, includeHidden: true })).toHaveCount(0);
+							}
 							await expect.poll(async () => (await views()).find(view => view.id === first.targetId)?.state.visible).toBe(false);
 							await select(source.title, threadId);
 							await expect(canvas).toBeVisible();
-							await page.getByRole('tab', { name: 'Updated preview', exact: true }).click();
+							await page.getByRole('tab', { name: 'Interactive preview', exact: true }).click();
+							expect(await native.evaluate(contents => contents.executeJavaScript("document.querySelector('button').textContent"))).toBe('Clicked');
+							const updated = await open('Updated preview');
+							expect(updated.targetId).toBe(first.targetId);
+							await expect(page.getByRole('tab', { name: 'Updated preview', exact: true })).toHaveCount(1);
 							await canvas.locator('.ash-session-canvas-page').focus();
 							await page.keyboard.press('Alt+F1');
 							const help = page.getByRole('dialog');

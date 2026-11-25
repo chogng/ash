@@ -171,6 +171,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 	private refresh(): void {
 		if (!this.initialized || this.isDisposed) { return; }
 		const targets: ICanvasReopenTarget[] = [];
+		const shouldFollowVisibleOwners = !this.contexts.workingSets && this.contexts.contexts.get().some(({ owner }) => this.contexts.isOwnerVisible(owner));
 		for (const entry of this.live.values()) {
 			const context = this.contexts.getContext(entry.input.reference);
 			const canvas = this.contexts.getTrackedCanvas?.(entry.input.reference)
@@ -191,7 +192,17 @@ export class CanvasService extends Disposable implements ICanvasService {
 				void this.closeEditors(entry.input).catch(error => this.notifications.error(error));
 				continue;
 			}
-			if (!this.contexts.isOwnerVisible(entry.input.reference) || this.contexts.isPresentedElsewhere?.(entry.input.reference)) { continue; }
+			if (!this.contexts.isOwnerVisible(entry.input.reference)) {
+				// Suspend the tab when another conversation is visible. An in-flight open closes itself if its owner stays hidden.
+				if (shouldFollowVisibleOwners && !entry.dismissed && (isOpen || entry.opening)) {
+					entry.suspended = true;
+					if (isOpen && !entry.opening) {
+						void this.closeEditors(entry.input, { skipConfirmation: true }).catch(error => this.notifications.error(error));
+					}
+				}
+				continue;
+			}
+			if (this.contexts.isPresentedElsewhere?.(entry.input.reference)) { continue; }
 			const hasSource = !!entry.input.canvas.get().source;
 			// An admitted live page can restore its reconnecting placeholder before its provider confirms a source.
 			if (!hasSource && !entry.admitted) { continue; }
@@ -203,7 +214,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 				void this.revealCanvas(entry.input.reference).catch(error => {
 					if (!(error instanceof CancellationError)) { this.notifications.error(localize('canvas.openFailed', 'Could not open Canvas: {0}', String(error))); }
 				});
-			} else if (entry.suspended && !entry.dismissed && !this.editorPart.groups.some(group => group.inputs.includes(entry.input))) {
+			} else if (entry.suspended && !entry.dismissed && !entry.opening && !isOpen) {
 				entry.suspended = false;
 				void this.openInput(entry, true).catch(error => { if (!(error instanceof CancellationError)) { this.notifications.error(error); } });
 			}
@@ -276,7 +287,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 			&& entry.input.reference.session.toString() === reference.session.toString() ? entry : undefined;
 	}
 
-	private async closeEditors(input: CanvasInput): Promise<void> {
-		await Promise.all(this.editorPart.groups.filter(group => group.inputs.includes(input)).map(group => group.closeEditor(input, { reason: 'reset' })));
+	private async closeEditors(input: CanvasInput, options?: { skipConfirmation: true; }): Promise<void> {
+		await Promise.all(this.editorPart.groups.filter(group => group.inputs.includes(input)).map(group => group.closeEditor(input, { reason: 'reset', ...options })));
 	}
 }

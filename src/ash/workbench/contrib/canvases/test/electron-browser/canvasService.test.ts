@@ -83,21 +83,62 @@ suite('Conversation Canvas presentation', () => {
 	});
 
 	test('keeps background conversations hidden and validates exact owner before reveal or close', async () => {
-		using f = fixture([info('one', 'thread-one'), info('two', 'thread-two')]);
+		using f = fixture([info('one', 'thread-one'), info('two', 'thread-two')], undefined, {
+			contexts: constObservable([unresolvedContext('thread-one'), unresolvedContext('thread-two')]),
+		});
 		await settle();
 		assert.equal(f.opened.length, 1);
 		assert.deepEqual(f.canvases.reopenableCanvases.get(), []);
 		const first = f.opened[0] as CanvasInput;
 		await assert.rejects(f.canvases.revealCanvas({ ...first.reference, providerId: 'other' }));
 		await assert.rejects(f.canvases.closeCanvas({ ...first.reference, session: URI.parse('other:/owner') }));
-		f.visible.clear(); f.visible.add('thread-two'); f.visibility.fire();
+		f.visible.add('thread-two');
+		f.visibility.fire();
+		await settle();
+		const second = f.opened[1] as CanvasInput;
+		assert.deepEqual(f.inputs, [first, second]);
+		f.visible.clear();
+		f.visibility.fire();
+		await settle();
+		assert.deepEqual(f.inputs, [first, second]);
+		f.visible.add('thread-two');
+		f.visibility.fire();
 		await settle();
 		assert.equal(f.canvases.isOwnerPresentable(first.reference), false);
-		const second = f.opened[1] as CanvasInput;
+		assert.deepEqual(f.inputs, [second]);
 		await f.canvases.closeCanvas(second.reference);
+		f.visible.delete('thread-two');
+		f.visible.add('thread-one');
+		f.visibility.fire();
 		await settle();
 		assert.deepEqual(f.destroyed, ['two']);
+		assert.deepEqual(f.inputs, [first]);
+		assert.equal(f.options[2]?.preserveFocus, true);
 		assert.deepEqual(f.canvases.reopenableCanvases.get(), []);
+	});
+
+	test('restores an open request that completes after the owner is hidden', async () => {
+		using f = fixture([], undefined, { contexts: constObservable([unresolvedContext('thread-one'), unresolvedContext('thread-two')]) });
+		await settle();
+		const opening = promiseWithResolvers<void>();
+		f.waitForOpen = opening.promise;
+		const page = info('one', 'thread-one');
+		f.events.fire({ type: 'canvasOpened', targetId: page.id, info: page });
+		await settle();
+		f.visible.delete('thread-one');
+		f.visible.add('thread-two');
+		f.visibility.fire();
+		await settle();
+		opening.resolve();
+		await settle();
+		assert.deepEqual(f.inputs, []);
+		f.visible.delete('thread-two');
+		f.visible.add('thread-one');
+		f.visibility.fire();
+		await settle();
+		assert.deepEqual(f.inputs, [f.opened[0]]);
+		assert.equal(f.options[1]?.preserveFocus, true);
+		assert.deepEqual(f.destroyed, []);
 	});
 
 	test('replays removals before presenting a late initial snapshot', async () => {
@@ -243,6 +284,13 @@ suite('Conversation Canvas presentation', () => {
 		assert.equal(f.opened.length, 2);
 	});
 });
+
+function unresolvedContext(thread: string): ICanvasContext {
+	return {
+		owner: { providerId: 'local-agent-host', session: URI.parse('ash-session:/session-one'), chat: URI.parse(`ash-thread:/${thread}`) },
+		canvases: constObservable(undefined),
+	};
+}
 
 function info(id: string, thread: string): IBrowserViewInfo {
 	return {
