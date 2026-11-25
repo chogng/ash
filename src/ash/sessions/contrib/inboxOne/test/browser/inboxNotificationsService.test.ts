@@ -300,7 +300,7 @@ class AttentionFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, {
 			getValue: () => 'code', onDidChangeContext: Event.None,
 		} as unknown as IContextKeyService);
-		this.services.registerInstance(IChatListCatalog, { sources: [] });
+		this.services.registerInstance(IChatListCatalog, { sources: [], attach: () => Disposable.None });
 		this.services.registerInstance(IGitHubService, {
 			onDidChange: this.githubChanged.event,
 			getSessionPullRequests: (sessionId: string) => this.pullRequests.get(sessionId) ?? [],

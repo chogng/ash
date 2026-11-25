@@ -18,14 +18,14 @@ import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { CUSTOMIZE_NAVIGATION_CONTAINER, CUSTOMIZE_NAVIGATION_VIEW, CustomizeEditorPane } from './customizeEditor.js';
-import { CustomizeNavigationView } from './customizeNavigationView.js';
+import { CustomizeView } from './views/customizeView.js';
 
 SessionsViewRegistry.registerViewContainer({
 	id: CUSTOMIZE_NAVIGATION_CONTAINER, title: localize('customize.title', 'Customize'), location: ViewContainerLocation.Sidebar, order: 8,
 });
 SessionsViewRegistry.registerViews(CUSTOMIZE_NAVIGATION_CONTAINER, [{
 	id: CUSTOMIZE_NAVIGATION_VIEW, title: localize('customize.title', 'Customize'),
-	ctorDescriptor: new SyncDescriptor(CustomizeNavigationView), canToggleVisibility: false,
+	ctorDescriptor: new SyncDescriptor(CustomizeView), canToggleVisibility: false,
 }]);
 
 registerEditorPane({

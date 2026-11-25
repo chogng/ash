@@ -26,7 +26,7 @@ import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProje
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { derived, observableFromEvent, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -233,6 +233,7 @@ export interface ChatListSource {
 export interface IChatListCatalog {
 	readonly sources: readonly ChatListSource[];
 	readonly forks?: Pick<ChatListForks, 'project'>;
+	attach(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
 }
 
 export const IChatListCatalog = createServiceIdentifier<IChatListCatalog>('chatListCatalog');
@@ -240,6 +241,7 @@ export const IChatListCatalog = createServiceIdentifier<IChatListCatalog>('chatL
 export class ChatListCatalog extends Disposable implements IChatListCatalog {
 	readonly sources: readonly ChatListSource[];
 	readonly forks: ChatListForks;
+	private readonly windows = this._register(new DisposableMap<Window, IDisposable & { readonly views: Set<() => boolean>; }>());
 
 	constructor(adapters: readonly SyncDescriptor<ChatListSource>[],
 		@IInstantiationService instantiation: IInstantiationService,
@@ -263,6 +265,31 @@ export class ChatListCatalog extends Disposable implements IChatListCatalog {
 			return source;
 		});
 		this.forks = this._register(new ChatListForks(this.sources, storage));
+	}
+
+	attach(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable {
+		const view = () => isVisible();
+		const existing = this.windows.get(window);
+		const views = existing?.views ?? new Set<() => boolean>();
+		views.add(view);
+		if (!existing) {
+			const sources = new DisposableStore();
+			this.windows.set(window, Object.assign(sources, { views }));
+			// Projects and Chat can keep their views alive in the same window. The provider
+			// only needs one set of window listeners and refreshes while either surface is visible.
+			try {
+				for (const source of this.sources) {
+					if (source.attach) sources.add(source.attach(window, () => [...views].some(check => check())));
+				}
+			} catch (error) {
+				this.windows.deleteAndDispose(window);
+				throw error;
+			}
+		}
+		return toDisposable(() => {
+			views.delete(view);
+			if (!views.size && this.windows.get(window)?.views === views) this.windows.deleteAndDispose(window);
+		});
 	}
 }
 
@@ -544,9 +571,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): void {
 		void this.projects.reload();
-		for (const source of this.catalog.sources) {
-			if (source.attach) this._register(source.attach(window, isVisible));
-		}
+		this._register(this.catalog.attach(window, isVisible));
 	}
 
 	loadMore(): void {

@@ -443,7 +443,7 @@ test('catalog deletion rejects a stale account identity and delegates a confirme
 		defaultIcon: Lxicon.chatSession, open: async () => { }, remove: async () => { deleted.push('current-account'); },
 	};
 	const snapshot = observableValue<ChatListSnapshot>('catalog', { entries: [entry] });
-	using current = await fixture('archive', false, { sources: [{ snapshot }] });
+	using current = await fixture('archive', false, { sources: [{ snapshot }], attach: () => Disposable.None });
 	let confirmations = 0;
 	current.services.registerInstance(IDialogService, {
 		confirm: async () => { confirmations++; return { confirmed: true }; },

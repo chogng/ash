@@ -308,7 +308,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (!this.chat.native || restoreCatalog) {
 			this.chat.setNetworkAvailable(window.navigator.onLine);
 		}
-		// Pages such as Projects restore the shared sidebar without opening a chat editor.
+		// Projects can restore before the Chat sidebar or its editor is created.
 		// The retained backend still owns its account-scoped catalog and selection.
 		if (restoreCatalog) this.chat.initialize();
 		const refresh = (): void => {

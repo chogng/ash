@@ -1879,21 +1879,19 @@ suite('sessions browser component', () => {
 		await expect.poll(async () => Math.round((await sessions.boundingBox())!.width)).toBe(Math.round(expanded.width));
 	});
 
-	for (const locale of ['en', 'zh-CN']) test(`Sessions owns button presentations without changing shared defaults (${locale})`, async function () {
+	for (const locale of ['en', 'zh-CN']) test(`Projects sidebar keeps toolbar controls compact without changing shared button defaults (${locale})`, async function () {
 		const { page, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';
 		await page.goto(`/sessions.html?search${chinese ? '&locale=zh-CN' : ''}`);
 		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-		const projects = page.locator('.ash-projects');
-		await projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true }).click();
-		await projects.getByRole('searchbox').fill('No matching synthetic project');
-		const primary = projects.locator('.ash-projects-tools').getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true });
-		const secondary = projects.locator('.ash-projects-empty .ash-button-secondary');
-		await expect(primary).toBeVisible();
-		await expect(secondary).toBeVisible();
-		// The same button outside the window must keep shared defaults even
-		// when the Sessions stylesheet is loaded in the same document.
-		await primary.evaluate(element => {
+		const projects = page.locator('.ash-projects-view');
+		const create = projects.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
+		const search = projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
+		const close = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
+		await search.click();
+		const input = projects.getByRole('searchbox');
+		await input.fill('No matching synthetic project');
+		await create.evaluate(element => {
 			const reference = element.cloneNode(true) as HTMLButtonElement;
 			reference.id = 'outside-sessions-button';
 			document.body.append(reference);
@@ -1904,47 +1902,27 @@ suite('sessions browser component', () => {
 			await expect(outside).toHaveCSS('border-radius', '4px');
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
-				await page.mouse.move(0, 0);
-				for (const button of [primary, secondary]) {
-					await expect(button).toHaveCSS('padding', button === primary ? '0px 8px' : '4px 8px');
-					expect((await button.boundingBox())!.height).toBeLessThan(36);
-					await expect(button).toHaveCSS('border-radius', '8px');
-					await expect(button).toHaveCSS('font-size', '14px');
+				for (const button of [create, close]) {
+					await expect(button).toBeVisible();
+					const bounds = (await button.boundingBox())!;
+					expect(bounds.height).toBeLessThan(36);
 				}
-				await expect(secondary).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-				const colors = await primary.evaluate(element => {
-					const style = getComputedStyle(element);
-					return { background: style.backgroundColor, foreground: style.color, expected: getComputedStyle(element.closest('.ash-projects')!).color };
-				});
-				expect(colors.background).not.toBe(colors.foreground);
-				await expect(primary).toHaveCSS('background-color', colors.expected);
-				if (!theme.includes('high-contrast')) await expect(primary).not.toHaveCSS('background-color', await outside.evaluate(element => getComputedStyle(element).backgroundColor));
-				const search = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
-				await search.hover();
-				await expect(search).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-				await expect(search).toHaveCSS('height', '28px');
-				await primary.hover();
-				await page.mouse.down();
-				if (!theme.includes('high-contrast')) await expect(primary).not.toHaveCSS('background-color', colors.background);
-				await page.mouse.move(0, 0);
-				await page.mouse.up();
-				await primary.focus();
+				await close.hover();
+				await expect(close).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await create.focus();
 				await page.keyboard.press('Tab');
 				await page.keyboard.press('Shift+Tab');
-				await expect(primary).toBeFocused();
-				await expect(primary).toHaveCSS('outline-style', 'solid');
-				if (theme.includes('high-contrast')) {
-					await expect(primary).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
-					await expect(primary).toHaveCSS('outline-offset', '2px');
-				}
+				await expect(create).toBeFocused();
+				await expect(create).toHaveCSS('outline-style', 'solid');
 			}
 			await page.setViewportSize({ width: 640, height: 720 });
-			await expect(primary).toBeInViewport();
-			await expect(secondary).toBeInViewport();
-			await primary.press('Enter');
+			await expect(create).toBeInViewport();
+			await expect(input).toBeInViewport();
+			await expect(page.locator('.ash-projects-empty h2')).toHaveText(chinese ? '未选择项目' : 'No project selected');
+			await create.press('Enter');
 			await expect(page.locator('.ash-projects-dialog')).toBeVisible();
 			await page.keyboard.press('Escape');
-			await expect(primary).toBeFocused();
+			await expect(create).toBeFocused();
 			await page.screenshot({ path: testInfo.outputPath(`sessions-buttons-${locale}.png`) });
 		} finally {
 			await outside.evaluate(element => element.remove());

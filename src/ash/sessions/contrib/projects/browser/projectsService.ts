@@ -6,7 +6,12 @@ import { IProjectService, type Project, type ProjectAppearance, type ProjectMate
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
+export const projectsViewContainerId = 'sessions.navigation.projects';
+export const projectsViewId = projectsViewContainerId + '.view';
+
 export type ProjectSortOrder = 'updated' | 'created' | 'name';
+
+type ProjectOrderEntry = Pick<ProjectSummary, 'id' | 'name' | 'updatedAtMs' | 'createdAtMs'>;
 
 const sortOrderStorageKey = 'sessions.projects.sortOrder';
 // Keep the existing profile keys so upgrades retain catalog preferences and offline material names.
@@ -56,6 +61,7 @@ export interface IProjectsService {
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
 	getProjects(): readonly ProjectSummary[];
+	compareProjectOrder(left: ProjectOrderEntry, right: ProjectOrderEntry): number;
 	getAccessibleContent(): string;
 }
 
@@ -241,20 +247,23 @@ export class ProjectsService extends Disposable implements IProjectsService {
 
 	public getProjects(): readonly ProjectSummary[] {
 		const state = this.state.get();
-		const query = state.query.trim().toLocaleLowerCase();
-		return state.projects.filter(project => !project.archived && project.name.toLocaleLowerCase().includes(query))
-			.sort((a, b) => {
-				const pinned = Number(this.isPinned(b.id)) - Number(this.isPinned(a.id));
-				const time = state.sortOrder === 'updated' ? (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0)
-					: state.sortOrder === 'created' ? (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0) : 0;
-				return pinned || time || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-			});
+		const filter = state.query.trim().toLocaleLowerCase();
+		return state.projects.filter(project => !project.archived && project.name.toLocaleLowerCase().includes(filter))
+			.sort((left, right) => this.compareProjectOrder(left, right));
+	}
+
+	public compareProjectOrder(left: ProjectOrderEntry, right: ProjectOrderEntry): number {
+		const pinned = Number(this.isPinned(right.id)) - Number(this.isPinned(left.id));
+		const { sortOrder } = this.state.get();
+		const time = sortOrder === 'updated' ? (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0)
+			: sortOrder === 'created' ? (right.createdAtMs ?? 0) - (left.createdAtMs ?? 0) : 0;
+		return pinned || time || left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
 	}
 
 	public getAccessibleContent(): string {
 		const state = this.state.get();
 		return state.selected
 			? [state.selected.name, state.selected.description, ...state.selected.materials.map(material => material.name), state.message].filter(Boolean).join('\n')
-			: [localize('projects.title', 'Projects'), ...this.getProjects().map(project => project.name), state.message].filter(Boolean).join('\n');
+			: [localize('projects.title', 'Projects'), state.message].filter(Boolean).join('\n');
 	}
 }

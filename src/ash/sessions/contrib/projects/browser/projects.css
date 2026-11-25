@@ -24,8 +24,6 @@
 		var(--ash-spacing-size400);
 }
 
-.ash-projects-heading,
-.ash-projects-tools,
 .ash-projects-section-heading,
 .ash-projects-feedback {
 	display: flex;
@@ -34,36 +32,11 @@
 	min-width: 0;
 }
 
-.ash-projects-heading {
-	justify-content: space-between;
-	margin: 0 0 var(--ash-spacing-size320);
-}
-
-.ash-projects h1 {
-	margin: 0;
-	flex-shrink: 0;
-	min-width: 0;
-	max-width: 100%;
-	font-size: var(--ash-fontSize-heading1);
-	font-weight: var(--ash-fontWeight-semiBold);
-	line-height: 1.35;
-	overflow-wrap: anywhere;
-}
-
 .ash-projects h2 {
 	margin: 0;
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
 	line-height: 1.5;
-}
-
-.ash-projects .ash-projects-tools {
-	flex-shrink: 1;
-	gap: var(--ash-spacing-size80);
-}
-
-.ash-projects-tools > .ash-action-view-item:not(.ash-toolbar-search-action) {
-	flex-shrink: 0;
 }
 
 .ash-projects-feedback {
@@ -137,168 +110,6 @@
 	left: 24px;
 	top: 36px;
 	transform: rotate(-3deg);
-}
-
-.ash-projects-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--ash-spacing-size120);
-	padding: 0;
-	margin: 0;
-	list-style: none;
-}
-
-.ash-projects-grid li {
-	min-width: 0;
-}
-
-.ash-projects-row {
-	position: relative;
-	--ash-projects-card-background: var(--ash-sideBar-background);
-}
-
-.ash-projects-row:is(:hover, :focus-within, .menu-visible) {
-	--ash-projects-card-background: var(--ash-list-hoverBackground);
-}
-
-.ash-projects .ash-projects-card {
-	display: flex;
-	align-items: center;
-	justify-content: flex-start;
-	gap: var(--ash-spacing-size120);
-	width: 100%;
-	min-height: 64px;
-	padding: var(--ash-spacing-size120);
-	padding-inline-end: calc(
-		var(--ash-spacing-size120) + var(--ash-spacing-size280)
-	);
-	border-color: var(--ash-contrastBorder, transparent);
-	background: var(--ash-projects-card-background);
-	color: inherit;
-	line-height: 1.4;
-	text-align: left;
-}
-
-.ash-projects .ash-projects-card:hover {
-	background: var(--ash-projects-card-background);
-}
-
-.ash-projects-card-actions {
-	position: absolute;
-	top: 50%;
-	inset-inline-end: var(--ash-spacing-size120);
-	transform: translateY(-50%);
-	pointer-events: none;
-}
-
-.ash-projects-card-actions .ash-action-view-item {
-	pointer-events: auto;
-}
-
-.ash-projects-card-actions .ash-action-view-item {
-	opacity: 0;
-	pointer-events: none;
-	transition: opacity var(--ash-animation-durationFast) ease-out;
-
-	.ash-projects-row:is(:hover, :focus-within, .menu-visible) & {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.ash-projects-row:focus-within & {
-		transition: none;
-	}
-
-	@media (hover: none) {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		transition: none;
-	}
-}
-
-.ash-projects-card-actions .ash-action-view-item.pinned {
-	opacity: 1;
-	pointer-events: auto;
-	transition: none;
-}
-
-.ash-projects-card-actions::before {
-	content: "";
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	inset-inline-end: 100%;
-	width: var(--ash-spacing-size320);
-	background: linear-gradient(
-		to right,
-		transparent,
-		color-mix(in srgb, var(--ash-projects-card-background) 16%, transparent)
-			25%,
-		color-mix(in srgb, var(--ash-projects-card-background) 50%, transparent)
-			50%,
-		color-mix(in srgb, var(--ash-projects-card-background) 84%, transparent)
-			75%,
-		var(--ash-projects-card-background)
-	);
-	opacity: 0;
-	pointer-events: none;
-}
-
-.ash-projects-row:is(:hover, :focus-within, .menu-visible)
-	.ash-projects-card-actions {
-	background: var(--ash-projects-card-background);
-}
-
-.ash-projects-row:is(:hover, :focus-within, .menu-visible)
-	.ash-projects-card-actions::before {
-	opacity: 1;
-}
-
-.ash-projects-row:dir(rtl) .ash-projects-card-actions::before {
-	transform: scaleX(-1);
-}
-
-@media (hover: none) {
-	.ash-projects .ash-projects-card {
-		padding-inline-end: calc(
-			var(--ash-spacing-size120) + 2 * var(--ash-spacing-size280)
-		);
-	}
-}
-
-.ash-projects-card-content {
-	display: flex;
-	flex: 1;
-	flex-direction: column;
-	gap: var(--ash-spacing-size20);
-	min-width: 0;
-}
-
-.ash-projects-card-name {
-	width: 100%;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.ash-projects-card-mark {
-	display: flex;
-	flex: 0 0 var(--ash-spacing-size320);
-	align-items: center;
-	justify-content: center;
-	height: var(--ash-spacing-size320);
-	border-radius: var(--ash-cornerRadius-large);
-	background: var(--ash-toolbar-hoverBackground);
-	color: var(--ash-description-foreground);
-}
-
-.ash-projects-card-caption {
-	font-size: var(--ash-fontSize-body2);
-	line-height: 1.4;
-	color: var(--ash-description-foreground);
 }
 
 .ash-projects-muted {
@@ -621,35 +432,10 @@
 	opacity: 1;
 }
 
-.ash-projects .ash-projects-skeleton-card {
-	box-sizing: border-box;
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-projects-skeleton-card .ash-projects-card-content {
-	gap: var(--ash-spacing-size60);
-}
-
-.ash-projects-skeleton-card .ash-projects-card-mark {
-	height: var(--ash-spacing-size320);
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-projects-skeleton-name {
-	width: 70%;
-	height: var(--ash-spacing-size160);
-}
-
 .ash-projects-skeleton-lines {
 	display: flex;
 	flex-direction: column;
 	gap: var(--ash-spacing-size120);
-}
-
-.ash-projects-skeleton-short {
-	width: 45%;
 }
 
 :is(.hc-black, .hc-light) .ash-projects-placeholder {
@@ -661,20 +447,8 @@
 .ash-projects.narrow .ash-projects-main {
 	padding: var(--ash-spacing-size200);
 }
-.ash-projects.narrow .ash-projects-heading {
-	gap: var(--ash-spacing-size80);
-}
-.ash-projects.narrow .ash-projects-heading > h1 {
-	flex-shrink: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
 .ash-projects.narrow .ash-projects-detail {
 	gap: var(--ash-spacing-size200);
-}
-.ash-projects.narrow .ash-projects-grid {
-	grid-template-columns: minmax(0, 1fr);
 }
 .ash-projects.narrow .ash-projects-empty {
 	margin-top: var(--ash-spacing-size200);
@@ -683,13 +457,4 @@
 .ash-projects :focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
-}
-
-:is(.hc-black, .hc-light) .ash-projects-card {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
-}
-
-:is(.hc-black, .hc-light) .ash-projects-card-actions::before {
-	background: var(--ash-projects-card-background);
 }

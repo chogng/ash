@@ -1,21 +1,21 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Event } from '../../../../base/common/event.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import type { Icon } from '../../../../base/common/icon.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
-import { localize } from '../../../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { CustomizeEditorPane } from './customizeEditor.js';
+import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { Event } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import type { Icon } from '../../../../../base/common/icon.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { autorun, observableFromEvent } from '../../../../../base/common/observable.js';
+import { localize } from '../../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { ViewPane, type IViewPaneOptions } from '../../../../../workbench/browser/parts/views/viewPane.js';
+import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { CustomizeEditorPane } from '../customizeEditor.js';
 
-import './customizeNavigationView.css';
+import '../media/customizeView.css';
 
 type ResourceGroup = 'plugins' | 'skills';
 interface GroupRows {
@@ -26,7 +26,7 @@ interface GroupRows {
 }
 
 /** Projects the retained Customize editor's catalog into the Sessions sidebar. */
-export class CustomizeNavigationView extends ViewPane {
+export class CustomizeView extends ViewPane {
 	private readonly discover: Button;
 
 	constructor(

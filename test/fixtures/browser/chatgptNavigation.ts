@@ -37,7 +37,7 @@ import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/
 import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { combinedDisposable, Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -548,7 +548,11 @@ if (parameters.has('mixedCatalog')) {
 	}));
 	sources.push(resources.add(ashServices.createInstance(NativeChatCatalogSource)));
 }
-services.registerInstance(IChatListCatalog, { sources, forks: resources.add(new ChatListForks(sources, services.get(IStorageService))) });
+services.registerInstance(IChatListCatalog, {
+	sources,
+	forks: resources.add(new ChatListForks(sources, services.get(IStorageService))),
+	attach: (window, isVisible) => combinedDisposable(...sources.map(source => source.attach?.(window, isVisible) ?? Disposable.None)),
+});
 services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';

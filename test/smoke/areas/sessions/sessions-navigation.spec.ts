@@ -258,7 +258,7 @@ test('Sessions restores the Projects entry and its pane visibility through entry
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	await expect(page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first()).toBeVisible();
+	await expect(page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first()).toBeVisible();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await chatEditor().waitForEditorContents(text => text === draft);
 });
@@ -612,11 +612,11 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await expect(codeEditor.locator('.ash-code-page-group').getByRole('tab', { name: /^Untitled-1/u, includeHidden: true })).toHaveCount(0);
 	await projects.click();
 	await expect(projects).toHaveAttribute('aria-current', 'page');
-	await page.locator('.ash-projects').getByRole('button', { name: 'Search projects', exact: true }).click();
-	const search = page.locator('.ash-projects').getByRole('searchbox');
+	await page.locator('.ash-projects-view').getByRole('button', { name: 'Search projects', exact: true }).click();
+	const search = page.locator('.ash-projects-view').getByRole('searchbox');
 	await search.fill('Keep this Projects search');
 	await expect(canvas).toBeHidden();
-	await expect(page.locator('.ash-projects').getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-projects-empty').getByRole('heading', { name: 'No project selected', exact: true })).toBeVisible();
 	await code.click();
 	await expect(codeEditor).toBeVisible();
 	await file.waitForEditorContents(text => text === 'Keep this unsaved Code file');

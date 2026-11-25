@@ -80,7 +80,7 @@ export class ProjectsToolbar extends Disposable {
 					if (action.id === 'projects.create') {
 						this.createActionViewItem = new ButtonActionViewItem(action, {
 							...options,
-							buttonPresentation: 'primary',
+							iconOnly: true,
 						});
 						return this.createActionViewItem;
 					}
@@ -91,7 +91,7 @@ export class ProjectsToolbar extends Disposable {
 		this.toolbar.element.classList.add('ash-projects-tools');
 		const searchLabel = localize('projects.search', 'Search projects');
 		const sortLabel = localize('projects.sort', 'Sort projects');
-		const createLabel = localize('projects.new', 'New project');
+		const createLabel = localize('sessions.activity.createProject', 'Create project');
 		this.toolbarActions = [
 			{
 				id: 'projects.search',
@@ -115,7 +115,8 @@ export class ProjectsToolbar extends Disposable {
 			{
 				id: 'projects.create',
 				label: createLabel,
-				tooltip: '',
+				tooltip: createLabel,
+				icon: Lxicon.add,
 				enabled: true,
 				run: () => actions.createProject(),
 			},

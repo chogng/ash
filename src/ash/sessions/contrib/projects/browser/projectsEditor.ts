@@ -18,15 +18,16 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { getCatalogProjectRename, getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { IProjectsService, type ProjectsState } from './projectsService.js';
+import { IProjectsService, projectsViewId, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ProjectChatInput } from './projectChatInput.js';
 import { IProjectDialogService, type ChatProjectEdit } from './projectDialogService.js';
 import { ProjectMaterials } from './projectMaterials.js';
 import type { ProjectTitleBarContent } from './projectTitleBarWidget.js';
 import { ProjectsActions } from './projectsActions.js';
-import { ProjectsList } from './projectsList.js';
-import { ProjectsView } from './projectsView.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
+import { ProjectConversations } from './projectConversations.js';
+import { renderProjectsEmptyState } from './projectsWelcomePage.js';
 import './projects.css';
 
 interface ProjectDetail extends IDisposable {
@@ -46,9 +47,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private readonly content = this._register(new DisposableStore());
 	private readonly projectDetail = this._register(new MutableDisposable<ProjectDetail>());
 	private projectMaterials!: ProjectMaterials;
-	private projectList!: ProjectsList;
+	private conversations!: ProjectConversations;
 	private projectActions!: ProjectsActions;
-	private projectsView!: ProjectsView;
 	private body!: HTMLElement;
 	private message!: HTMLElement;
 	private retry!: Button;
@@ -63,7 +63,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.chatCatalog.sources.map(source => source.snapshot.read(reader)));
 	private readonly projectGroups = derived(reader => groupChatList(this.conversationProjects.read(reader), 'projects'));
 	private readonly shown = observableValue(this, false);
-	private readonly showArchived = observableValue(this, false);
 	readonly projectTitleBarContent = derived<ProjectTitleBarContent | undefined>(reader => {
 		if (!this.shown.read(reader)) return undefined;
 		const state = this.projects.state.read(reader);
@@ -97,9 +96,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 					},
 				} : undefined,
 			open: () => {
-				const projectId = this.projects.state.get().conversationProjectId;
 				this.projects.showProjects();
-				if (!projectId || !this.projectList.focusCard(projectId)) this.projectsView.focusCreate();
+				this.focusNavigation();
 			},
 		};
 	});
@@ -113,6 +111,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
+		@IViewsService private readonly views: IViewsService,
 	) {
 		super('sessions.editor.projects', themeService, storageService);
 	}
@@ -130,14 +129,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		);
 		parent.append(this.domNode);
 		super.create(this.domNode);
+		this._register(this.chatCatalog.attach(getWindow(this.domNode), () => this.isVisible()));
 		this._register(toDisposable(() => this.projectDialogs.close(this.domNode)));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.projectActions = this._register(this.instantiationService.createInstance(ProjectsActions, {
 			showDialog: (edit?: ChatProjectEdit) => this.showProjectDialog(edit),
-			focusList: () => {
-				if (!this.projectList.focusCard()) this.projectsView.focusCreate();
-			},
+			focusList: () => this.focusNavigation(),
 			isVisible: () => this.isVisible(),
 		}));
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
@@ -153,8 +151,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		);
 		feedback.prepend(this.message);
 		this.body = h(document, 'div', { className: 'ash-projects-body' });
-		this.projectList = this._register(this.instantiationService.createInstance(ProjectsList, this.body, this.projectActions, {
-			openedProject: () => this.focusPage(),
+		this.conversations = this._register(this.instantiationService.createInstance(ProjectConversations, this.body, {
 			isVisible: () => this.isVisible(),
 			createProjectForConversation: (creator: CatalogProjectCreator, restoreFocus: () => void) => {
 				if (!this.isVisible()) return;
@@ -162,8 +159,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				this.projectDialogs.showChatProjectDialog(this.domNode, restoreFocus, undefined, creator);
 			},
 		}));
-		this.projectsView = this._register(this.instantiationService.createInstance(ProjectsView, this.body, this.projectList, this.projectActions));
-		main.append(this.projectsView.heading, feedback, this.body);
+		main.append(feedback, this.body);
 		this.domNode.append(main);
 		this._register(addDisposableListener(this.domNode, 'focusin', event => {
 			const from = event.relatedTarget;
@@ -187,7 +183,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const id = state.conversationProjectId;
 			const snapshots = this.conversationProjects.read(reader);
 			const groups = this.projectGroups.read(reader);
-			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
 			const selected = groups.find(group => group.key === id);
 			const details = selected?.project?.details;
 			const load = this.catalogDetailsLoad.read(reader);
@@ -207,7 +202,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			}
 			const projectChats = state.selected
 				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds, state.selected.externalConversationIds) : [];
-			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats, data, load?.key === details?.key ? load?.phase : undefined);
+			this.render(state, groups, selected, projectChats, data, load?.key === details?.key ? load?.phase : undefined);
 			const readableMaterials = loadedMaterials?.filter(file => file.read);
 			const materialSyncKey = root && details && readableMaterials?.length
 				? JSON.stringify([root.toString(), details.key, readableMaterials.map(file => [file.id, file.name])]) : undefined;
@@ -242,12 +237,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.projectActions.createProject();
 	}
 
-	private showProjectDialog(edit?: ChatProjectEdit): void {
+	public showProjectDialog(edit?: ChatProjectEdit, restoreFocus?: () => boolean): void {
 		const instructionsProject = edit && 'instructionsOnly' in edit && edit.instructionsOnly
 			? this.body.querySelector<HTMLElement>('[data-project-detail]')?.dataset.projectDetail
 			: undefined;
 		this.projectDialogs.showChatProjectDialog(this.domNode, () => {
 			if (this.isDisposed || !this.isVisible()) return;
+			if (restoreFocus) {
+				if (!restoreFocus()) this.focusPage();
+				return;
+			}
 			if (instructionsProject) {
 				const current = this.body.querySelector<HTMLElement>('[data-project-detail]');
 				const trigger = current?.dataset.projectDetail === instructionsProject
@@ -260,16 +259,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			}
 			this.focus();
 		}, edit);
-	}
-
-	public toggleArchivedProjects(): void {
-		if (this.projectsView.heading.hidden) {
-			this.showArchived.set(true, undefined);
-			this.projects.showProjects();
-		} else {
-			this.showArchived.set(!this.showArchived.get(), undefined);
-		}
-		this.focusPage();
 	}
 
 	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
@@ -285,8 +274,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		} else {
 			this.catalogDetailsRequest.clear();
 			this.catalogDetailsLoad.set(undefined);
-			this.projectList.reset();
-			this.projectsView.closeSortMenu();
+			this.conversations.reset();
 			this.projectActions.cancelPendingEdit();
 			this.projectDialogs.close(this.domNode);
 		}
@@ -296,21 +284,25 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.domNode.classList.toggle('stack-project-details', dimension.width < 840);
 	}
 	public override focus(): void {
-		if (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined) {
-			if (this.activeProjectInput) this.activeProjectInput.focus();
-			else this.focusPage();
+		const state = this.projects.state.get();
+		if (!state.selectedId && !state.conversationProjectId) {
+			this.focusNavigation();
+		} else if (this.activeProjectInput) {
+			this.activeProjectInput.focus();
 		} else {
-			this.projectsView.focusCreate();
+			this.focusPage();
 		}
 	}
 
+	private focusNavigation(): void {
+		const view = this.views.isViewVisible(projectsViewId) ? this.views.getViewWithId(projectsViewId) : null;
+		if (view) view.focus();
+		else this.focusPage();
+	}
+
 	private focusPage(): void {
-		if (this.projectsView.heading.hidden) {
-			this.domNode.scrollTop = 0;
-			this.domNode.focus();
-		} else {
-			this.projectsView.focusHeading();
-		}
+		this.domNode.scrollTop = 0;
+		this.domNode.focus();
 	}
 
 	private loadCatalogDetails(details: CatalogProjectDetails): void {
@@ -331,7 +323,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		void details.load(controller.signal).then(() => finish('loaded'), () => finish('error'));
 	}
 
-	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined, projectChats: readonly ChatListEntry[],
+	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, projectChats: readonly ChatListEntry[],
 		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
 		const loadingProject = !!state.selectedId && !state.selected && state.loading;
 		const projectName = selected?.title ?? state.selected?.name;
@@ -354,7 +346,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const anchor = scrollTop && scroller ? Array.from(scroller.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
 			.find(row => row.getBoundingClientRect().bottom > viewportTop) : undefined;
 		const anchorTop = anchor?.getBoundingClientRect().top;
-		this.projectList.reset();
+		this.conversations.reset();
 		this.content.clear();
 		const catalogInputs = new Set(groups.flatMap(group => group.project?.composer ? [group.project.composer.key] : []));
 		for (const [key, input] of this.projectInputs) {
@@ -366,20 +358,22 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (!sameProject) this.body.replaceChildren();
 		this.domNode.classList.toggle('project-detail-open', projectId !== undefined);
 		this.domNode.setAttribute('aria-label', projectName ?? localize('projects.title', 'Projects'));
-		this.message.textContent =
-			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
-		this.message.parentElement!.hidden = !state.message && !state.loading;
+		const hasSelection = state.selectedId !== undefined || state.conversationProjectId !== undefined;
+		const message = hasSelection ? state.message : undefined;
+		this.message.textContent = message ?? (loadingProject ? localize('projects.loading', 'Loading projects…') : '');
+		this.message.parentElement!.hidden = !message && !loadingProject;
 		// Keep loading announcements available without adding a row that shifts the page.
-		this.message.parentElement!.classList.toggle('loading', state.loading && !state.message);
-		this.retry.domNode.hidden = !state.message;
+		this.message.parentElement!.classList.toggle('loading', loadingProject && !message);
+		this.retry.domNode.hidden = !message;
 		this.retry.enabled = !state.loading && !state.busy;
-		this.body.setAttribute('aria-busy', String(state.loading));
-		this.projectsView.render(state, !state.selectedId && !selected, groups, archived, this.content);
+		this.body.setAttribute('aria-busy', String(hasSelection && state.loading));
 		if (projectId !== undefined) {
 			const conversations = selected ?? groups.find(group => group.key === state.selectedId);
 			this.renderProject(projectId, [...projectChats, ...(conversations?.rows ?? [])], conversations?.project, state.selected, data, detailsPhase);
 		} else if (loadingProject) {
 			this.renderDetailLoading();
+		} else if (!state.selectedId) {
+			renderProjectsEmptyState(this.body);
 		}
 		if (projectId === undefined) {
 			this.activeProjectInput?.setVisible(false);
@@ -417,7 +411,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const { element: layout, card, chats: chatContent, instructions, memory, files } = detail;
 		const details = conversationProject?.details;
 		chatContent.replaceChildren();
-		this.projectList.renderConversations(chatContent, chats, conversationProject, localProject?.id, this.content);
+		this.conversations.renderConversations(chatContent, chats, conversationProject, localProject?.id, this.content);
 		files.replaceChildren();
 		memory.replaceChildren();
 		memory.hidden = true;

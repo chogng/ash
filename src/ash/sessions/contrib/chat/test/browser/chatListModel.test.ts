@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { constObservable, derived, observableValue } from '../../../../../base/common/observable.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -32,6 +33,41 @@ async function advanceRecoveryClock(milliseconds: number): Promise<void> {
 }
 
 suite('Ash chat list model', () => {
+	test('Projects can attach before Chat and shares one provider attachment per window', () => {
+		let attached = 0;
+		let detached = 0;
+		let visible: (() => boolean) | undefined;
+		class Source implements ChatListSource {
+			readonly snapshot = constObservable({ entries: [] });
+			attach(_window: Window, isVisible: () => boolean) {
+				attached++;
+				visible = isVisible;
+				return toDisposable(() => detached++);
+			}
+		}
+		const { storage } = forkRecoveryStorage();
+		const list = new SessionsListModelService(storage);
+		using services = new InstantiationService();
+		services.registerInstance(ISessionsListModelService, list);
+		services.registerInstance(IStorageService, storage);
+		using catalog = services.createInstance(ChatListCatalog, [new SyncDescriptor(Source)]);
+		const window = {} as Window & typeof globalThis;
+		let projectsVisible = true;
+		let chatVisible = false;
+		using projects = catalog.attach(window, () => projectsVisible);
+		assert.equal(visible?.(), true);
+		using chat = catalog.attach(window, () => chatVisible);
+		assert.equal(attached, 1);
+		projectsVisible = false;
+		assert.equal(visible?.(), false);
+		chatVisible = true;
+		assert.equal(visible?.(), true);
+		projects.dispose();
+		assert.equal(detached, 0);
+		chat.dispose();
+		assert.equal(detached, 1);
+	});
+
 	test('owns catalog icon storage and moves an icon when a source replaces an identity', () => {
 		using retired = new Emitter<{ key: string; replacementKey?: string; }>();
 		class Source implements ChatListSource {

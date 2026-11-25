@@ -1,0 +1,242 @@
+.ash-projects-view {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	height: 100%;
+	min-height: 0;
+	padding: var(--ash-spacing-size120) var(--ash-sessions-sidebar-row-inset) 0;
+	color: var(--ash-foreground);
+}
+
+.ash-projects-heading {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size60);
+	min-width: 0;
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-projects-heading h2 {
+	margin: 0;
+	padding-inline: var(--ash-sessions-sidebar-item-inset);
+	font: inherit;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-projects-view .ash-projects-tools {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-projects-tools > .ash-action-view-item:not(.ash-toolbar-search-action) {
+	flex-shrink: 0;
+}
+
+.ash-projects-view-list {
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-projects-view-status {
+	margin: var(--ash-spacing-size80) var(--ash-sessions-sidebar-item-inset);
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size20);
+	padding: 0;
+	margin: 0;
+	list-style: none;
+}
+
+.ash-projects-grid li {
+	min-width: 0;
+}
+
+.ash-projects-row {
+	position: relative;
+	--ash-projects-card-background: var(--ash-sideBar-background);
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible) {
+	--ash-projects-card-background: var(--ash-list-hoverBackground);
+}
+
+.ash-projects-row.selected {
+	--ash-projects-card-background: var(--ash-tabList-activeBackground);
+}
+
+.ash-projects-view .ash-projects-card {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: var(--ash-spacing-size120);
+	width: 100%;
+	min-height: var(--ash-sessions-sidebar-row-height);
+	padding: var(--ash-spacing-size40) var(--ash-sessions-sidebar-item-inset);
+	padding-inline-end: calc(
+		var(--ash-spacing-size120) + var(--ash-spacing-size280)
+	);
+	border-color: var(--ash-contrastBorder, transparent);
+	background: var(--ash-projects-card-background);
+	color: inherit;
+	line-height: 1.4;
+	text-align: left;
+}
+
+.ash-projects-view .ash-projects-card:hover {
+	background: var(--ash-projects-card-background);
+}
+
+.ash-projects-card-actions {
+	position: absolute;
+	top: 50%;
+	inset-inline-end: var(--ash-spacing-size40);
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.ash-projects-card-actions .ash-action-view-item {
+	pointer-events: auto;
+}
+
+.ash-projects-card-actions .ash-action-view-item {
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+
+	.ash-projects-row:is(:hover, :focus-within, .menu-visible) & {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.ash-projects-row:focus-within & {
+		transition: none;
+	}
+
+	@media (hover: none) {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		transition: none;
+	}
+}
+
+.ash-projects-card-actions .ash-action-view-item.pinned {
+	opacity: 1;
+	pointer-events: auto;
+	transition: none;
+}
+
+.ash-projects-card-actions::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size320);
+	background: linear-gradient(
+		to right,
+		transparent,
+		color-mix(in srgb, var(--ash-projects-card-background) 16%, transparent)
+			25%,
+		color-mix(in srgb, var(--ash-projects-card-background) 50%, transparent)
+			50%,
+		color-mix(in srgb, var(--ash-projects-card-background) 84%, transparent)
+			75%,
+		var(--ash-projects-card-background)
+	);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible)
+	.ash-projects-card-actions {
+	background: var(--ash-projects-card-background);
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible)
+	.ash-projects-card-actions::before {
+	opacity: 1;
+}
+
+.ash-projects-row:dir(rtl) .ash-projects-card-actions::before {
+	transform: scaleX(-1);
+}
+
+@media (hover: none) {
+	.ash-projects-view .ash-projects-card {
+		padding-inline-end: calc(
+			var(--ash-spacing-size120) + 2 * var(--ash-spacing-size280)
+		);
+	}
+}
+
+.ash-projects-card-content {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
+	min-width: 0;
+}
+
+.ash-projects-card-name {
+	width: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-projects-card-mark {
+	display: flex;
+	flex: 0 0 var(--ash-lxiconFontSize);
+	align-items: center;
+	justify-content: center;
+	height: var(--ash-lxiconFontSize);
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-card-caption {
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.4;
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-view .ash-projects-skeleton-card {
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-skeleton-card .ash-projects-card-mark {
+	height: var(--ash-lxiconFontSize);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-skeleton-name {
+	width: 70%;
+	height: 1.4em;
+}
+
+.ash-projects-skeleton-short {
+	width: 45%;
+	height: 1.4em;
+	font-size: var(--ash-fontSize-body2);
+}
+
+:is(.hc-black, .hc-light) .ash-projects-card {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light) .ash-projects-card-actions::before {
+	background: var(--ash-projects-card-background);
+}

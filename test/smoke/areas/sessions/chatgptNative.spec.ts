@@ -2390,7 +2390,7 @@ test.describe('Ash project file copies', () => {
 		const page = await workbench.openAgentsWindow('electron');
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
-		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await page.locator('.ash-projects-view').getByRole('button', { name: 'File project fixture', exact: true }).click();
 		const materials = page.getByRole('region', { name: '上下文', exact: true });
 		const add = materials.getByRole('button', { name: '添加项目资料', exact: true });
 		const placeholders = materials.locator('.ash-projects-material-placeholder');
@@ -2571,7 +2571,7 @@ test.describe('Ash project file copies', () => {
 		};
 
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
-		const project = page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true });
+		const project = page.locator('.ash-projects-view').getByRole('button', { name: 'File project fixture', exact: true });
 		await expect(project).toBeVisible();
 		expect(await saved(originalRoot, 'project-fixture.txt')).toBeUndefined();
 		await project.click();
@@ -2617,7 +2617,7 @@ test.describe('Ash project file copies', () => {
 		const showSidebar = restored.getByRole('button', { name: '显示侧边栏', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await restored.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click({ timeout: 5000 });
-		await restored.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await restored.locator('.ash-projects-view').getByRole('button', { name: 'File project fixture', exact: true }).click();
 		await restored.getByRole('region', { name: '上下文', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
 		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
 		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
@@ -2633,7 +2633,7 @@ test.describe('ChatGPT project memory', () => {
 		const page = await workbench.openAgentsWindow('electron');
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
 		const projects = page.locator('.ash-projects');
-		await projects.getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await page.locator('.ash-projects-view').getByRole('button', { name: 'File project fixture', exact: true }).click();
 		const view = projects.getByRole('button', { name: '查看记忆', exact: true });
 		const dialog = page.getByRole('dialog', { name: '项目记忆', exact: true });
 		const editor = new Editor(dialog);
@@ -2715,7 +2715,7 @@ test.describe('ChatGPT project conversation title', () => {
 		const showSidebar = titleBar.getByRole('button', { name: '显示侧边栏', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
-		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await page.locator('.ash-projects-view').getByRole('button', { name: 'File project fixture', exact: true }).click();
 		await expect(pageTitle.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
 		await expect(conversation).toBeHidden();
 		if (await showSidebar.isVisible()) await showSidebar.click();

@@ -898,8 +898,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			if (this.active.value === active) {
 				this.active.clear();
 			}
-			// Updating action availability can replace the toolbar trigger during a save attempt.
-			if (!this.isDisposed && (didSave || !previousFocus?.isConnected)) {
+			// A save attempt can replace the trigger. A resize can hide its sidebar.
+			if (!this.isDisposed && (didSave || !previousFocus?.isConnected || previousFocus.getClientRects().length === 0)) {
 				restoreFocus();
 			}
 		});
