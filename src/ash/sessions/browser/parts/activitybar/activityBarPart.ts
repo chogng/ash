@@ -18,7 +18,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { CompositeActionViewItem, getActivityHoverPosition, type ICompositeBarActionViewItemOptions } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
-import { SessionsConfiguration, type SessionsActivityBarLocation } from '../../../common/configuration.js';
+import { getSessionsActivityBarLocationOptions, SessionsConfiguration, type SessionsActivityBarLocation } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { getFittingActionCount } from '../../../../base/browser/ui/toolbar/toolbar.js';
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -62,6 +62,7 @@ export class ActivityBar extends Disposable {
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
 	private labeled = true;
+	private horizontal = false;
 
 	public get accountContainer(): HTMLElement { return this.accounts.domNode; }
 
@@ -89,17 +90,17 @@ export class ActivityBar extends Disposable {
 			orientation: 'vertical',
 			actionViewItemProvider: action => {
 				if (action === this.moreAction) {
-					return new MoreActionViewItem(action, contextMenuService, () => this.menuActions, this.labeled ? {
+					return new MoreActionViewItem(action, contextMenuService, () => this.menuActions, this.labeled, this.horizontal ? undefined : {
 						pins: this.pinnedActions,
 						setPinned: (id, pinned) => this.setActionPinned(id, pinned),
-					} : undefined);
+					});
 				}
 				const options: ICompositeBarActionViewItemOptions = {
 					presentation: 'navigation',
 					navigationClassName: 'ash-sessions-activity-item',
 					navigationLabel: this.labeled ? 'visible' : 'hidden',
 					onDidChange: (action as ActivityAction).current.onDidChange,
-					hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+					hoverOptions: { position: () => this.getHoverPosition('navigation') },
 				};
 				return new CompositeActionViewItem(action, options);
 			},
@@ -120,10 +121,10 @@ export class ActivityBar extends Disposable {
 		}));
 		this.navigation.domNode.classList.add('ash-sessions-navigation');
 		const layout = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => {
-			if (!this.labeled) this.renderNavigation();
+			if (this.horizontal) this.renderNavigation();
 		}));
 		this._register(observeResize(this.navigation.domNode, () => {
-			if (!this.labeled) layout.schedule();
+			if (this.horizontal) layout.schedule();
 		}));
 		const updateActions = (): void => {
 			const groups = menu.getActions();
@@ -182,8 +183,10 @@ export class ActivityBar extends Disposable {
 		const accounts = this.accounts.domNode;
 		const restoreFocus = focused && (this.domNode.contains(focused) || accounts.contains(focused));
 		const labeled = location === ActivityBarPosition.DEFAULT;
-		const presentationChanged = this.labeled !== labeled;
+		const horizontal = location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM;
+		const presentationChanged = this.labeled !== labeled || this.horizontal !== horizontal;
 		this.labeled = labeled;
+		this.horizontal = horizontal;
 		host.append(this.domNode);
 		if (accountHost) {
 			accountHost.append(accounts);
@@ -191,7 +194,6 @@ export class ActivityBar extends Disposable {
 			accounts.remove();
 		}
 		this.domNode.classList.toggle('labeled', labeled);
-		const horizontal = !labeled;
 		this.domNode.classList.toggle('horizontal', horizontal);
 		this.navigation.setOrientation(horizontal ? 'horizontal' : 'vertical');
 		if (presentationChanged) {
@@ -212,10 +214,18 @@ export class ActivityBar extends Disposable {
 		}
 	}
 
+	private getHoverPosition(presentation: 'navigation' | 'sidebar'): HoverPosition {
+		const location = this.configurationService.getValue<SessionsActivityBarLocation>(SessionsConfiguration.activityBarLocation);
+		if (location === 'left' || location === 'right') {
+			return getActivityHoverPosition(ActivityBarPosition.DEFAULT, presentation === 'navigation' ? location : 'left');
+		}
+		return getActivityHoverPosition(location, 'left');
+	}
+
 	public createAccountActionViewItem(action: IAction, options: ActionViewItemOptions, presentation: 'sidebar' | 'titlebar'): ActionViewItem {
 		return new AccountActionViewItem(action, options, presentation, this.showAccountMenu, event => this.showContextMenu(event), anchor => this.hoverService.setupDelayedHover(anchor, () => ({
 			content: action.label,
-			position: { hoverPosition: presentation === 'titlebar' ? HoverPosition.BELOW : getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+			position: { hoverPosition: presentation === 'titlebar' ? HoverPosition.BELOW : this.getHoverPosition(presentation) },
 		}), { groupId: options.hoverGroupId }));
 	}
 
@@ -244,11 +254,14 @@ export class ActivityBar extends Disposable {
 
 	private getContextMenuActions(): readonly IAction[] {
 		const location = this.configurationService.getValue<SessionsActivityBarLocation>(SessionsConfiguration.activityBarLocation);
-		const positions: IAction[] = [
-			{ id: 'sessions.action.activityBar.position.default', label: localize('workbench.activityBarPositionDefault', 'Default'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.DEFAULT, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.DEFAULT) },
-			{ id: 'sessions.action.activityBar.position.top', label: localize('workbench.activityBarPositionTop', 'Top'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.TOP, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.TOP) },
-			{ id: 'sessions.action.activityBar.position.bottom', label: localize('workbench.activityBarPositionBottom', 'Bottom'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.BOTTOM, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.BOTTOM) },
-		];
+		const positions = getSessionsActivityBarLocationOptions().map(({ value, label }): IAction => ({
+			id: `sessions.action.activityBar.position.${value}`,
+			label,
+			tooltip: '',
+			enabled: true,
+			checked: location === value,
+			run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, value),
+		}));
 		return [new SubmenuAction('sessions.action.activityBar.position', localize('workbench.activityBarPosition', 'Activity Bar Position'), positions)];
 	}
 
@@ -263,7 +276,7 @@ export class ActivityBar extends Disposable {
 			enabled: true,
 			run: () => {
 				this.setActionPinned(id, false);
-				this.navigation.setTabStop(this.labeled ? this.moreAction.id : id);
+				this.navigation.setTabStop(this.horizontal ? id : this.moreAction.id);
 				this.navigation.focus();
 			},
 		}];
@@ -317,9 +330,9 @@ export class ActivityBar extends Disposable {
 	}
 
 	private get primaryActions(): readonly ActivityAction[] {
-		return this.labeled
-			? this.orderedActions.filter(action => !this.moreActionIds.has(action.id) || this.pinnedActions.get().has(action.id))
-			: this.orderedActions;
+		return this.horizontal
+			? this.orderedActions
+			: this.orderedActions.filter(action => !this.moreActionIds.has(action.id) || this.pinnedActions.get().has(action.id));
 	}
 
 	private restoreNavigationTabStop(id: string): void {
@@ -334,7 +347,7 @@ export class ActivityBar extends Disposable {
 	private renderNavigation(options?: { readonly retainOpenDropdowns?: boolean; }): void {
 		const actions = this.primaryActions;
 		let visible = actions;
-		if (this.labeled) {
+		if (!this.horizontal) {
 			this.menuActions = this.orderedActions.filter(action => this.moreActionIds.has(action.id));
 		} else {
 			const bar = this.navigation.domNode;
@@ -396,7 +409,7 @@ export class ActivityBar extends Disposable {
 }
 
 class MoreActionViewItem extends DropdownMenuActionViewItem {
-	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], private readonly pinControls?: {
+	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], private readonly labeled: boolean, pinControls?: {
 		readonly pins: IObservable<ReadonlySet<string>>;
 		readonly setPinned: (id: string, pinned: boolean) => void;
 	}) {
@@ -413,7 +426,7 @@ class MoreActionViewItem extends DropdownMenuActionViewItem {
 	}
 
 	protected override createButton(container: HTMLElement, options: IButtonOptions): Button {
-		const button = super.createButton(container, { ...options, iconOnly: !this.pinControls });
+		const button = super.createButton(container, { ...options, iconOnly: !this.labeled });
 		button.domNode.classList.add('ash-sessions-activity-item', 'ash-sessions-activity-more');
 		return button;
 	}

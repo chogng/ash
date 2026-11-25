@@ -258,10 +258,10 @@ test('Sessions Activity Bar context menu changes its own position with a fixed s
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position']);
 		const position = shownActions[0] as import('../../../base/common/actions.js').SubmenuAction;
 		assert.deepEqual(position.actions.map(action => [action.label, action.checked]), [
-			['Default', true], ['Top', false], ['Bottom', false],
+			['Default', true], ['Left', false], ['Right', false], ['Top', false], ['Bottom', false],
 		]);
 		await position.actions[1]!.run();
-		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), ActivityBarPosition.TOP);
+		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), 'left');
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarLocation), ActivityBarPosition.DEFAULT);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarCompact), false);
 		bar.domNode.querySelector('button')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));

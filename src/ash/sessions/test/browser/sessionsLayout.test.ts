@@ -60,6 +60,22 @@ suite('sessions browser component', () => {
 	});
 
 
+	async function expectActivityGlyph(icon: Locator, size: number, centerHorizontally: boolean): Promise<void> {
+		await expect(icon).toHaveCSS('width', `${size}px`);
+		await expect(icon).toHaveCSS('height', `${size}px`);
+		await expect(icon).toHaveCSS('font-size', `${size}px`);
+		const offset = await icon.evaluate(element => {
+			const icon = element.getBoundingClientRect();
+			const button = element.closest('button')!.getBoundingClientRect();
+			return {
+				x: Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2),
+				y: Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2),
+			};
+		});
+		if (centerHorizontally) { expect(offset.x).toBeLessThanOrEqual(1); }
+		expect(offset.y).toBeLessThanOrEqual(1);
+	}
+
 	async function expectActivityIconSize(navigation: Locator, size: number, position: 'default' | 'top' | 'bottom' = 'default'): Promise<void> {
 		const horizontal = position !== 'default';
 		await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);
@@ -89,19 +105,7 @@ suite('sessions browser component', () => {
 			await expect(navigation.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
 		}
 		for (const icon of await icons.all()) {
-			await expect(icon).toHaveCSS('width', `${size}px`);
-			await expect(icon).toHaveCSS('height', `${size}px`);
-			await expect(icon).toHaveCSS('font-size', `${size}px`);
-			const bounds = await icon.evaluate(element => {
-				const icon = element.getBoundingClientRect();
-				const button = element.closest('button')!.getBoundingClientRect();
-				return {
-					x: Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2),
-					y: Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2),
-				};
-			});
-			if (!labeled) { expect(bounds.x).toBeLessThanOrEqual(1); }
-			expect(bounds.y).toBeLessThanOrEqual(1);
+			await expectActivityGlyph(icon, size, !labeled);
 		}
 	}
 
@@ -1138,11 +1142,76 @@ suite('sessions browser component', () => {
 		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await expect(page.getByRole('menuitemradio')).toHaveText(['Default', 'Top', 'Bottom']);
+		await expect(page.getByRole('menuitemradio')).toHaveText(['Default', 'Left', 'Right', 'Top', 'Bottom']);
 		await expect(page.getByRole('menuitemradio', { name: 'Default' })).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
 		await expect(topHost.locator('.ash-sessions-activity-content')).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
+	});
+
+	test('Activity Bar switches sidebar edges and restores the default in Chinese', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?catalog&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const content = sidebar.locator(':scope > .ash-workbench-part-content');
+		const rail = sidebar.locator('.ash-sessions-activity-host.side');
+		const navigation = sidebar.locator('.ash-sessions-navigation');
+		const buttons = navigation.getByRole('button');
+		const newButton = navigation.getByRole('button', { name: '新建', exact: true });
+		const account = sidebar.getByRole('button', { name: '账户', exact: true });
+		const sidebarToggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+		const position = page.getByRole('menuitem', { name: '活动栏位置' });
+		const openPositionMenu = async () => {
+			await newButton.press('Shift+F10');
+			await position.press('ArrowRight');
+		};
+
+		const defaultWidth = (await newButton.boundingBox())!.width;
+		await openPositionMenu();
+		await expect(page.getByRole('menuitemradio')).toHaveText(['默认', '左侧', '右侧', '顶部', '底部']);
+		await expect(page.getByRole('menuitemradio', { name: '默认' })).toHaveAttribute('aria-checked', 'true');
+		for (const [side, label, nextLabel] of [['left', '左侧', '右侧'], ['right', '右侧', '默认']] as const) {
+			await page.getByRole('menuitemradio', { name: label }).press('Enter');
+			await expect(sidebar).toHaveAttribute('data-activity-bar-side', side);
+			await expect(navigation).toHaveAttribute('aria-orientation', 'vertical');
+			await expect(navigation.getByRole('button', { name: '更多', exact: true })).toBeVisible();
+			for (const button of await buttons.all()) {
+				await expect(button).toHaveCSS('width', '36px');
+				await expect(button).toHaveCSS('height', '36px');
+				await expectActivityGlyph(button.locator('.ash-icon-label-icon > .ash-icon'), 20, true);
+			}
+			const gaps = await buttons.evaluateAll(elements => {
+				const bounds = elements.map(element => element.getBoundingClientRect());
+				return bounds.slice(1).map((item, index) => item.top - bounds[index].bottom);
+			});
+			expect(gaps).toEqual(gaps.map(() => 8));
+			await expect(newButton).toBeFocused();
+			await expect(account).toBeVisible();
+			const railBounds = (await rail.boundingBox())!;
+			const contentBounds = (await content.boundingBox())!;
+			if (side === 'left') {
+				expect(railBounds.x + railBounds.width).toBeCloseTo(contentBounds.x, 0);
+			} else {
+				expect(contentBounds.x + contentBounds.width).toBeCloseTo(railBounds.x, 0);
+			}
+			await sidebarToggle.click();
+			await expect(rail).toBeHidden();
+			await sidebarToggle.click();
+			await expect(rail).toBeVisible();
+			await rail.click({ button: 'right', position: { x: railBounds.width / 2, y: railBounds.height - 24 } });
+			await expect(position).toBeVisible();
+			await expect(page.getByRole('menuitem', { name: '向前移动', exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await openPositionMenu();
+			await expect(page.getByRole('menuitemradio', { name: label })).toHaveAttribute('aria-checked', 'true');
+			await expect(page.getByRole('menuitemradio', { name: nextLabel })).toHaveAttribute('aria-checked', 'false');
+		}
+		await page.getByRole('menuitemradio', { name: '默认' }).press('Enter');
+		await expect(rail).toBeHidden();
+		await expect(newButton).toBeFocused();
+		expect((await newButton.boundingBox())!.width).toBe(defaultWidth);
+		await expect(account).toBeVisible();
 	});
 
 	test('Sessions titlebar reserves its dimensions and orders component actions', async function () {

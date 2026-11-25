@@ -32,6 +32,7 @@ export const ISessionsSidebarFooter = createServiceIdentifier<ISessionsSidebarFo
 /** Shared container host with Sessions Activity Bar placement and sizing. */
 export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
+	private readonly sideActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
 	private readonly bottomNavigationHost: HTMLDivElement;
 	private readonly updateStatus: HTMLDivElement;
@@ -65,6 +66,9 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;
 		this.domNode.insertBefore(this.topActivityBarHost, this.titleDomNode);
+		this.sideActivityBarHost = h(container.ownerDocument, 'div', { className: 'ash-sessions-activity-host side' });
+		this.sideActivityBarHost.hidden = true;
+		this.domNode.insertBefore(this.sideActivityBarHost, this.titleDomNode);
 		this.bottomActivityBarHost = h(container.ownerDocument, 'div');
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
 		this.bottomNavigationHost = h(container.ownerDocument, 'div');
@@ -125,12 +129,19 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		super.showComposite(id, focus);
 		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.updateStatus);
 	}
-	override setActivityBarLocation(location: SessionsActivityBarLocation): HTMLElement {
+	setNavigationLocation(location: SessionsActivityBarLocation): HTMLElement {
+		const side = location === 'left' || location === 'right' ? location : undefined;
 		const integrated = location === ActivityBarPosition.DEFAULT;
 		const atBottom = location === ActivityBarPosition.BOTTOM;
 		this.topActivityBarHost.classList.toggle('integrated', integrated);
 		this.bottomActivityBarHost.classList.toggle('integrated', !atBottom);
-		this.topActivityBarHost.hidden = atBottom;
+		this.topActivityBarHost.hidden = atBottom || side !== undefined;
+		this.sideActivityBarHost.hidden = side === undefined;
+		if (side) {
+			this.domNode.dataset.activityBarSide = side;
+			return this.sideActivityBarHost;
+		}
+		delete this.domNode.dataset.activityBarSide;
 		return atBottom ? this.bottomNavigationHost : this.topActivityBarHost;
 	}
 }

@@ -25,11 +25,9 @@
 }
 
 .ash-sessions-activity-item {
-	/* Sessions uses 32px-high rows in default vertical navigation.
-	 * Its hover, selection background and radius remain independent of Workbench. */
 	display: grid;
 	width: var(--ash-spacing-size360);
-	height: var(--ash-spacing-size320);
+	height: var(--ash-spacing-size360);
 	place-items: center;
 	padding: 0;
 	border: 0;
@@ -77,6 +75,12 @@
 
 .ash-sessions-navigation {
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content:not(.horizontal, .labeled)
+	> .ash-sessions-navigation {
+	--ash-actionBar-gap: var(--ash-spacing-size80);
+	--ash-lxiconFontSize-large: 20px;
 }
 
 .ash-sessions-activity-content.labeled {

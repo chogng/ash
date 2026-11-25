@@ -21,10 +21,6 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.equal(layoutSetting.title, '布局样式');
 		assert.equal(layoutSetting.valueType, 'select');
 		assert.deepEqual(layoutSetting.options, [{ value: 'modern', label: 'Modern' }, { value: 'flat', label: 'Flat' }]);
-		const activityBarSetting = registry.getConfiguration(SessionsConfiguration.activityBarLocation)?.setting;
-		assert.ok(activityBarSetting?.valueType === 'select');
-		assert.equal(activityBarSetting.description, '将活动栏放在侧边、顶部或底部。');
-		assert.deepEqual(activityBarSetting.options.map(option => option.value), ['default', 'top', 'bottom']);
 		const inputLayout = registry.getConfiguration(SessionsConfiguration.chatInputLayout)?.setting;
 		assert.ok(inputLayout?.valueType === 'select');
 		assert.equal(inputLayout.title, 'Chat 输入框布局');
@@ -54,11 +50,36 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 	}
 });
 
+test('Activity Bar setting offers the five positions in Chinese', () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	assert.ok(chinese);
+	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+	try {
+		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		const setting = registry.getConfiguration(SessionsConfiguration.activityBarLocation)?.setting;
+		assert.ok(setting?.valueType === 'select');
+		assert.equal(setting.description, '使用默认布局，或将活动栏放在侧栏左侧、右侧、顶部或底部。');
+		assert.deepEqual(setting.options, [
+			{ value: 'default', label: '默认' },
+			{ value: 'left', label: '左侧' },
+			{ value: 'right', label: '右侧' },
+			{ value: 'top', label: '顶部' },
+			{ value: 'bottom', label: '底部' },
+		]);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('Activity Bar positions persist as strings and legacy Hidden falls back only in Sessions', async () => {
 	const configuration = new WorkbenchConfigurationService();
 	try {
 		await configuration.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.TOP);
-		await configuration.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.BOTTOM);
+		for (const location of ['left', 'right', ActivityBarPosition.BOTTOM] as const) {
+			await configuration.updateValue(SessionsConfiguration.activityBarLocation, location);
+			assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), location);
+			assert.equal(JSON.parse((await configuration.read()).source)[SessionsConfiguration.activityBarLocation], location);
+		}
 		const saved = await configuration.read();
 		assert.deepEqual(JSON.parse(saved.source), {
 			[WorkbenchConfiguration.activityBarLocation]: 'top',

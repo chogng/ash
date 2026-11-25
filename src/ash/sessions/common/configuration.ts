@@ -1,7 +1,7 @@
 import { localize } from '../../nls.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { ActivityBarPosition } from '../../workbench/common/configuration.js';
+import { ActivityBarPosition, type SideBarLocation } from '../../workbench/common/configuration.js';
 import { TERMINAL_CONFIG_SECTION } from '../../workbench/contrib/terminal/common/terminal.js';
 import '../../workbench/contrib/terminal/common/terminalConfiguration.js';
 
@@ -67,7 +67,17 @@ export const SESSIONS_EDITOR_WORD_WRAP = registerEditorPreference('sessions.edit
 
 export const SESSIONS_GENERAL_SETTINGS_TAG = 'sessionsGeneral';
 
-export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityBarPosition.HIDDEN>;
+export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityBarPosition.HIDDEN> | SideBarLocation;
+
+export function getSessionsActivityBarLocationOptions(): readonly { value: SessionsActivityBarLocation; label: string; }[] {
+	return [
+		{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBarPositionDefault', 'Default') },
+		{ value: 'left', label: localize('workbench.sideBar.location.left', 'Left') },
+		{ value: 'right', label: localize('workbench.sideBar.location.right', 'Right') },
+		{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBarPositionTop', 'Top') },
+		{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBarPositionBottom', 'Bottom') },
+	];
+}
 
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
@@ -143,6 +153,7 @@ export const SessionsConfiguration = Object.freeze({
 			if (value === ActivityBarPosition.DEFAULT) return ActivityBarPosition.DEFAULT;
 			if (value === ActivityBarPosition.TOP) return ActivityBarPosition.TOP;
 			if (value === ActivityBarPosition.BOTTOM) return ActivityBarPosition.BOTTOM;
+			if (value === 'left' || value === 'right') return value;
 			// Restore navigation for profiles that saved the former Hidden option.
 			if (value === ActivityBarPosition.HIDDEN) return ActivityBarPosition.DEFAULT;
 			throw new TypeError(`Unknown Sessions Activity Bar location: ${String(value)}`);
@@ -151,14 +162,8 @@ export const SessionsConfiguration = Object.freeze({
 			included: false,
 			valueType: 'select',
 			get title() { return localize('sessions.activityBar.location.title', 'Activity Bar position'); },
-			get description() { return localize('sessions.activityBar.location.description', 'Place the Activity Bar on the side, top, or bottom.'); },
-			get options() {
-				return [
-					{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBar.location.side', 'Side') },
-					{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBar.location.top', 'Top') },
-					{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBar.location.bottom', 'Bottom') },
-				] as const;
-			}
+			get description() { return localize('sessions.activityBar.location.description', 'Choose the default layout or place the Activity Bar on the left, right, top, or bottom of the sidebar.'); },
+			get options() { return getSessionsActivityBarLocationOptions(); },
 		},
 	}),
 	showSessionActivityBar: configurationRegistry.registerConfiguration<boolean>({

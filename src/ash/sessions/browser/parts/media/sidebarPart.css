@@ -47,6 +47,63 @@
 	margin-top: auto;
 }
 
+.ash-sessions-window
+	.ash-workbench-sidebar[data-activity-bar-side]:not([hidden]) {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+}
+
+.ash-sessions-window .ash-workbench-sidebar[data-activity-bar-side="left"] {
+	grid-template-areas: "activity title" "activity content";
+	grid-template-columns: auto minmax(0, 1fr);
+}
+
+.ash-sessions-window .ash-workbench-sidebar[data-activity-bar-side="right"] {
+	grid-template-areas: "title activity" "content activity";
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ash-sessions-window [data-activity-bar-side] > .ash-workbench-part-title {
+	grid-area: title;
+}
+
+.ash-sessions-window [data-activity-bar-side] > .ash-workbench-part-content {
+	grid-area: content;
+}
+
+.ash-sessions-window .ash-workbench-sidebar > .ash-sessions-activity-host.side {
+	grid-area: activity;
+	box-sizing: border-box;
+	width: calc(var(--ash-spacing-size360) + var(--ash-spacing-size160));
+	min-height: 0;
+	overflow: auto;
+	scrollbar-width: thin;
+	border-color: var(
+		--ash-sideBar-border,
+		var(--ash-contrastBorder, var(--ash-border))
+	);
+	border-style: solid;
+	border-width: 0;
+}
+
+.ash-sessions-activity-host.side > .ash-sessions-activity-content {
+	/* The Activity Bar handles right-clicks, including the space below its buttons. */
+	box-sizing: border-box;
+	min-height: 100%;
+}
+
+.ash-sessions-window
+	[data-activity-bar-side="left"]
+	> .ash-sessions-activity-host.side {
+	border-right-width: var(--ash-strokeThickness);
+}
+
+.ash-sessions-window
+	[data-activity-bar-side="right"]
+	> .ash-sessions-activity-host.side {
+	border-left-width: var(--ash-strokeThickness);
+}
+
 .ash-sessions-sidebar-footer {
 	display: flex;
 	flex: 0 0 auto;
