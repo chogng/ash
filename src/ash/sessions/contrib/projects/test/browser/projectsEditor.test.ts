@@ -9,6 +9,25 @@ suite('Projects toolbar', () => {
 		expect(await browser.page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
 	});
 
+	test('opens a PDF material in a modal editor and returns focus to the card', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?projectCreation&projectPdfPreview');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Projects', exact: true }).click();
+		await page.locator('.ash-projects-view').getByRole('button', { name: 'PDF project', exact: true }).click();
+		const context = page.locator('.ash-projects').getByRole('region', { name: 'Context', exact: true });
+		const card = context.getByRole('button', { name: 'report.pdf', exact: true });
+		await card.press('Enter');
+		const preview = page.getByRole('dialog', { name: 'report.pdf', exact: true });
+		await expect(preview).toHaveAttribute('aria-modal', 'true');
+		const controls = preview.getByRole('group', { name: 'PDF controls', exact: true });
+		await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
+		await expect(preview.getByText('Page 1 of 1', { exact: true })).toBeVisible();
+		await preview.getByRole('button', { name: 'Close', exact: true }).press('Enter');
+		await expect(preview).toBeHidden();
+		await expect(card).toBeFocused();
+	});
+
 	test('a missing PDF material is reported by the window notification service', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?projectCreation&projectPdfPreview&missingProjectPdf&locale=zh-CN');
@@ -888,6 +907,7 @@ suite('Projects toolbar', () => {
 					expect(Math.abs(titleBounds.y + titleBounds.height / 2 - searchBounds.y - searchBounds.height / 2)).toBeLessThan(1);
 					await search.click();
 					await expect(input).toBeFocused();
+					await expect(projects.locator('.ash-toolbar-search-field')).toHaveCSS('border-top-style', 'solid');
 					await expect
 						.poll(async () =>
 							toolbar
