@@ -1,4 +1,5 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
@@ -621,6 +622,25 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
+		const details = project.project?.details;
+		const description = localProject
+			? current?.revision === localProject.revision && !current.failed ? current.project?.description : undefined
+			: details?.data.read(reader)?.description;
+		const loadDetails = details?.load;
+		const descriptionSource: NonNullable<SessionsCatalogProject['preview']>['descriptionSource'] = description !== undefined ? undefined
+			: localProject ? {
+				key: JSON.stringify([localProject.id, localProject.revision]),
+				load: async token => (await raceCancellationError(this.readProject(localProject).read, token)).description,
+			} : details && loadDetails ? {
+				key: details.key,
+				load: async token => {
+					const controller = new AbortController();
+					using cancellation = token.onCancellationRequested(() => controller.abort());
+					if (token.isCancellationRequested) return undefined;
+					await loadDetails(controller.signal);
+					return details.data.get()?.description;
+				},
+			} : undefined;
 		const loading = history?.state === 'loading' || (!!localProject?.sessionCount && current !== undefined && current.failed === undefined);
 		const retry = localProject?.sessionCount && current?.failed ? () => {
 			this.membership.delete(project.key);
@@ -631,6 +651,11 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			title: project.title,
 			rows,
 			loading,
+			preview: {
+				description, descriptionSource,
+				conversationCount: localProject?.sessionCount ?? new Set(rows.map(row => row.id)).size,
+				completeCount: !!localProject || history?.state === 'complete',
+			},
 			localProject,
 			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,
 			operations: {

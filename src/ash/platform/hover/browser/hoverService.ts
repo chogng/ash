@@ -27,7 +27,8 @@ import { ILayoutService } from '../../layout/browser/layoutService.js';
 /** Caller-owned description of one target and its managed Hover content. */
 export interface HoverSetupOptions extends HoverDelegateSetupOptions {
 	readonly anchor?: HTMLElement;
-	readonly delay?: HoverDelayMode;
+	/** Explicit delay in milliseconds, or a Workbench delay policy. */
+	readonly delay?: number | HoverDelayMode;
 	readonly setupKeyboardEvents?: boolean;
 	readonly dialogLabel?: string;
 }
@@ -270,10 +271,11 @@ export class HoverService extends Disposable implements IHoverService {
 		for (const hover of this.managedHovers) { hover.hide(); }
 	}
 
-	private resolveDelay(mode: HoverDelayMode | undefined, groupId: string | undefined): number {
-		if (mode === 'instant' || this.shouldSkipDelay(groupId)) return 0;
+	private resolveDelay(delay: HoverSetupOptions['delay'], groupId: string | undefined): number {
+		if (delay === 'instant' || this.shouldSkipDelay(groupId)) return 0;
+		if (typeof delay === 'number') return delay;
 		return this.configurationService.getValue<number>(
-			mode === 'reduced'
+			delay === 'reduced'
 				? HoverConfiguration.reducedDelay
 				: HoverConfiguration.delay,
 		);

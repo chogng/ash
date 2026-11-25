@@ -140,6 +140,33 @@ for (const reducedDelay of [false, true]) {
 	});
 }
 
+test('HoverService uses an explicit initial delay and skips it between grouped targets', () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		using configuration = new InMemoryConfigurationService();
+		using contextViews = new BrowserContextViewService(requiredElement<HTMLElement>('main'));
+		using contextMenus = new TestContextMenuService();
+		using service = new HoverService(configuration, contextViews, contextMenus);
+		const firstTarget = requiredElement<HTMLButtonElement>('#first');
+		const secondTarget = requiredElement<HTMLButtonElement>('#second');
+		using first = service.setupHover({ target: firstTarget, content: 'First', delay: 300, groupId: 'test.items' });
+		using second = service.setupHover({ target: secondTarget, content: 'Second', delay: 300, groupId: 'test.items' });
+
+		firstTarget.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+		mock.timers.tick(299);
+		assert.equal(first.visible, false);
+		mock.timers.tick(1);
+		assert.equal(first.visible, true);
+
+		secondTarget.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+		mock.timers.tick(0);
+		assert.equal(first.visible, false);
+		assert.equal(second.visible, true);
+	} finally {
+		mock.timers.reset();
+	}
+});
+
 for (const dismissal of ['hide', 'menu', 'escape', 'blur'] as const) {
 	test(`HoverService cancels a pending hover on ${dismissal}`, () => {
 		mock.timers.enable({ apis: ['setTimeout'] });

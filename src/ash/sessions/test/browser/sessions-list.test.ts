@@ -51,7 +51,7 @@ import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/b
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
-import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../../contrib/sessions/browser/sessionHoverContent.js';
+import { createSessionPreviewHover, getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
@@ -374,6 +374,120 @@ test('Needs Attention reuses title bar alerts in the single sidebar tree', async
 	await attentionAction().run();
 	assert.equal(attention(), undefined);
 	assert.equal(new SessionsListModelService(storage).showAttentionGroup, false);
+});
+
+test('Chat sidebar reuses the session preview and updates it when the catalog changes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'chat-preview', flushInterval: 0 });
+	const updatedAt = new Date('2026-01-05T14:00:00Z');
+	const createdAt = new Date('2026-01-04T13:00:00Z');
+	const row: SessionsCatalogRow = {
+		id: 'chat-preview', title: 'Chat conversation', selected: false, defaultIcon: Lxicon.chatSession,
+		createdAt: createdAt.getTime(), updatedAt: updatedAt.getTime(), pinned: true,
+		organization: () => undefined, getActions: () => [], open() { },
+	};
+	const catalog = (conversation: SessionsCatalogRow, projectTitle: string): SessionsCatalogSnapshot => ({
+		sections: [
+			{ key: 'pinned', rows: [conversation], projects: [] },
+			{
+				key: 'projects', rows: [], projects: [{
+					key: 'research', title: projectTitle, rows: [conversation], loading: false,
+					preview: { description: 'Project notes', conversationCount: 8, completeCount: true },
+				}]
+			},
+		],
+		loading: false,
+	});
+	const snapshot = observableValue('chatPreviewCatalog', catalog(row, 'Research'));
+	const hovers = new Map<HTMLElement, HoverContent>();
+	const hoverService = {
+		setupHover({ target, content, anchor, delay, groupId }: HoverSetupOptions) {
+			assert.equal(anchor, target.closest('.ash-sessions-list-row, .ash-sessions-list-project-row'));
+			assert.equal(delay, 300);
+			assert.equal(groupId, 'sessions-list-preview');
+			assert.equal(hovers.has(target), false);
+			hovers.set(target, content);
+			return Object.assign(toDisposable(() => { hovers.delete(target); }), {
+				update(nextContent: HoverContent) { hovers.set(target, nextContent); },
+			});
+		},
+	} as IHoverService;
+	const management = { pendingArchives: noPendingArchives, sessions: [], untitledSessions: [], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
+	const view = { onDidChange: Event.None } as unknown as ISessionsService;
+	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
+	using list = new TestSessionsList(dom.window.document.body, 'Sessions', {
+		catalog: { snapshot, loadMore() { } },
+		accessibility: { focusContext: 'testChatPreview', verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' },
+	}, management, view, github, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications,
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, undefined, hoverService);
+	const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="chat-preview"] .ash-sessions-list-item')!;
+	const preview = (target = button) => {
+		const render = hovers.get(target);
+		assert.ok(typeof render === 'function');
+		const card = render(CancellationToken.None);
+		assert.ok(card && typeof card !== 'string');
+		assert.equal(card.className, 'ash-sessions-list-preview');
+		return card;
+	};
+	assert.equal(button.hasAttribute('title'), false);
+	const initial = preview();
+	assert.equal(initial.querySelector('strong')?.textContent, row.title);
+	assert.equal(initial.querySelector('time')?.dateTime, updatedAt.toISOString());
+	assert.equal(initial.querySelector('.ash-sessions-list-preview-project')?.textContent, 'Research');
+	assert.deepEqual([...initial.children].map(child => child.localName), ['div', 'div', 'time']);
+	const project = list.domNode.querySelector<HTMLButtonElement>('[data-project-id="research"] .ash-sessions-list-section-toggle')!;
+	assert.equal(project.hasAttribute('title'), false);
+	assert.deepEqual([...preview(project).children].map(child => child.textContent), ['Research', 'Project notes', '8 chats']);
+
+	snapshot.set(catalog({ ...row, title: 'Updated conversation', updatedAt: undefined }, 'New project name'), undefined);
+	assert.equal(list.domNode.querySelector('[data-item="chat-preview"] .ash-sessions-list-item'), button);
+	const updated = preview();
+	assert.equal(updated.querySelector('strong')?.textContent, 'Updated conversation');
+	assert.equal(updated.querySelector('time')?.dateTime, createdAt.toISOString());
+	assert.equal(updated.querySelector('.ash-sessions-list-preview-project')?.textContent, 'New project name');
+	assert.deepEqual([...preview(project).children].map(child => child.textContent), ['New project name', 'Project notes', '8 chats']);
+});
+
+test('Session preview preserves field order as Code branch and Chat project details arrive', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	const { document } = dom.window;
+	const branch = new DeferredPromise<string>();
+	const description = new DeferredPromise<string>();
+	const timestamp = Date.UTC(2026, 0, 5);
+	const code = createSessionPreviewHover(document, {
+		kind: 'codeConversation', title: 'Fix tests', projectName: 'Research', timestamp,
+		branch: { key: 'branch', load: () => branch.p },
+	})(CancellationToken.None);
+	const chatProject = createSessionPreviewHover(document, {
+		kind: 'chatProject', title: 'Research', details: {
+			conversationCount: 2, completeCount: false,
+			descriptionSource: { key: 'description', load: () => description.p },
+		},
+	})(CancellationToken.None);
+	const codeProject = createSessionPreviewHover(document, {
+		kind: 'codeProject', title: 'Research', conversationCount: 15,
+		folders: [URI.file('/home/test/work/research')],
+		formatPath: () => ({ label: '~/work/research', basename: 'research' }),
+	})(CancellationToken.None);
+	document.body.append(code, chatProject, codeProject);
+
+	await branch.complete('Branch: work');
+	await description.complete('Project notes');
+	const fields = (card: HTMLElement) => [...card.children].map(child => child instanceof dom.window.HTMLTimeElement ? child.dateTime : child.textContent);
+	assert.deepEqual(fields(code), ['Fix tests', 'Research', 'Branch: work', new Date(timestamp).toISOString()]);
+	assert.ok(code.textContent?.startsWith('Fix tests\nResearch\nBranch: work\n'));
+	assert.deepEqual(fields(chatProject), ['Research', 'Project notes', '2 chats loaded']);
+	assert.deepEqual(fields(codeProject), ['Research', '~/work/research', '15 chats']);
+	const path = codeProject.querySelector('.ash-sessions-list-preview-path-text');
+	assert.equal(path?.querySelector('.ash-sessions-list-preview-path-home')?.textContent, '~/');
+	assert.deepEqual([...path!.querySelector('.ash-sessions-list-preview-path-components')!.children].map(part => part.textContent), ['work', '/research']);
+	for (const card of [chatProject, codeProject]) {
+		const icon = card.querySelector('.ash-sessions-list-preview-count > :first-child');
+		assert.equal(icon?.getAttribute('data-ash-icon-id'), Lxicon.chatSession.id);
+		assert.equal(icon?.getAttribute('aria-hidden'), 'true');
+	}
 });
 
 test('Conversation branches expand independently and keep their state through search and refresh', () => {

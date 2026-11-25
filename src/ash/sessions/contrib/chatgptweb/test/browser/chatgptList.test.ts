@@ -12,6 +12,37 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
+	test('A collapsed ChatGPT project preview reads its description without loading conversation pages', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const id = 'g-p-preview';
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: { items: [{ gizmo: { id, display: { name: 'Preview project' } } }], cursor: null },
+		}));
+		await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
+			if (!new URL(route.request().url()).pathname.endsWith(id)) return route.fallback();
+			return route.fulfill({ json: { gizmo: { id, display: { name: 'Preview project' }, instructions: 'Project notes' }, files: [] } });
+		});
+		let projectHistoryReads = 0;
+		await page.route(`**/service/backend-api/gizmos/${id}/conversations?*`, route => {
+			projectHistoryReads++;
+			return route.fulfill({ json: { items: [{ id: 'fixture-chat', title: 'Project chat' }], cursor: null } });
+		});
+		await page.goto('/chatgptNavigation.html?projectPreview&locale=zh-CN');
+		const project = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Preview project', exact: true });
+		const fields = page.getByRole('tooltip').locator('.ash-sessions-list-preview > *');
+		await project.hover();
+		await expect(fields).toHaveText(['Preview project', 'Project notes', '已加载 0 个对话']);
+		expect(projectHistoryReads).toBe(0);
+
+		await project.click();
+		await expect(page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Project chat', exact: true })).toBeVisible();
+		await page.mouse.move(700, 100);
+		await project.hover();
+		await expect(fields).toHaveText(['Preview project', 'Project notes', '1 个对话']);
+		expect(projectHistoryReads).toBe(1);
+	});
+
 	test('Project content filter keeps projects visible and shows their own chats and files', async () => {
 		const { page, info } = browserTests;
 		await mockChatGPTRequests(page);

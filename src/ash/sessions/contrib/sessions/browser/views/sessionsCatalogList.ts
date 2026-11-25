@@ -1,4 +1,5 @@
 import type { IAction } from '../../../../../base/common/actions.js';
+import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
@@ -47,6 +48,12 @@ export interface SessionsCatalogProject {
 	readonly title: string;
 	readonly rows: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
+	readonly preview?: {
+		readonly description?: string;
+		readonly descriptionSource?: { readonly key: string; load(token: CancellationToken): Promise<string | undefined>; };
+		readonly conversationCount: number;
+		readonly completeCount: boolean;
+	};
 	readonly localProject?: ProjectSummary;
 	readonly appearance?: CatalogProjectAppearance;
 	readonly operations?: SessionsCatalogProjectOperations;

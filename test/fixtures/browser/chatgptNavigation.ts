@@ -84,6 +84,8 @@ import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { testAppServerApi } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
@@ -102,6 +104,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { SessionsViewRegistry } from '../../../src/ash/sessions/common/views.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
@@ -220,6 +223,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[ISessionsEntryService, undefined],
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
+	[IAppServerApi, testAppServerApi({})],
 	[IChatGPTTransport, {
 		async getCacheScope() { return chatGPTCacheScope; },
 		onDidChangeAuthentication: authenticationChanged.event,
@@ -391,6 +395,11 @@ services.registerInstance(IContextMenuService, resources.add(new BrowserContextM
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
 	services.get(IContextViewService), notifications,
 )));
+if (parameters.has('projectPreview')) {
+	services.registerInstance(IHoverService, resources.add(new HoverService(
+		services.get(IConfigurationService), services.get(IContextViewService), services.get(IContextMenuService),
+	)));
+}
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService) })));
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);

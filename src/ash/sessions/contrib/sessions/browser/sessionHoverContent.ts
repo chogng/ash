@@ -4,48 +4,138 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { formatTimeAgo } from '../../../../base/common/date.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import type { ThreadChangesSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostChatWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { chatExecutionWorkspace, type IChat, type ISession, type SessionId, type ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import type { SessionsCatalogProject } from './views/sessionsCatalogList.js';
 
-/** Builds a fresh preview on each display, using the hover's cancellation token for Git metadata. */
-export function createSessionPreviewHover(
-	document: Document,
-	{ title, projectName, timestamp, loadBranch }: {
+interface ConversationPreview {
+	readonly title: string;
+	readonly projectName?: string;
+	readonly timestamp?: number;
+}
+
+interface PreviewSource {
+	readonly key: string;
+	load(token: CancellationToken): Promise<string | undefined>;
+}
+
+interface PreviewPathLabel {
+	readonly label: string;
+	readonly basename: string;
+}
+
+export type SessionListPreviewContent =
+	| (ConversationPreview & { readonly kind: 'chatConversation'; })
+	| (ConversationPreview & { readonly kind: 'codeConversation'; readonly branch?: PreviewSource; })
+	| { readonly kind: 'chatProject'; readonly title: string; readonly details?: SessionsCatalogProject['preview']; }
+	| {
+		readonly kind: 'codeProject';
 		readonly title: string;
-		readonly projectName?: string;
-		readonly timestamp: number;
-		readonly loadBranch?: (token: CancellationToken) => Promise<string | undefined>;
-	},
-): (token: CancellationToken) => HTMLElement {
+		readonly folders: readonly URI[];
+		readonly formatPath: (folder: URI) => PreviewPathLabel;
+		readonly conversationCount: number;
+	};
+
+const previewDetailIcons = {
+	project: Lxicon.folder,
+	path: Lxicon.folder,
+	branch: Lxicon.gitBranch,
+	count: Lxicon.chatSession,
+};
+
+/** Builds the preview anew on each display and cancels its metadata reads when the hover closes. */
+export function createSessionPreviewHover(document: Document, preview: SessionListPreviewContent): (token: CancellationToken) => HTMLElement {
 	return token => {
-		const heading = h(document, 'div', { className: 'ash-sessions-list-preview-heading' }, h(document, 'strong', title));
-		if (Number.isFinite(timestamp)) {
-			const formatter = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' });
-			const label = formatTimeAgo(timestamp, Date.now(), formatter) ?? formatter.format(0, 'second');
-			heading.append(' ', h(document, 'time', { attributes: { datetime: new Date(timestamp).toISOString() } }, label));
-		}
+		const heading = h(document, 'div', { className: 'ash-sessions-list-preview-heading' }, h(document, 'strong', preview.title));
 		const card = h(document, 'div', { className: 'ash-sessions-list-preview' }, heading);
-		if (projectName) {
-			const project = h(document, 'div', { className: 'ash-sessions-list-preview-project' });
-			appendIcon(Lxicon.folder, project);
-			project.append(h(document, 'span', projectName));
-			card.append('\n', project);
-		}
-		if (loadBranch) {
-			void loadBranch(token).then(branch => {
-				if (!branch || token.isCancellationRequested || !card.isConnected) return;
-				const detail = h(document, 'div', { className: 'ash-sessions-list-preview-branch' });
-				appendIcon(Lxicon.gitBranch, detail);
-				detail.append(h(document, 'span', branch));
-				card.append('\n', detail);
-			}, () => { /* Git metadata is optional when the owning host is unavailable. */ });
+		const detail = (content: string | HTMLElement, kind: keyof typeof previewDetailIcons): HTMLElement => {
+			const row = h(document, 'div', { className: `ash-sessions-list-preview-${kind}` });
+			appendIcon(previewDetailIcons[kind], row);
+			row.append(typeof content === 'string' ? h(document, 'span', content) : content);
+			return row;
+		};
+		const insertDetail = (element: HTMLElement, before: HTMLElement | null = null) => {
+			if (before) before.before(element, '\n');
+			else card.append('\n', element);
+		};
+		const insertLoadedDetail = (source: PreviewSource, render: (value: string) => HTMLElement, before: HTMLElement | null) => {
+			void source.load(token).then(value => {
+				if (value?.trim() && !token.isCancellationRequested && card.isConnected) insertDetail(render(value), before);
+			}, () => { /* Metadata can be unavailable independently of the row. */ });
+		};
+
+		switch (preview.kind) {
+			case 'chatConversation':
+			case 'codeConversation': {
+				if (preview.projectName) insertDetail(detail(preview.projectName, 'project'));
+				const time = createPreviewTime(document, preview.timestamp);
+				if (time) insertDetail(time);
+				if (preview.kind === 'codeConversation' && preview.branch) {
+					insertLoadedDetail(preview.branch, branch => detail(branch, 'branch'), time ?? null);
+				}
+				break;
+			}
+			case 'chatProject': {
+				const details = preview.details;
+				if (!details) break;
+				if (details.description?.trim()) insertDetail(h(document, 'div', details.description));
+				const count = detail(formatPreviewChatCount(details.conversationCount, details.completeCount), 'count');
+				insertDetail(count);
+				if (details.description === undefined && details.descriptionSource) {
+					insertLoadedDetail(details.descriptionSource, description => h(document, 'div', description), count);
+				}
+				break;
+			}
+			case 'codeProject':
+				for (const folder of preview.folders) insertDetail(detail(createPreviewPath(document, preview.formatPath(folder)), 'path'));
+				insertDetail(detail(formatPreviewChatCount(preview.conversationCount, true), 'count'));
+				break;
 		}
 		return card;
 	};
+}
+
+function createPreviewPath(document: Document, { label, basename }: PreviewPathLabel): HTMLElement {
+	const home = label.startsWith('~/') ? label.slice(0, 2) : '';
+	const path = label.slice(home.length);
+	// Keep the final directory and its separator together when the parent path shrinks.
+	const nameStart = path.lastIndexOf(basename);
+	const separator = path[nameStart - 1];
+	const split = separator === '/' || separator === '\\' ? nameStart - 1 : 0;
+	const components = h(document, 'span', { className: 'ash-sessions-list-preview-path-components' },
+		h(document, 'span', { className: 'ash-sessions-list-preview-path-prefix' }, path.slice(0, split)),
+		h(document, 'span', { className: 'ash-sessions-list-preview-path-suffix' }, path.slice(split)),
+	);
+	const row = h(document, 'span', { className: 'ash-sessions-list-preview-path-text', attributes: { dir: 'ltr' } });
+	if (home) row.append(h(document, 'span', { className: 'ash-sessions-list-preview-path-home' }, home));
+	row.append(components);
+	return row;
+}
+
+function formatPreviewChatCount(count: number, complete: boolean): string {
+	const formattedCount = new Intl.NumberFormat(getNLSLanguage()).format(count);
+	if (complete) {
+		return count === 1
+			? localize('sessions.hover.conversationCountOne', '{0} chat', formattedCount)
+			: localize('sessions.hover.conversationCount', '{0} chats', formattedCount);
+	}
+	return count === 1
+		? localize('sessions.hover.loadedConversationCountOne', '{0} chat loaded', formattedCount)
+		: localize('sessions.hover.loadedConversationCount', '{0} chats loaded', formattedCount);
+}
+
+function createPreviewTime(document: Document, timestamp: number | undefined): HTMLElement | undefined {
+	const updatedAt = new Date(timestamp ?? NaN);
+	const updatedAtMs = updatedAt.getTime();
+	if (!Number.isFinite(updatedAtMs)) return undefined;
+	const formatter = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' });
+	const label = formatTimeAgo(updatedAtMs, Date.now(), formatter) ?? formatter.format(0, 'second');
+	return h(document, 'time', { attributes: { datetime: updatedAt.toISOString() } }, label);
 }
 
 export function getSessionSummaryHoverData(session: ISession, chat?: IChat): readonly string[] {

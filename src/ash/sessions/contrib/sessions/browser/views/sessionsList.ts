@@ -72,9 +72,10 @@ import { createSessionItemActions, getSessionWorkspaceMenuState } from '../../..
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { readNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import { createSessionPreviewHover, loadSessionHoverBranch } from '../sessionHoverContent.js';
+import { createSessionPreviewHover, loadSessionHoverBranch, type SessionListPreviewContent } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { IAgentSessionActionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -961,7 +962,7 @@ export class SessionsList extends DomWidget {
 		this.inlineRename.value = store;
 		row.classList.add('renaming');
 		store.add(toDisposable(() => row.classList.remove('renaming')));
-		item.hidePreviewHover();
+		item.preview.hide();
 		const input = startConversationRename(row, store, this.notifications, {
 			name, rename, validate, label: inputLabel,
 			finish: restoreFocus => {
@@ -1232,9 +1233,12 @@ export class SessionsList extends DomWidget {
 		const scopes = this.providerScopes;
 		const { sessionId } = session;
 		const { threadId } = chat;
-		item.updatePreview(this.hoverService, projectName, chat.updatedAt, scopes && {
-			key: JSON.stringify([sessionId, threadId, session.providerId, session.workspace, chat.workspace === undefined, chat.workspace]),
-			load: token => loadSessionHoverBranch(this.sessionService, scopes, sessionId, threadId, token),
+		item.preview.update(this.hoverService, {
+			kind: 'codeConversation', title: item.title, projectName, timestamp: chat.updatedAt?.getTime(),
+			branch: scopes && {
+				key: JSON.stringify([sessionId, threadId, session.providerId, session.workspace, chat.workspace === undefined, chat.workspace]),
+				load: token => loadSessionHoverBranch(this.sessionService, scopes, sessionId, threadId, token),
+			},
 		});
 	}
 
@@ -1303,7 +1307,7 @@ export class SessionsList extends DomWidget {
 			return item;
 		};
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
-			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly catalogProjectId?: string; }): HTMLElement => {
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly catalogProjectId?: string; readonly preview?: SessionListPreviewContent; }): HTMLElement => {
 			activeSections.add(key);
 			const projectId = this.mode === 'code' ? options?.project?.id : undefined;
 			const section = this.sections.get(key) ?? this.sections.set(key, this.instantiation.createInstance(SessionListSection, ownerDocument, key, kind, this.mode,
@@ -1325,6 +1329,7 @@ export class SessionsList extends DomWidget {
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
 			if (kind === 'project') {
+				if (options?.preview) section.preview?.update(this.hoverService, options.preview);
 				if (project) {
 					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, section, anchor));
 				} else if (catalogProjectId) {
@@ -1347,11 +1352,16 @@ export class SessionsList extends DomWidget {
 		const external = this.catalog?.snapshot.get();
 		const forkChildren = new Map<string, SessionsCatalogRow[]>();
 		const conversations = new Map<string, SessionsCatalogRow>();
+		const catalogProjectNames = new Map<string, string>();
 		for (const row of external?.forkEntries ?? []) conversations.set(row.id, row);
 		for (const section of external?.sections ?? []) {
 			for (const row of section.rows) conversations.set(row.id, row);
 			for (const project of section.projects) {
-				for (const row of project.rows) conversations.set(row.id, row);
+				for (const row of project.rows) {
+					conversations.set(row.id, row);
+					// Pinned and flat rows can appear outside their project.
+					if (!catalogProjectNames.has(row.id)) catalogProjectNames.set(row.id, project.title);
+				}
 			}
 		}
 		for (const row of conversations.values()) {
@@ -1361,7 +1371,7 @@ export class SessionsList extends DomWidget {
 			if (children) children.push(row);
 			else forkChildren.set(parent, [row]);
 		}
-		const renderCatalogRow = (row: SessionsCatalogRow, rootKey: string, ancestors: readonly string[], threadId?: string): SessionListItem => {
+		const renderCatalogRow = (row: SessionsCatalogRow, rootKey: string, ancestors: readonly string[], threadId?: string, projectName = catalogProjectNames.get(row.id)): SessionListItem => {
 			const reference = ancestors.length > 0;
 			const key = reference ? JSON.stringify(['fork', rootKey, row.id]) : rootKey;
 			const item = itemFor(key, 'conversation', undefined, reference);
@@ -1369,6 +1379,9 @@ export class SessionsList extends DomWidget {
 			const children = forkChildren.get(row.id)?.filter(child => !path.includes(child.id));
 			const hasForks = !!children?.length;
 			item.updateCatalogRow(row, threadId, hasForks ? () => this.tree.setRowCollapsed(key) : undefined, reference);
+			item.preview.update(this.hoverService, {
+				kind: 'chatConversation', title: row.title, projectName, timestamp: row.updatedAt ?? row.createdAt,
+			});
 			if (hasForks) {
 				this.catalogForks.set(item.domNode, {
 					collapsedByDefault: !reference,
@@ -1381,18 +1394,18 @@ export class SessionsList extends DomWidget {
 			if (value !== undefined) sortKeys.set(item.domNode, value);
 			return item;
 		};
-		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
-			const key = project ? JSON.stringify([row.id, project]) : row.id;
+		const externalRow = (row: SessionsCatalogRow, project?: Pick<SessionsCatalogProject, 'key' | 'title'>, alert?: IBlockedSession): HTMLElement => {
+			const key = project ? JSON.stringify([row.id, project.key]) : row.id;
 			this.catalogRows.set(key, row);
-			const item = renderCatalogRow(row, key, [], alert?.threadId);
+			const item = renderCatalogRow(row, key, [], alert?.threadId, project?.title);
 			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
-			if (project) item.domNode.dataset.parentProject = `project:${project}`;
+			if (project) item.domNode.dataset.parentProject = `project:${project.key}`;
 			return item.domNode;
 		};
 		const placedAlerts = new Set<string>();
 		const flatRecentIds = new Set<string>();
-		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], sectionKey: string, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
+		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], sectionKey: string, project?: Pick<SessionsCatalogProject, 'key' | 'title'>): HTMLElement[] => {
 			const children: HTMLElement[] = [];
 			for (const row of rows) {
 				const alert = sectionKey !== 'pinned' && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
@@ -1403,12 +1416,12 @@ export class SessionsList extends DomWidget {
 				}
 				if (!alert) {
 					if (project && !flat && projectType === 'file') continue;
-					const node = externalRow(row, flat ? undefined : project?.key);
+					const node = externalRow(row, flat ? undefined : project);
 					if (!project && sectionKey === 'recent' && groupRecents) contributedRecent.push([node, row.groupingContext]);
 					children.push(node);
 				} else if (!placedAlerts.has(alert.session.sessionId)) {
 					placedAlerts.add(alert.session.sessionId);
-					attentionRows.push(externalRow(row, project?.key, alert));
+					attentionRows.push(externalRow(row, project, alert));
 				}
 			}
 			return children;
@@ -1467,6 +1480,7 @@ export class SessionsList extends DomWidget {
 				}
 				const node = sectionFor(key, project.title, children, 'project', {
 					project: project.localProject, catalogProjectId: project.key, projectAppearance: project.appearance,
+					preview: { kind: 'chatProject', title: project.title, details: project.preview },
 					projectOperations: project.operations && {
 						...project.operations,
 						archive: project.operations.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog')),
@@ -1576,14 +1590,19 @@ export class SessionsList extends DomWidget {
 			const key = `project:${project.id}`;
 			const destination = this.projectPreferences.isPinned(project.id) ? pinned : projects;
 			if (this.mode === 'code') {
-				const section = sectionFor(key, project.name, [...members, ...drafts], 'project', { project });
-				section.dataset.projectId = project.id;
-				destination.push(section);
+				const node = sectionFor(key, project.name, [...members, ...drafts], 'project', { project });
+				this.sections.get(key)!.updateCodeProjectPreview(this.hoverService, project);
+				node.dataset.projectId = project.id;
+				destination.push(node);
 			} else {
 				const item = itemFor(key, 'project');
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				item.updateProjectAppearance(project);
+				item.preview.update(this.hoverService, {
+					kind: 'chatProject', title: project.name,
+					details: { description: project.description, conversationCount: project.sessionCount, completeCount: true },
+				});
 				item.setContextMenu(anchor => this.showLocalProjectMenu(project.name, project, item, anchor));
 				destination.push(item.domNode);
 			}
@@ -1782,10 +1801,48 @@ function rowMoreAction(run: () => void, project: boolean): IAction {
 	return { id: 'sessions.list.more', label, tooltip: label, icon: Lxicon.ellipsis, enabled: true, run };
 }
 
+class SessionListPreview extends Disposable {
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
+	private key: string | undefined;
+
+	constructor(private readonly button: HTMLButtonElement, private readonly anchor: HTMLElement) {
+		super();
+	}
+
+	get registered(): boolean { return this.hover.value !== undefined; }
+
+	update(hoverService: IHoverService | undefined, preview: SessionListPreviewContent): void {
+		if (!hoverService) return;
+		const key = JSON.stringify(preview);
+		if (this.key === key) return;
+		this.key = key;
+		const content = createSessionPreviewHover(this.button.ownerDocument, preview);
+		if (this.hover.value) {
+			this.hover.value.update(content);
+			return;
+		}
+		this.button.removeAttribute('title');
+		this.hover.value = hoverService.setupHover({
+			target: this.button,
+			anchor: this.anchor,
+			content,
+			delay: 300,
+			groupId: 'sessions-list-preview',
+			anchorAlignment: AnchorAlignment.Left,
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			anchorPosition: AnchorPosition.Below,
+		});
+	}
+
+	hide(): void { this.hover.value?.hide(); }
+}
+
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLElement;
 	target: { readonly sessionId: string; readonly threadId: string; } | undefined;
 	readonly button: HTMLButtonElement;
+	readonly preview: SessionListPreview;
+	get title(): string { return this.row.title; }
 	private readonly actions: WorkbenchToolBar;
 	private readonly moreAction: IAction;
 	private readonly row: SessionListRowRenderer;
@@ -1793,8 +1850,6 @@ class SessionListItem extends AbstractDisposable {
 	private readonly statusAnnouncement: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
-	private readonly previewHover = new MutableDisposable<IManagedHover>();
-	private previewKey: string | undefined;
 	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
@@ -1821,6 +1876,7 @@ class SessionListItem extends AbstractDisposable {
 		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
 		this.domNode = this.row.element;
 		this.button = this.row.button;
+		this.preview = new SessionListPreview(this.button, this.domNode);
 		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
 			ariaLabel: kind === 'file' ? localize('sessions.list.projectFileActions', 'File actions') : localize('sessions.list.actions', 'Chat actions'),
 		});
@@ -1873,8 +1929,6 @@ class SessionListItem extends AbstractDisposable {
 			}),
 		];
 	}
-
-	hidePreviewHover(): void { this.previewHover.value?.hide(); }
 
 	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
@@ -2000,40 +2054,12 @@ class SessionListItem extends AbstractDisposable {
 
 	private updateDescription(): void {
 		const parts = [this.row.title, this.managementDescription, this.pullRequestDescription].filter(Boolean);
-		if (!this.previewHover.value) this.button.title = parts.join('\n');
+		if (!this.preview.registered) this.button.title = parts.join('\n');
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
-	updatePreview(
-		hoverService: IHoverService | undefined,
-		projectName: string | undefined,
-		updatedAt: Date | undefined,
-		branchSource?: { readonly key: string; readonly load: (token: CancellationToken) => Promise<string | undefined>; },
-	): void {
-		if (!hoverService) return;
-		const title = this.row.title;
-		const timestamp = updatedAt?.getTime() ?? NaN;
-		const key = JSON.stringify([title, projectName, timestamp, branchSource?.key]);
-		if (this.previewKey === key) return;
-		this.previewKey = key;
-		const content = createSessionPreviewHover(this.button.ownerDocument, { title, projectName, timestamp, loadBranch: branchSource?.load });
-		if (this.previewHover.value) {
-			this.previewHover.value.update(content);
-		} else {
-			this.button.removeAttribute('title');
-			this.previewHover.value = hoverService.setupHover({
-				target: this.button,
-				anchor: this.domNode,
-				content,
-				anchorAlignment: AnchorAlignment.Left,
-				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-				anchorPosition: AnchorPosition.Below,
-			});
-		}
-	}
-
 	protected override disposeCore(): void {
-		this.previewHover.dispose();
+		this.preview.dispose();
 		this.leadingIcon?.dispose();
 		this.clickListener.dispose();
 		this.actions.dispose();
@@ -2047,6 +2073,7 @@ type SessionListSectionKind = 'section' | 'subgroup' | 'project';
 class SessionListSection extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
+	readonly preview: SessionListPreview | undefined;
 	private readonly heading: HTMLElement;
 	private readonly label: SessionListTitle;
 	private readonly icon: HTMLElement;
@@ -2064,7 +2091,8 @@ class SessionListSection extends Disposable {
 
 	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code',
 		toggle: () => void, projectId: string | undefined,
-		@IContextMenuService contextMenus: IContextMenuService, @IInstantiationService instantiation: IInstantiationService) {
+		@IContextMenuService contextMenus: IContextMenuService, @IInstantiationService instantiation: IInstantiationService,
+		@ILabelService private readonly labels: ILabelService) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
@@ -2072,6 +2100,7 @@ class SessionListSection extends Disposable {
 		this.heading = h(document, 'h3');
 		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
 		this.button.type = 'button';
+		this.preview = kind === 'project' ? this._register(new SessionListPreview(this.button, this.domNode)) : undefined;
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		if (kind === 'project') this.icon.classList.add('ash-sessions-list-project-icon');
 		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
@@ -2129,6 +2158,19 @@ class SessionListSection extends Disposable {
 		}));
 	}
 
+	updateCodeProjectPreview(hoverService: IHoverService | undefined, project: Project): void {
+		this.preview?.update(hoverService, {
+			kind: 'codeProject',
+			title: project.name,
+			folders: projectFolders(project),
+			formatPath: folder => ({
+				label: this.labels.getUriLabel(folder),
+				basename: this.labels.getUriBasenameLabel(folder),
+			}),
+			conversationCount: project.sessionCount,
+		});
+	}
+
 	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
 		if (this.actions) this.actions.element.hidden = !menu;
@@ -2164,7 +2206,7 @@ class SessionListSection extends Disposable {
 	update(title: string, options?: { readonly open?: () => void; readonly actionLabel?: string; readonly icon?: Icon; readonly color?: string; }): void {
 		this.open = options?.open;
 		this.label.setTitle(title);
-		this.button.title = options?.actionLabel ?? title;
+		if (!this.preview?.registered) this.button.title = options?.actionLabel ?? title;
 		if (options?.actionLabel) this.button.setAttribute('aria-label', options.actionLabel);
 		else this.button.removeAttribute('aria-label');
 		const customIcon = options?.icon;
