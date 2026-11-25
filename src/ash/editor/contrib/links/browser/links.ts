@@ -15,6 +15,7 @@ import { Position } from '../../../common/core/position.js';
 import { type View } from '../../../browser/view.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { localize2 } from '../../../../nls.js';
 import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../common/services/languageFeatureDebounce.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
@@ -258,6 +259,21 @@ class OpenLinkAction extends EditorAction {
 	}
 }
 
+class CopyLinkAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.copyLink',
+			label: localize2({ bundle: 'ash', key: 'editor.copyLink' }, 'Copy Link Address'),
+			precondition: undefined,
+		});
+	}
+
+	public run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> | undefined {
+		const link = LinkDetector.get(editor)?.getLinkOccurrence(editor.getPosition());
+		if (link) return accessor.get(IClipboardService).writeText(link.target);
+	}
+}
+
 registerEditorContribution({
 	id: LinkDetector.ID, install: context => {
 		if (context.kind !== 'text') return;
@@ -265,3 +281,4 @@ registerEditorContribution({
 	}
 });
 registerEditorAction(OpenLinkAction);
+registerEditorAction(CopyLinkAction);

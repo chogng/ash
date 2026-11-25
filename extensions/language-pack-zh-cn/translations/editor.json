@@ -132,6 +132,7 @@
     "workbench.editor.tabSizingFixedMaxWidth.description": "控制标签宽度设为等宽时的最大宽度，单位为像素。",
     "workbench.editor.tabSizingFixedMaxWidth.invalid": "标签最大宽度必须是至少 38 像素的有限数值。",
     "editor.openLink": "打开链接",
+    "editor.copyLink": "复制链接地址",
     "actionWidget.label": "操作",
     "actionWidget.helpHint": "按 Alt+F1 打开操作菜单的无障碍帮助。",
     "actionWidget.helpTitle": "操作菜单无障碍帮助",

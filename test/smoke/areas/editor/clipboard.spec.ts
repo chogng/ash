@@ -7,6 +7,39 @@ interface DelayedClipboardRead {
 	restore(): void;
 }
 
+test('Copy Link Address copies the editor link at the caret in Chinese', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const languagePicker = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await languagePicker.fill('简体中文');
+	await languagePicker.press('Enter');
+	const { workbench: localized, application } = await restartWorkbench();
+	const desktop = application as ElectronApplication;
+	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());
+	const url = 'https://example.test/path%20name?x=1&y=2#fragment';
+	try {
+		await desktop.evaluate(({ clipboard }) => clipboard.writeText('clipboard sentinel'));
+		await localized.page.keyboard.press('ControlOrMeta+N');
+		const editor = localized.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor(url);
+		await editor.input.press('Enter');
+		await editor.waitForTypeInEditor('plain text');
+
+		await localized.quickaccess.open('>复制链接地址');
+		await localized.quickaccess.select('复制链接地址');
+		expect(await desktop.evaluate(({ clipboard }) => clipboard.readText())).toBe('clipboard sentinel');
+
+		await editor.waitForEditorFocus();
+		await editor.input.press('ArrowUp');
+		await localized.quickaccess.open('>复制链接地址');
+		await localized.quickaccess.select('复制链接地址');
+		await expect.poll(() => desktop.evaluate(({ clipboard }) => clipboard.readText())).toBe(url);
+		await editor.waitForEditorContents(text => text === `${url}\nplain text`);
+	} finally {
+		await desktop.evaluate(({ clipboard }, text) => clipboard.writeText(text), previous);
+	}
+});
+
 for (const outcome of ['resolve', 'reject'] as const) {
 	test(`cancelled browser paste ignores a late clipboard ${outcome} after a new paste`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
