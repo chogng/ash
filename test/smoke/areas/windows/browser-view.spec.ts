@@ -1386,6 +1386,57 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
 }
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test.extend({ electronUserSettings: { 'workbench.locale': locale } })(`desktop browser duplicates the inactive clicked tab in ${locale}`, { tag: '@electron-ui' }, async ({ application, workbench }) => {
+		const server = createServer((request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end(request.url === '/source' ? '<title>Source page</title>' : '<title>Other page</title>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		try {
+			const endpoint = server.address();
+			if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing fixture endpoint'); }
+			const origin = `http://127.0.0.1:${endpoint.port}`;
+			const sourceUrl = `${origin}/source`;
+			const electron = application as ElectronApplication;
+			const page = workbench.page;
+			await installMainChannelTestClient(page);
+			const sourceViews = () => page.evaluate(async url => {
+				const views = await globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []);
+				return views.filter(view => view.state.url === url).map(view => view.id);
+			}, sourceUrl);
+			const address = page.locator('.ash-browser-editor:visible').getByRole('textbox', { name: locale === 'en' ? 'Browser address' : '浏览器地址', exact: true });
+			const source = page.getByRole('tab', { name: 'Source page', exact: true });
+			const other = page.getByRole('tab', { name: 'Other page', exact: true });
+			for (const [url, tab] of [[sourceUrl, source], [`${origin}/other`, other]] as const) {
+				await workbench.quickaccess.runCommand('workbench.action.browser.newTab');
+				await address.fill(url);
+				await address.press('Enter');
+				await expect(tab).toHaveAttribute('aria-selected', 'true');
+			}
+			const original = await sourceViews();
+			expect(original).toHaveLength(1);
+			await expect(source).toHaveAttribute('aria-selected', 'false');
+			const menuReady = electron.waitForEvent('window', {
+				predicate: candidate => candidate.evaluate(() => window.name.startsWith('ash-context-menu-')),
+			});
+			await source.click({ button: 'right' });
+			const menu = await menuReady;
+			await menu.getByRole('menuitem', { name: locale === 'en' ? 'Duplicate Tab' : '复制标签页', exact: true }).click();
+			await expect(source).toHaveCount(2);
+			await expect(source.or(other).nth(1)).toHaveAccessibleName('Source page');
+			await expect(source.nth(1)).toHaveAttribute('aria-selected', 'true');
+			await expect(address).toHaveValue(sourceUrl);
+			await expect.poll(sourceViews).toHaveLength(2);
+			await page.getByRole('button', { name: locale === 'en' ? 'Close Source page' : '关闭 Source page', exact: true }).nth(1).click();
+			await expect.poll(sourceViews).toEqual(original);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+}
+
 test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	let finishSlowLoad: (() => void) | undefined;
 	const server = createServer((request, response) => {

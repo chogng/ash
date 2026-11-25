@@ -138,6 +138,7 @@ for (const [operation, title, group, order, when] of [
 	['hardReload', localize2({ bundle: 'ash.workbench', key: 'browser.tab.hardReload' }, 'Reload Without Cache'), '1_page', 2, undefined],
 	['copyUrl', localize2({ bundle: 'ash.workbench', key: 'browser.tab.copyUrl' }, 'Copy URL'), '1_page', 3, undefined],
 	['openExternal', localize2({ bundle: 'ash.workbench', key: 'browser.tab.openExternal' }, 'Open in System Browser'), '1_page', 4, undefined],
+	['duplicate', localize2({ bundle: 'ash.workbench', key: 'browser.tab.duplicate' }, 'Duplicate Tab'), '1_page', 5, undefined],
 	['closeOthers', localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Others'), '2_close', 2, ContextKeyExpr.greater(EditorGroupEditorsCountContext.key, 1)],
 	['closeLeft', localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left'), '2_close', 3, ActiveEditorFirstInGroupContext.isEqualTo(false)],
 	['closeRight', localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right'), '2_close', 4, ActiveEditorLastInGroupContext.isEqualTo(false)],
@@ -160,6 +161,11 @@ for (const [operation, title, group, order, when] of [
 					if (/^https?:/u.test(url)) {
 						await accessor.get(IOpenerService).open(URI.parse(url), { openExternal: true, allowContributedOpeners: false, allowCommands: false });
 					}
+					break;
+				case 'duplicate':
+					await accessor.get(IBrowserViewWorkbenchService).createBrowserView({
+						initialUrl: url, owner: { type: 'user' }, session: clicked.serialize().session,
+					}, 'duplicateTab', { target: { groupId: group.id }, index: group.inputs.indexOf(clicked) + 1 });
 					break;
 				default: {
 					const index = group.inputs.indexOf(clicked);

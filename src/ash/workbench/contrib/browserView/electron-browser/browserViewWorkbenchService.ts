@@ -254,7 +254,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			if (!input.model) { input.model = this.instantiationService.createInstance(BrowserViewModel, info); }
-			await this.openEditor(input, undefined, await this.getPreferredGroup(openOptions));
+			await this.openEditor(input, { index: openOptions?.index }, await this.getPreferredGroup(openOptions));
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			for (const callback of created) { callback?.(input); }

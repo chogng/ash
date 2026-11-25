@@ -100,6 +100,7 @@
     "browser.tab.hardReload": "忽略缓存重新加载",
     "browser.tab.copyUrl": "复制网址",
     "browser.tab.openExternal": "在系统浏览器中打开",
+    "browser.tab.duplicate": "复制标签页",
     "browser.back": "后退",
     "browser.forward": "前进",
     "browser.focusHelp": "输入网址并按 Enter 导航。按 Alt+F1 打开浏览器帮助。",

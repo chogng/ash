@@ -5,7 +5,7 @@ export type IntegratedBrowserOpenSource =
 	| 'commandWithoutUrl' | 'commandWithUrl'
 	| 'quickOpenWithoutUrl' | 'quickOpenWithUrl' | 'newTabCommand' | 'localhostLinkOpener'
 	| 'browserLinkForeground' | 'browserLinkBackground' | 'browserLinkNewWindow'
-	| 'copyToNewWindow' | 'openFileCommand' | 'fileResource';
+	| 'copyToNewWindow' | 'openFileCommand' | 'fileResource' | 'duplicateTab';
 
 /** The shared telemetry service controls collection; website identity is never included. */
 export function logBrowserOpen(telemetryService: ITelemetryService, source: IntegratedBrowserOpenSource): void {

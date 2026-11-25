@@ -53,6 +53,7 @@ export interface IBrowserViewOpenOptions {
 	readonly sourceWindowId?: number;
 	readonly openToSide?: boolean;
 	readonly target?: EditorOpenTarget;
+	readonly index?: number;
 }
 
 export interface IBrowserViewWorkbenchService {
