@@ -284,6 +284,10 @@ exports.activate = context => {
 		await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
 		const existing = new Set((await connection.client.request(APP_SERVER_METHODS['session/list'], {})).sessions.map(session => session.sessionId));
 		await agentCommands.runCommand('workbench.action.agentSessions.newCanvasSession');
+		await expect(agentCommands.input).toBeFocused();
+		await agentCommands.close();
+		expect(new Set((await connection.client.request(APP_SERVER_METHODS['session/list'], {})).sessions.map(session => session.sessionId))).toEqual(existing);
+		await agentCommands.runCommand('workbench.action.agentSessions.newCanvasSession');
 		await expect(agents.getByRole('option', { name: /Fixture board/ })).toBeVisible();
 		await expect(agents.getByRole('option', { name: /Needs input/ })).toHaveCount(0);
 		await agentCommands.select('Fixture board');

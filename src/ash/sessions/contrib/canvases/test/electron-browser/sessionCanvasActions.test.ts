@@ -36,6 +36,8 @@ suite('Sessions Canvas actions', () => {
 		const calls: unknown[] = [];
 		const canvasResource = URI.parse('agent-host-canvas:/board');
 		const live = observableValue<readonly ICanvas[]>('canvases', []);
+		const catalog = new DeferredPromise<readonly ICanvasDefinition[]>();
+		const catalogRequested = new DeferredPromise<void>();
 		services.registerInstance(ISessionsManagementService, {
 			resolveNewSessionTarget: async () => ({ providerId: 'provider', workspace: { type: 'local', root: '/other' } }),
 			startNewSession: async (title, options) => {
@@ -49,7 +51,11 @@ suite('Sessions Canvas actions', () => {
 			show: async target => { calls.push({ shown: target }); },
 		} as IPinnedCanvasService);
 		services.registerInstance(IAgentHostCanvasCollection, {
-			listProviderCanvases: async provider => { assert.equal(provider, 'provider'); return definitions; },
+			listProviderCanvases: async provider => {
+				assert.equal(provider, 'provider');
+				void catalogRequested.complete();
+				return catalog.p;
+			},
 			createContext: owner => ({
 				owner, canvases: live, definitionProvider: {
 					onDidChangeDefinitions: Event.None, listCanvases: async () => definitions,
@@ -66,23 +72,43 @@ suite('Sessions Canvas actions', () => {
 		const accepted = resources.add(new Emitter<void>());
 		const hidden = resources.add(new Emitter<void>());
 		let shown = new DeferredPromise<void>();
-		const createPicker = () => ({
-			items: [] as readonly IQuickPickItem[], selectedItems: [] as readonly IQuickPickItem[], activeItems: [],
-			onDidAccept: accepted.event, onDidHide: hidden.event, show: () => { void shown.complete(); },
-			hide: () => hidden.fire(), [Symbol.dispose]() { },
-		});
-		let picker: ReturnType<typeof createPicker>;
+		let loaded = new DeferredPromise<void>();
+		const createPicker = () => {
+			let items: readonly IQuickPickItem[] = [];
+			return {
+				get items() { return items; },
+				set items(value: readonly IQuickPickItem[]) { items = value; void loaded.complete(); },
+				busy: false, selectedItems: [] as readonly IQuickPickItem[], activeItems: [],
+				onDidAccept: accepted.event, onDidHide: hidden.event, show: () => { void shown.complete(); },
+				hide: () => hidden.fire(), [Symbol.dispose]() { },
+			};
+		};
+		let picker: ReturnType<typeof createPicker> | undefined;
 		services.registerInstance(IQuickInputService, { createQuickPick: () => picker = createPicker() } as unknown as IQuickInputService);
 		const commands = resources.add(new CommandService(services));
 		const canceled = commands.executeCommand('workbench.action.agentSessions.newCanvasSession');
-		await Promise.race([shown.p, canceled]);
-		assert.deepEqual(picker!.items.map(item => item.label), ['Board']);
-		picker!.hide();
-		await canceled;
+		try {
+			await Promise.race([catalogRequested.p, canceled]);
+			assert.equal(shown.isResolved, true, 'The picker opens before the catalog resolves');
+			assert.equal(picker!.busy, true);
+			assert.equal(picker!.items.length, 0);
+			accepted.fire();
+			picker!.hide();
+			await canceled;
+		} finally {
+			await catalog.complete(definitions);
+			await Promise.race([shown.p, canceled]);
+			picker?.hide();
+			await canceled;
+		}
+		assert.equal(picker!.items.length, 0, 'The late catalog leaves the dismissed picker alone');
 		assert.deepEqual(calls, []);
 		shown = new DeferredPromise<void>();
+		loaded = new DeferredPromise<void>();
 		const opening = commands.executeCommand('workbench.action.agentSessions.newCanvasSession');
-		await Promise.race([shown.p, opening]);
+		await Promise.race([loaded.p, opening]);
+		assert.deepEqual(picker!.items.map(item => item.label), ['Board']);
+		assert.equal(picker!.busy, false);
 		picker!.selectedItems = [picker!.items[0]!];
 		accepted.fire();
 		await opening;

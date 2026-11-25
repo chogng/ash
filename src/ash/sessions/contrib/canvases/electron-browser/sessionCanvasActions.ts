@@ -13,7 +13,7 @@ import { showCanvasContextPicker } from '../../../../workbench/contrib/canvases/
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { Menus } from '../../../browser/menus.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
-import { disposableTimeout } from '../../../../base/common/async.js';
+import { DeferredPromise, disposableTimeout } from '../../../../base/common/async.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -46,27 +46,41 @@ export class NewCanvasSessionAction extends Action2 {
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const notifications = accessor.get(INotificationService);
 		if (!canvases.enabled.get()) return;
-		const { providerId } = await sessions.resolveNewSessionTarget();
-		const definitions = (await canvasHosts.listProviderCanvases(providerId))?.filter(definition => !definition.requiresInput);
-		if (!definitions?.length) {
-			notifications.info(localize('canvas.newSession.unavailable', 'No Canvas is available to start a session.'));
-			return;
-		}
-		const labels = getCanvasDefinitionLabels(definitions);
-		type CanvasPick = { label: string; description?: string; definition: ICanvasDefinition; };
-		using pickerResources = new DisposableStore();
-		const quickPick = pickerResources.add(picker.createQuickPick<CanvasPick>());
-		quickPick.placeholder = quickPick.ariaLabel = localize('canvas.newSession.pick', 'Choose a Canvas to start the session');
-		quickPick.items = definitions.map((definition, index) => ({ label: labels[index]!, description: definition.description, definition }));
-		const selected = await new Promise<CanvasPick | undefined>(resolve => {
+		type CanvasPick = { label: string; description?: string; providerId: string; definition: ICanvasDefinition; };
+		let selected: CanvasPick | undefined;
+		{
+			using pickerResources = new DisposableStore();
+			const quickPick = pickerResources.add(picker.createQuickPick<CanvasPick>());
+			quickPick.placeholder = quickPick.ariaLabel = localize('canvas.newSession.pick', 'Choose a Canvas to start the session');
+			quickPick.busy = true;
+			const selection = new DeferredPromise<CanvasPick | undefined>();
 			pickerResources.add(quickPick.onDidAccept(() => {
-				resolve(quickPick.selectedItems[0] ?? quickPick.activeItems[0]);
+				const item = quickPick.selectedItems[0] ?? quickPick.activeItems[0];
+				if (!item) return;
+				void selection.complete(item);
 				quickPick.hide();
 			}));
-			pickerResources.add(quickPick.onDidHide(() => resolve(undefined)));
+			pickerResources.add(quickPick.onDidHide(() => void selection.complete(undefined)));
 			quickPick.show();
-		});
+			const loadCatalog = async (): Promise<void> => {
+				const { providerId } = await sessions.resolveNewSessionTarget();
+				if (selection.isSettled) return;
+				const definitions = (await canvasHosts.listProviderCanvases(providerId))?.filter(definition => !definition.requiresInput);
+				if (selection.isSettled) return;
+				if (!definitions?.length) {
+					notifications.info(localize('canvas.newSession.unavailable', 'No Canvas is available to start a session.'));
+					quickPick.hide();
+					return;
+				}
+				const labels = getCanvasDefinitionLabels(definitions);
+				quickPick.items = definitions.map((definition, index) => ({ label: labels[index]!, description: definition.description, providerId, definition }));
+				quickPick.busy = false;
+			};
+			void loadCatalog().catch(error => selection.error(error));
+			selected = await selection.p;
+		}
 		if (!selected || !canvases.enabled.get()) return;
+		const { providerId } = selected;
 		const revision = navigation.revision;
 		const { session, threadId } = await sessions.startNewSession(selected.definition.displayName, {
 			providerId, workspace: { type: 'current' }, creation: { token: CancellationToken.None, kind: 'code' },
