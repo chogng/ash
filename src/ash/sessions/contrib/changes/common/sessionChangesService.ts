@@ -5,7 +5,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import type { TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
-import type { ISessionChangeset, ISessionFileChange } from '../../../services/sessions/common/session.js';
+import type { ISessionChangeset, ISessionFileChange } from '../../../../workbench/services/sessions/common/session.js';
 
 export interface ISessionChangesEditorOptions extends IMultiDiffEditorOptions {
 	readonly changesetSelection?:

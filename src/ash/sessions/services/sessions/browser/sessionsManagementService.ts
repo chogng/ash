@@ -11,13 +11,12 @@ import { canceled, isCancellationError } from '../../../../base/common/errors.js
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { observableValue } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, SessionExecutionTarget, ThreadId } from '../common/session.js';
+import { type IActiveSessionThread, type IUntitledChatSession, type ISession, type SessionManagementInfo, type ModelRef, type SessionId, type SessionWorkspaceSelection, type SessionExecutionTarget, type ThreadId, sessionWorkspaceUri } from '../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService, SessionsManagementState } from '../common/sessionsManagement.js';
-import type { ISessionCreateOptions, ISessionsProvider } from '../common/sessionsProvider.js';
+import type { ISessionCreateOptions, ISessionsProvider } from '../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
-import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { selectionFromResource } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { writePendingCreationKind } from './sessionGridState.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
 import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, threadIdentity } from '../common/sessionIdentity.js';

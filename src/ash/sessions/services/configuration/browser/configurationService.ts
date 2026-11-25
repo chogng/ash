@@ -1,6 +1,6 @@
 import { Event } from '../../../../base/common/event.js';
 import type { IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
-import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP } from '../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP } from '../common/editorConfiguration.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { WorkspaceService, type WorkspaceServiceOptions } from '../../../../workbench/services/configuration/browser/configurationService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';

@@ -40,7 +40,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { IDiffService } from '../../../../../workbench/services/diff/common/diffService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { constObservable } from '../../../../../base/common/observable.js';
-import { createSessionFileChange } from '../../../../services/sessions/common/session.js';
+import { createSessionFileChange } from '../../../../../workbench/services/sessions/common/session.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 import { resetNlsResolver, setNlsMessages, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';

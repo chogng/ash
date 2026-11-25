@@ -8,7 +8,7 @@ import { localize } from '../../../../../nls.js';
 import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/automations/common/automation.js';
 import type { IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { AutomationCatalogueState, ICreateAutomationOptions, IGuardedAutomationUpdateResult, IUpdateAutomationOptions, IAutomationRunRequestResult } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
-import type { ISessionsProviderAutomations } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionsProviderAutomations } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 
 /** One host's observable catalogue. It never schedules work or changes a run's authority. */

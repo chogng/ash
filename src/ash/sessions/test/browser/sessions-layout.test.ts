@@ -13,7 +13,7 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
-import { sessionsPartIds } from '../../common/layoutConstants.js';
+import { sessionsPartIds } from '../../browser/layoutPolicy.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -49,7 +49,7 @@ const { SessionsConfiguration } = await import('../../../sessions/common/configu
 const { WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/test/common/testServices.js');
 
-type SessionsPartId = import('../../common/layoutConstants.js').SessionsPartId;
+type SessionsPartId = import('../../browser/layoutPolicy.js').SessionsPartId;
 type WorkbenchPartInstance = import('../../../workbench/browser/part.js').Part;
 
 class TestSessionsPart extends Part {

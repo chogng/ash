@@ -15,7 +15,7 @@ import { TestQuickInputService } from '../../../../../platform/quickinput/test/b
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import '../../browser/projectsRepairActions.js';
 

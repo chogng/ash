@@ -3,8 +3,7 @@ import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import type { IActiveSessionThread, ISessionWorkspace } from '../../sessions/common/session.js';
+import { sessionWorkspaceUri, type IActiveSessionThread, type ISessionWorkspace } from '../../../../workbench/services/sessions/common/session.js';
 
 export const IWorkspaceFolderLabelService = createServiceIdentifier<IWorkspaceFolderLabelService>('sessionsWorkspaceFolderLabelService');
 

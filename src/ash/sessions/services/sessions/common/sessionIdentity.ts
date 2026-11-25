@@ -1,4 +1,4 @@
-import type { ISession, AgentTreeNode, ThreadOrigin } from './session.js';
+import type { ISession, AgentTreeNode, ThreadOrigin } from '../../../../workbench/services/sessions/common/session.js';
 
 const prefix = 'ash-session:';
 

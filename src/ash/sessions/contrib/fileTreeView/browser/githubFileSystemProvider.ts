@@ -13,7 +13,7 @@ import {
 	type GitHubAccount, type GitHubRepository, type GitHubRepositoryTreeEntry,
 } from '../../../../platform/github/common/githubService.js';
 import { localize } from '../../../../nls.js';
-import { GITHUB_REMOTE_FILE_SCHEME } from '../../../services/sessions/common/session.js';
+import { GITHUB_REMOTE_FILE_SCHEME } from '../../../../workbench/services/sessions/common/session.js';
 
 interface RepositorySnapshot {
 	readonly entries: ReadonlyMap<string, GitHubRepositoryTreeEntry>;

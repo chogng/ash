@@ -1,4 +1,4 @@
-import type { IActiveSessionThread, IUntitledChatSession } from './session.js';
+import type { IActiveSessionThread, IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 

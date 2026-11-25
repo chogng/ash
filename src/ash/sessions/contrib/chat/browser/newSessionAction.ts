@@ -9,7 +9,7 @@ import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
+import type { IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
 
 // Shared Chat actions reach this window's creation policy through its navigation service.
 export class NewChatInSessionsWindowAction extends Action2 {

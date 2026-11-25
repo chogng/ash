@@ -4,7 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { canOpenThreadInCode, type IChat, type ISession } from '../../../services/sessions/common/session.js';
+import { canOpenThreadInCode, type IChat, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../common/chatWorkspace.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';

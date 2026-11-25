@@ -22,7 +22,8 @@ import '../workbench/browser/actions/layoutActions.js';
 import '../workbench/browser/parts/panel/panelActions.js';
 // Register this renderer's Sessions colors before Workbench theme initialization.
 import './common/theme.js';
-import './common/sessionConfig.js';
+import './services/configuration/common/editorConfiguration.js';
+import './contrib/layout/common/sessionsLayoutConfiguration.js';
 import './browser/actions/devContainerActions.js';
 // The composer needs text input, completion, hover and paste. Text/diff panes
 // admit the complete editor on first use, including restored document tabs.
@@ -75,8 +76,8 @@ import '../workbench/contrib/trace/browser/trace.contribution.js';
 import '../workbench/contrib/output/browser/output.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
-import './contrib/editor/browser/diffEditor.sessions.contribution.js';
 import './contrib/editor/browser/editor.contribution.js';
+import './contrib/editor/browser/diffEditor.sessions.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/codeReview/browser/codeReview.contribution.js';
 import './contrib/codeReview/browser/bots.contribution.js';

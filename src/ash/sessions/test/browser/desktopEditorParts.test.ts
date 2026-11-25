@@ -21,6 +21,7 @@ import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWi
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { EditorParts } from '../../browser/parts/editorParts.js';
+import { SessionsConfiguration } from '../../common/configuration.js';
 
 function fixture() {
 	const resources = new DisposableStore();
@@ -51,7 +52,7 @@ function fixture() {
 		}));
 	}
 	const hosts = resources.add(createDesktopEditorTestServices(services, { registry, inputSerializers }, browserEnvironment.window.document));
-	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area });
+	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area, configuration: services.get(IConfigurationService) });
 }
 
 suite('Desktop tool EditorParts', () => {
@@ -149,6 +150,7 @@ suite('Desktop tool EditorParts', () => {
 
 	test('lays out a product page flush and restores the Files card when switching back', async () => {
 		using hosts = fixture();
+		await hosts.configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
 		const { editor, files } = hosts;
 		const frame = files.domNode.parentElement!;
 		const workspace = frame.parentElement!;

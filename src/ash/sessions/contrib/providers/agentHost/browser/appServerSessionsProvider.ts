@@ -9,21 +9,20 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
-import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId } from '../../../../services/sessions/common/session.js';
+import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId, sessionWorkspaceUri } from '../../../../../workbench/services/sessions/common/session.js';
 import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import type { ISessionArtifact } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
 import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
-import { agentHostSessionArtifacts } from '../../../../common/agentHostSessionArtifacts.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
+import { agentHostSessionArtifacts } from '../../../../../workbench/contrib/sessions/providers/agentHost/browser/agentHostSessionArtifacts.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
-import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
-import { getSessionApplication } from '../../../../common/sessionApplication.js';
+import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { getSessionApplication } from '../../../../../workbench/services/sessions/common/sessionApplication.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ISessionCreateOptions, ISessionWorktree, ISessionWorktreeQueryOptions } from '../../../../services/sessions/common/sessionsProvider.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import type { ISessionCreateOptions, ISessionWorktree, ISessionWorktreeQueryOptions } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { devContainerSourcePath } from '../../remoteAgentHost/browser/devContainerSource.js';
 import { extUri } from '../../../../../base/common/resources.js';
 

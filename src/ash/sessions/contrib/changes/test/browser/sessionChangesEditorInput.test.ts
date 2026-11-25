@@ -3,7 +3,7 @@ import { suite, test } from 'mocha';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { EditorInputSerializers } from '../../../../../workbench/services/editor/common/editorInputSerializer.js';
-import type { ISessionChangeset } from '../../../../services/sessions/common/session.js';
+import type { ISessionChangeset } from '../../../../../workbench/services/sessions/common/session.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 
 suite('Session Changes editor restoration', () => {

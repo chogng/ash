@@ -1,7 +1,7 @@
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
-import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../common/sessionConfig.js';
+import { BROWSER_FOLLOWS_SESSION_SETTING } from '../common/sessionsLayoutConfiguration.js';
 import { IViewDescriptorService, ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';

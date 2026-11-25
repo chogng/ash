@@ -18,8 +18,8 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../platform/
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { getContextInputBudget } from '../../../workbench/services/chat/common/chatService.js';
-import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
-import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../workbench/services/sessions/common/session.js';
+import { buildAgentHostSessionWorkspace } from '../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import type { ChatWidgetModel } from '../chatWidgetModel.js';
 import './media/sessionInfoRail.css';
 

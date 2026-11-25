@@ -33,7 +33,7 @@ import { ArtifactTitleBarWidget } from './artifactTitleBarWidget.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
-import { artifactKinds, type ArtifactKind } from '../../../common/artifactKind.js';
+import { chatCreationKinds, type ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { NewArtifactWidget } from './newArtifactWidget.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ISessionsEditorPage } from '../../../browser/parts/editorPart.js';
@@ -99,7 +99,7 @@ export class ArtifactEditorView extends Disposable {
 	private sort: ArtifactSort = 'modified';
 	private descending = true;
 	private owner: ArtifactOwner = 'anyone';
-	private kind: ArtifactKind | 'any' = 'any';
+	private kind: ChatCreationKind | 'any' = 'any';
 	private sortDropdown!: DropdownMenuActionViewItem;
 	private sortButton!: HTMLElement;
 	private readonly dateTimer = this._register(new IntervalTimer());
@@ -283,7 +283,7 @@ export class ArtifactEditorView extends Disposable {
 				}))),
 			new SubmenuAction('artifacts.type', localize('sessions.artifacts.type', 'Type'), [
 				choice('artifacts.type.any', localize('sessions.artifacts.anyType', 'Any'), this.kind === 'any', () => { this.kind = 'any'; }),
-				...artifactKinds.map(kind => choice(`artifacts.type.${kind}`, getArtifactTitle(kind), this.kind === kind, () => { this.kind = kind; })),
+				...chatCreationKinds.map(kind => choice(`artifacts.type.${kind}`, getArtifactTitle(kind), this.kind === kind, () => { this.kind = kind; })),
 			]),
 			new Separator(),
 			{
@@ -297,7 +297,7 @@ export class ArtifactEditorView extends Disposable {
 		];
 	}
 
-	private createIllustration(kind: ArtifactKind): HTMLElement {
+	private createIllustration(kind: ChatCreationKind): HTMLElement {
 		const preview = h(this.domNode.ownerDocument, 'span', {
 			className: 'ash-artifacts-illustration ash-artifact-type',
 			attributes: { 'aria-hidden': 'true', 'data-artifact-kind': kind },
@@ -563,7 +563,7 @@ export class ArtifactEditorView extends Disposable {
 			return [this.currentWorkspace?.title, help, this.currentWorkspace?.getAccessibleContent()].filter(Boolean).join('\n');
 		}
 		const cards = this.filter === 'shared' ? [] : selectArtifactCards(this.getArtifacts(), { sort: this.sort, descending: this.descending, owner: this.owner, kind: this.kind }, this.search.value);
-		return [localize('sessions.artifacts.title', 'Artifacts'), ...artifactKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}, ${artifactDate(card.modifiedAt ?? card.createdAt).label}`)].join('\n');
+		return [localize('sessions.artifacts.title', 'Artifacts'), ...chatCreationKinds.map(getArtifactTitle), ...cards.map(card => `${card.title}: ${card.detail}, ${artifactDate(card.modifiedAt ?? card.createdAt).label}`)].join('\n');
 	}
 	protected override disposeCore(): void { pages.delete(this.domNode); super.disposeCore(); this.domNode.remove(); }
 }

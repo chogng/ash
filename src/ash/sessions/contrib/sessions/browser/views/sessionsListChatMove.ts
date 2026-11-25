@@ -1,5 +1,5 @@
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import type { SessionId, ThreadId } from '../../../../services/sessions/common/session.js';
+import type { SessionId, ThreadId } from '../../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
 export async function runSessionsListMove(

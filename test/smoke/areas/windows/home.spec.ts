@@ -58,7 +58,7 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 		await expect(agents.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
 		await expect(agents.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
-		await expect(agents.locator('.ash-reply-chat-editor .chat-composer:visible')).toHaveCount(1);
+		await expect(agents.locator('[data-part="sessions"] :is(.chat-composer, .native-chat-composer):visible')).toHaveCount(1);
 		expect(await agents.evaluate(() => (window as Window & { startupLayout?: Promise<number>; }).startupLayout)).toBe(0);
 		await new QuickAccess(agents).runCommand('sessions.action.manageAgentHosts');
 		const remotes = agents.getByRole('dialog', { name: 'Remote Environments' });

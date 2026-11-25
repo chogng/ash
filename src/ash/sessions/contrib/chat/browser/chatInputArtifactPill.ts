@@ -8,7 +8,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputPart, IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatCreationKind } from '../../../common/chatCreation.js';
+import type { ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { appendArtifactIcon, getArtifactTitle } from '../../artifact/browser/artifactKindPresentation.js';
 import './media/chatInputArtifactPill.css';
 

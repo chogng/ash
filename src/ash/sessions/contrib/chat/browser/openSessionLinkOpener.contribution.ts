@@ -9,9 +9,9 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ILinkPresentationService, type ILinkPresentation } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { ISessionSummaryHoverService } from '../../../../workbench/contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
-import { chatExecutionWorkspace, type IChat, type ISession } from '../../../services/sessions/common/session.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { agentHostSessionWorkspaceKey } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { chatExecutionWorkspace, type IChat, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { parseSessionProviderAuthority, sessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
 import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../../sessions/browser/sessionHoverContent.js';

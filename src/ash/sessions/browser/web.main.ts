@@ -35,7 +35,7 @@ import { registerTitleService } from '../services/title/browser/titleService.js'
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
-import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
+import { selectionFromWorkspace } from '../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { BrowserHostService } from '../../workbench/services/host/browser/browserHostService.js';
 import { ILanguagePackStore } from '../../platform/languagePacks/common/languagePackStore.js';

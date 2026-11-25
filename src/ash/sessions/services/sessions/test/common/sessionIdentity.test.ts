@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionArtifactType, type ISessionArtifact } from '../../../../../platform/agentHost/common/sessionArtifacts.js';
-import type { ISession } from '../../common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { backendSession, projectSession, threadIdentity } from '../../common/sessionIdentity.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();

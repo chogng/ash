@@ -7,7 +7,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
-import { canOpenThreadInCode, type IUntitledChatSession, type ModelRef, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
+import { canOpenThreadInCode, type IUntitledChatSession, type ModelRef, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
@@ -15,7 +15,7 @@ import { ClosedItemHistory } from './closedItemHistory.js';
 import { SessionsRecencyHistory, type SessionRecencyEntry } from './sessionsRecencyHistory.js';
 import { SessionsNavigation } from './sessionNavigation.js';
 import { loadChatSelection, loadSessionGridState, saveChatSelection, saveSessionGridState, storedReference, type ISessionGridState, type SessionsChatModelPreference, type StoredChatSelection } from './sessionGridState.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { VisibleSessions, referenceForSelection, referenceKey, type SessionSlotPlacement, type SessionsSelection, type SessionsViewReference, type SessionsViewSelection } from './visibleSessions.js';
 
 export type { SessionsSelection, SessionsViewSelection } from './visibleSessions.js';

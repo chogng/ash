@@ -62,13 +62,3 @@ export interface ChatReplyRequest {
 	readonly messageId: string;
 	readonly files?: readonly ChatReplyAttachment[];
 }
-
-export interface ChatReplyUpdate {
-	readonly conversationId?: string;
-	readonly message?: ChatReplyMessage;
-}
-
-export interface IChatReplyBackend {
-	streamReply(request: ChatReplyRequest, signal: AbortSignal): AsyncIterable<ChatReplyUpdate>;
-	stopReply(remoteConversationId: string, remoteReplyId: string, signal: AbortSignal): Promise<void>;
-}

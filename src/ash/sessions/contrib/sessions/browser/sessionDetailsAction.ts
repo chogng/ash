@@ -10,11 +10,10 @@ import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actio
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../../../browser/menus.js';
 import { sessionResource } from '../../../browser/chatHistoryModel.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
 import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 const canShowSessionDetails = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true), SessionsWorkspaceModeContext.isEqualTo('code'));

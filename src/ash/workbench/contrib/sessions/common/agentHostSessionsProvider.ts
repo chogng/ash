@@ -1,11 +1,11 @@
-import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
-import type { IObservable } from '../../base/common/observable.js';
-import type { ISessionsProvider } from '../services/sessions/common/sessionsProvider.js';
-import type { URI } from '../../base/common/uri.js';
-import type { SessionExecutionTarget } from '../services/sessions/common/session.js';
-import type { CancellationToken } from '../../base/common/cancellation.js';
-import { agentHostConnectionAddress, type IAgentHostConnectionInfo } from '../../platform/agentHost/common/agentHostConnectionsService.js';
-import { isSSHAgentHost } from '../../platform/agentHost/common/remoteAgentHostService.js';
+import type { RemoteConnectionDefinition } from '../../../../platform/remote/common/remoteConnectionService.js';
+import type { IObservable } from '../../../../base/common/observable.js';
+import type { ISessionsProvider } from './sessionsProvider.js';
+import type { URI } from '../../../../base/common/uri.js';
+import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import { agentHostConnectionAddress, type IAgentHostConnectionInfo } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { isSSHAgentHost } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 
 export const LOCAL_AGENT_HOST_PROVIDER_ID = 'local-agent-host';
 export const SSH_AGENT_HOST_PROVIDER_PREFIX = 'ssh-agent-host:';

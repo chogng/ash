@@ -26,8 +26,8 @@ import { SessionsManagementService } from '../../../../services/sessions/browser
 import { SessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
-import type { IActiveSessionThread } from '../../../../services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
+import type { IActiveSessionThread } from '../../../../../workbench/services/sessions/common/session.js';
 import { ProjectChatModel } from '../../browser/projectChatModel.js';
 
 class ProjectChatFixture extends Disposable {

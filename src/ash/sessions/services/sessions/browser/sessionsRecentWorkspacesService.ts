@@ -1,9 +1,8 @@
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { buildAgentHostSessionWorkspace, selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import type { SessionExecutionTarget, SessionWorkspaceSelection } from '../common/session.js';
+import { buildAgentHostSessionWorkspace, selectionFromResource } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri, type SessionExecutionTarget, type SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 
 /** Stores the last folder selected in Agents per provider. */
 export class SessionsRecentWorkspacesService {

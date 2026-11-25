@@ -23,13 +23,13 @@ import { createDisconnectedRendererApi } from '../../../../../workbench/browser/
 import { isUntitledSession } from '../../browser/sessionGridState.js';
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import { AppServerSessionsProvider } from '../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
-import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from '../../common/session.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IArtifactCatalogService } from '../../../artifactCatalog/common/artifactCatalogService.js';
 import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 
 type SessionDto = Omit<BackendSession, 'executionTarget'> & Pick<import('../../../../../platform/agentHost/common/agent.js').AgentSession, 'executionTarget'>;
 

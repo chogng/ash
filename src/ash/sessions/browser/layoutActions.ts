@@ -3,7 +3,7 @@ import { registerAddTabActions } from '../contrib/editor/browser/addTabActions.j
 import { isRecord } from '../../base/common/types.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
-import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService, hasSelectedCodeWorkspace } from '../services/sessions/common/sessionsManagement.js';
 import type { EditorParts } from './parts/editorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../nls.js';
@@ -22,8 +22,8 @@ import {
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { EditorHasMultipleToolsContext, EditorToolMaximizedContext, Menus, sessionToolMenuItems } from './menus.js';
-import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
-import { CanGoBackContext, CanGoForwardContext, ChatConversationPageContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext, SessionsEditorToolContext } from '../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext } from '../../workbench/contrib/sessions/common/contextkeys.js';
+import { ChatConversationPageContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext, SessionsEditorToolContext } from '../common/contextkeys.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 const sessionsPartHidden = new RawContextKey<boolean>('sessions.sessionPartHidden', false);

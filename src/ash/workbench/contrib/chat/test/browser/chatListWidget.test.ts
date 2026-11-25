@@ -60,7 +60,7 @@ import { BrowserFileSearchService } from '../../../../../platform/search/browser
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { getChatInputAccessibilityHelp } from '../../browser/actions/chatAccessibilityHelp.js';
 import { ChatCopyActionRendering } from '../../browser/actions/chatCopyActions.js';
-import { agentHostTurnDirectory } from '../../../../../sessions/common/agentHostSessionWorkspace.js';
+import { agentHostTurnDirectory } from '../../../sessions/common/agentHostSessionWorkspace.js';
 import type { Turn } from '../../../../services/chat/common/chatService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';

@@ -35,7 +35,7 @@ import { Menus, SessionsFlatLayoutContext } from '../../../../browser/menus.js';
 import { SessionsEditorToolContext } from '../../../../common/contextkeys.js';
 import type { EditorParts } from '../../../../browser/parts/editorParts.js';
 import type { SessionsPart } from '../../../../browser/parts/sessionsPart.js';
-import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../../workbench/contrib/sessions/common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { registerChangesEditorTitleActions } from '../../../changes/browser/changesActions.js';

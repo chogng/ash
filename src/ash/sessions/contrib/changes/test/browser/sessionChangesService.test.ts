@@ -23,7 +23,7 @@ import { ISessionChangesService } from '../../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../services/sessions/common/session.js';
+import { createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../../workbench/services/sessions/common/session.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 
 suite('Session Changes opening and capture contract', () => {

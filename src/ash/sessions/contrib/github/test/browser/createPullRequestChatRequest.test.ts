@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IChatService, type StartTurnOptions, type ThreadRead } from '../../../../../workbench/services/chat/common/chatService.js';
-import type { ISession, IChat } from '../../../../services/sessions/common/session.js';
+import type { ISession, IChat } from '../../../../../workbench/services/sessions/common/session.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestChatOptions } from '../../common/pullRequestCreation.js';
 import { CreatePullRequestChatRequest } from '../../browser/createPullRequestChatRequest.js';
 

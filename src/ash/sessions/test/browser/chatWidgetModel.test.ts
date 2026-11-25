@@ -32,14 +32,14 @@ import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/ch
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { INativeChatModelPreferencesService } from '../../contrib/chat/browser/nativeChatModelPreferencesService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
+import { type ISession, type IUntitledChatSession, chatCreationKinds, isChatCreationKind, type ChatCreationKind } from '../../../workbench/services/sessions/common/session.js';
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import { URI } from '../../../base/common/uri.js';
 import { SessionArtifactType, type ISessionArtifact } from '../../../platform/agentHost/common/sessionArtifacts.js';
-import { agentHostResponseArtifactId } from '../../common/agentHostSessionArtifacts.js';
+import { agentHostResponseArtifactId } from '../../../platform/agentHost/common/sessionArtifacts.js';
 import { readPendingCreationKind, writePendingCreationKind } from '../../services/sessions/browser/sessionGridState.js';
-import { chatCreationKinds, getChatCreationContext, isChatCreationKind, type ChatCreationKind } from '../../common/chatCreation.js';
+import { getChatCreationContext } from '../../common/chatCreation.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 

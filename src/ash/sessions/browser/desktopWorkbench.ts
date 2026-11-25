@@ -28,7 +28,7 @@ import type { Part } from '../../workbench/browser/part.js';
 import { SessionsCodeEditorContext } from '../../workbench/common/contextkeys.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
-import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
+import { sessionsPartIds, type SessionsPartId } from './layoutPolicy.js';
 import { ChatConversationPageContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import {
 	Workbench,

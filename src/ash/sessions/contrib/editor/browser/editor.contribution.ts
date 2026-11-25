@@ -18,9 +18,9 @@ import { IEditorGroupsService } from '../../../../workbench/services/editor/comm
 import { Menus } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import type { SessionsPart } from '../../../browser/parts/sessionsPart.js';
-import { SessionsCategories } from '../../../common/categories.js';
+import { SessionsCategories } from '../../../../workbench/contrib/sessions/common/categories.js';
 import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
-import { SESSIONS_EDITOR_WORD_WRAP } from '../../../common/configuration.js';
+import { SESSIONS_EDITOR_WORD_WRAP } from '../../../services/configuration/common/editorConfiguration.js';
 
 registerAction2(class ToggleSessionsEditorWordWrapAction extends Action2 {
 	constructor() {

@@ -5,7 +5,7 @@ import { toDisposable, type IDisposable } from '../../../../base/common/lifecycl
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { readStoredOrder, resolveSectionOrder, storeReorderedIds } from './sessionSectionOrderService.js';
-import type { ISession } from '../common/session.js';
+import type { ISession } from '../../../../workbench/services/sessions/common/session.js';
 
 type SessionListIdentity = Pick<ISession, 'sessionId' | 'source'>;
 

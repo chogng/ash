@@ -1,4 +1,4 @@
-import { TelemetryLevel, type ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
+import { TelemetryLevel, type ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 
 export type SessionsInteractionButton = 'openInVSCode';
 export type SessionsInteractionSource = 'menu';

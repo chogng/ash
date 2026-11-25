@@ -11,7 +11,7 @@ import { InboxNotificationKind, InboxNotificationPriority, InboxNotificationsSor
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { IAgentWorkbenchLayoutService, type SessionsPartVisibilityChangeEvent } from '../../../../browser/workbench.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { IChatListCatalog } from '../../../chat/browser/chatListModel.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';

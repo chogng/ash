@@ -5,8 +5,8 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { type SessionRuntimeRequest, type SessionRuntimeResult } from '../../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../../nls.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
-import type { SessionExecutionTarget } from '../../../../services/sessions/common/session.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
+import type { SessionExecutionTarget } from '../../../../../workbench/services/sessions/common/session.js';
 
 export class DevContainerAgentHostService extends Disposable implements IDevContainerAgentHostService {
 	declare readonly _serviceBrand: undefined;

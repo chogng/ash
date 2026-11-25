@@ -22,7 +22,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { IPinnedCanvasService } from '../browser/pinnedCanvases.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 
 function getCanvasOwner(selection: SessionsViewSelection): ICanvasOwner | undefined {
 	if (selection.kind !== 'session') return undefined;

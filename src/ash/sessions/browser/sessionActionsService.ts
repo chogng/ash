@@ -11,10 +11,10 @@ import {
 	type IAgentSessionReviewEnvironmentTarget,
 } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../services/sessions/common/session.js';
+import type { ISession } from '../../workbench/services/sessions/common/session.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
-import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
+import { selectionFromWorkspace } from '../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import type { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 

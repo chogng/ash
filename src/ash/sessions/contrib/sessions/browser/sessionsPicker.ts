@@ -3,7 +3,7 @@ import { localize } from '../../../../nls.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionManagementLabel } from '../../../browser/sessionManagementLabels.js';
 import { getRecencyEntryKey, type SessionRecencyEntry } from '../../../services/sessions/browser/sessionsRecencyHistory.js';
-import type { ISession, SessionId, ThreadId } from '../../../services/sessions/common/session.js';
+import type { ISession, SessionId, ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 
 export interface ISessionPickItem extends IQuickPickItem {
 	readonly sessionId: SessionId;

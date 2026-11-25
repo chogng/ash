@@ -1,6 +1,6 @@
-import type { SessionExecutionTarget } from '../../../../services/sessions/common/session.js';
+import type { SessionExecutionTarget } from '../../../../../workbench/services/sessions/common/session.js';
 import { hasDevelopmentPermissions } from '../../../../../platform/workspace/common/workspaceTrust.js';
-import { ISessionFolderAuthorizationService } from '../../../../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../../../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Action } from '../../../../../base/common/actions.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -12,7 +12,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { RemoteAgentHostSessionsProvider } from './remoteAgentHostSessionsProvider.js';
-import { remoteAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
+import { remoteAgentHostProviderId } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { createAgentHostSessionScope } from '../../agentHost/browser/agentHostSessionScope.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 

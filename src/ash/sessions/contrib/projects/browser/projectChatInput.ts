@@ -14,7 +14,7 @@ import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/ch
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ReplyChatInputFactory } from '../../chat/browser/replyChatInput.js';
 import type { ChatListProject } from '../../chat/browser/chatListModel.js';

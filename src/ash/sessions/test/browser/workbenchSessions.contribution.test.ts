@@ -11,7 +11,7 @@ import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/comm
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IAgentConnection, IAgentHostInputCompletionService } from '../../../platform/agentHost/common/agentService.js';
 import type { AgentHostInputCompletionRequest } from '../../../platform/agentHost/common/agent.js';
-import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../workbench/contrib/sessions/common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from '../../browser/sessionActionsService.js';
@@ -30,7 +30,7 @@ import { ServiceCollection } from '../../../platform/instantiation/common/servic
 import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
-import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
+import { IDevContainerAgentHostService } from '../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -52,6 +52,8 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { createThreadMultiDiffEditorInput, registerChatChangesActions } from '../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { IArtifactCatalogService } from '../../services/artifactCatalog/common/artifactCatalogService.js';
+import { createTestArtifactCatalogService } from '../common/testArtifactCatalogService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 for (const [name, value] of Object.entries({
@@ -146,6 +148,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	using services = new InstantiationService(new ServiceCollection(...registrations));
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
+	services.registerInstance(IArtifactCatalogService, createTestArtifactCatalogService());
 	services.registerInstance(IAgentConnection, api);
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);

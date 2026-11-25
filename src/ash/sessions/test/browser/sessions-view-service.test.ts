@@ -12,7 +12,7 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../../../workbenc
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
-import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService, type SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';

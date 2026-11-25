@@ -6,7 +6,7 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import type { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewFilterContext } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import type { AgentTreeNode, ISession } from '../../../services/sessions/common/session.js';
+import type { AgentTreeNode, ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';

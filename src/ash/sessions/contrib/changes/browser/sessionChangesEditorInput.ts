@@ -2,7 +2,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
+import { DockedEditorInput } from '../../../../workbench/browser/parts/editor/dockedEditorInput.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { ISessionChangesEditorOptions } from '../common/sessionChangesService.js';
 import './media/sessionChangesEditorInput.css';

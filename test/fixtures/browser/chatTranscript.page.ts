@@ -52,7 +52,7 @@ import { LocalTranscriptionService } from '../../../src/ash/workbench/services/l
 import { DictationModelState, ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService, type IDictationModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
-import { IDevContainerAgentHostService } from '../../../src/ash/sessions/common/devContainerAgentHostService.js';
+import { IDevContainerAgentHostService } from '../../../src/ash/workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';

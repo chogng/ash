@@ -1,10 +1,5 @@
-import { SessionArtifactType, type ISessionArtifact } from '../../platform/agentHost/common/sessionArtifacts.js';
-import type { ArtifactResource } from '../../platform/artifactCatalog/common/artifactCatalog.js';
-
-/** Native document creation publishes one Markdown document for a response. */
-export function agentHostResponseArtifactId(threadId: string, itemId: string): string {
-	return JSON.stringify([threadId, itemId, 'markdown']);
-}
+import { agentHostResponseArtifactId, SessionArtifactType, type ISessionArtifact } from '../../../../../../platform/agentHost/common/sessionArtifacts.js';
+import type { ArtifactResource } from '../../../../../../platform/artifactCatalog/common/artifactCatalog.js';
 
 /** Adapts published references without retaining document content or another catalog. */
 export function agentHostSessionArtifacts(files: readonly ArtifactResource[]): readonly ISessionArtifact[] {

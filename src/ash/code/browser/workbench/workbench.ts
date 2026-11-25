@@ -33,6 +33,7 @@ try {
 	document.documentElement.lang = getNLSLanguage();
 	await import('../../../workbench/workbench.web.main.js');
 	await import('../../../sessions/common/configuration.js');
+	await import('../../../sessions/services/configuration/common/editorConfiguration.js');
 	await import('../../../sessions/common/theme.js');
 	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');

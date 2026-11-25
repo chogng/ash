@@ -13,7 +13,7 @@ import type { IQuickInputService } from '../../../../../platform/quickinput/comm
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { CreatePullRequestContextView } from '../../browser/createPullRequestContextView.js';
 import type { ICreatePullRequestWidgetOptions } from '../../browser/createPullRequestWidget.js';
 

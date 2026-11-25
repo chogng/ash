@@ -1,17 +1,15 @@
-import { sessionWorkspaceUri } from './sessionWorkspace.js';
-import type { FileSearchDirectory } from '../../platform/search/common/fileSearch.js';
-import { URI } from '../../base/common/uri.js';
-import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
-import type { SessionCreateParams } from '../../platform/agentHost/common/agent.js';
-import { createProviderRemoteWorkspaceUri, createSshRemoteAuthority, getProviderRemoteWorkspace, getRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../platform/remote/common/remote.js';
-import type { ISessionWorkspace, SessionExecutionTarget, SessionWorkspaceSelection } from '../services/sessions/common/session.js';
+import { sessionWorkspaceUri, type ISessionWorkspace, type SessionExecutionTarget, type SessionWorkspaceSelection } from '../../../services/sessions/common/session.js';
+import type { FileSearchDirectory } from '../../../../platform/search/common/fileSearch.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import { createProviderRemoteWorkspaceUri, createSshRemoteAuthority, getProviderRemoteWorkspace, getRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 
 /** An absent directory and a directory on another authority must never share a cache entry. */
 export function agentHostSessionWorkspaceKey(workspace: ISessionWorkspace | null | undefined): string | undefined {
 	return workspace ? JSON.stringify([workspace.authorityId, workspace.root]) : undefined;
 }
 
-export function buildAgentHostSessionWorkspace(target: SessionCreateParams['executionTarget'] | undefined): ISessionWorkspace | null {
+export function buildAgentHostSessionWorkspace(target: SessionExecutionTarget | null | undefined): ISessionWorkspace | null {
 	if (!target) { return null; }
 	// Keep SSH aliases distinct from the local sentinel and opaque provider authorities.
 	const authorityId = target.type === 'local' ? 'local' : target.type === 'ssh' ? createSshRemoteAuthority(target.host).authority
@@ -20,13 +18,13 @@ export function buildAgentHostSessionWorkspace(target: SessionCreateParams['exec
 }
 
 /** Returns the resource identity for a recorded execution directory. */
-export function agentHostTurnDirectory(sessionId: string, directory: SessionCreateParams['executionTarget'] | undefined): FileSearchDirectory | undefined {
+export function agentHostTurnDirectory(sessionId: string, directory: SessionExecutionTarget | null | undefined): FileSearchDirectory | undefined {
 	const workspace = buildAgentHostSessionWorkspace(directory);
 	return workspace ? { resource: sessionWorkspaceUri(workspace), target: { type: 'session', sessionId, path: workspace.root } } : undefined;
 }
 
 /** Undefined means not hydrated; null is a hydrated Thread without filesystem access. */
-export function buildAgentHostChatWorkspace(directory: SessionCreateParams['executionTarget'] | undefined): ISessionWorkspace | null | undefined {
+export function buildAgentHostChatWorkspace(directory: SessionExecutionTarget | null | undefined): ISessionWorkspace | null | undefined {
 	return directory === undefined ? undefined : buildAgentHostSessionWorkspace(directory);
 }
 

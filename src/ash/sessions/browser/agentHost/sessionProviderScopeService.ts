@@ -3,8 +3,8 @@ import { IMcpServerManagementService } from '../../../platform/mcp/common/mcpSer
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IAgentHostInputCompletionService, IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { IInstructionService, type IInstructionImports } from '../../../platform/instructions/common/instructionService.js';
-import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
+import { buildAgentHostSessionWorkspace } from '../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../workbench/services/sessions/common/session.js';
 import { createSessionVoiceService } from './sessionScopedVoiceService.js';
 import { createSessionThreadService } from './sessionScopedThreadService.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -17,7 +17,7 @@ import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/l
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { ISessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
-import type { ISessionsProvider } from '../../services/sessions/common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { SessionScopedPromptsService } from './sessionScopedPromptsService.js';

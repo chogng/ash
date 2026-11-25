@@ -5,7 +5,7 @@ import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
-import type { SessionWorkspaceSelection } from '../../services/sessions/common/session.js';
+import type { SessionWorkspaceSelection } from '../../../workbench/services/sessions/common/session.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../base/common/event.js';

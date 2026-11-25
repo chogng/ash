@@ -5,7 +5,7 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { SessionId, ThreadId } from '../../../services/sessions/common/session.js';
+import type { SessionId, ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 
 export type SearchCategory = 'all' | 'sessions' | 'projects' | 'scheduled';

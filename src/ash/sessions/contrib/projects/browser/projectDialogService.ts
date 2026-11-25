@@ -30,10 +30,10 @@ import { IProjectService, type Project, type ProjectAppearance, type ProjectMate
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import { OPEN_MEMORIES_COMMAND_ID } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { ISessionFolderAuthorizationService } from '../../../common/sessionWorkspace.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { ISessionFolderAuthorizationService } from '../../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import type { SessionWorkspaceSelection } from '../../../services/sessions/common/session.js';
+import type { SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 import { IChatListCatalog, type CatalogProjectDetails } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';

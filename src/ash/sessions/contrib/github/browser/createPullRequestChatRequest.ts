@@ -1,6 +1,6 @@
 import { localize } from '../../../../nls.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
-import type { ISession, IChat } from '../../../services/sessions/common/session.js';
+import type { ISession, IChat } from '../../../../workbench/services/sessions/common/session.js';
 import type { ISessionPullRequestChatOptions, ISessionPullRequestCreation } from '../common/pullRequestCreation.js';
 
 class UncertainChatRequestError extends Error {

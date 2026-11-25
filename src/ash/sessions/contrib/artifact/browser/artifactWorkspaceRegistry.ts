@@ -6,7 +6,7 @@ import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import type { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -51,7 +51,7 @@ export interface ArtifactWorkspaceContribution {
 
 export interface ArtifactCard {
 	readonly title: string;
-	readonly kind: ArtifactKind;
+	readonly kind: ChatCreationKind;
 	readonly detail: string;
 	/** Ownership relative to the current user. Missing ownership stays unknown. */
 	readonly owner?: 'you' | 'others';

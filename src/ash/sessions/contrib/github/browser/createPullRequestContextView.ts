@@ -11,12 +11,11 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, chatExecutionWorkspace } from '../../../../workbench/services/sessions/common/session.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
 import { CreatePullRequestChatRequest } from './createPullRequestChatRequest.js';
 import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from './createPullRequestWidget.js';

@@ -18,7 +18,7 @@ import type { NativeChatWidget } from '../../../../src/ash/sessions/contrib/chat
 import type { ViewPane } from '../../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import type { IModelPickerDelegate } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.js';
 import type { Emitter } from '../../../../src/ash/base/common/event.js';
-import type { IUntitledChatSession } from '../../../../src/ash/sessions/services/sessions/common/session.js';
+import type { IUntitledChatSession } from '../../../../src/ash/workbench/services/sessions/common/session.js';
 
 declare global {
 	var uiHotReloadEvidence: {

@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService, StorageScope, type IStorageValueChangeEvent } from '../../../platform/storage/common/storage.js';
 import { URI } from '../../../base/common/uri.js';
 import { ChatHistoryModel } from '../../browser/chatHistoryModel.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import type { ISession } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { ISessionGroupsService, type SessionGroup } from '../../services/sessions/browser/sessionGroupsService.js';
 

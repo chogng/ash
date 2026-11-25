@@ -8,7 +8,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { ChatConfiguration, ChatNotificationMode } from '../../../../workbench/contrib/chat/common/constants.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../workbench/services/host/browser/host.js';
-import type { IChat, ISession } from '../../../services/sessions/common/session.js';
+import type { IChat, ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 type NotificationKind = 'needsInput' | 'completed' | 'failed';

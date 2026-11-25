@@ -72,7 +72,7 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
+import type { ISession, IUntitledChatSession } from '../../../workbench/services/sessions/common/session.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IChatWindowService } from '../../../workbench/contrib/chatWindow/browser/chatWindow.js';
 import { registerTestChatWindowParts } from '../../../workbench/contrib/chatWindow/test/browser/chatWindowTestServices.js';
@@ -96,7 +96,7 @@ import { ChatConfiguration } from '../../../workbench/contrib/chat/common/consta
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
-import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';

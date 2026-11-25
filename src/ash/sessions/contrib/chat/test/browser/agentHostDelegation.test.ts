@@ -21,7 +21,7 @@ import { BrowserStorageService } from '../../../../../workbench/services/storage
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
 test('Compare Agents sends identical tasks in parallel from separate worktrees and supports Judge retry and isolated synthesis', async () => {

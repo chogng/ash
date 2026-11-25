@@ -15,7 +15,7 @@ import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/bro
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
-import { ISessionFolderAuthorizationService } from '../../../src/ash/sessions/common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../../../src/ash/sessions/services/workspace/common/sessionFolderAuthorizationService.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
@@ -34,7 +34,7 @@ import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/cha
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
 import { IChatPasteTargetService, IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
-import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
+import { ChatTimelineStorage } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatTimelineStorage.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { combinedDisposable, Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';

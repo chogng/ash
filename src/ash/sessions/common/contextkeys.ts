@@ -1,13 +1,10 @@
 import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
-import type { ArtifactKind } from './artifactKind.js';
+import type { ChatCreationKind } from '../../workbench/services/sessions/common/session.js';
 import type { SessionsActivityBarLocation } from './configuration.js';
 
 /** The artifact owning a toolbar or context menu, scoped to its editor rather than global focus. */
-export const ArtifactKindContext = new RawContextKey<ArtifactKind | undefined>('sessions.artifacts.kind', undefined);
+export const ArtifactKindContext = new RawContextKey<ChatCreationKind | undefined>('sessions.artifacts.kind', undefined);
 
-// Navigation history belongs to the Sessions service; these keys only expose it to action conditions.
-export const CanGoBackContext = new RawContextKey<boolean>('sessionsCanGoBack', false);
-export const CanGoForwardContext = new RawContextKey<boolean>('sessionsCanGoForward', false);
 /** The product workspace owning the current page and its sidebar navigation. */
 export const SessionsWorkspaceModeContext = new RawContextKey<'chat' | 'code'>('sessions.workspaceMode', 'chat');
 
@@ -31,13 +28,13 @@ export const SessionsActivityBarOnSide = ContextKeyExpr.or(SessionsActivityBarLo
 export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);
 export const SessionsMenuConversationPinnedContext = new RawContextKey<boolean>('sessions.menu.conversationPinned', false);
 export const SessionsMenuCanSetFolderContext = new RawContextKey<boolean>('sessions.menu.canSetFolder', false);
+export const SessionsMenuWorkspaceIdleContext = new RawContextKey<boolean>('sessions.menu.workspaceIdle', false);
+export const SessionsMenuCanMoveConversationContext = new RawContextKey<boolean>('sessions.menu.canMoveConversation', false);
+
 export const desktopEditorTools = ['files', 'changes', 'browser', 'terminal', 'chat', 'search'] as const;
 export type DesktopEditorTool = typeof desktopEditorTools[number];
 
 export const SessionsEditorToolContext = new RawContextKey<DesktopEditorTool | undefined>('sessions.editorTool', undefined);
-
-export const SessionsMenuWorkspaceIdleContext = new RawContextKey<boolean>('sessions.menu.workspaceIdle', false);
-export const SessionsMenuCanMoveConversationContext = new RawContextKey<boolean>('sessions.menu.canMoveConversation', false);
 
 /** The current entry is showing its new conversation draft. */
 export const NewSessionDraftVisibleContext = new RawContextKey<boolean>('sessions.activity.newSessionDraftVisible', false);

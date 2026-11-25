@@ -1,8 +1,8 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
-import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
+import { DockedEditorInput } from '../../../../workbench/browser/parts/editor/dockedEditorInput.js';
+import type { IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
 import { readUntitledSession } from '../../../services/sessions/browser/sessionGridState.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { IEditorCloseHandler } from '../../../../workbench/common/editor/editorInput.js';

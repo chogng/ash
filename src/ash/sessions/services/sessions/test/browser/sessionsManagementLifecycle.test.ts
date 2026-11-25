@@ -14,8 +14,8 @@ import { canceled, isCancellationError } from '../../../../../base/common/errors
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
-import type { IActiveSessionThread, ISession, SessionWorkspaceSelection } from '../../common/session.js';
-import type { ISessionsProvider } from '../../common/sessionsProvider.js';
+import type { IActiveSessionThread, ISession, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();

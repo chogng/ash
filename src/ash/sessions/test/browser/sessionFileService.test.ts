@@ -24,8 +24,8 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { TestSessionsManagementService as SessionsManagementService } from '../../services/sessions/test/browser/testSessionsManagementService.js';
-import type { ISessionsProvider } from '../../services/sessions/common/sessionsProvider.js';
-import type { ISession, SessionId } from '../../services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../workbench/contrib/sessions/common/sessionsProvider.js';
+import type { ISession, SessionId } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';
 import { WorkspaceFolderManagementContribution } from '../../contrib/workspace/browser/workspaceFolderManagement.js';
 import { SessionFileService } from '../../contrib/providers/agentHost/browser/sessionFileService.js';

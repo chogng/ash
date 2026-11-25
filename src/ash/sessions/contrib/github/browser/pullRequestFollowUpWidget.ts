@@ -6,7 +6,7 @@ import { getErrorMessage } from '../../../../base/common/errors.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, autorun } from '../../../../base/common/observable.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../../workbench/services/sessions/common/session.js';
 import { localize } from '../../../../nls.js';
 import type { Automation, IAutomationBackendService } from '../../../../platform/automations/common/automation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';

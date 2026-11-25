@@ -1,5 +1,5 @@
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../workbench/contrib/sessions/common/sessionCommands.js';
 import { localize2, localize } from '../../../../nls.js';
 import '../../../../workbench/contrib/files/browser/files.contribution.js';
 import '../../../../workbench/contrib/files/browser/media/explorerviewlet.css';

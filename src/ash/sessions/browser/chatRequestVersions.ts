@@ -1,6 +1,6 @@
 import { equals } from '../../base/common/objects.js';
 import { getAcceptedChatRequest, type IChatService, type Thread } from '../../workbench/services/chat/common/chatService.js';
-import type { ISession } from '../services/sessions/common/session.js';
+import type { ISession } from '../../workbench/services/sessions/common/session.js';
 import { readComparableTurnChanges, type TurnCaptureTarget } from './turnMultiDiffSource.js';
 
 export interface ChatRequestVersionPair {

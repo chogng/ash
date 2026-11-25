@@ -10,10 +10,10 @@ import { localize } from '../../../../nls.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { hasSelectedCodeWorkspace, sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import type { ISessionWorkspace, IUntitledChatSession } from '../../../services/sessions/common/session.js';
+import { buildAgentHostSessionWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { sessionWorkspaceUri, type ISessionWorkspace, type IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
+import { hasSelectedCodeWorkspace } from '../../../services/sessions/common/sessionsManagement.js';
 import { createGitComparisonEditorInput } from '../../changes/browser/gitComparisonEditorInput.js';
 
 /** The environment card presents the uncommitted files in this draft's selected checkout. */

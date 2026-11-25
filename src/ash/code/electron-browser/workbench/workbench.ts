@@ -29,6 +29,7 @@ try {
 		await import('../../../workbench/workbench.desktop.main.js');
 		await import('../../../sessions/contrib/chatgptweb/common/chatGPTAccountLabel.js');
 		await import('../../../sessions/common/configuration.js');
+		await import('../../../sessions/services/configuration/common/editorConfiguration.js');
 		await import('../../../sessions/common/theme.js');
 		await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');
 		await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');

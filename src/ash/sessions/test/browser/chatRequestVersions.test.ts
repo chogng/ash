@@ -4,7 +4,7 @@ import type { IChatService, Thread, Turn } from '../../../workbench/services/cha
 import type { TurnChangeDetails, TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { readChatRequestVersions } from '../../browser/chatRequestVersions.js';
 import { createTurnResultComparisonInput } from '../../browser/turnMultiDiffSource.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import type { ISession } from '../../../workbench/services/sessions/common/session.js';
 
 const original = { sessionId: 'session', threadId: 'original', turnId: 'request' };
 const alternate = { sessionId: 'session', threadId: 'alternate', turnId: 'rerun' };

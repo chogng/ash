@@ -8,7 +8,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { IChatService, type StartTurnOptions } from '../../../../../workbench/services/chat/common/chatService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionComparisonService, SessionComparisonService } from '../../../../services/sessions/browser/sessionComparisonService.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';

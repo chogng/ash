@@ -4,9 +4,8 @@ import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import { isModelReasoningEffort, type ModelRef, type ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { IActiveSessionThread, IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
+import { type IActiveSessionThread, type IUntitledChatSession, type SessionEnvironmentSelection, type SessionWorkspaceSelection, isChatCreationKind, type ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
-import { isChatCreationKind, type ChatCreationKind } from '../../../common/chatCreation.js';
 
 const storageKey = 'sessions.viewState';
 const chatSelectionKey = 'sessions.chat.ashSelection';

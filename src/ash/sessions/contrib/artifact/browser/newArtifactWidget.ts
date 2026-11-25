@@ -3,7 +3,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { chatCreationKinds } from '../../../common/chatCreation.js';
+import { chatCreationKinds } from '../../../../workbench/services/sessions/common/session.js';
 import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
 import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../../common/sessionCommands.js';
 import './newArtifactWidget.css';

@@ -10,7 +10,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../workbench/services/sessions/common/session.js';
 
 export const codeReviewScheme = 'ash-code-review';
 export const codeReviewRequestPrefix = 'ash-code-review-';

@@ -24,3 +24,8 @@ export interface ISessionArtifact {
 	readonly isGitHub?: boolean;
 	readonly origin?: ArtifactOrigin;
 }
+
+/** Native document creation publishes one Markdown document for a response. */
+export function agentHostResponseArtifactId(threadId: string, itemId: string): string {
+	return JSON.stringify([threadId, itemId, 'markdown']);
+}

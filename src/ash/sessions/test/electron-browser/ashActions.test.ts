@@ -17,10 +17,10 @@ import { INativeHostService } from '../../../workbench/common/services.js';
 import { IChatSessionNavigationService, type IPreparedChatConversation } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
-import type { ISession, ISessionWorkspace } from '../../services/sessions/common/session.js';
+import type { ISession, ISessionWorkspace } from '../../../workbench/services/sessions/common/session.js';
 import { sessionProviderAuthority } from '../../services/sessions/common/sessionIdentity.js';
 
 const command = 'agents.openSessionInAsh';

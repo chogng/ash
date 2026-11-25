@@ -7,7 +7,7 @@ import { ILanguageModelsService } from '../../../../workbench/contrib/chat/commo
 import { MEMORY_SETTINGS_CATEGORY } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/services/preferences/common/preferences.js';
-import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
+import { agentHostSessionWorkspaceKey } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults, type CodeConversationModel } from '../../../common/codeConversationDefaults.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 

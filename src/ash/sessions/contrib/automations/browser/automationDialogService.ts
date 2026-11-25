@@ -7,7 +7,7 @@ import type { IAutomationDialogService, IShowAutomationDialogOptions, IAutomatio
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { AutomationDialog } from './automationDialog.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 
 export class AutomationDialogService extends Disposable implements IAutomationDialogService {
 	private readonly active = this._register(new MutableDisposable<AutomationDialog>());

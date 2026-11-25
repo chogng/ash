@@ -2,7 +2,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import type { ISessionsProvider } from '../common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 
 export interface ISessionsProvidersChangeEvent {
 	readonly added: readonly ISessionsProvider[];

@@ -5,7 +5,7 @@ import type { IObservable } from '../../../../../base/common/observable.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import type { CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import type { SessionListOrganization } from './sessionsListActions.js';
 

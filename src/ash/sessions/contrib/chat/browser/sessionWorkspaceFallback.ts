@@ -1,7 +1,6 @@
 import { basename } from '../../../../base/common/resources.js';
-import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
+import { selectionFromResource } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri, type SessionExecutionTarget } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 /** Supplies workspace choices from the current host's active Session catalog. */

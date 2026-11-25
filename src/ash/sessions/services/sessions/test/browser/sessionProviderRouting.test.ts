@@ -2,7 +2,7 @@ import { IDialogService, type IConfirmationDialogOptions } from '../../../../../
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { SavedSSHConversationHost } from '../../../../browser/agentHost/savedSSHConversationHost.js';
-import { sshAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
+import { sshAgentHostProviderId } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { RemoteAgentHostContribution } from '../../../../../workbench/contrib/chat/browser/remoteAgentHost/remoteAgentHostChatContribution.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
@@ -24,7 +24,7 @@ import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../../../..
 import type { ISessionsService } from '../../browser/sessionsService.js';
 import { SessionFileSystemContribution } from '../../../../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
 import type { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import type { ISession } from '../../common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -45,7 +45,7 @@ import { ISessionProviderScopeService, SessionProviderServices, SessionProviderS
 import { SessionsChatService } from '../../../../browser/agentHost/sessionsChatService.js';
 import { SessionsSearchService } from '../../../../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { ISessionsManagementService } from '../../common/sessionsManagement.js';
-import type { ISessionsProvider } from '../../common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { sessionIdentity } from '../../common/sessionIdentity.js';
 import type { IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 import type { ThreadGoalUpdate } from '../../../../../platform/agentHost/common/agent.js';

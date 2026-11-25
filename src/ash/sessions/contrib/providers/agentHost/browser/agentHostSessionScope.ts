@@ -16,7 +16,7 @@ import { PromptsService } from '../../../../../workbench/contrib/chat/common/pro
 import { AppServerAccountService } from '../../../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { ChatService } from '../../../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
 
 /** The host scope borrows UI services and owns every service that retains backend subscriptions. */

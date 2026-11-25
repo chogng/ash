@@ -6,14 +6,13 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import type { ModelCatalogEntry } from '../../../../platform/models/common/agentModels.js';
 import { IChatService, type ChatAgent, type ThreadRead } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { sessionWorkspaceUri, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 import type { IModelEvaluationTools, ModelEvaluationCaller, ModelEvaluationOperation, ModelEvaluationSelection } from '../../../services/appTools/browser/appTools.js';
 import { comparisonAttemptTurn, ISessionComparisonService, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { COMPARE_AGENTS_TOOLS_ENABLED_SETTING, type SessionComparison } from '../../../services/sessions/common/sessionComparison.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { readComparisonEvidence, startSessionComparison } from '../../chat/browser/agentHostDelegation.js';
 

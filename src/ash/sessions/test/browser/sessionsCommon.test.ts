@@ -8,11 +8,11 @@ import { InMemoryConfigurationService } from '../../../platform/configuration/co
 import { getProviderRemoteWorkspace, getRemoteAuthority, getRemoteWorkspacePath } from '../../../platform/remote/common/remote.js';
 import { TelemetryLevel, type ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { ChatLayoutContext, ChatLayoutPresentation, SESSIONS_LAYOUT_SCOPE_SETTING, type IChatLayoutOwner } from '../../common/chatLayout.js';
-import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
-import { getSessionApplication } from '../../common/sessionApplication.js';
-import { logSessionsInteraction } from '../../common/sessionsTelemetry.js';
-import '../../common/sessionConfig.js';
+import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from '../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../workbench/services/sessions/common/session.js';
+import { getSessionApplication } from '../../../workbench/services/sessions/common/sessionApplication.js';
+import { logSessionsInteraction } from '../../../workbench/contrib/sessions/common/sessionsTelemetry.js';
+import '../../contrib/layout/common/sessionsLayoutConfiguration.js';
 
 test('layout operations expire across Chat, scope, phone and disposal transitions', async () => {
 	using services = new InstantiationService();

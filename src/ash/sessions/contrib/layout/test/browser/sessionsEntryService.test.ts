@@ -1,4 +1,4 @@
-import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../../common/sessionConfig.js';
+import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../common/sessionsLayoutConfiguration.js';
 import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../common/sessionEditorWorkingSet.js';
 import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';

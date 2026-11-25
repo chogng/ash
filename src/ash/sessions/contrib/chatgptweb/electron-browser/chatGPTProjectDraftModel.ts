@@ -9,7 +9,7 @@ import type { ModelRef } from '../../../../platform/models/common/agentModels.js
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { ChatReplyError } from '../../../common/chatReplyBackend.js';
+import { ChatReplyError } from '../common/chatGPTReplyTypes.js';
 import { canAttachChatGPTFiles, chatGPTAttachmentLimitMessage, IChatGPTService } from '../browser/chatGPTService.js';
 import { chatGPTModelEntries } from './chatGPTWidgetModel.js';
 

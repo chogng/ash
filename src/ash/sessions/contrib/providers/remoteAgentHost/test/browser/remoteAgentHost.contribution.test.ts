@@ -12,12 +12,11 @@ import type { FileInvalidation } from '../../../../../../platform/files/common/f
 import { SessionFileSystemContribution } from '../../../agentHost/browser/sessionFileSystemContribution.js';
 import { ISessionProviderScopeService } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { projectSession } from '../../../../../services/sessions/common/sessionIdentity.js';
-import { sessionWorkspaceUri } from '../../../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, type ISession } from '../../../../../../workbench/services/sessions/common/session.js';
 import { WSLAgentHostContribution } from '../../browser/wslAgentHost.contribution.js';
 import { TunnelAgentHostContribution } from '../../browser/tunnelAgentHost.contribution.js';
 import { RemoteAgentHostContribution } from '../../browser/remoteAgentHostContribution.js';
 import { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';

@@ -30,7 +30,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { ChangesViewMode, type IChangesThreadFileItem } from '../common/changes.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { SessionChangesStatsCache } from '../../../services/sessions/common/sessionChangesStatsCache.js';
-import { createSessionFileChange, matchesSessionFileChange, type IActiveSessionThread, type ISessionFileChange } from '../../../services/sessions/common/session.js';
+import { createSessionFileChange, matchesSessionFileChange, type IActiveSessionThread, type ISessionFileChange } from '../../../../workbench/services/sessions/common/session.js';
 import { IWorkspaceFolderLabelService } from '../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 

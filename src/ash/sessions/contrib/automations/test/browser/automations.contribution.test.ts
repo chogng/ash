@@ -22,7 +22,7 @@ import { INotificationService, Severity } from '../../../../../platform/notifica
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { AgentHostAutomationStore } from '../../../providers/agentHost/browser/agentHostAutomationStore.js';
 import { ProviderAutomationService } from '../../browser/providerAutomationService.js';
 import { AutomationRunner } from '../../browser/automationRunner.js';

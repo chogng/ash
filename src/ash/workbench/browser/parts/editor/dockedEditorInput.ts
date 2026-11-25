@@ -1,5 +1,5 @@
-import type { URI } from '../../base/common/uri.js';
-import { EditorInputCapabilities, type IResourceEditorInput } from '../../workbench/common/editor.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { EditorInputCapabilities, type IResourceEditorInput } from '../../../common/editor.js';
 
 /**
  * Resource-only detail tabs share input capabilities without acquiring document leases.

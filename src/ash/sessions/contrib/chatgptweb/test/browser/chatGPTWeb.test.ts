@@ -28,13 +28,13 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { LanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, OPEN_EXTERNAL_CHAT_CONVERSATION_COMMAND_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../../common/chatWorkspace.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
 import type { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
-import type { ISession, IUntitledChatSession, ModelRef } from '../../../../services/sessions/common/session.js';
+import type { ISession, IUntitledChatSession, ModelRef, ChatCreationKind } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { readNewChatDraftState } from '../../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTViewSource, experimentalChatGPTViewSource, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
@@ -53,7 +53,6 @@ import { IChatViewFactory } from '../../../chat/browser/chatViewFactory.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
-import type { ChatCreationKind } from '../../../../common/chatCreation.js';
 import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { createTestArtifactCatalogService, createTestDocsService } from '../../../../test/common/testArtifactCatalogService.js';
 

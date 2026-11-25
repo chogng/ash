@@ -13,7 +13,7 @@ import type { IActionWidgetService } from '../../../../platform/actionWidget/bro
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
-import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
+import type { SessionExecutionTarget } from '../../../../workbench/services/sessions/common/session.js';
 
 interface EnvironmentHost {
 	readonly label: string;

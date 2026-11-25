@@ -8,7 +8,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
-import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
+import type { ChatReplyReference, ChatReplyResource } from '../common/chatGPTReplyTypes.js';
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { chatGPTResourceKey, type ChatGPTImageGroup } from './chatGPTClient.js';

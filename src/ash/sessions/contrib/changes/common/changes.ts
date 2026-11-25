@@ -1,4 +1,4 @@
-import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
+import type { ISessionFileChange } from '../../../../workbench/services/sessions/common/session.js';
 import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import { StorageScope, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import { getMultiDiffEditorFileListViewMode, setMultiDiffEditorFileListViewMode } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';

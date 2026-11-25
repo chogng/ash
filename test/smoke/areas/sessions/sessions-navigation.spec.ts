@@ -533,7 +533,7 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await home.getByRole('button', { name: 'Search artifacts', exact: true }).click();
 	await home.getByRole('searchbox').fill('missing_artifact');
 	await expect(home.locator('.ash-artifacts-card')).toHaveCount(0);
-	await expect(home.getByText('No artifacts match your search.')).toBeVisible();
+	await expect(home.getByText('No artifacts match these filters.')).toBeVisible();
 	await home.getByRole('searchbox').fill('');
 	await home.getByRole('button', { name: 'Layout grid', exact: true }).click();
 	await expect(home.locator('.ash-artifacts-results')).toHaveClass(/list-view/);
@@ -542,7 +542,7 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const quick = new QuickAccess(page);
 	await quick.runCommand('sessions.docs.chooseEditor');
-	await quick.select('Markdown');
+	await quick.select('Markdown source');
 	await quick.runCommand('sessions.docs.chooseEditor');
 	await quick.select('New blank document');
 	const document = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));

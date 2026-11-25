@@ -1,14 +1,14 @@
 import { IDocsService } from '../../docs/common/docsService.js';
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { expandChatRichContentForCopy } from '../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
-import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
+import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from './chatTimelineStorage.js';
 import { ResourceQueue } from '../../../../base/common/async.js';
 import { ChatLinkedTasks } from '../../chat/browser/chatLinkedTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../workbench/services/chat/common/chatService.js';
 import { formatChatMessageTime } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { ChatReplyError, type ChatReplyRequest } from '../../../common/chatReplyBackend.js';
+import { ChatReplyError, type ChatReplyRequest } from '../common/chatGPTReplyTypes.js';
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
@@ -19,7 +19,7 @@ import { observableValue, type IObservable } from '../../../../base/common/obser
 import { equals } from '../../../../base/common/objects.js';
 import { isMacintosh, isNative } from '../../../../base/common/platform.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { isChatCreationKind, type ChatCreationKind } from '../../../common/chatCreation.js';
+import { isChatCreationKind, type ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
@@ -1531,7 +1531,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const owner = this.taskWatchers.add(new DisposableStore());
 		owner.add(toDisposable(() => controller.abort()));
 		const tasks = this.instantiation.createInstance(ChatLinkedTasks);
-		void tasks.resolve(task, controller.signal).then(active => {
+		void tasks.resolve(task.sessionId, task.threadId, controller.signal).then(active => {
 			if (controller.signal.aborted) return;
 			const model = tasks.createModel(active, owner);
 			const update = () => this.updateLinkedTask(localId, task, { thread: model.thread, readError: model.error });

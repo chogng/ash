@@ -14,8 +14,7 @@ import { registerDiffEditorViewMenu } from '../../../../workbench/browser/parts/
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { ActiveEditorContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
+import { sessionWorkspaceUri, SessionChangesetOperationStatus } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ChangesCanPreviewCommitContext, ChangesHasWorkspaceContext, ChangesScopeContext, SessionChangesEditor } from './sessionChangesEditor.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';

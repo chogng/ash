@@ -17,7 +17,7 @@ import { TestNotificationService } from '../../../../../workbench/services/notif
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { DownloadRemoteFileAction, SESSIONS_FILES_CONTAINER_ID } from '../../browser/files.contribution.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../../workbench/contrib/sessions/common/sessionCommands.js';
 
 test('Files command opens group navigation without registering a competing Part container', async () => {
 	using contexts = new ContextKeyService();

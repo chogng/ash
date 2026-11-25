@@ -11,7 +11,7 @@ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promp
 import { modelRefIdentity } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { ChatWidgetModel, type ChatWidgetSelection } from '../../../browser/chatWidgetModel.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
+import type { IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
 import { INativeChatModelPreferencesService } from './nativeChatModelPreferencesService.js';
 
 /** Ash Chat's conversation policy for the Session pane, reply editor and projects. */

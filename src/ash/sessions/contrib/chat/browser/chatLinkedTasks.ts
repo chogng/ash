@@ -2,8 +2,7 @@ import type { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { IActiveSessionThread } from '../../../services/sessions/common/session.js';
-import type { ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
+import type { IActiveSessionThread } from '../../../../workbench/services/sessions/common/session.js';
 import { NativeChatPaneFactory } from './nativeChatPaneFactory.js';
 
 export class ChatLinkedTasks {
@@ -12,13 +11,13 @@ export class ChatLinkedTasks {
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 	) { }
 
-	async resolve(task: ChatTimelineTask, signal: AbortSignal): Promise<IActiveSessionThread> {
+	async resolve(sessionId: string, threadId: string, signal: AbortSignal): Promise<IActiveSessionThread> {
 		await this.sessions.whenDirectoriesReady(signal);
-		const session = this.sessions.sessions.find(candidate => candidate.sessionId === task.sessionId);
-		if (!session?.chats.some(thread => thread.threadId === task.threadId)) {
+		const session = this.sessions.sessions.find(candidate => candidate.sessionId === sessionId);
+		if (!session?.chats.some(thread => thread.threadId === threadId)) {
 			throw new Error(localize('sessions.chat.linkedTaskUnavailable', 'This task could not be opened.'));
 		}
-		return { session, threadId: task.threadId };
+		return { session, threadId };
 	}
 
 	createModel(active: IActiveSessionThread, owner: DisposableStore) {

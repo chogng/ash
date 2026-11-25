@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { URI } from '../../../base/common/uri.js';
 import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
 import type { IWorkspace } from '../../../platform/workspace/common/workspace.js';
-import { selectionFromWorkspace } from '../../common/agentHostSessionWorkspace.js';
+import { selectionFromWorkspace } from '../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { WorkspacePicker } from '../../contrib/chat/browser/sessionWorkspacePicker.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter } from '../../../base/common/event.js';

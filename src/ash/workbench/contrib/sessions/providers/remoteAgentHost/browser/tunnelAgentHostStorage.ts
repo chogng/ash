@@ -1,6 +1,6 @@
-import { localize } from '../../nls.js';
-import { tunnelEndpoint } from '../../platform/agentHost/common/remoteAgentHostService.js';
-import { StorageScope, StorageTarget, type IStorageService } from '../../platform/storage/common/storage.js';
+import { localize } from '../../../../../../nls.js';
+import { tunnelEndpoint } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { StorageScope, StorageTarget, type IStorageService } from '../../../../../../platform/storage/common/storage.js';
 
 const keyPrefix = 'sessions.remoteTunnel:';
 

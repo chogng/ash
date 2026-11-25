@@ -6,8 +6,7 @@ import { equals } from '../../base/common/objects.js';
 import { canPreviewTurnChange, type IChatService } from '../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary, TurnCommitPreview } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import type { IActiveSessionThread, ISessionFileChange } from '../services/sessions/common/session.js';
-import { createSessionFileChange } from '../services/sessions/common/session.js';
+import { type IActiveSessionThread, type ISessionFileChange, createSessionFileChange } from '../../workbench/services/sessions/common/session.js';
 
 export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
 

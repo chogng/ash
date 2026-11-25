@@ -37,7 +37,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import { sessionExecutionWorkspace, type IChat, type ISession, type SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import { sessionExecutionWorkspace, type IChat, type ISession, type SessionManagementInfo, sessionWorkspaceUri } from '../../../../../workbench/services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
@@ -66,7 +66,6 @@ import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCata
 import { cancelOnDispose, CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
-import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { createSessionItemActions, getSessionWorkspaceMenuState } from '../../../../browser/agentSessionsModel.js';

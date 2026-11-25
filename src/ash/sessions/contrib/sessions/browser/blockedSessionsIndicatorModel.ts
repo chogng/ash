@@ -1,11 +1,11 @@
 import { derived, observableSignalFromEvent, type IObservable } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { ISession, ThreadId } from '../../../services/sessions/common/session.js';
+import type { ISession, ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { IResolvedSessionPullRequest } from '../../github/common/types.js';
 

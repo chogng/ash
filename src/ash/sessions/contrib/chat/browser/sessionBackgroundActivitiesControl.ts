@@ -9,7 +9,7 @@ import { IChatSessionNavigationService } from '../../../../workbench/services/ch
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import { chatSubagentStatusLabel } from '../../../../workbench/contrib/chat/common/model/chatSubagentActivity.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
-import { directSessionSubagents } from '../../../common/sessionSubagentActivity.js';
+import { directSessionSubagents } from '../../../browser/sessionSubagentActivity.js';
 
 /** Projects the current thread's directly delegated agents from the owning Session tree. */
 export class SessionBackgroundActivitiesControl extends Disposable {

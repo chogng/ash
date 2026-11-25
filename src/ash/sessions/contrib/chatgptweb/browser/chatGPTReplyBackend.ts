@@ -1,8 +1,8 @@
-import { ChatReplyError, type IChatReplyBackend } from '../../../common/chatReplyBackend.js';
+import { ChatReplyError } from '../common/chatGPTReplyTypes.js';
 import { ChatGPTAuthenticationError } from '../common/chatGPTTransport.js';
 import { ChatGPTRequestError, type ChatGPTClient, type ChatGPTReplyRequest, type ChatGPTStreamUpdate } from './chatGPTClient.js';
 
-export class ChatGPTReplyBackend implements IChatReplyBackend {
+export class ChatGPTReplyBackend {
 	constructor(private readonly client: ChatGPTClient) { }
 
 	async *streamReply(request: ChatGPTReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {

@@ -9,7 +9,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { readCapturedTurnFile } from '../../../browser/turnMultiDiffSource.js';
-import { createSessionFileChange } from '../../../services/sessions/common/session.js';
+import { createSessionFileChange } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionChangesService, type ISessionChangesEditorOptions } from '../../changes/common/sessionChangesService.js';
 
 interface CapturedFileDiff extends IEditSessionEntryDiff {

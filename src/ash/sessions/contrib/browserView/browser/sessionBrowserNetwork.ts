@@ -16,9 +16,9 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import type { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewNetworkResolver, type IBrowserViewNetworkStatus } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import type { ISession, SessionWorkspaceSelection } from '../../../services/sessions/common/session.js';
+import type { ISession, SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
+import { buildAgentHostSessionWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { resolveBrowserOwnerSession } from './sessionBrowserView.js';
 

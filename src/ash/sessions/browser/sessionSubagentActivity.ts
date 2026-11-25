@@ -1,7 +1,7 @@
 import { chatToolResultPresentation } from '../../workbench/contrib/chat/common/chatService/chatService.js';
 import type { IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from './agentHostSessionsProvider.js';
-import { findAgentNode, type AgentTreeNode, type ISession } from '../services/sessions/common/session.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { findAgentNode, type AgentTreeNode, type ISession } from '../../workbench/services/sessions/common/session.js';
 import { parseSessionIdentity } from '../services/sessions/common/sessionIdentity.js';
 
 type SpawnedAgent = AgentTreeNode & { readonly origin: Extract<AgentTreeNode['origin'], { type: 'agentSpawn'; }>; };

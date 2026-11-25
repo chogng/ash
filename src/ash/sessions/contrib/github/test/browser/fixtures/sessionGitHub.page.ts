@@ -51,7 +51,7 @@ import type { IContextMenuService } from '../../../../../../platform/contextview
 
 import { ISessionsService, type SessionsViewSelection } from '../../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../../workbench/services/sessions/common/session.js';
 import { GitHubService } from '../../../browser/githubService.js';
 import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
 import { IBrowserViewWorkbenchService } from '../../../../../../workbench/contrib/browserView/common/browserView.js';

@@ -1,5 +1,5 @@
 import type { AutomationTarget } from '../../../../workbench/contrib/chat/common/automations/automation.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 
 export const AUTOMATIONS_CUSTOM_VIEW_ID = 'sessions.customView.automations';
 export const SCHEDULED_CUSTOM_VIEW_ID = 'sessions.customView.scheduled';

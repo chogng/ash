@@ -10,7 +10,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
+import type { IUntitledChatSession } from '../../../../workbench/services/sessions/common/session.js';
 import { AshChatModel } from '../../chat/browser/ashChatModel.js';
 
 /** Keeps the project composer on its own draft until the first submission is accepted. */

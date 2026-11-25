@@ -13,10 +13,10 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../common/agentHostSessionsProvider.js';
+import { buildAgentHostSessionWorkspace } from '../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../../common/sessionCommands.js';
-import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { sessionProviderAuthority } from '../../services/sessions/common/sessionIdentity.js';
 

@@ -14,7 +14,7 @@ import { ChatConfiguration, ChatNotificationMode } from '../../../../../workbenc
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../../workbench/services/host/browser/host.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
-import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import type { ISession, SessionManagementInfo } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionsWindowNotifier } from '../../browser/sessionsWindowNotifier.js';
 

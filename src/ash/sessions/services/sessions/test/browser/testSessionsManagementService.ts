@@ -1,4 +1,4 @@
-import type { ISessionsProvider } from '../../common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
 import { SessionsProvidersService } from '../../browser/sessionsProvidersService.js';
 

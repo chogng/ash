@@ -4,7 +4,7 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
-import { DockedEditorInput } from '../../../../common/dockedEditorInput.js';
+import { DockedEditorInput } from '../../../../../workbench/browser/parts/editor/dockedEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import type { IEditorGroupView } from '../../../../../workbench/browser/parts/editor/editor.js';

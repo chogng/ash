@@ -1,5 +1,5 @@
 import { observableValue, type IReader, type ITransaction } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from '../common/session.js';
+import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =

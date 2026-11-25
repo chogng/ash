@@ -25,12 +25,12 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { ISessionFolderAuthorizationService } from '../../../../common/sessionWorkspace.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { ISessionFolderAuthorizationService } from '../../../../services/workspace/common/sessionFolderAuthorizationService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
-import type { ISessionWorktreeQueryOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
+import type { ISessionWorktreeQueryOptions } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { getSessionsChatAccessibilityHelp } from '../../browser/sessionsChatAccessibilityHelp.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 

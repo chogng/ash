@@ -9,8 +9,8 @@ import { BrowserContentSearchService } from '../../../../../platform/search/brow
 import type { FileSearchDirectory, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import type { IContentSearchService } from '../../../../../platform/search/common/search.js';
 import type { IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
-import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
-import { buildAgentHostSessionWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../../../workbench/services/sessions/common/session.js';
+import { buildAgentHostSessionWorkspace } from '../../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 

@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { constObservable } from '../../../../../base/common/observable.js';
-import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind } from '../../../../../platform/actionWidget/browser/actionList.js';
@@ -25,7 +25,7 @@ import { IAgentConnection } from '../../../../../platform/agentHost/common/agent
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionEnvironmentPicker } from '../../browser/sessionEnvironmentPicker.js';
@@ -33,7 +33,7 @@ import { SessionsManagementService } from '../../../../services/sessions/browser
 import { SessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { URI } from '../../../../../base/common/uri.js';
-import type { SessionEnvironmentSelection, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
+import type { SessionEnvironmentSelection, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
 
 async function flush(): Promise<void> {
 	await new Promise<void>(resolve => setImmediate(resolve));

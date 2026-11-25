@@ -4,8 +4,8 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import type { ModelRef } from '../../../../../platform/models/common/agentModels.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
-import type { ChatCreationKind } from '../../../../common/chatCreation.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import type { ChatCreationKind } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SHOW_ASH_CHAT_COMMAND } from '../../../../common/chatWorkspace.js';

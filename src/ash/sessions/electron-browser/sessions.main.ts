@@ -37,7 +37,7 @@ import { throwIfCancelled, type CancellationToken } from '../../base/common/canc
 import { OPEN_IDE_EXTENSIONS_CHANNEL } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
-import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../services/workspace/common/sessionFolderAuthorizationService.js';
 import { WorkspaceTrustPrompt } from '../../workbench/contrib/workspace/browser/workspace.contribution.js';
 import { ElectronContextMenuService } from '../../workbench/services/contextmenu/electron-browser/contextMenuService.js';
 import * as nativeContextMenu from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
@@ -68,7 +68,7 @@ import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOO
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { getWorkspaceRemoteAuthority, parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { getRemoteWorkspacePath } from '../../platform/remote/common/remote.js';
-import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
+import { selectionFromWorkspace } from '../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';

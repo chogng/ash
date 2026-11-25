@@ -12,8 +12,8 @@ import { SessionsRecentWorkspacesService } from '../../browser/sessionsRecentWor
 import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
 import { SessionsProvidersService } from '../../browser/sessionsProvidersService.js';
 import { sessionIdentity, parseSessionIdentity } from '../../common/sessionIdentity.js';
-import type { ISession, IActiveSessionThread, SessionWorkspaceSelection } from '../../common/session.js';
-import type { ISessionsProvider } from '../../common/sessionsProvider.js';
+import type { ISession, IActiveSessionThread, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';

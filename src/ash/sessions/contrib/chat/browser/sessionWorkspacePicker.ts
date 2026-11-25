@@ -10,7 +10,6 @@ import { autorun, observableValue, type ISettableObservable } from '../../../../
 import { raceCancellation } from '../../../../base/common/async.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
-import { WorkspaceSelectionOrigin, type IWorkspaceSelectionSnapshot } from '../../../common/workspaceSelection.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -35,12 +34,12 @@ import { ActionListItemKind, type IActionListItem, type IActionListItemInlineTog
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
-import { buildAgentHostSessionWorkspace, selectionFromResource, selectionFromWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { buildAgentHostSessionWorkspace, selectionFromResource, selectionFromWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri, type IUntitledChatSession, type SessionExecutionTarget } from '../../../../workbench/services/sessions/common/session.js';
+import { ISessionFolderAuthorizationService } from '../../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession, SessionExecutionTarget } from '../../../services/sessions/common/session.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionFolderTrustRetryService } from '../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 
@@ -742,9 +741,6 @@ function cloneFolderName(input: string): string | undefined {
 /** Owns Sessions workspace triggers, folder history and the cancellation scope of each selection. */
 export class WorkspacePicker extends Disposable {
 	private readonly pending = this._register(new MutableDisposable<DisposableStore>());
-	private readonly snapshot = observableValue<IWorkspaceSelectionSnapshot>(this, {
-		folderUri: undefined, origin: WorkspaceSelectionOrigin.None, state: 'none', historyState: 'loading',
-	});
 
 	private readonly renderDisposables = this._register(new DisposableStore());
 	private dropdown: ActionWidgetDropdown | undefined;
@@ -865,16 +861,14 @@ export class WorkspacePicker extends Disposable {
 		if (this.isDisposed) { return Promise.resolve(undefined); }
 		const lifetime = new DisposableStore();
 		this.pending.value = lifetime;
-		const picker = lifetime.add(this.quickInput.createQuickPick<{ label: string; description: string; folderUri: URI; target: SessionExecutionTarget; origin: WorkspaceSelectionOrigin; }>());
+		const picker = lifetime.add(this.quickInput.createQuickPick<{ label: string; description: string; folderUri: URI; target: SessionExecutionTarget; }>());
 		picker.items = folders.filter(folder => accepts(folder.target)).map(folder => ({
 			label: folder.label, description: folder.target.root,
 			folderUri: sessionWorkspaceUri(buildAgentHostSessionWorkspace(folder.target)!), target: folder.target,
-			origin: WorkspaceSelectionOrigin.WindowContext,
 		}));
 		picker.placeholder = localize('sessions.selectExecutionFolder', 'Select a folder for this session');
 		picker.ariaLabel = picker.placeholder;
 		picker.busy = true;
-		this.snapshot.set({ folderUri: undefined, origin: WorkspaceSelectionOrigin.None, target: undefined, state: picker.items.length ? 'unresolved' : 'noWorkspace', historyState: 'loading' });
 		return new Promise(resolve => {
 			let settled = false;
 			const finish = (target: SessionExecutionTarget | undefined): void => {
@@ -887,8 +881,7 @@ export class WorkspacePicker extends Disposable {
 			lifetime.add(picker.onDidAccept(() => {
 				const item = picker.selectedItems[0];
 				if (!item) { return; }
-				this.snapshot.set({ ...this.snapshot.get(), folderUri: item.folderUri, target: item.target, origin: item.origin === WorkspaceSelectionOrigin.AgentsRecent ? item.origin : WorkspaceSelectionOrigin.User, state: 'selected' });
-				finish(this.snapshot.get().target);
+				finish(item.target);
 			}));
 			lifetime.add(picker.onDidHide(() => finish(undefined)));
 			picker.show();
@@ -897,15 +890,13 @@ export class WorkspacePicker extends Disposable {
 				const known = new Set(picker.items.flatMap(item => 'folderUri' in item ? [item.folderUri.toString()] : []));
 				const recents = this.resolveRecentFolders(history, known, accepts).map(({ label, target }) => ({
 					label, description: target.root, folderUri: sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!),
-					target, origin: WorkspaceSelectionOrigin.AgentsRecent,
+					target,
 				}));
 				picker.items = [...picker.items, ...recents];
 				picker.busy = false;
-				this.snapshot.set({ ...this.snapshot.get(), historyState: 'loaded' });
 			}, () => {
 				if (settled) { return; }
 				picker.busy = false;
-				this.snapshot.set({ ...this.snapshot.get(), historyState: 'error' });
 			});
 		});
 	}

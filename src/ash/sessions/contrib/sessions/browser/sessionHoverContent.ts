@@ -7,8 +7,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import type { ThreadChangesSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { agentHostSessionWorkspaceKey, buildAgentHostChatWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import { chatExecutionWorkspace, type IChat, type ISession, type SessionId, type ThreadId } from '../../../services/sessions/common/session.js';
+import { agentHostSessionWorkspaceKey, buildAgentHostChatWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import { chatExecutionWorkspace, type IChat, type ISession, type SessionId, type ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 /** Builds a fresh preview on each display, using the hover's cancellation token for Git metadata. */

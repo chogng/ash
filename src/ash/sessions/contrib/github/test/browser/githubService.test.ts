@@ -28,7 +28,7 @@ interface RepositoryCommandsFixture {
 }
 import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { GitHubService } from '../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import type { IWorkbenchHost } from '../../../../../workbench/browser/rendererApi.js';

@@ -42,7 +42,7 @@ import { SearchService } from '../../../../../workbench/services/search/common/s
 import { IFileTextModelService } from '../../../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { localize, resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import translatedGitHub from '../../../../../../../extensions/language-pack-zh-cn/translations/github.json' with { type: 'json' };
-import { GITHUB_REMOTE_FILE_SCHEME } from '../../../../services/sessions/common/session.js';
+import { GITHUB_REMOTE_FILE_SCHEME } from '../../../../../workbench/services/sessions/common/session.js';
 import '../../browser/fileTreeView.contribution.js';
 
 const root = URI.from({ scheme: GITHUB_REMOTE_FILE_SCHEME, authority: 'github', path: '/team/repo/feature%2Ffiles' });

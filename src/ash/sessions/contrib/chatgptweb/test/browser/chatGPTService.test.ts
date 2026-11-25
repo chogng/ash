@@ -28,7 +28,8 @@ import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } from '../../common/chatGPTTransport.js';
 import { ChatGPTService, IChatGPTService, selectedChatConversationId } from '../../browser/chatGPTService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
-import { chatCreationKinds, getChatCreationContext } from '../../../../common/chatCreation.js';
+import { chatCreationKinds } from '../../../../../workbench/services/sessions/common/session.js';
+import { getChatCreationContext } from '../../../../common/chatCreation.js';
 
 const lifecycle = { onWillShutdown: Event.None } as ILifecycleService;
 
@@ -1530,6 +1531,34 @@ suite('ChatGPT shared service', () => {
 			assert.equal(reopened.state.get().messages.find(message => message.role === 'assistant')?.completion, 'complete');
 		});
 	}
+
+	test('legacy Sheet and Slides history restores creation kinds and preserves user-authored context', async () => {
+		const instructions = {
+			sheet: 'Create the spreadsheet requested by the user. Structure the rows and columns, include the needed formulas, and explain assumptions or inputs. Use formats you can actually produce.',
+			slides: 'Create the presentation requested by the user. Develop a clear narrative and provide slide-by-slide content, with speaker notes or visual direction where useful. Use formats you can actually produce.',
+		};
+		const draft = 'Create the requested work';
+		for (const [kind, instruction] of Object.entries(instructions)) {
+			const legacy = `${draft}\n\n<ash_context name="ash.creation.${kind}">\n${instruction}\n</ash_context>`;
+			const authored = `${draft}\n\n<ash_context name="ash.creation.${kind}">\nKeep these notes.\n</ash_context>`;
+			using chat = fixture(async path => {
+				if (!path.endsWith('/conversation/one')) return response(path);
+				return Response.json({
+					title: 'One', current_node: 'authored', mapping: {
+						legacy: { parent: null, message: { id: 'legacy', author: { role: 'user' }, content: { parts: [legacy] } } },
+						authored: { parent: 'legacy', message: { id: 'authored', author: { role: 'user' }, content: { parts: [authored] } } },
+					},
+				});
+			});
+			await chat.reload();
+			await chat.select('one');
+			const messages = chat.state.get().messages.filter(message => message.role === 'user');
+			assert.deepEqual(messages.map(({ text, editableText, creationKind }) => ({ text, editableText, creationKind })), [
+				{ text: draft, editableText: draft, creationKind: kind },
+				{ text: authored, editableText: authored, creationKind: undefined },
+			]);
+		}
+	});
 
 	test('stopping before submit and a rejected first send preserve the creation choice for retry', async () => {
 		const preparing = new DeferredPromise<void>();

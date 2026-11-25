@@ -15,9 +15,9 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../platform/qu
 import { IWorkspacesService } from '../../../../platform/workspaces/common/workspaces.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { ISessionFolderAuthorizationService } from '../../../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { projectForFolder, readCodeProjects } from './sessionWorkspaceProjects.js';
 

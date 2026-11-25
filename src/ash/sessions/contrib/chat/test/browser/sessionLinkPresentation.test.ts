@@ -25,8 +25,8 @@ import { LinkPresentationService } from '../../../../../workbench/services/dataC
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { sessionIdentity, sessionProviderAuthority } from '../../../../services/sessions/common/sessionIdentity.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';

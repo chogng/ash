@@ -5,8 +5,8 @@ import { ContextKeyExpr, type ContextKeyExpression } from '../../../../platform/
 import { localize2 } from '../../../../nls.js';
 import { AppServerAvailableContext } from '../../../../workbench/common/contextkeys.js';
 import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { SessionsCategories } from '../../../common/categories.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../workbench/contrib/sessions/common/sessionCommands.js';
+import { SessionsCategories } from '../../../../workbench/contrib/sessions/common/categories.js';
 import { Menus } from '../../../browser/menus.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 

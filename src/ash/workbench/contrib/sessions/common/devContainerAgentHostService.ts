@@ -1,6 +1,6 @@
-import type { CancellationToken } from '../../base/common/cancellation.js';
-import { createDecorator } from '../../platform/instantiation/common/instantiation.js';
-import type { SessionExecutionTarget } from '../services/sessions/common/session.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
 
 /** Provisioning belongs to the shared backend's optional Docker Provider. */
 export interface IDevContainerAgentHostService {

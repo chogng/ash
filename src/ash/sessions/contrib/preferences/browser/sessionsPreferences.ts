@@ -62,10 +62,11 @@ import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting, type ISelectSetting, type ISettingsGroup } from '../../../../workbench/services/preferences/common/preferences.js';
-import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SESSIONS_GENERAL_SETTINGS_TAG, SessionsConfiguration } from '../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP } from '../../../services/configuration/common/editorConfiguration.js';
+import { SESSIONS_GENERAL_SETTINGS_TAG, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../common/sessionConfig.js';
+import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../layout/common/sessionsLayoutConfiguration.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsAccountContent } from './sessionsAccountContent.js';
 import { AICustomizationManagementEditorInput } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';

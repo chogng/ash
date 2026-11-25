@@ -1,4 +1,8 @@
-import type { ISessionApplication } from '../services/sessions/common/session.js';
+/** Product application serving the Session catalog, independent of its execution authority. */
+export interface ISessionApplication {
+	readonly id: string;
+	readonly label: string;
+}
 
 /** Preserve unknown application identities and supplied labels instead of assigning another product. */
 export function getSessionApplication(name: string, title?: string): ISessionApplication {

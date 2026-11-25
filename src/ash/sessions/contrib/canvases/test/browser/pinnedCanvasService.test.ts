@@ -22,7 +22,7 @@ import type { IAgentHostCanvasCollection } from '../../../../../workbench/contri
 import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/common/canvasReference.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { AbstractCustomView } from '../../../../services/customView/browser/customView.js';
 import { CustomViewService } from '../../../../services/customView/browser/customViewService.js';

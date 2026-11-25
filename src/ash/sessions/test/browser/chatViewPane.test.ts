@@ -4,7 +4,7 @@ import { ISessionContext } from '../../services/sessions/browser/sessionContext.
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
-import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService } from '../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults } from '../../common/codeConversationDefaults.js';
 import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
@@ -154,9 +154,9 @@ import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/commo
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { TestSessionsManagementService as BaseSessionsManagementService } from '../../services/sessions/test/browser/testSessionsManagementService.js';
 import { AppServerSessionsProvider } from '../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import type { ISession } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
+import { IDevContainerAgentHostService } from '../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { ViewsService } from '../../../workbench/services/views/browser/viewsService.js';

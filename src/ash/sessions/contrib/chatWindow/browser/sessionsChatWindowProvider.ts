@@ -2,7 +2,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { IChatWindowContent, IChatWindowProvider } from '../../../../workbench/contrib/chatWindow/browser/chatWindow.js';
 import { sessionResource } from '../../../browser/chatHistoryModel.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { canOpenThreadInCode } from '../../../services/sessions/common/session.js';
+import { canOpenThreadInCode } from '../../../../workbench/services/sessions/common/session.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 
 /** Resolves resources against the host's retained views as drafts become durable chats. */

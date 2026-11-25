@@ -1,5 +1,5 @@
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { saveTunnelEndpoint, tunnelEnvironmentLabel } from '../../../../common/savedTunnelEnvironments.js';
+import { saveTunnelEndpoint, tunnelEnvironmentLabel } from '../../../../../workbench/contrib/sessions/providers/remoteAgentHost/browser/tunnelAgentHostStorage.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';

@@ -23,7 +23,7 @@ import type { EditorPartChangeEvent } from '../../../../../workbench/services/ed
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
-import type { AgentTreeNode, ISession, IUntitledChatSession, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
+import type { AgentTreeNode, ISession, IUntitledChatSession, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService, type SessionsManagementState } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionBrowserNetworkContribution } from '../../browser/sessionBrowserNetwork.js';
 import { IAgentHostConnectionsService } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';

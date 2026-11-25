@@ -25,7 +25,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { projectFolders } from '../../../chat/browser/sessionWorkspaceProjects.js';
 
 const canCloseSession = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), SessionsWorkspaceModeContext.isEqualTo('code'));

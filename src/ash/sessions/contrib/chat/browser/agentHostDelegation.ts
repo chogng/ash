@@ -20,19 +20,18 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../platform/qu
 import { modelPickerEffortLabel } from '../../../../workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerModelConfig.js';
 import { IChatService, type ChatAgent, type ThreadRead, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
-import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
+import { selectionFromResource } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { Menus } from '../../../browser/menus.js';
 import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
 import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { comparisonAttemptTurn, comparisonTurn, ISessionComparisonService, parseComparisonVerdict, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
 import type { ComparisonAttempt, ComparisonParticipantSettings, ComparisonThread, SessionComparison } from '../../../services/sessions/common/sessionComparison.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 const canCompareAgents = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.not(`config.${ChatAIDisabledSettingId}`));

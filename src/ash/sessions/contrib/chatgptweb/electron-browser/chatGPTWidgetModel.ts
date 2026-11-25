@@ -12,7 +12,7 @@ import { equals } from '../../../../base/common/objects.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ICompactChatModel } from '../../chat/browser/chatViewFactory.js';
-import type { ChatCreationKind } from '../../../common/chatCreation.js';
+import type { ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';

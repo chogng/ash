@@ -32,7 +32,7 @@ import { AbstractLifecycleService } from '../../../../../workbench/services/life
 import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../../workbench/services/editor/common/editorWorkingSet.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../services/sessions/common/session.js';
+import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../../workbench/services/sessions/common/session.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 

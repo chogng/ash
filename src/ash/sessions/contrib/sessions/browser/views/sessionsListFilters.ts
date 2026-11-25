@@ -1,5 +1,5 @@
 import type { ISessionsListModelService, SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 
 /** The selected session stays reachable when its automation visibility changes. */
 export function getSessionsListEntries(catalog: readonly ISession[], model: ISessionsListModelService, activeSessionId: string | undefined): readonly ISession[] {

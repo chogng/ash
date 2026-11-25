@@ -13,7 +13,7 @@ import { IBrowserViewWorkbenchService } from '../../../../../workbench/contrib/b
 import type { BrowserEditorInput } from '../../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
-import type { AgentTreeNode, ISession } from '../../../../services/sessions/common/session.js';
+import type { AgentTreeNode, ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { SessionBrowsersControl } from '../../browser/sessionBrowsersControl.js';
 
 test('The Sessions browser menu opens only the viewed conversation and its delegated Agent pages', async () => {

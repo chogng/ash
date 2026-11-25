@@ -11,7 +11,7 @@ import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceRe
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
+import type { AgentTreeNode } from '../../../../workbench/services/sessions/common/session.js';
 
 registerAction2(class OpenAgentTrace extends Action2 {
 	constructor() {

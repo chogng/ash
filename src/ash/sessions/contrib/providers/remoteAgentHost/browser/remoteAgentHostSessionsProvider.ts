@@ -6,8 +6,8 @@ import { IAgentSessionService, IAgentTurnService, IAgentConnection } from '../..
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
-import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
+import { sessionWorkspaceUri } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { IArtifactCatalogService } from '../../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from '../../agentHost/browser/appServerSessionsProvider.js';

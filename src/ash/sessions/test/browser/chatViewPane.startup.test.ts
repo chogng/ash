@@ -55,7 +55,7 @@ import { type IMenu, IMenuService } from '../../../platform/actions/common/actio
 import { IContextViewService, IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
 import { Position, IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
-import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService, type SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';

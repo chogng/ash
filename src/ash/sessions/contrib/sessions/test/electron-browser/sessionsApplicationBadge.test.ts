@@ -6,7 +6,7 @@ import type { ILayoutService } from '../../../../../platform/layout/browser/layo
 import type { IApplicationBadge } from '../../../../../platform/native/common/native.js';
 import type { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import type { IGitHubService } from '../../../github/browser/githubService.js';
-import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SESSIONS_APPLICATION_BADGE_SETTING, SessionsApplicationBadge } from '../../electron-browser/sessionsApplicationBadge.js';
 

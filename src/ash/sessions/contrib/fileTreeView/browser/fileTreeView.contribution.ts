@@ -19,7 +19,7 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { FileSystemFileSearchProvider } from '../../../../workbench/services/search/browser/fileSystemFileSearchProvider.js';
 import { QueryType, SearchProviderType, ISearchService } from '../../../../workbench/services/search/common/search.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { GITHUB_REMOTE_FILE_SCHEME } from '../../../services/sessions/common/session.js';
+import { GITHUB_REMOTE_FILE_SCHEME } from '../../../../workbench/services/sessions/common/session.js';
 import { GitHubFileSystemProvider } from './githubFileSystemProvider.js';
 
 class GitHubFileSystemProviderContribution extends Disposable {

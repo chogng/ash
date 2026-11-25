@@ -1,6 +1,6 @@
 import { formatTimeAgo } from '../../../../base/common/date.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
-import type { ArtifactKind } from '../../../common/artifactKind.js';
+import type { ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import type { ArtifactCard } from './artifactWorkspaceRegistry.js';
 
 export type ArtifactSort = 'modified' | 'created' | 'name';
@@ -10,7 +10,7 @@ export interface ArtifactCatalogOptions {
 	readonly sort: ArtifactSort;
 	readonly descending: boolean;
 	readonly owner: ArtifactOwner;
-	readonly kind: ArtifactKind | 'any';
+	readonly kind: ChatCreationKind | 'any';
 }
 
 export function selectArtifactCards(cards: readonly ArtifactCard[], options: ArtifactCatalogOptions, query: string): ArtifactCard[] {

@@ -1,6 +1,6 @@
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../../workbench/services/sessions/common/session.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
@@ -18,7 +18,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatLayoutContext, ChatLayoutPresentation, chatLayoutOwnersEqual, type IChatLayoutOwner, type IChatLayoutSnapshot } from '../../../common/chatLayout.js';
-import '../../../common/sessionConfig.js';
+import '../common/sessionsLayoutConfiguration.js';
 import { Menus } from '../../../browser/menus.js';
 import { ChatConversationPageContext } from '../../../common/contextkeys.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';

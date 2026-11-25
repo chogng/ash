@@ -1,10 +1,10 @@
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
+import type { ChatCreationKind, IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
-import type { ISessionCreateOptions } from './sessionsProvider.js';
-import type { ChatCreationKind } from '../../../common/chatCreation.js';
+import type { ISessionCreateOptions } from '../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 
 export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
 
@@ -73,3 +73,10 @@ export interface ISessionsManagementService {
 }
 
 export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>('sessionsManagementService');
+
+/** A local Code draft needs a project selection in addition to its execution directory. */
+export function hasSelectedCodeWorkspace({ providerId, projectId, workspace }: IUntitledChatSession): boolean {
+	return (!!projectId || (!!providerId && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID))
+		&& workspace.type !== 'current'
+		&& (workspace.type !== 'multiple' || workspace.folders.length > 0);
+}

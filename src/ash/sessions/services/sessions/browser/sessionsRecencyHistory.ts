@@ -1,7 +1,7 @@
 import { observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
-import type { SessionId, ThreadId } from '../common/session.js';
+import type { SessionId, ThreadId } from '../../../../workbench/services/sessions/common/session.js';
 
 export interface SessionRecencyEntry {
 	readonly sessionId: SessionId;

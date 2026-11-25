@@ -28,7 +28,7 @@ import { observableValue, type IObservable } from '../../../base/common/observab
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import { IsNewSessionContext } from '../../common/contextkeys.js';
-import type { SessionId } from '../../services/sessions/common/session.js';
+import type { SessionId } from '../../../workbench/services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';

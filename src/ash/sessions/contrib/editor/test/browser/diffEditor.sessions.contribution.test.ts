@@ -19,7 +19,7 @@ import { CommandService } from '../../../../../workbench/services/commands/commo
 import { testConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
-import { SESSIONS_DIFF_VIEW_MODE } from '../../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE } from '../../../../services/configuration/common/editorConfiguration.js';
 import { ConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { SessionChangesEditor } from '../../../changes/browser/sessionChangesEditor.js';
 import { SessionsDiffEditorCommandsService } from '../../browser/diffEditor.sessions.contribution.js';

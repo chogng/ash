@@ -17,7 +17,7 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import {
 	createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
 	type ISessionChangeset, type ISessionFileChange,
-} from '../../../services/sessions/common/session.js';
+} from '../../../../workbench/services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
 import { getCapturedTurnIds } from '../common/changes.js';
 import type { ISessionChangesEditorOptions, ISessionChangesService, SessionCommitCandidate } from '../common/sessionChangesService.js';

@@ -135,7 +135,7 @@ Surfaces that can represent a session other than the window-global active sessio
 
 ## Domain model
 
-Provider-neutral interfaces live in `services/sessions/common/session.ts`.
+The Agents window and Workbench Chat share the [Session and Chat model](../workbench/services/sessions/common/session.ts).
 
 ### Identity
 
@@ -202,7 +202,7 @@ GitHub resolves recorded associations even without a workspace and combines them
 
 ## Provider contract
 
-`ISessionsProvider` is defined in `services/sessions/common/sessionsProvider.ts`. A provider represents one compute environment. A provider may advertise multiple session types, and multiple providers may advertise the same logical type.
+`ISessionsProvider` is defined in the [Workbench Sessions contribution](../workbench/contrib/sessions/common/sessionsProvider.ts). A provider represents one compute environment. A provider may advertise multiple session types, and multiple providers may advertise the same logical type.
 
 ### Discovery and catalog
 

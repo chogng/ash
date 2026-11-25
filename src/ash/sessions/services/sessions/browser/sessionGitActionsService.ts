@@ -9,10 +9,9 @@ import { ICommandService, CommandsRegistry } from '../../../../platform/commands
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, chatExecutionWorkspace } from '../../../../workbench/services/sessions/common/session.js';
 import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { ISessionsService } from './sessionsService.js';
-import { chatExecutionWorkspace } from '../common/session.js';
 
 export interface ISessionGitActionsService {
 	readonly onDidChange: Event<void>;

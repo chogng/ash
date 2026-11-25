@@ -20,8 +20,8 @@ import { ISessionComparisonService } from '../../../src/ash/sessions/services/se
 import { ISessionsProvidersService } from '../../../src/ash/sessions/services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
-import type { ISessionsProvider } from '../../../src/ash/sessions/services/sessions/common/sessionsProvider.js';
-import type { AgentTreeNode, ISession, SessionWorkspaceSelection } from '../../../src/ash/sessions/services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../src/ash/workbench/contrib/sessions/common/sessionsProvider.js';
+import type { AgentTreeNode, ISession, SessionWorkspaceSelection } from '../../../src/ash/workbench/services/sessions/common/session.js';
 import { saveSessionGridState } from '../../../src/ash/sessions/services/sessions/browser/sessionGridState.js';
 import { referenceForSelection } from '../../../src/ash/sessions/services/sessions/browser/visibleSessions.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';

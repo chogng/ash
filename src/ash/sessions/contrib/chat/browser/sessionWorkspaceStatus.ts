@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
+import { chatExecutionWorkspace } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 /** Shows the workspace in the footer, with the effective execution directory on hover. */

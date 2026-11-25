@@ -5,7 +5,7 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { DIFF_EDITOR_ID } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { MULTI_DIFF_EDITOR_ID } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { SESSIONS_DIFF_VIEW_MODE } from '../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE } from '../../../services/configuration/common/editorConfiguration.js';
 import { SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
 
 /** Diff commands change the Agents Window preference through its configuration owner. */

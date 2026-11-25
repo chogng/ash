@@ -11,7 +11,7 @@ import { sessionResource } from '../../../browser/chatHistoryModel.js';
 import { sessionManagementLabel } from '../../../browser/sessionManagementLabels.js';
 import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { linkKey } from '../../../common/sessionLinks.js';
+import { linkKey } from '../../../../workbench/contrib/sessions/common/sessionLinks.js';
 import type { SessionRecencyEntry } from '../../../services/sessions/browser/sessionsRecencyHistory.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';

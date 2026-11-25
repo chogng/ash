@@ -1,13 +1,12 @@
 import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/resources.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri, type IActiveSessionThread } from '../../../../workbench/services/sessions/common/session.js';
+import { buildAgentHostSessionWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceFolderId, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsWorkspaceContextService } from '../../../services/workspace/browser/workspaceContextService.js';
-import type { IActiveSessionThread } from '../../../services/sessions/common/session.js';
 import { IWorkspaceFolderLabelService } from '../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 
 /** Projects the selected conversation's directory into the window's Explorer workspace. */

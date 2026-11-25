@@ -9,7 +9,7 @@ import { localize } from '../../../nls.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
-import type { SessionId, IActiveSessionThread, IUntitledChatSession } from '../../services/sessions/common/session.js';
+import type { SessionId, IActiveSessionThread, IUntitledChatSession } from '../../../workbench/services/sessions/common/session.js';
 import type { SessionsConversationKind } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface ISessionChatView extends IDisposable {

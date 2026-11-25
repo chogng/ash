@@ -1,5 +1,5 @@
 import { localize } from '../../nls.js';
-import type { SessionManagementInfo } from '../services/sessions/common/session.js';
+import type { SessionManagementInfo } from '../../workbench/services/sessions/common/session.js';
 
 export function sessionManagementLabel(management: SessionManagementInfo | undefined): string | undefined {
 	switch (management?.status) {

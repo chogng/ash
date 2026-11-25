@@ -12,7 +12,7 @@ import { IChatService } from '../../../../workbench/services/chat/common/chatSer
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { readChatRequestVersions, type ChatRequestVersionPair } from '../../../browser/chatRequestVersions.js';
 import { createTurnResultComparisonInput } from '../../../browser/turnMultiDiffSource.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
+import type { ISession } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 const code = ChatContextKeys.messageActionSurface.isEqualTo('code');

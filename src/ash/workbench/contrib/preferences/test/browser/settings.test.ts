@@ -665,7 +665,7 @@ test('Explicit host settings resolve registry metadata without entering the auto
 test('Sessions resolves its registered appearance metadata in the active language', async () => {
 	const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
 	const { SESSIONS_LAYOUT_SCOPE_SETTING } = await import('../../../../../sessions/common/chatLayout.js');
-	await import('../../../../../sessions/common/sessionConfig.js');
+	await import('../../../../../sessions/contrib/layout/common/sessionsLayoutConfiguration.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using reset = toDisposable(resetNlsResolver);

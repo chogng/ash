@@ -8,7 +8,7 @@ import { IPromptsService } from '../../../../../workbench/contrib/chat/common/pr
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, SessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from '../../../../browser/agentHost/sessionsChatService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -19,9 +19,9 @@ import { SessionsManagementService } from '../../../../services/sessions/browser
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from './appServerSessionsProvider.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { selectionFromWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
+import { selectionFromWorkspace } from '../../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { WorkspacePicker } from '../../../chat/browser/sessionWorkspacePicker.js';
-import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { IDevContainerAgentHostService } from '../../../../../workbench/contrib/sessions/common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
 import { SessionsSearchService } from './sessionsSearchService.js';
 

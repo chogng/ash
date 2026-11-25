@@ -1,7 +1,7 @@
 import { findLast } from '../../base/common/arraysFind.js';
 import { observableValue } from '../../base/common/observable.js';
 import type { Thread } from '../../workbench/services/chat/common/chatService.js';
-import type { IActiveSessionThread, ModelRef, ThreadId } from '../services/sessions/common/session.js';
+import type { IActiveSessionThread, ModelRef, ThreadId } from '../../workbench/services/sessions/common/session.js';
 
 /** Owns unsent model choices for one composer as it switches between durable threads. */
 export class SessionModelSelection {

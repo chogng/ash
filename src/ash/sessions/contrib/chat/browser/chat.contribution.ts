@@ -23,8 +23,8 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../../../workbench/contrib/sessions/common/chatConstants.js';
 import { OPEN_CHAT_CREATION_COMMAND_ID } from '../../../common/sessionCommands.js';
 
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { isChatCreationKind } from '../../../common/chatCreation.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
+import { isChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';

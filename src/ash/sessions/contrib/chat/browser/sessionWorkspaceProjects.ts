@@ -2,8 +2,7 @@ import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/re
 import type { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import type { IProjectService, Project } from '../../../../platform/projects/common/projectService.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import type { ISession } from '../../../services/sessions/common/session.js';
+import { sessionWorkspaceUri, type ISession } from '../../../../workbench/services/sessions/common/session.js';
 
 export async function readCodeProjects(projects: IProjectService): Promise<readonly Project[]> {
 	const summaries = await projects.list('code');

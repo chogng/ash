@@ -1,12 +1,5 @@
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
-
-export const chatCreationKinds = ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion'] as const;
-
-export type ChatCreationKind = typeof chatCreationKinds[number];
-
-export function isChatCreationKind(value: unknown): value is ChatCreationKind {
-	return chatCreationKinds.some(kind => kind === value);
-}
+import type { ChatCreationKind } from '../../workbench/services/sessions/common/session.js';
 
 const creationInstructions: Record<ChatCreationKind, string> = {
 	docs: 'Create the document requested by the user. Your final reply must be the complete, standalone Markdown document, without an outer code fence. Do not reply with only a file path, a summary of what you created, or a completion notice. Ash saves the final reply body as a .md file after the turn completes.',

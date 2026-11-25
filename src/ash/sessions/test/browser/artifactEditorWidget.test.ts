@@ -17,10 +17,13 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import { Separator } from '../../../base/common/actions.js';
 import { test, setup, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -104,7 +107,9 @@ const { createSlides } = await import('./fixtures/artifactExampleShapes.js');
 const DESIGN_EDITOR_RESOURCE = URI.parse('ash-artifacts:/design');
 await import('../../contrib/artifact/browser/artifactCanvasEditor.contribution.js');
 const { createArtifactCanvasEditorContributionFactory } = await import('../../contrib/artifact/browser/artifactCanvasEditorContributions.js');
-const services = new InstantiationService();
+const actionViewItems = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService);
+assert.ok(actionViewItems);
+const services = new InstantiationService(new ServiceCollection(actionViewItems));
 services.registerInstance(ILogService, new NullLoggerService());
 const notifications = new TestNotificationService();
 services.registerInstance(INotificationService, notifications);
@@ -2547,34 +2552,21 @@ class AutoSaveFixture extends Disposable {
 	async readActive(): Promise<ReturnType<typeof parseArtifactCanvasDocument>> { return parseArtifactCanvasDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }
 
-test('Artifact fixtures migrate the existing Docs content before seeding a Markdown successor', async () => {
+test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
 	using fixture = new AutoSaveFixture();
 	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
 	const { getArtifactDraftHome } = await import('../../contrib/artifact/browser/artifactStorage.js');
-	const { createDefaultDocumentSchema } = await import('../../../../../extensions/academy/common/model/documentSchema.js');
-	const { serializeDocument } = await import('../../../../../extensions/academy/common/model/documentSerialization.js');
+	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
 	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
 	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
 	const home = getArtifactDraftHome(profile, workspace);
 	await fixture.files.createDirectory(home);
-	const legacy = home.joinPathSegment('studio-launch.ash-doc');
-	const schema = createDefaultDocumentSchema();
-	const content = serializeDocument(schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Existing Docs edits')] })]), schema);
-	await fixture.files.writeFile({ resource: legacy, content });
+	const existing = home.joinPathSegment('studio-launch.md');
+	const content = '# Edited launch brief\n\nExisting Docs edits\n';
+	await fixture.files.writeFile({ resource: existing, content });
 	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace);
-	assert.ok(docs.path.endsWith('.md'));
-	assert.equal((await fixture.files.readFile(docs)).content.trim(), 'Existing Docs edits');
-	assert.equal((await fixture.files.readFile(legacy)).content, content);
-});
-
-test('Artifact fixtures restore as ordinary editable documents and never overwrite edits or deleted work', async () => {
-	using fixture = new AutoSaveFixture();
-	const { prepareArtifactFixtures } = await import('./fixtures/artifactExamples.contribution.js');
-	const { ArtifactTableService } = await import('../../contrib/artifact/browser/artifactTableService.js');
-	const profile = fixture.child.get(IUserDataProfileService).currentProfile.location;
-	const workspace = fixture.child.get(IWorkspaceContextService).getWorkspace().id;
-	const docs = await prepareArtifactFixtures(fixture.files, profile, workspace);
-	assert.ok((await fixture.files.readFile(docs)).content.includes('Studio launch brief'));
+	assert.equal(docs.toString(), existing.toString());
+	assert.equal((await fixture.files.readFile(docs)).content, content);
 	using view = new ArtifactFixture(fixture.child);
 	await view.editors.loadArtifactDocuments();
 	assert.deepEqual([...view.editors.artifactDocuments.get().values()].map(document => document.artifactKind).sort(), ['design', 'motion', 'slides', 'whiteboard']);

@@ -40,10 +40,10 @@ import '../../browser/views/sessionsViewActions.js';
 import '../../../../browser/workbenchChat.contribution.js';
 import '../../../../../workbench/contrib/chat/browser/chat.contribution.js';
 import { TestSessionsManagementService as SessionsManagementService } from '../../../../services/sessions/test/browser/testSessionsManagementService.js';
-import type { IActiveSessionThread, ISession } from '../../../../services/sessions/common/session.js';
+import type { IActiveSessionThread, ISession } from '../../../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
-import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionsProvider } from '../../../../../workbench/contrib/sessions/common/sessionsProvider.js';
 import { SessionActionsService } from '../../../../browser/sessionActionsService.js';
 import type { ChatListSnapshot, IChatListCatalog } from '../../../chat/browser/chatListModel.js';
 

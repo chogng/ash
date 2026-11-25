@@ -27,14 +27,13 @@ import { ISessionChangesService, type SessionCommitCandidate } from '../common/s
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { createGitComparisonEditorInput } from './gitComparisonEditorInput.js';
 import { getChangesViewMode, getCapturedTurnIds, type IChangesThreadFileItem } from '../common/changes.js';
-import { chatExecutionWorkspace, matchesSessionFileChange, type ISessionFileChange } from '../../../services/sessions/common/session.js';
+import { chatExecutionWorkspace, matchesSessionFileChange, type ISessionFileChange, sessionWorkspaceUri } from '../../../../workbench/services/sessions/common/session.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { MultiDiffEditorViewState } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import type { GitRepositoryContext, GitSessionComparison } from '../../../../platform/git/common/localGitService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';

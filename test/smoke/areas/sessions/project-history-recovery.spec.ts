@@ -12,7 +12,7 @@ import type { ChildProcessJsonlTransport } from '../../../../src/ash/platform/ag
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
 import { DEVELOPMENT_DIR_PERMISSIONS } from '../../../../src/ash/platform/workspace/common/workspaceTrust.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../../../src/ash/sessions/common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../../../src/ash/workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { sessionIdentity } from '../../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { createSshFixture } from '../../../automation/ssh.js';

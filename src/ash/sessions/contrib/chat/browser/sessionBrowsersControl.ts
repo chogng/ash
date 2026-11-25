@@ -12,7 +12,7 @@ import type { BrowserEditorInput } from '../../../../workbench/contrib/browserVi
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
-import { findAgentNode, type AgentTreeNode } from '../../../services/sessions/common/session.js';
+import { findAgentNode, type AgentTreeNode } from '../../../../workbench/services/sessions/common/session.js';
 
 function addAgentDescendants(nodes: readonly AgentTreeNode[], owners: Set<string>): void {
 	for (const node of nodes) {

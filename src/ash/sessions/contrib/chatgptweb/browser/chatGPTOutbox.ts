@@ -1,5 +1,5 @@
 import { isRecord } from '../../../../base/common/types.js';
-import { isChatCreationKind, type ChatCreationKind } from '../../../common/chatCreation.js';
+import { isChatCreationKind, type ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 export interface PendingChatGPTCreation {

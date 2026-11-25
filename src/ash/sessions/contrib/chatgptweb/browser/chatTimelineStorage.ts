@@ -1,6 +1,6 @@
-import { isRecord } from '../../base/common/types.js';
-import { type IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import type { ChatReplyMessage } from '../common/chatReplyBackend.js';
+import { isRecord } from '../../../../base/common/types.js';
+import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { ChatReplyMessage } from '../common/chatGPTReplyTypes.js';
 
 export interface ChatTimelineTask {
 	readonly sessionId: string;

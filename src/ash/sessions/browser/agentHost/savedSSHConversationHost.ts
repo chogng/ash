@@ -4,7 +4,7 @@ import { localize } from '../../../nls.js';
 import { IRemoteAgentHostService } from '../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IRemoteConnectionService } from '../../../platform/remote/common/remoteConnectionService.js';
-import { sshAgentHostProviderId } from '../../common/agentHostSessionsProvider.js';
+import { sshAgentHostProviderId } from '../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 
 /** A conversation link may select a saved SSH target after explicit confirmation. */
 export class SavedSSHConversationHost {

@@ -14,7 +14,7 @@ import type { ArtifactAction, ArtifactRecord, IArtifactIntegrationBinding } from
 import { GitHubIssueState, GitHubMergeMethod, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount, type GitHubIssueReference } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { sessionWorkspaceUri, sessionExecutionWorkspace, type ISession, type SessionId } from '../../../../workbench/services/sessions/common/session.js';
 import { computePullRequestIcon, type IPullRequestIconStatus } from '../../../../workbench/common/chatPullRequest.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ISCMService } from '../../../../workbench/contrib/scm/common/scm.js';
@@ -23,10 +23,9 @@ type RepositoryIdentity = NonNullable<GitRepositoryContext['remotes'][number]['i
 import { getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { sessionExecutionWorkspace, type ISession, type SessionId } from '../../../services/sessions/common/session.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { linkKey } from '../../../common/sessionLinks.js';
-import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
+import { linkKey } from '../../../../workbench/contrib/sessions/common/sessionLinks.js';
+import { agentHostSessionWorkspaceKey } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import type { IResolvedSessionPullRequest, IResolvedSessionIssue } from '../common/types.js';
 
 export interface IGitHubService {

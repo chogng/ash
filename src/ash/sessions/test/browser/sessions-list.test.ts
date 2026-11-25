@@ -1,7 +1,7 @@
 import { TestSessionsList } from './testSessionsList.js';
 import type { IProjectsService } from '../../contrib/projects/browser/projectsService.js';
 import { sessionIdentity } from '../../services/sessions/common/sessionIdentity.js';
-import type { ISession } from '../../services/sessions/common/session.js';
+import type { ISession } from '../../../workbench/services/sessions/common/session.js';
 import { SessionSectionOrderService } from '../../services/sessions/browser/sessionSectionOrderService.js';
 import { SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';

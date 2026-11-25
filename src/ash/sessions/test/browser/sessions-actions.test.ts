@@ -23,7 +23,7 @@ import { registerChatActions } from '../../../workbench/contrib/chat/browser/act
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ISessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
-import type { ISession } from '../../../sessions/services/sessions/common/session.js';
+import type { ISession } from '../../../workbench/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../sessions/services/sessions/common/sessionsManagement.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ApprovalReviewModelSelection } from '../../../platform/models/common/agentModels.js';

@@ -1,7 +1,7 @@
-import { localize } from '../../nls.js';
-import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
-import { Registry } from '../../platform/registry/common/platform.js';
-import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from './chatLayout.js';
+import { localize } from '../../../../nls.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from '../../../common/chatLayout.js';
 
 const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 

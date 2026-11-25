@@ -1,6 +1,6 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { SessionId } from '../common/session.js';
+import type { SessionId } from '../../../../workbench/services/sessions/common/session.js';
 
 /** The conversation owned by this surface, including when another pane is active. */
 export interface ISessionContext {

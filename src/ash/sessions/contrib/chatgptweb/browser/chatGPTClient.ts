@@ -1,6 +1,5 @@
-import { getArtifactRequestContext, isRequestArtifactKind } from '../../../common/artifactKind.js';
-import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMention, ChatReplyMessage } from '../../../common/chatReplyBackend.js';
-export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference } from '../../../common/chatReplyBackend.js';
+import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMention, ChatReplyMessage } from '../common/chatGPTReplyTypes.js';
+export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference } from '../common/chatGPTReplyTypes.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
@@ -10,7 +9,14 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { decodeBase64 } from '../../../../base/common/buffer.js';
 import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
-import { chatCreationKinds, getChatCreationContext, type ChatCreationKind } from '../../../common/chatCreation.js';
+import { chatCreationKinds, type ChatCreationKind } from '../../../../workbench/services/sessions/common/session.js';
+import { getChatCreationContext } from '../../../common/chatCreation.js';
+
+// Match the exact suffix Ash stored before Sheet and Slides shared the current creation instructions.
+const legacyCreationInstructions: Readonly<Partial<Record<ChatCreationKind, string>>> = {
+	sheet: 'Create the spreadsheet requested by the user. Structure the rows and columns, include the needed formulas, and explain assumptions or inputs. Use formats you can actually produce.',
+	slides: 'Create the presentation requested by the user. Develop a clear narrative and provide slide-by-slide content, with speaker notes or visual direction where useful. Use formats you can actually produce.',
+};
 
 function chatGPTCreationSuffix(kind: ChatCreationKind): string {
 	const context = getChatCreationContext(kind);
@@ -31,9 +37,9 @@ function readChatGPTCreation(text: string): { text: string; kind: ChatCreationKi
 		const suffix = chatGPTCreationSuffix(kind);
 		// Only strip the exact instructions Ash appended, never arbitrary user-authored context tags.
 		if (text.endsWith(suffix)) return { text: text.slice(0, -suffix.length), kind };
-		if (isRequestArtifactKind(kind)) {
-			const legacy = getArtifactRequestContext(kind);
-			const legacySuffix = `\n\n<ash_context name="${legacy.name}">\n${legacy.content}\n</ash_context>`;
+		const legacy = legacyCreationInstructions[kind];
+		if (legacy) {
+			const legacySuffix = `\n\n<ash_context name="ash.creation.${kind}">\n${legacy}\n</ash_context>`;
 			if (text.endsWith(legacySuffix)) return { text: text.slice(0, -legacySuffix.length), kind };
 		}
 	}

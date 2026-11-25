@@ -2,8 +2,8 @@ import { isRecord } from '../../base/common/types.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { isModelReasoningEffort, modelReasoningEfforts, type ModelReasoningEffort, type ModelRef } from '../../platform/models/common/agentModels.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from './agentHostSessionWorkspace.js';
-import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
+import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from '../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
+import type { SessionWorkspaceSelection } from '../../workbench/services/sessions/common/session.js';
 
 export interface CodeConversationModel {
 	readonly model: ModelRef | null;

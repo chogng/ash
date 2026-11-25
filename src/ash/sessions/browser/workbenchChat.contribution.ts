@@ -14,7 +14,7 @@ import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/edi
 import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../workbench/browser/editor.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID, SSH_AGENT_HOST_PROVIDER_PREFIX } from '../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, SSH_AGENT_HOST_PROVIDER_PREFIX } from '../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { localize } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';

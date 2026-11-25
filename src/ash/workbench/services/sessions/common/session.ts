@@ -1,15 +1,16 @@
-import type { SessionKind } from '../../../../platform/agentHost/common/agent.js';
+import type { ISessionApplication } from './sessionApplication.js';
+import type { SessionCreateParams, SessionKind } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
-import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../chat/common/chatService.js';
 import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { ChatCreationKind } from '../../../common/chatCreation.js';
 import type { ISessionArtifact } from '../../../../platform/agentHost/common/sessionArtifacts.js';
+import { ASH_REMOTE_SCHEME, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -80,7 +81,7 @@ export function matchesSessionFileChange(change: Pick<ISessionFileChange, 'uri' 
 }
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
-export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
+export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../chat/common/chatService.js';
 
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
@@ -164,15 +165,12 @@ export function canOpenThreadInCode(session: ISession, chat: IChat): boolean {
 }
 
 export type SessionStatus = 'active' | 'archived';
-export type SessionWorkspaceSelection =
-	| { readonly type: 'current'; }
-	| { readonly type: 'local'; readonly root: string; }
-	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
-	| { readonly type: 'remote'; readonly authority: string; readonly root: string; }
-	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; readonly hostAuthority?: string; }
-	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]; };
+export type SessionExecutionTarget = NonNullable<SessionCreateParams['executionTarget']>;
 
-export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'remote' | 'provider'; }>;
+export type SessionWorkspaceSelection =
+	| SessionExecutionTarget
+	| { readonly type: 'current'; }
+	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]; };
 
 /** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
 export interface ISessionWorkspace {
@@ -182,10 +180,10 @@ export interface ISessionWorkspace {
 	readonly runtime?: { readonly providerId: string; readonly workspace: string; readonly hostAuthority?: string; };
 }
 
-/** Product application serving the Session catalog, independent of its execution authority. */
-export interface ISessionApplication {
-	readonly id: string;
-	readonly label: string;
+/** Provider authorities are opaque resource identities. SessionDirectory supplies routing/permissions. */
+export function sessionWorkspaceUri(workspace: ISessionWorkspace): URI {
+	if (workspace.authorityId === 'local') { return URI.file(workspace.root); }
+	return withRemoteWorkspacePath(URI.from({ scheme: ASH_REMOTE_SCHEME, authority: workspace.authorityId }), workspace.root);
 }
 
 /** Frontend product model for one App Server Session tree. */
@@ -222,6 +220,14 @@ export interface SessionEnvironmentSelection {
 	readonly name: string;
 	readonly folders: readonly SessionExecutionTarget[];
 	readonly hasVariables: boolean;
+}
+
+export const chatCreationKinds = ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion'] as const;
+
+export type ChatCreationKind = typeof chatCreationKinds[number];
+
+export function isChatCreationKind(value: unknown): value is ChatCreationKind {
+	return chatCreationKinds.some(kind => kind === value);
 }
 
 /** An untitled Chat session that has not yet acquired a durable Session identity. */
