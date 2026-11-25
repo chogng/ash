@@ -410,9 +410,10 @@ impl GitRuntime {
             if facts["reset"] != true
                 && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
                 && facts["sequence"].as_u64() == Some(state.sequence)
-                && state.discovery_signature.as_ref().is_some_and(|signature| {
-                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
-                })
+                && state
+                    .discovery
+                    .as_ref()
+                    .is_some_and(|discovery| discovery.matches_workspace(&facts))
             {
                 return Ok(());
             }
@@ -460,9 +461,10 @@ impl GitRuntime {
                 && facts["reset"] != true
                 && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
                 && facts["events"].as_array().is_some_and(Vec::is_empty)
-                && state.discovery_signature.as_ref().is_some_and(|signature| {
-                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
-                })
+                && state
+                    .discovery
+                    .as_ref()
+                    .is_some_and(|discovery| discovery.matches_workspace(&facts))
             {
                 state.sequence = facts["sequence"].as_u64().unwrap_or(after);
                 return Ok(());
@@ -475,9 +477,10 @@ impl GitRuntime {
             let state = self.lock();
             let same_workspace = (facts["connection"] == "ready"
                 || facts["connection"] == "connected")
-                && state.discovery_signature.as_ref().is_some_and(|signature| {
-                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
-                });
+                && state
+                    .discovery
+                    .as_ref()
+                    .is_some_and(|discovery| discovery.matches_workspace(&facts));
             facts["events"]
                 .as_array()
                 .filter(|events| {
@@ -537,8 +540,7 @@ impl GitRuntime {
                 let mut state = self.lock();
                 let changed = !state.repositories.is_empty();
                 state.repositories.clear();
-                state.discovery_signature = None;
-                state.discovery_result.clear();
+                state.discovery = None;
                 state.active = None;
                 changed
             };
@@ -554,6 +556,7 @@ impl GitRuntime {
                 let mut state = self.lock();
                 let changed = !state.repositories.is_empty();
                 state.repositories.clear();
+                state.discovery = None;
                 state.active = None;
                 changed
             };
@@ -606,7 +609,12 @@ impl GitRuntime {
                 worktree_limit: config.number("detectWorktreesLimit", 50),
             });
         }
-        let signature = json!([facts["generation"], folders, discovery, configuration.0]);
+        let key = model::DiscoveryKey {
+            generation: facts["generation"].clone(),
+            folders: facts["folders"].clone(),
+            options: discovery,
+            configuration: configuration.0.clone(),
+        };
         let reset = facts["reset"] == true
             || facts["events"].as_array().is_some_and(|events| {
                 events
@@ -615,25 +623,24 @@ impl GitRuntime {
             });
         let cached = {
             let state = self.lock();
-            (!reset && state.discovery_signature.as_ref() == Some(&signature))
-                .then(|| state.discovery_result.clone())
+            state
+                .discovery
+                .as_ref()
+                .filter(|discovery| !reset && discovery.key == key)
+                .map(|discovery| discovery.descriptors.clone())
         };
         let mut published_statuses = std::collections::HashMap::<String, Status>::new();
         let descriptors = if let Some(cached) = cached {
             cached
         } else {
-            let result = self.api.discover(&discovery, &configuration, token)?;
-            let descriptors = result.repositories;
+            let result = self.api.discover(&key.options, &configuration, token)?;
             for status in result.statuses.into_iter().flatten() {
                 published_statuses.insert(status.repository_id.clone(), status);
             }
-            let mut state = self.lock();
-            state.discovery_signature = Some(signature);
-            state.discovery_result = descriptors.clone();
-            descriptors
+            result.repositories
         };
         let mut repositories = Vec::new();
-        for descriptor in descriptors {
+        for descriptor in descriptors.iter().cloned() {
             let folder = folders
                 .iter()
                 .find(|folder| descriptor.dir_id.as_deref() == Some(folder.id.as_str()))
@@ -793,6 +800,9 @@ impl GitRuntime {
             state.folders = folders;
             state.sequence = facts["sequence"].as_u64().unwrap_or(after);
             state.configuration = configuration;
+            // The cursor and discovery cache describe the model installed above.
+            // A failed status or catalog read must leave the discovery retryable.
+            state.discovery = Some(model::RepositoryDiscovery { key, descriptors });
             previous != next
         };
         if changed {

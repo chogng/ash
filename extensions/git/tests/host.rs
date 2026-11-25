@@ -475,6 +475,27 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             host::RegistrationKind::SourceControl { .. }
         )));
         assert!(started.registrations.iter().any(|registration|matches!(&registration.kind,host::RegistrationKind::Command{command,title,..} if command=="git.commit" && title==if language=="zh-CN" {"提交"} else {"Commit"})));
+        // A failed Changes initialization must leave the same workspace cursor retryable.
+        let failed_initialization = supervisor
+            .begin_invoke(invocation("ash.scm", "scm", json!({"method":"initialize"})))
+            .unwrap()
+            .wait_with_client(|operation, _, _| {
+                if matches!(&operation, Operation::BackendRequest { method, .. } if method == "catalog")
+                {
+                    return Ok(ResultValue::Value {
+                        value: json!({"backendError":{"name":"GitOperationFailed","message":"Synthetic discovery catalog failure"}}),
+                    });
+                }
+                client.request(operation)
+            });
+        assert!(
+            failed_initialization
+                .unwrap_err()
+                .to_string()
+                .contains("Synthetic discovery catalog failure")
+        );
+        assert!(client.snapshots.lock().unwrap().is_empty());
+
         let cold_contexts = execute(
             &supervisor,
             &client,

@@ -108,7 +108,7 @@ pub struct WorkspaceFolder {
     pub uri: ResourceUri,
 }
 
-#[derive(Serialize)]
+#[derive(PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryFolder {
     pub dir_id: String,
@@ -119,6 +119,26 @@ pub struct DiscoveryFolder {
     pub submodule_limit: u64,
     pub detect_worktrees: bool,
     pub worktree_limit: u64,
+}
+
+#[derive(PartialEq)]
+pub(crate) struct DiscoveryKey {
+    pub generation: Value,
+    pub folders: Value,
+    pub options: Vec<DiscoveryFolder>,
+    pub configuration: Value,
+}
+
+/// Discovery results for the repository model last applied by the extension.
+pub(crate) struct RepositoryDiscovery {
+    pub key: DiscoveryKey,
+    pub descriptors: Vec<RepositoryDescriptor>,
+}
+
+impl RepositoryDiscovery {
+    pub fn matches_workspace(&self, facts: &Value) -> bool {
+        self.key.generation == facts["generation"] && self.key.folders == facts["folders"]
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -299,9 +319,8 @@ pub struct State {
     pub active_line_signature: String,
     pub installation_signature: Option<Value>,
     pub installation_available: bool,
-    pub discovery_signature: Option<Value>,
+    pub(crate) discovery: Option<RepositoryDiscovery>,
     pub parent_prompts: BTreeSet<String>,
-    pub discovery_result: Vec<RepositoryDescriptor>,
 }
 
 #[derive(Clone)]
