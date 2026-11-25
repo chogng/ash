@@ -25,23 +25,30 @@ suite('auxiliaryBar browser component', () => {
 			await expect(selector).toBeVisible();
 			await expect(title).toBeVisible();
 			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(true));
-			await expect(selector).toBeVisible();
-			for (const position of ['top', 'bottom']) {
+			await expect(selector).toBeHidden();
+			for (const position of ['default', 'top', 'bottom']) {
 				await page.evaluate(position => window.ashAuxiliaryBarIntegration.setLocation(position as ActivityBarPosition), position);
 				await expect(selector).toBeHidden();
 				await expect(title).toBeVisible();
 				await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(false));
 				await expect(selector).toBeVisible();
 				const before = await content.evaluate(element => element.clientHeight);
-				const rowBounds = (await row.boundingBox())!;
-				const contentBounds = (await content.boundingBox())!;
-				if (position === 'top') expect(rowBounds.y + rowBounds.height).toBeLessThanOrEqual(contentBounds.y);
-				else expect(rowBounds.y).toBeGreaterThanOrEqual(contentBounds.y + contentBounds.height);
+				if (position === 'default') {
+					await expect(row).toBeHidden();
+				} else {
+					const rowBounds = (await row.boundingBox())!;
+					const contentBounds = (await content.boundingBox())!;
+					if (position === 'top') {
+						expect(rowBounds.y + rowBounds.height).toBeLessThanOrEqual(contentBounds.y);
+					} else {
+						expect(rowBounds.y).toBeGreaterThanOrEqual(contentBounds.y + contentBounds.height);
+					}
+				}
 				await selector.getByRole('tab', { name: 'Chat', exact: true }).focus();
 				await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(true));
 				await expect(selector).toBeHidden();
 				await expect(draft).toBeFocused();
-				expect(await content.evaluate(element => element.clientHeight)).toBe(before + 36);
+				expect(await content.evaluate(element => element.clientHeight)).toBe(position === 'default' ? before : before + 36);
 				for (const theme of [0, 1, 2, 3]) {
 					await page.evaluate(theme => window.ashAuxiliaryBarIntegration.setTheme(theme), theme);
 					await expect(title).toBeVisible();
@@ -62,6 +69,8 @@ suite('auxiliaryBar browser component', () => {
 			await expect(selector).toBeHidden();
 			await expect(title).toBeVisible();
 			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setLocation('default' as ActivityBarPosition));
+			await expect(selector).toBeHidden();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(false));
 			await expect(selector).toBeVisible();
 			await bar.getByRole('button', { name: 'Clear draft', exact: true }).press('Enter');
 			await expect(draft).toHaveValue('');

@@ -1700,8 +1700,8 @@ suite('search browser component', () => {
 			expect(setting).toEqual({
 				title: locale === 'en' ? 'Auto Hide Activity Bar' : '自动隐藏活动栏',
 				description: locale === 'en'
-					? 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'
-					: '侧边栏的视图切换栏位于顶部或底部，且该位置最多只有一个容器具有可用视图时，隐藏该切换栏。',
+					? 'Hide a side bar view switcher when at most one container there has active views. Applies to the secondary side bar at any Activity Bar location and to the primary side bar at the top or bottom.'
+					: '侧边栏最多只有一个容器具有可用视图时，隐藏该侧边栏的视图切换栏。此设置适用于任意活动栏位置下的辅助侧边栏，以及活动栏位于顶部或底部时的主侧边栏。',
 				value: false,
 			});
 			const sidebar = page.locator('[data-part="sidebar"]');
