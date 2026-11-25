@@ -521,6 +521,43 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Review all files' })).toHaveCount(1);
 });
 
+test('SCM history displays HTML-like commit text literally alongside Markdown', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const subject = 'Document Foo<T>';
+	const body = [
+		'## Changes',
+		'',
+		'Keep the <div> wrapper for Foo<T> and the **public API**.',
+		'',
+		'<div>Example markup</div>',
+		'',
+		'See <https://example.invalid/docs> and `<span>`.',
+		'',
+		'```html',
+		'<span>Example</span>',
+		'```',
+	].join('\n');
+	await run('git', ['commit', '--allow-empty', '-m', subject, '-m', body], { cwd: testWorkspace.directory });
+
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const commit = history.getByRole('treeitem', { name: /Document Foo<T>/u });
+	await commit.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
+
+	const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+	await expect(hover.locator('.ash-scm-graph-hover-subject')).toHaveText(subject);
+	const message = hover.locator('.ash-scm-graph-hover-message');
+	await expect(message).toContainText('Keep the <div> wrapper for Foo<T> and the public API.');
+	await expect(message).toContainText('<div>Example markup</div>');
+	await expect(message.locator('div')).toHaveCount(0);
+	await expect(message.getByRole('heading', { name: 'Changes' })).toBeVisible();
+	await expect(message.locator('strong')).toHaveText('public API');
+	await expect(message.getByRole('link', { name: 'https://example.invalid/docs' })).toHaveAttribute('href', 'https://example.invalid/docs');
+	await expect(message.locator('p code')).toHaveText('<span>');
+	await expect(message.locator('pre code')).toHaveText('<span>Example</span>');
+});
+
 test('SCM history opens committed contents, copies host metadata and restores localized actions after restart', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	const cwd = testWorkspace.directory;
 	const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;

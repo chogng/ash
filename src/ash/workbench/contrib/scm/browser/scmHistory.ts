@@ -448,9 +448,10 @@ function renderCommitDetails(container: HTMLElement, subjectText: string, detail
 	const message = h(document, 'div');
 	message.className = 'ash-scm-graph-hover-message';
 	const body = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
-	// Commit text uses Markdown without granting HTML or command-link trust.
+	// Commit messages can contain literal tags and type parameters alongside Markdown.
 	resources.add(renderMarkdown({ value: body }, {
 		markedOptions: { breaks: true },
+		sanitizerConfig: { replaceWithPlaintext: true },
 		actionHandler: (href, markdown) => { void openLinkFromMarkdown(openerService, href, markdown.isTrusted); },
 	}, message));
 	const statistics = h(document, 'div');
