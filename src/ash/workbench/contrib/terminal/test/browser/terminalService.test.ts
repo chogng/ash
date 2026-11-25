@@ -690,6 +690,36 @@ test('TerminalService resumes reconnectable terminals from their existing output
 	assert.deepEqual(processService.writeCalls.map(call => call.data), ['after reconnect']);
 });
 
+test('TerminalService applies the latest terminal dimensions after reconnecting to the same PTY', async () => {
+	const processes = new TestTerminalProcessService([], 'reconnectable');
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const original = { rows: 24, cols: 80 };
+	const larger = { rows: 36, cols: 100 };
+	const instance = await terminals.createTerminal({ dimensions: original, profile: { type: 'default' } });
+	instance.resize(larger);
+	await waitFor(() => processes.resizeCalls.length === 1);
+
+	processes.emitConnectionState('crashed');
+	await waitFor(() => instance.state === 'reconnecting');
+	const recovery = deferred<ITerminalProcessReadResult>();
+	processes.queueRead(recovery.promise);
+	const readsBeforeRecovery = processes.readCursors.length;
+	processes.emitConnectionState('ready');
+	await waitFor(() => processes.readCursors.length > readsBeforeRecovery);
+	instance.resize({ rows: 30, cols: 90 });
+	instance.resize(original);
+	assert.deepEqual(processes.resizeCalls, [{ terminalId: 'terminal-1', dirId: 'workspace', ...larger }]);
+
+	recovery.resolve(readResult({}));
+	await waitFor(() => instance.state === 'running');
+	assert.deepEqual(processes.resizeCalls, [
+		{ terminalId: 'terminal-1', dirId: 'workspace', ...larger },
+		{ terminalId: 'terminal-1', dirId: 'workspace', ...original },
+	]);
+	assert.equal(processes.createCalls.length, 1);
+});
+
 test('TerminalService exposes failed reconnectable recovery as a relaunchable error', async () => {
 	const processService = new TestTerminalProcessService([
 		readResult({ nextSequence: 1 }),

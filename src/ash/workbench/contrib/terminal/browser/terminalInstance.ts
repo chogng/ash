@@ -996,6 +996,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
 		lifetime.add(manager.onPtyReconnect(() => {
+			// Layout can change while disconnected, and the old connection can drop a queued resize.
+			const { cols, rows } = this.dimensions;
+			void manager.resize(cols, rows).catch(onUnexpectedError);
 			this.setState('running');
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
