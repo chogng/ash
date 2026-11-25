@@ -205,7 +205,7 @@ export function registerLayoutActions(
 					command: {
 						id: 'ash.sessions.toggleSidebar',
 						title: localize2({ bundle: 'ash', key: 'sessions.navigation.showSidebar' }, 'Show sidebar'),
-						icon: Lxicon.layoutSidebarLeftOffSession,
+						icon: Lxicon.layoutSidebarLeftOff,
 						toggled: {
 							condition: SideBarVisibleContext.isEqualTo(true),
 							title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
@@ -213,7 +213,7 @@ export function registerLayoutActions(
 								{ bundle: 'ash', key: 'sessions.navigation.hideSidebar' },
 								'Hide sidebar',
 							),
-							icon: Lxicon.layoutSidebarLeftSession,
+							icon: Lxicon.layoutSidebarLeft,
 						},
 					},
 					group: 'navigation',

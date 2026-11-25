@@ -2903,7 +2903,7 @@ emptyWorkspaceTest(
 		await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
 		await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeHidden();
 		const sidebarToggle = titlebar.getByRole('button', { name: 'Hide sidebar' });
-		await expect(sidebarToggle.locator('[data-ash-icon-id="layout-sidebar-left-session"]')).toBeVisible();
+		await expect(sidebarToggle.locator('[data-ash-icon-id="layout-sidebar-left"]')).toBeVisible();
 		const divider = await sessionsPage.evaluate(() => {
 			const sidebar = document.querySelector<HTMLElement>('[data-part="sidebar"]')!;
 			const sessions = document.querySelector<HTMLElement>('[data-part="sessions"]')!;
@@ -2917,7 +2917,7 @@ emptyWorkspaceTest(
 		await sidebarToggle.click();
 		await expect(sessionsPage.locator("[data-part='sidebar']")).toBeHidden();
 		const showSidebar = titlebar.getByRole('button', { name: 'Show sidebar' });
-		await expect(showSidebar.locator('[data-ash-icon-id="layout-sidebar-left-off-session"]')).toBeVisible();
+		await expect(showSidebar.locator('[data-ash-icon-id="layout-sidebar-left-off"]')).toBeVisible();
 		await showSidebar.click();
 		await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 		if (process.platform === 'darwin') {
@@ -3374,6 +3374,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(sidebar).toBeHidden();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 		await expect(toggle).toHaveAccessibleName('Show sidebar');
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-left-off"]')).toBeVisible();
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toggle.hover();
@@ -3396,7 +3397,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(toggle).toHaveAccessibleName('Hide sidebar');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('border-radius', '8px');
-		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-left-session"]')).toBeVisible();
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-left"]')).toBeVisible();
 		if (hasWindowMenu) {
 			await page.keyboard.press('ArrowLeft');
 			await expect(menu).toBeFocused();

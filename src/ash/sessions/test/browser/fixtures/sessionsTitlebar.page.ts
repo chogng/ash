@@ -55,7 +55,7 @@ resources.add(MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
 	command: { id: 'test.sessionInformation', title: 'Session information', icon: Lxicon.info }, group: 'navigation',
 }));
 for (const [id, title, icon] of [
-	['test.sidebar', 'Toggle sidebar', Lxicon.layoutSidebarLeftSession],
+	['test.sidebar', 'Toggle sidebar', Lxicon.layoutSidebarLeft],
 	['test.back', 'Back', Lxicon.chevronLeft],
 	['test.forward', 'Forward', Lxicon.chevronRight],
 ] as const) {

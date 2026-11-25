@@ -327,11 +327,11 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 						command: {
 							...toggleSidePane,
 							title: localize2({ bundle: 'ash', key: 'sessions.layout.showSidePane' }, 'Show Code side panel'),
-							icon: Lxicon.layoutSidebarRightOffSession,
+							icon: Lxicon.layoutSidebarRightOff,
 							toggled: {
 								condition: sidePaneVisibleContext.isEqualTo(true),
 								title: localize2({ bundle: 'ash', key: 'sessions.layout.hideSidePane' }, 'Hide Code side panel'),
-								icon: Lxicon.layoutSidebarRightSession,
+								icon: Lxicon.layoutSidebarRight,
 							},
 						},
 						when: codeWhen,
@@ -432,7 +432,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOffSession },
+						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOff },
 						when: ContextKeyExpr.and(editorShown, filesTool),
 						group: 'navigation',
 						order: 91,
@@ -441,7 +441,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...showEditor, icon: Lxicon.layoutSidebarRightSession },
+						command: { ...showEditor, icon: Lxicon.layoutSidebarRight },
 						when: ContextKeyExpr.and(editorHidden, filesTool),
 						group: 'navigation',
 						order: 91,
