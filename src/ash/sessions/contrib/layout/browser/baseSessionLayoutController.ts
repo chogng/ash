@@ -47,7 +47,7 @@ export abstract class BaseLayoutController extends Disposable {
 					precondition: conversation,
 					f1: true,
 					menu: [
-						{ id: Menus.TitleBarSidePane, when: conversation, group: 'navigation' },
+						{ id: Menus.TitleBarSidePane, when: conversation, group: 'navigation', order: 2 },
 						{ id: MenuId.MenubarViewMenu, when: conversation, group: '2_code_layout', order: 0 },
 					],
 				});

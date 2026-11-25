@@ -7,7 +7,6 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
-import { DesktopEditorArea } from '../../browser/parts/desktopEditorArea.js';
 import { SessionsEditorToolContext, type DesktopEditorTool } from '../../common/contextkeys.js';
 import { EditorParts } from '../../browser/parts/editorParts.js';
 import { DesktopToolEditorPart } from '../../browser/parts/desktopToolEditorPart.js';
@@ -46,8 +45,8 @@ export function createDesktopEditorTestServices(services: InstantiationService, 
 			root, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
 		})));
 	}
-	const area = resources.add(services.createInstance(DesktopEditorArea, root));
-	const editor = resources.add(services.createInstance(EditorParts, area, options, constObservable(false)));
+	const editor = resources.add(services.createInstance(EditorParts, root, options, constObservable(false)));
+	const area = editor.area;
 	const contextKeys = services.get(IContextKeyService);
 	const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 	for (const part of editor.parts) {

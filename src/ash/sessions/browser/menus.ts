@@ -1,5 +1,5 @@
-import { MenuId, type IMenuItem } from '../../platform/actions/common/actions.js';
-import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { MenuId } from '../../platform/actions/common/actions.js';
+import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 
 export const Menus = {
 	ActivityBar: new MenuId('SessionsActivityBar'),
@@ -37,6 +37,7 @@ export const Menus = {
 	SessionTitleBar: new MenuId('SessionsSessionTitleBar'),
 	EditorPartLayout: new MenuId('SessionsEditorPartLayout'),
 	SessionsEditorTabsBarAddTab: new MenuId('SessionsEditorTabsBarAddTab'),
+	SessionsEditorStart: new MenuId('SessionsEditorStart'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
 	SessionsChangesScope: new MenuId('SessionsChangesScope'),
@@ -49,19 +50,4 @@ export const activityBarPositionCommandPrefix = 'sessions.action.activityBar.pos
 
 export const SessionActivityBarVisibleContext = new RawContextKey<boolean>('sessions.sessionActivityBarVisible', false);
 export const SessionsFlatLayoutContext = new RawContextKey<boolean>('sessions.flatLayout', false);
-export const EditorToolMaximizedContext = new RawContextKey<boolean>('sessions.editorToolMaximized', false);
 export const EditorHasMultipleToolsContext = new RawContextKey<boolean>('sessions.editorHasMultipleTools', false);
-
-/** Both menu placements share the tool's command and its availability rules. */
-export function sessionToolMenuItems(item: IMenuItem): { id: MenuId; item: IMenuItem; }[] {
-	return [
-		{
-			id: Menus.TitleBarRightLayout,
-			item: { ...item, when: ContextKeyExpr.and(item.when, ContextKeyExpr.not(SessionActivityBarVisibleContext.key)) },
-		},
-		{
-			id: Menus.SessionActivityBar,
-			item: { ...item, when: ContextKeyExpr.and(item.when, SessionActivityBarVisibleContext.isEqualTo(true)) },
-		},
-	];
-}

@@ -1,0 +1,43 @@
+.ash-editor-start {
+	box-sizing: border-box;
+	display: flex;
+	block-size: 100%;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+}
+
+.ash-editor-start-content {
+	display: grid;
+	gap: var(--ash-spacing-size240);
+	inline-size: min(100%, 400px);
+	margin: auto;
+}
+
+.ash-editor-start-search {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-editor-start-search > .ash-input-box {
+	flex: 1;
+	min-inline-size: 0;
+}
+
+.ash-editor-start-shortcuts h2 {
+	margin: 0 0 var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-editor-start-actions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-editor-start-actions > .ash-button {
+	justify-content: flex-start;
+	min-inline-size: 0;
+}

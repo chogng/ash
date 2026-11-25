@@ -52,3 +52,138 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
+
+.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area,
+.ash-desktop-editor-area.has-product-page {
+	background: var(--ash-sessions-conversation-background);
+}
+
+.ash-desktop-editor-area > .ash-workbench-part-content {
+	position: absolute;
+	inset: 0;
+}
+
+.ash-desktop-editor-area .ash-tool-editor-workspace {
+	box-sizing: border-box;
+}
+
+.ash-desktop-editor-area .ash-editor-tabs-and-actions.ash-editor-group-header {
+	background: var(
+		--ash-editor-group-header-surface,
+		var(--ash-editor-background)
+	);
+}
+
+.ash-sessions-tool-editor .ash-editor-title-with-group-header::after {
+	content: none;
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	.ash-editor-title-with-group-header::after {
+	content: "";
+	height: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
+}
+
+:is(
+		.ash-sessions-tool-editor .ash-editor-group-header,
+		.ash-sessions-titlebar-editor-region > .ash-editor-tab-strip
+	)
+	.ash-tab-list-inset {
+	--ash-tab-height: var(--ash-toolbar-actionSize);
+	--ash-tabList-activeBackground: var(--ash-sessions-selectionBackground);
+	--ash-tab-list-inactive-background: transparent;
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+
+	& .ash-tab-close-action {
+		--ash-toolbar-actionSize: var(--ash-spacing-size240);
+	}
+
+	& .ash-tab-list-scroll-content > .ash-action-bar {
+		padding-inline-start: 0;
+	}
+
+	& .ash-tab {
+		border-radius: var(--ash-cornerRadius-medium);
+
+		&:not(.checked, .selected):hover {
+			background-color: var(
+				--ash-tabList-hoverBackground,
+				var(--ash-editorGroupHeader-tabsBackground)
+			);
+		}
+
+		&.checked {
+			box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+				var(--ash-contrastBorder, transparent);
+		}
+	}
+}
+
+.ash-sessions-tool-editor[data-editor-tool="browser"]
+	:is(.ash-tab-list-sizing-fit, .ash-tab-list-sizing-shrink)
+	.ash-tab {
+	max-width: 240px;
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	[data-editor-tool="terminal"]
+	.ash-editor-group-header
+	.ash-tab-list-inset {
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size80);
+
+	& .ash-tab {
+		border-radius: var(--ash-cornerRadius-large);
+	}
+
+	& .ash-tab-label .ash-icon-label-icon {
+		display: none;
+	}
+}
+
+.ash-desktop-editor-area [data-editor-tool="terminal"] {
+	--ash-editor-group-header-surface: var(
+		--ash-terminal-background,
+		var(--ash-editor-background)
+	);
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	> .ash-workbench-part-frame {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	.ash-workbench-part-frame
+	> .ash-workbench-part {
+	position: relative;
+	/* Tool content owns scrolling; focus reveal must not scroll its host. */
+	overflow: clip;
+	background: var(--ash-editor-background);
+}
+
+.ash-desktop-editor-area
+	.ash-product-page-host
+	> .ash-workbench-part-frame
+	> .ash-workbench-part {
+	background: transparent;
+	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	.ash-code-editor-groups
+	.ash-editor-group:not(.ash-code-page-group) {
+	border-radius: 0;
+	box-shadow: none;
+}

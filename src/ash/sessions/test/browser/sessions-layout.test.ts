@@ -95,16 +95,14 @@ class TestDesktopEditorPart extends DesktopMainEditorPart {
 	public retain(resource: import('../../../base/common/lifecycle.js').IDisposable): void { this._register(resource); }
 }
 
-test('opening Files retains one owned AuxiliaryBarPart without creating an editor input', async () => {
-	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+test('opening Files creates one tab and reuses its owned AuxiliaryBarPart', async () => {
 	const { ViewPane } = await import('../../../workbench/browser/parts/views/viewPane.js');
 	const { ViewContainerLocation } = await import('../../../workbench/common/views.js');
 	const { SyncDescriptor } = await import('../../../platform/instantiation/common/descriptors.js');
 	using resources = new (await import('../../../base/common/lifecycle.js')).DisposableStore();
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
 	registerDesktopDetailsTestServices(resources, services);
-	using registry = new EditorPaneRegistry();
-	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry });
+	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, {});
 	let created = 0;
 	class TestDetailsView extends ViewPane {
 		constructor(container: HTMLElement, options: import('../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) {
@@ -122,9 +120,9 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 	assert.equal(created, 0);
 	const group = editor.activeGroup;
 	await editor.openFiles();
-	assert.deepEqual(group.inputs, []);
-	assert.equal(group.activePane, undefined);
-	assert.equal(group.domNode.querySelector('[role="tab"]'), null);
+	assert.deepEqual(group.inputs.map(input => input.resource.scheme), ['ash-sessions-files']);
+	assert.ok(group.activePane);
+	assert.equal(group.domNode.querySelector('[role="tab"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(editor.detailsOpen, true);
 	assert.equal(editor.auxiliaryBar, auxiliary);
 	assert.equal(detailsStorage.get('workbench.auxiliarybar.activeViewContainer', StorageScope.WORKSPACE), 'window.properties');
@@ -148,7 +146,7 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 			editors: [{ input: { typeId: 'sessions.editorInput.files', value: {} }, paneId: 'ash.sessions.emptyFileEditor', preview: false }],
 		}))
 	}, { preserveGroups: [editor.pageGroupId] });
-	assert.deepEqual(editor.activeGroup.inputs, []);
+	assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.scheme), ['ash-sessions-files']);
 	editor.hideDetails();
 	assert.equal(editor.detailsOpen, false);
 	assert.equal(editor.auxiliaryBar, auxiliary);
@@ -279,9 +277,10 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	const terminalGroup = editor.activeGroup;
 	const terminalPane = terminalGroup.activePane;
 	await editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
-	await editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
-	assert.equal(editor.groups.filter(group => editor.isGroupVisible(group.id)).length, 4);
-	assert.equal(created, 4);
+	const browserGroup = editor.activeGroup;
+
+	assert.equal(editor.groups.filter(group => editor.isGroupVisible(group.id)).length, 3);
+	assert.equal(created, 3);
 	area.moveTool('terminal', 'files', Direction.Right);
 	assert.equal(terminalGroup.activePane, terminalPane);
 	assert.equal(terminalGroup.domNode.closest('[data-editor-tool]')?.getAttribute('data-editor-tool'), 'terminal');
@@ -290,11 +289,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
 	assert.equal(editor.isGroupVisible(terminalGroup.id), true);
 	assert.equal(terminalGroup.activePane, terminalPane);
-	assert.equal(created, 4);
-	const before = area.saveLayout();
-	editor.toggleMaximizeTool(terminalGroup.id);
-	editor.toggleMaximizeTool(terminalGroup.id);
-	assert.deepEqual(area.saveLayout(), before);
+	assert.equal(created, 3);
 	const filePane = fileGroup.activePane;
 	const otherGroups = editor.groups.filter(group => group !== fileGroup && editor.isGroupVisible(group.id));
 	await editor.toggleFileEditors();
@@ -304,7 +299,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	await editor.toggleFileEditors();
 	assert.equal(editor.isGroupVisible(fileGroup.id), true);
 	assert.equal(fileGroup.activePane, filePane);
-	assert.equal(created, 4);
+	assert.equal(created, 3);
 	const mixed = { resource: URI.file('/fixture/mixed.txt') };
 	await editor.openEditor(mixed, { pinned: true }, { groupId: terminalGroup.id });
 	await editor.toggleFileEditors();
@@ -323,29 +318,30 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 		using layout = createLayout(browserEnvironment.window.document.body, parts, { initialDimension: new Dimension(1_245, 890) });
 		layout.showPart('editor');
 		layout.resizePart('editor', new Dimension(300, 800));
-		area.moveTool('terminal', 'changes', Direction.Right);
+		area.moveTool('terminal', 'browser', Direction.Right);
 		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
 		const wide = new Dimension(1_600, 890);
+		editor.activateGroup(browserGroup.id);
 		layout.layout(wide);
 		const arranged = area.saveLayout();
 		const terminalEditors = terminalGroup.inputs.slice();
 		layout.layout(new Dimension(980, 890));
 		assert.equal(area.isToolVisible('terminal'), true);
-		assert.equal(area.isToolVisible('changes'), true);
+		assert.equal(area.isToolVisible('browser'), true);
 		assert.deepEqual(area.saveLayout(), arranged);
-		const narrow = new Dimension(980, 390);
+		const narrow = new Dimension(980, 200);
 		layout.layout(narrow);
 		assert.equal(layout.isPartVisible('sessions'), true);
 		assert.equal(area.isToolVisible('terminal'), false);
-		assert.equal(area.isToolVisible('changes'), true);
+		assert.equal(area.isToolVisible('browser'), true);
 		assert.deepEqual(area.saveLayout(), arranged);
 		await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
 		assert.equal(area.isToolVisible('terminal'), true);
-		assert.equal(area.isToolVisible('changes'), false);
+		assert.equal(area.isToolVisible('browser'), false);
 		assert.deepEqual(terminalGroup.inputs, terminalEditors);
 		assert.equal(terminalGroup.activePane, terminalPane);
 
-		layout.layout(new Dimension(760, 390));
+		layout.layout(new Dimension(760, 200));
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.equal(layout.isPartRequested('sidebar'), true);
 		assert.equal(layout.isPartVisible('sessions'), true);
@@ -360,7 +356,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 		assert.equal(layout.isPartRequested('editor'), true);
 		layout.layout(wide);
 		assert.equal(layout.isPartVisible('editor'), true);
-		assert.equal(area.isToolVisible('changes'), true);
+		assert.equal(area.isToolVisible('browser'), true);
 		assert.equal(area.isToolVisible('terminal'), true);
 		assert.deepEqual(area.saveLayout(), arranged);
 

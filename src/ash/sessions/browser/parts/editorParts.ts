@@ -1,3 +1,4 @@
+import './media/editorPart.css';
 import { isEditorPaneWithSelection } from '../../../workbench/common/editor.js';
 import { isEditorPaneWithViewState } from '../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { TextEditorSelectionSource } from '../../../platform/editor/common/editor.js';
@@ -16,6 +17,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../workbench/commo
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { parseEditorWorkingSet, parseEditorWorkingSetLayout, type ApplyEditorWorkingSetOptions, type EditorWorkingSet, type EditorWorkingSetLayout, type EditorWorkingSetTarget, type EditorGroupWorkingSet } from '../../../workbench/services/editor/common/editorWorkingSet.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { isSearchEditorInput, SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { URI } from '../../../base/common/uri.js';
 import { BrowserViewUri } from '../../../platform/browserView/common/browserViewUri.js';
@@ -29,7 +31,7 @@ import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWi
 import { DesktopMainEditorPart } from './desktopEditorPart.js';
 import { DesktopToolEditorPart } from './desktopToolEditorPart.js';
 import { desktopEditorTools, SessionsEditorToolContext, type DesktopEditorTool } from '../../common/contextkeys.js';
-import { DesktopEditorArea, type ToolSlot } from './desktopEditorArea.js';
+import { EditorArea, type ToolSlot } from './editorPart.js';
 
 /** Documents are serialized once. Sessions adds only their Part membership and geometry. */
 export interface DesktopEditorWorkingSet extends EditorWorkingSet {
@@ -51,7 +53,6 @@ function editorTool(input: IResourceEditorInput): DesktopEditorTool {
 	if (input instanceof SessionSideChatEditorInput) { return 'chat'; }
 	if (input instanceof TerminalEditorInput) { return 'terminal'; }
 	if (input.resource.scheme === BrowserViewUri.scheme) { return 'browser'; }
-	if (input.resource.scheme === 'ash-session-changes') { return 'changes'; }
 	if (isSearchEditorInput(input)) { return 'search'; }
 	return 'files';
 }
@@ -60,7 +61,6 @@ function serializedTool(entry: EditorGroupWorkingSet['editors'][number]): Deskto
 	if (entry.input.typeId === SessionSideChatEditorInput.ID) { return 'chat'; }
 	if (entry.input.typeId === TerminalEditorInput.ID) { return 'terminal'; }
 	if (entry.input.typeId === 'workbench.editorInput.browser') { return 'browser'; }
-	if (entry.input.typeId === 'sessions.editorInput.changes') { return 'changes'; }
 	if (entry.paneId === SearchEditorID) { return 'search'; }
 	const resourceInput = entry.input.value;
 	if (entry.input.typeId === 'workbench.editorInput.resource' && isRecord(resourceInput) && typeof resourceInput.resource === 'string'
@@ -144,9 +144,10 @@ export class EditorParts extends WorkbenchEditorParts {
 	private waitForWorkingSet = () => Promise.resolve();
 	private readonly hosts: ReadonlyMap<DesktopEditorTool, EditorPart>;
 	public readonly filesPart: DesktopMainEditorPart;
+	public readonly area: EditorArea;
 
 	constructor(
-		public readonly area: DesktopEditorArea,
+		container: HTMLElement,
 		options: IEditorPartOptions,
 		flatLayout: IObservable<boolean>,
 		@IAuxiliaryWindowService windows: IAuxiliaryWindowService,
@@ -159,6 +160,7 @@ export class EditorParts extends WorkbenchEditorParts {
 		// The base coordinator needs the main Part at construction time.
 		using pending = new DisposableStore();
 		const resources = pending.add(new DisposableStore());
+		const area = resources.add(services.createInstance(EditorArea, container));
 		const createTool = <T extends EditorPart>(
 			ctor: Constructor<T>,
 			tool: DesktopEditorTool,
@@ -184,6 +186,7 @@ export class EditorParts extends WorkbenchEditorParts {
 		});
 		super(filesPart, windows, undefined, accessibility, storage, services, configuration);
 		this.filesPart = filesPart;
+		this.area = area;
 		pending.delete(resources);
 		this._register(resources);
 		const hosts = new Map<DesktopEditorTool, EditorPart>([['files', filesPart]]);
@@ -191,19 +194,18 @@ export class EditorParts extends WorkbenchEditorParts {
 		try {
 			for (const tool of desktopEditorTools) {
 				if (tool === 'files') continue;
-				const toolTitleActions: IEditorPartOptions['titleActions'] = titleActions && (tool === 'changes' || tool === 'terminal') ? {
+				const toolTitleActions: IEditorPartOptions['titleActions'] = titleActions && tool === 'terminal' ? {
 					menuService: titleActions.menuService,
 					contextMenuProvider: {
 						showContextMenu: delegate =>
 							titleActions.contextMenuProvider.showContextMenu(
-								tool === 'changes' || flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
+								flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
 							),
 					},
 				} : titleActions;
 				hosts.set(tool, createTool(DesktopToolEditorPart, tool, {
 					...toolOptions,
 					canDropEditor: input => (tool === 'search') === isSearchEditorInput(input),
-					hideTabs: tool === 'changes',
 					titleActions: toolTitleActions,
 				}));
 			}
@@ -221,7 +223,7 @@ export class EditorParts extends WorkbenchEditorParts {
 				if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
 					const host = [...this.hosts.values()].find(part => part.groups.some(group => group.id === event.groupId));
 					const group = host?.groups.find(candidate => candidate.id === event.groupId);
-					if (host && host !== filesPart && group && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
+					if (host && group && group.id !== this.pageGroupId && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
 				}
 				this.syncArea();
 			}));
@@ -258,7 +260,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	public get filesDetailsOpen(): boolean { return this.filesPart.detailsOpen; }
 	public get filesDetailsVisible(): boolean { return this.filesPart.detailsVisible; }
 	public get fileEditorsVisible(): boolean {
-		return this.filesPart.fileGroups.some(group => this.filesPart.isGroupVisible(group.id));
+		return this.filesPart.fileGroups.some(group => group.inputs.length > 0 && this.filesPart.isGroupVisible(group.id));
 	}
 
 	public setGroupScope(contains: (id: number) => boolean, supportsFilesDetails: () => boolean = () => true): IDisposable {
@@ -288,7 +290,7 @@ export class EditorParts extends WorkbenchEditorParts {
 		const tools: DesktopEditorTool[] = [];
 		// A group is made visible before opening its editor pane. It can prepare
 		// the pane without reserving space in the outer Grid.
-		let hasContent = productPage || this.filesPart.hasDetailsContent;
+		let hasContent = productPage;
 		for (const [tool, part] of this.hosts) {
 			if (productPage && tool !== 'files') continue;
 			const groups = part.groups.filter(group => part.isGroupVisible(group.id));
@@ -324,7 +326,6 @@ export class EditorParts extends WorkbenchEditorParts {
 	public override revealReturnedEditors(group: IEditorGroupView): void {
 		this.activateGroup(group.id);
 		this.syncArea();
-		this.area.revealTool(this.toolForGroup(group.id));
 		this.revealed.fire();
 	}
 
@@ -350,12 +351,7 @@ export class EditorParts extends WorkbenchEditorParts {
 		const pane = await super.openEditor(input, options, target);
 		this.syncArea();
 		if (!options.inactive && !options.preserveFocus) {
-			const group = host.groups.find(group => group.activePane === pane);
-			const restored = group && this.area.revealTool(tool);
-			// Reopening a tool's selected tab may leave another tool active.
-			if (restored) { this.activateGroup(group.id); }
 			this.revealed.fire();
-			if (restored) pane.focus();
 		}
 		return pane;
 	}
@@ -394,24 +390,22 @@ export class EditorParts extends WorkbenchEditorParts {
 		}
 	}
 
-	public openFiles(): void {
-		this.filesPart.openFiles();
+	public async openFiles(): Promise<void> {
+		await this.filesPart.openFiles();
 		this.syncArea();
 	}
 
 	public toggleFileEditors(): Promise<boolean> {
-		return this.toggleToolEditors(input => editorTool(input) === 'files', {
-			emptyGroupId: this.filesDetailsOpen ? this.filesPart.fileGroups[0]?.id : undefined,
-		});
+		return this.toggleToolEditors(input => editorTool(input) === 'files');
 	}
 
-	public getToolGroups(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; } = {}): readonly IEditorGroupView[] {
+	public getToolGroups(accepts: (input: IResourceEditorInput) => boolean): readonly IEditorGroupView[] {
 		return this.mainWindowGroups.filter(group => group.id !== this.pageGroupId && this.inWorkingSet(group.id)
-			&& (group.inputs.some(accepts) || group.id === options.emptyGroupId));
+			&& group.inputs.some(accepts));
 	}
 
-	public async toggleToolEditors(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; } = {}): Promise<boolean> {
-		const groups = this.getToolGroups(accepts, options);
+	public async toggleToolEditors(accepts: (input: IResourceEditorInput) => boolean): Promise<boolean> {
+		const groups = this.getToolGroups(accepts);
 		if (!groups.length) { return false; }
 		const visible = groups.some(group => this.isGroupVisible(group.id) && this.area.isToolVisible(this.toolForGroup(group.id)));
 		for (const group of groups) { this.setGroupVisible(group.id, !visible); }
@@ -427,7 +421,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	public hideTool(groupId: number = this.activeGroup.id): void {
 		const part = this.owner(groupId);
 		const focused = part.domNode.ownerDocument.activeElement;
-		const hadFocus = part.domNode.contains(focused) || part.groups.some(group => group.headerElement.contains(focused));
+		const hadFocus = part.domNode.contains(focused) || part.groups.some(group => group.containsFocus(focused));
 		// A retained Chat group is a valid target outside the active Code working set.
 		for (const group of part.groups) {
 			if (group.id !== this.pageGroupId && (group.id === groupId || this.inWorkingSet(group.id))) { this.setGroupVisible(group.id, false); }
@@ -437,11 +431,6 @@ export class EditorParts extends WorkbenchEditorParts {
 			this.activateGroup(next.id);
 			this.focus();
 		}
-	}
-
-	public toggleMaximizeTool(groupId: number = this.activeGroup.id): void {
-		const host = this.owner(groupId);
-		this.area.toggleMaximize([...this.hosts].find(([, part]) => part === host)![0]);
 	}
 
 	public override saveWorkingSet(id: string, excludedGroups: readonly number[] = []): DesktopEditorWorkingSet {
@@ -514,8 +503,64 @@ export class EditorParts extends WorkbenchEditorParts {
 		} : metadata;
 	}
 
+	/** Fold the former Changes Part into the Files group before restoring live editors. */
+	private migrateChangesWorkingSet(saved: EditorWorkingSet): DesktopEditorWorkingSet {
+		const metadata = (saved as DesktopEditorWorkingSet).toolParts;
+		if (!metadata || !isRecord(metadata.parts) || !('changes' in metadata.parts)) return saved;
+		const { changes, ...parts } = metadata.parts;
+		if (metadata.version !== 1 || !isRecord(changes) || !Array.isArray(changes.groups) || !Array.isArray(parts.files?.groups)) {
+			throw new TypeError('Invalid legacy Files and Changes membership');
+		}
+		const filesIds = new Set(parts.files.groups);
+		const sourceIds = [...parts.files.groups, ...changes.groups];
+		const sourceGroups = saved.groups.filter(group => sourceIds.includes(group.id));
+		if (sourceGroups.length !== sourceIds.length || sourceIds.some(id => !Number.isSafeInteger(id))) {
+			throw new TypeError('Invalid legacy Files and Changes group identity');
+		}
+		if (parts.files.layout !== undefined) parseEditorWorkingSetLayout(parts.files.layout, filesIds);
+		if (changes.layout !== undefined) parseEditorWorkingSetLayout(changes.layout, new Set(changes.groups));
+		const missing = (['chat', 'search'] as const).filter(tool => parts[tool] === undefined);
+		const geometry = this.area.migrateChangesLayout(metadata.layout, missing);
+		const active = saved.groups[saved.activeGroupIndex];
+		const selected = sourceGroups.includes(active!) ? active : sourceGroups.find(group => filesIds.has(group.id!)) ?? sourceGroups[0];
+		let groups = saved.groups;
+		let activeGroupIndex = saved.activeGroupIndex;
+		if (selected) {
+			const filesTab = { input: { typeId: EmptyFileEditorInput.ID, value: {} }, preview: false } as const;
+			const editors = sourceGroups.flatMap(group => group.editors.length || !filesIds.has(group.id!) || !geometry.filesVisible ? group.editors : [filesTab]);
+			const activeEntry = selected.editors[selected.activeEditorIndex];
+			const combined = { ...selected, editors, activeEditorIndex: editors.length ? Math.max(0, activeEntry ? editors.indexOf(activeEntry) : editors.indexOf(filesTab)) : -1 };
+			groups = saved.groups.flatMap(group => group === selected ? [combined] : sourceGroups.includes(group) ? [] : [group]);
+			activeGroupIndex = Math.max(0, groups.indexOf(sourceGroups.includes(active!) ? combined : active!));
+		}
+		const mergeTool = (tool: DesktopEditorTool | 'changes'): DesktopEditorTool => tool === 'changes' ? 'files' : tool;
+		const positioned = metadata.positioned && [...new Set(metadata.positioned.map(mergeTool))];
+		const slots = metadata.closedSlots as (typeof metadata.closedSlots & { changes?: ToolSlot; });
+		const closedSlots = slots && Object.fromEntries(Object.entries(slots).flatMap(([key, slot]) => {
+			if (key === 'changes' && slots.files) return [];
+			const tool = mergeTool(key as DesktopEditorTool | 'changes');
+			const anchors = [...new Set(slot.anchors.map(mergeTool))].filter(anchor => anchor !== tool);
+			const opposite = [...new Set(slot.opposite.map(mergeTool))].filter(anchor => anchor !== tool);
+			return anchors.length ? [[tool, { ...slot, anchors, opposite }]] : [];
+		}));
+		const visible = geometry.filesVisible || geometry.changesVisible;
+		return {
+			...saved, groups, activeGroupIndex, layout: undefined,
+			toolParts: {
+				...metadata, layout: geometry.layout, positioned, closedSlots,
+				parts: {
+					...parts, files: {
+						groups: selected ? [selected.id!] : [],
+						layout: selected && { type: 'leaf', data: { groupId: selected.id! }, visible, size: selected.size, priority: 0 },
+					}
+				},
+			},
+		};
+	}
+
 	/** Repair Files membership for Search tabs even if the saved layout already has a Search tool. */
 	public migrateWorkingSet(saved: EditorWorkingSet): DesktopEditorWorkingSet {
+		saved = this.migrateChangesWorkingSet(saved);
 		const toolParts = this.readParts(saved);
 		if (!toolParts) return saved;
 		const files = toolParts.parts.files;
@@ -638,9 +683,7 @@ export class EditorParts extends WorkbenchEditorParts {
 					// A legacy mixed group becomes several tool groups. Its selected tab chooses the active Part.
 					if (metadata || tool === activeTool || !restored.has(from)) { restored.set(from, to); }
 				}
-				if (tool !== 'files' || !this.filesDetailsOpen) {
-					for (const group of created) { if (!group.inputs.length) { part.setGroupVisible(group.id, false); } }
-				}
+				for (const group of created) { if (!group.inputs.length) { part.setGroupVisible(group.id, false); } }
 			}
 			restoringTool = undefined;
 			const layout = metadata?.layout ?? (saved === 'empty' ? undefined : legacyToolLayout(saved));

@@ -111,7 +111,9 @@ test('Sessions layout commands update menu state from their owners and release w
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
-	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
+	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.tooltip, action.enabled, action.checked]);
+	using palette = new MenuService(commands, contextKeys).createMenu(MenuId.CommandPalette);
+	const terminalAction = () => palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel');
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
 		const tools = layoutMenu.getActions().find(([group]) => group === '1_tools')?.[1];
@@ -119,13 +121,14 @@ test('Sessions layout commands update menu state from their owners and release w
 			['ash.sessions.openSideChat', Lxicon.chat, true],
 			['ash.sessions.openIOSSimulator', Lxicon.deviceMobile, false],
 		]);
-		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.equal(terminalAction()?.enabled, true);
 		activeSelection = {
 			kind: 'untitled',
 			session: { untitledSessionId: 'new', title: 'New', model: undefined, agent: undefined, workspace: { type: 'current' } },
 		};
 		changed.fire();
-		assert.deepEqual(layoutMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.togglePanel']);
+		assert.deepEqual(layoutMenu.getActions(), []);
+		assert.equal(terminalAction()?.enabled, true);
 		hasDesktopChatSource.set(true, undefined);
 		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
 		hasDesktopChatSource.set(false, undefined);
@@ -134,7 +137,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		changed.fire();
 		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
 		assert.deepEqual(navigationState(), [true, false]);
-		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.equal(terminalAction()?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		using goMenu = new MenuService(commands, contextKeys).createMenu(MenuId.MenubarGoMenu);
 		assert.deepEqual(goMenu.getActions().flatMap(([, actions]) => actions).filter(action => action.id.startsWith('ash.sessions.')).map(action => [action.id, action.enabled]), [
@@ -162,7 +165,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		await commands.executeCommand('ash.sessions.forward');
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
-		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.equal(terminalAction()?.enabled, true);
 		const input = { resource: URI.file('/fixture/retained.md'), editorId: 'test.retainedLayout' };
 		const pageGroupId = hosts.editor.pageGroupId;
 		hosts.editor.setGroupVisible(pageGroupId, true);
@@ -192,9 +195,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		await hosts.editor.openEditor(browserInput, { pinned: true }, { groupId: browserGroup.id });
 		SessionsCodeEditorContext.bindTo(contextKeys).set(false);
 		using toolMenu = new MenuService(commands, contextKeys).createMenu(Menus.SessionsEditorHeaderLayout);
-		assert.deepEqual(toolMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), [
-			'sessions.toggleSessionPart',
-		]);
+		assert.deepEqual(toolMenu.getActions(), []);
 		await commands.executeCommand('sessions.closeEditorPart', { groupId: browserGroup.id });
 		assert.equal(hosts.editor.isGroupVisible(browserGroup.id), true);
 		assert.equal(layout.isPartVisible('editor'), true);

@@ -19,7 +19,8 @@ export interface IEditorGroupMenuIds {
 export interface IEditorGroupViewOptions {
 	readonly menuIds?: IEditorGroupMenuIds;
 	readonly showHeader?: boolean;
-	readonly hideTabs?: boolean;
+	/** Label for a visible group header with no editor and no tabs. */
+	readonly emptyHeaderLabel?: string;
 	readonly headerRowHeight?: IObservable<number | undefined>;
 }
 
@@ -30,7 +31,6 @@ export const CONNECTED_EDITOR_TABS_SELECTOR = `.${CONNECTED_EDITOR_TABS_CLASS}`;
 /** Browser host capabilities used by editor parts, separate from command operations. */
 export interface IEditorGroupView extends IEditorGroup {
 	readonly domNode: HTMLElement;
-	readonly headerElement: HTMLElement;
 	readonly activePane: IEditorPane | undefined;
 	readonly activeEditor: EditorIdentifier | undefined;
 	getEditorIdentifier(instanceId: EditorInstanceId): EditorIdentifier | undefined;
@@ -47,6 +47,7 @@ export interface IEditorGroupView extends IEditorGroup {
 	moveEditorTo(input: IResourceEditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;
 	setTitleVisible(visible: boolean): void;
-	setHeaderHost(host: HTMLElement | undefined): void;
+	setTabStripHost(host: HTMLElement | undefined): void;
+	containsFocus(element: Element | null): boolean;
 	layout(dimension: IDimension): void;
 }

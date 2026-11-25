@@ -138,8 +138,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	readonly onDidChange: Event<void> = this.sizeChangeEmitter.event;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly titleControl: EditorTitleControl;
-	private readonly headerContext = this._register(new MutableDisposable<IDisposable>());
-	get headerElement(): HTMLElement { return this.titleControl.headerElement; }
 	private readonly watermark: EditorGroupWatermark | undefined;
 	private readonly panes: EditorPanes;
 	private readonly registry: IEditorPaneRegistry;
@@ -340,8 +338,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		if (options.onDidActivate) {
 			this._register(addDisposableListener(this.domNode, 'focusin', options.onDidActivate));
-			this._register(addDisposableListener(this.headerElement, 'focusin', () => {
-				if (!this.domNode.contains(this.headerElement)) options.onDidActivate?.();
+			const strip = this.titleControl.tabStrip;
+			if (strip) this._register(addDisposableListener(strip, 'focusin', () => {
+				if (!this.domNode.contains(strip)) options.onDidActivate?.();
 			}));
 		}
 		this._register(this.titleControl.onDidChangeHeight(() => {
@@ -1002,11 +1001,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (this.titleControl.setVisible(visible)) this.layout(this.groupDimension);
 	}
 
-	public setHeaderHost(host: HTMLElement | undefined): void {
-		// Bind while the header is still inside its group so detached controls inherit its context.
-		if (host && !this.headerContext.value) this.headerContext.value = this.scopedContextKeyService?.createScoped(this.headerElement);
-		this.titleControl.setHeaderHost(host);
-		if (!host) this.headerContext.clear();
+	public setTabStripHost(host: HTMLElement | undefined): void { this.titleControl.setTabStripHost(host); }
+
+	public containsFocus(element: Element | null): boolean {
+		return this.domNode.contains(element) || !!this.titleControl.tabStrip?.contains(element);
 	}
 
 	public setContentRightInset(inset: number): void {

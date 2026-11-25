@@ -16,7 +16,7 @@ import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
-import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializerRegistry, EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
@@ -51,6 +51,11 @@ function fixture() {
 			deserialize: value => scheme === 'vscode-terminal' ? new TerminalEditorInput(URI.parse(value as string)) : { resource: URI.parse(value as string) },
 		}));
 	}
+	resources.add(inputSerializers.register({
+		typeId: 'sessions.editorInput.files', canSerialize: input => input.resource.scheme === 'ash-sessions-files',
+		serialize: input => EditorInputSerializers.serialize(input).value,
+		deserialize: value => EditorInputSerializers.deserialize({ typeId: 'sessions.editorInput.files', value: value as {} }),
+	}));
 	const hosts = resources.add(createDesktopEditorTestServices(services, { registry, inputSerializers }, browserEnvironment.window.document));
 	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area, configuration: services.get(IConfigurationService) });
 }
@@ -129,7 +134,7 @@ suite('Desktop tool EditorParts', () => {
 		incompleteServices.registerInstance(IConfigurationService, services.get(IConfigurationService));
 		incompleteServices.registerInstance(IStorageService, services.get(IStorageService));
 		const before = hosts.area.domNode.childElementCount;
-		assert.throws(() => incompleteServices.createInstance(EditorParts, hosts.area, {}, constObservable(false)), /Unknown service: contextKeyService/);
+		assert.throws(() => incompleteServices.createInstance(EditorParts, hosts.area.domNode, {}, constObservable(false)), /Unknown service: contextKeyService/);
 		assert.equal(hosts.area.domNode.childElementCount, before);
 	});
 
@@ -277,7 +282,6 @@ suite('Desktop tool EditorParts', () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const filesGroup = hosts.editor.activeGroup;
-		hosts.editor.toggleMaximizeTool(filesGroup.id);
 		const input = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
 		await hosts.editor.openEditor(input, { pinned: true }, { groupId: filesGroup.id });
 		const searchPart = hosts.tools.get('search')!;
@@ -288,7 +292,7 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.area.isToolVisible('files'), true);
 	});
 
-	test('reveals Files when opening a result in the foreground from maximized Search', async () => {
+	test('opening results from Search preserves focus for a preview and activates Files in the foreground', async () => {
 		using hosts = fixture();
 		const { editor, area, files } = hosts;
 		await editor.openEditor({ resource: URI.file('/fixture/previous.txt') }, { pinned: true });
@@ -296,9 +300,8 @@ suite('Desktop tool EditorParts', () => {
 		const search = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
 		await editor.openEditor(search, { pinned: true });
 		const searchGroup = editor.activeGroup;
-		editor.toggleMaximizeTool();
 		assert.equal(area.isToolVisible('search'), true);
-		assert.equal(area.isToolVisible('files'), false);
+		assert.equal(area.isToolVisible('files'), true);
 		const searchTab = searchGroup.domNode.querySelector<HTMLElement>('[role="tab"]');
 		assert.ok(searchTab);
 		searchTab.focus();
@@ -307,7 +310,7 @@ suite('Desktop tool EditorParts', () => {
 		const preview = await editor.openEditor(result, { pinned: true, preserveFocus: true });
 		assert.equal(preview.id, 'test.tool');
 		assert.equal(files.activeGroup.activePane, preview);
-		assert.equal(area.isToolVisible('files'), false);
+		assert.equal(area.isToolVisible('files'), true);
 		assert.equal(editor.activeGroup, searchGroup);
 		assert.equal(searchTab.ownerDocument.activeElement, searchTab);
 
@@ -367,26 +370,38 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.area.isToolVisible('search'), true);
 	});
 
-	test('restacks an older Files and Changes pair and preserves a recorded manual split', async () => {
+	for (const filesVisible of [true, false]) test(`migrates a legacy Changes split with Files ${filesVisible ? 'visible' : 'hidden'}`, async () => {
 		using hosts = fixture();
-		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		await hosts.editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
-		hosts.area.moveTool('changes', 'files', Direction.Right);
 		const saved = hosts.editor.saveWorkingSet('files-and-changes');
-		const split = (node: SerializedGridDescriptor): Orientation | undefined => {
-			if (node.type === 'leaf') return undefined;
-			const hasTool = (child: SerializedGridDescriptor, name: string): boolean =>
-				child.type === 'leaf' ? child.data === name : child.children.some(nested => hasTool(nested, name));
-			const shared = node.children.find(child => hasTool(child, 'files') && hasTool(child, 'changes'));
-			return shared ? split(shared) : node.orientation;
+		const changes = saved.groups.find(group => group.editors.length)!;
+		const filesId = Math.max(...saved.groups.map(group => group.id!)) + 1;
+		const parts = saved.toolParts!.parts;
+		const leaves = (node: SerializedGridDescriptor): SerializedGridDescriptor[] => node.type === 'leaf' ? [node] : node.children.flatMap(leaves);
+		const old = {
+			...saved, activeGroupIndex: 1,
+			groups: [{ id: filesId, size: 1, editors: [], activeEditorIndex: -1 }, changes, ...saved.groups.filter(group => group !== changes)],
+			toolParts: {
+				...saved.toolParts!,
+				layout: {
+					type: 'branch', orientation: Orientation.HORIZONTAL, size: 1200, priority: 0, children: [
+						...leaves(saved.toolParts!.layout).map(leaf => leaf.type === 'leaf' && leaf.data === 'files' ? { ...leaf, visible: filesVisible } : leaf),
+						{ type: 'leaf', data: 'changes', size: 300, priority: 0, visible: true },
+					]
+				},
+				positioned: ['files', 'changes'],
+				parts: { ...parts, files: { groups: [filesId] }, changes: parts.files },
+			},
 		};
-		assert.equal(split(saved.toolParts!.layout), Orientation.HORIZONTAL);
-		await hosts.editor.applyWorkingSet(saved);
-		assert.equal(split(hosts.area.saveLayout()), Orientation.HORIZONTAL);
-		const older = { ...saved, toolParts: { ...saved.toolParts!, manuallyArranged: undefined } };
-		await hosts.editor.applyWorkingSet(older);
-		assert.equal(split(hosts.area.saveLayout()), Orientation.VERTICAL);
-		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'ash-session-changes:/fixture');
+		await hosts.editor.applyWorkingSet(old);
+		assert.equal(hosts.files.fileGroups.length, 1);
+		assert.equal(hosts.editor.activeGroup.activeInput?.resource.scheme, 'ash-session-changes');
+		assert.equal(hosts.files.activeGroup.inputs.some(input => input.resource.scheme === 'ash-sessions-files'), filesVisible);
+		assert.ok(leaves(hosts.area.saveLayout()).every(leaf => leaf.type === 'leaf' && leaf.data !== 'changes'));
+		const migrated = hosts.editor.saveWorkingSet('migrated');
+		assert.ok(!Object.hasOwn(migrated.toolParts!.parts, 'changes'));
+		await hosts.editor.applyWorkingSet(migrated);
+		assert.equal(hosts.editor.activeGroup.activeInput?.resource.scheme, 'ash-session-changes');
 	});
 
 	test('reopens Preview by a surviving neighbor and falls back after that neighbor closes', async () => {
@@ -394,7 +409,7 @@ suite('Desktop tool EditorParts', () => {
 		const preview = { resource: URI.parse('ash-browser:/fixture') };
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		await hosts.editor.openEditor(preview, { pinned: true });
-		await hosts.editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
+		await hosts.editor.openEditor(new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1')), { pinned: true });
 		const visible = (node: SerializedGridDescriptor): unknown => {
 			if (node.type === 'leaf') return node.visible ? node.data : undefined;
 			const children = node.children.map(visible).filter(child => child !== undefined);
@@ -406,39 +421,39 @@ suite('Desktop tool EditorParts', () => {
 		assert.deepEqual(saved.toolParts?.closedSlots?.browser?.anchors, ['files']);
 		await hosts.editor.applyWorkingSet(saved);
 		await togglePreview();
-		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.HORIZONTAL, [Orientation.VERTICAL, 'files', 'browser'], 'changes']);
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.HORIZONTAL, [Orientation.VERTICAL, 'files', 'browser'], 'terminal']);
 		await togglePreview();
-		hosts.area.moveTool('changes', 'files', Direction.Down);
-		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'changes']);
+		hosts.area.moveTool('terminal', 'files', Direction.Down);
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'terminal']);
 		await togglePreview();
-		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'browser', 'changes']);
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'browser', 'terminal']);
 		await hosts.editor.applyWorkingSet(saved);
 		await hosts.editor.toggleFileEditors();
 		await togglePreview();
-		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'changes', 'browser']);
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'terminal', 'browser']);
 	});
 
 	test('allocates new tool columns against the conversation and restores their width', async () => {
 		using hosts = fixture();
 		hosts.area.layout({ width: 1800, height: 900 });
 		const width = () => hosts.area.getPreferredWidth(3000, 100, 600);
-		const changes = { resource: URI.parse('ash-session-changes:/fixture') };
-		const toggleChanges = () => hosts.editor.toggleToolEditors(input => input.resource.scheme === changes.resource.scheme);
+		const terminal = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1'));
+		const toggleTerminal = () => hosts.editor.toggleToolEditors(input => input.resource.scheme === terminal.resource.scheme);
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		assert.equal(width(), 1800);
 		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
 		assert.equal(width(), 1800);
-		await hosts.editor.openEditor(changes, { pinned: true });
+		await hosts.editor.openEditor(terminal, { pinned: true });
 		assert.equal(width(), 2000);
 
-		await toggleChanges();
+		await toggleTerminal();
 		assert.equal(width(), 1800);
 		const saved = hosts.editor.saveWorkingSet('two-tools');
 		hosts.area.rememberWidth(0.5);
 		assert.equal(width(), 1500);
 		await hosts.editor.applyWorkingSet(saved);
 		assert.equal(width(), 1800);
-		await toggleChanges();
+		await toggleTerminal();
 		assert.equal(width(), 2000);
 	});
 

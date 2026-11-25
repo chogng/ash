@@ -173,7 +173,7 @@ test('Code Sessions starts with dialog dependencies and confirms closing a dirty
 	await expect(input).toBeVisible();
 	await input.focus();
 	await input.pressSequentially('Keep this unsaved draft');
-	const tab = page.locator('[data-editor-tool="files"]').getByRole('tab', { name: /^Untitled-1(?:,|$)/u });
+	const tab = page.getByRole('tab', { name: /^Untitled-1(?:,|$)/u });
 	await tab.press('Delete');
 	const dialog = page.getByRole('dialog', { name: 'Save Changes', exact: true });
 	await expect(dialog).toBeVisible();
@@ -191,10 +191,8 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	let page = await workbench.openAgentsWindow(target.kind);
 	const code = () => page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 	const draft = () => page.locator('[data-part="sessions"] .ash-sessions-chat-slot.active[data-conversation-kind="code"] [data-untitled-session-id]');
-	// Files owns its tabs even when its header is mounted in the window title bar.
-	const files = () => page.locator('[data-editor-tool="files"]');
-	const firstTab = () => files().getByRole('tab', { name: 'Untitled-1', exact: true });
-	const secondTab = () => files().getByRole('tab', { name: 'Untitled-2', exact: true });
+	const firstTab = () => page.getByRole('tab', { name: 'Untitled-1', exact: true });
+	const secondTab = () => page.getByRole('tab', { name: 'Untitled-2', exact: true });
 	const editorFocus = () => page.locator('[data-editor-tool="files"]:focus-within');
 	await code().click();
 	await expect(code()).toHaveAttribute('aria-pressed', 'true');
@@ -276,7 +274,7 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	await expect(page.locator('[data-part="panel"]')).toBeHidden();
 });
 
-test('Code retains group file navigation after closing the last document and reopening', async ({ application, target, workbench }, testInfo) => {
+test('Code keeps Files open until its tab closes', async ({ application, target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = () => page.locator('[data-part="editor"]');
@@ -286,23 +284,30 @@ test('Code retains group file navigation after closing the last document and reo
 	await expect(files()).toBeVisible();
 	await expect(header()).toBeVisible();
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
-	await expect(editor().getByRole('tab')).toHaveCount(0);
+	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
-	await expect(editor().getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await expect(header()).toBeVisible();
 	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
-	await expect(editor().getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
 	await expect(files()).toBeVisible();
 	await expect(header()).toBeVisible();
-	await expect(editor().getByRole('tab')).toHaveCount(0);
+	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	page = await workbench.reopenAgentsWindow(application, page);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(files()).toBeVisible();
 	await expect(editor()).toBeVisible();
 	await expect(header()).toBeVisible();
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
-	await expect(editor().getByRole('tab')).toHaveCount(0);
+	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await testInfo.attach('code-group-file-navigation', { body: await page.screenshot(), contentType: 'image/png' });
+	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
+	await expect(editor()).toBeHidden();
+	await expect(files()).toBeHidden();
+	const toggle = page.getByRole('button', { name: 'Toggle Side Panel', exact: true, pressed: false });
+	await toggle.click();
+	await expect(page.getByRole('tab', { name: 'New Tab', exact: true })).toBeVisible();
+	await expect(files()).toBeHidden();
 });
 
 test.describe('Sessions from an Electron Workbench', () => {
@@ -322,9 +327,10 @@ test.describe('Sessions from an Electron Workbench', () => {
 		await expect(auxiliary).toBeHidden();
 		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 		await expect(auxiliary).toBeVisible();
 		await expect(editors).toBeVisible();
-		await expect(editors.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
 		if (target.appServerMode === 'required' && target.kind === 'electron') {
 			const nested = auxiliary.getByRole('treeitem', { name: 'nested', exact: true });
 			await nested.click();
@@ -342,10 +348,10 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await page.keyboard.press('ControlOrMeta+S');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 42;\n');
 			const input = await editor.input.elementHandle();
-			await new QuickAccess(page).runCommand('ash.sessions.toggleFiles');
+			await new QuickAccess(page).runCommand('ash.sessions.toggleDetails');
 			await expect(auxiliary).toBeHidden();
 			await expect(editors).toBeVisible();
-			await new QuickAccess(page).runCommand('ash.sessions.toggleFiles');
+			await new QuickAccess(page).runCommand('ash.sessions.toggleDetails');
 			await expect(auxiliary).toBeVisible();
 			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
 			await mode.getByRole('button', { name: /^Chat/u }).click();
@@ -422,12 +428,13 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	page.on('pageerror', error => failures.push(error.message));
 	await page.goto('/browser/sessions/sessions.html');
 	const auxiliary = page.locator('.ash-desktop-auxiliarybar');
-	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
+	const tabs = page.getByRole('tablist').filter({ has: page.getByRole('tab', { name: 'Files', exact: true }) });
 	await expect(auxiliary).toBeHidden();
 	await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 	await expect(page.locator('[data-part="editor"]')).toBeVisible();
-	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(0);
+	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
 	await expect(auxiliary.getByRole('status')).toHaveText('Open a folder to browse files.');
 	await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toBeVisible();
 	const emptyMessage = auxiliary.getByRole('status');
@@ -435,7 +442,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	await page.keyboard.press('ControlOrMeta+Shift+E');
 	await expect(auxiliary.getByRole('tree')).toBeFocused();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files, Changes, Browser and Terminal have independent EditorParts/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files and Changes are separate tabs in the same editor group/u);
 	await page.keyboard.press('Escape');
 	await expect(auxiliary.getByRole('tree')).toBeFocused();
 	// This empty, disconnected embedder uses the host's bootstrap palette.
@@ -450,6 +457,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		await page.goto('/browser/sessions/sessions.html');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const colors = await emptyMessage.evaluate(element => ({
 			text: getComputedStyle(element).color,
@@ -459,6 +467,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 		expect(colors.text).not.toBe(colors.background);
 	}
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 	await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 	const comparison = page.locator('.ash-sessions-changes-editor');
 	await expect(comparison.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
@@ -472,38 +481,58 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await page.setViewportSize({ width: 1_000, height: 760 });
-	await expect(auxiliary).toBeVisible();
+	await expect(auxiliary).toBeHidden();
 	await page.reload();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
 	expect(failures).toEqual([]);
 });
 
-test('Files and Changes use independent editor Parts and tool maximization restores their layout', async ({ target, workbench }, testInfo) => {
+test('New Tab searches files in its group and opens a URL', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle Side Panel', exact: true }).press('Enter');
+	const tab = page.getByRole('tab', { name: 'New Tab', exact: true });
+	const search = page.getByRole('textbox', { name: 'Search files or enter a URL', exact: true });
+	await expect(tab).toHaveAttribute('aria-selected', 'true');
+	await expect(search).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Open Changes', exact: true })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('editor-new-tab.png') });
+	await search.fill(testWorkspace.file);
+	await search.press('Enter');
+	const picker = new QuickAccess(page);
+	await expect(picker.element.locator('.ash-quick-pick-row-label', { hasText: /^main\.ts$/u })).toBeVisible();
+	await picker.input.press('Enter');
+	const tabList = page.getByRole('tablist').filter({ has: tab });
+	await expect(tabList.getByRole('tab', { name: 'main.ts', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await tab.press('Enter');
+	await search.fill('about:blank');
+	await search.press('Enter');
+	await expect(page.locator('[data-editor-tool="browser"] .ash-browser-welcome')).toBeVisible();
+});
+
+test('Files, Changes and a document share one editor group', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
 	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.agentSessions.newFileTab');
 	await commands.runCommand('workbench.action.files.newUntitledFile');
-	const files = editor.locator('[data-editor-tool="files"]').getByRole('tabpanel', { name: 'Untitled-1', exact: true });
-	await expect(files).toBeVisible();
+	const document = editor.getByRole('tabpanel', { name: 'Untitled-1', exact: true });
+	await expect(document).toBeVisible();
 	await commands.runCommand('workbench.agentSessions.action.viewChanges');
 	const review = editor.locator('.ash-sessions-changes-editor');
 	await expect(review).toBeVisible();
-	await expect(files).toBeVisible();
-	const reviewGroup = editor.locator('.ash-editor-group').filter({ has: page.locator('.ash-sessions-changes-editor') });
-	const retained = await review.elementHandle();
-	const changesTool = page.locator('[data-editor-tool="changes"]');
-	await changesTool.getByRole('button', { name: 'Maximize Tool', exact: true }).click();
+	await expect(document).toBeHidden();
 	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(1);
-	await expect(reviewGroup).toBeVisible();
-	await changesTool.getByRole('button', { name: 'Restore Tool Size', exact: true }).click();
-	await expect(files).toBeVisible();
-	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(2);
-	expect(await review.evaluate((node, original) => node === original, retained)).toBe(true);
-	await retained?.dispose();
-	await expect(page.locator('[data-code-card], .ash-sessions-tool-card')).toHaveCount(0);
-	await testInfo.attach('shared-editor-groups', { body: await page.screenshot(), contentType: 'image/png' });
+	const tabList = page.getByRole('tablist').filter({ has: page.getByRole('tab', { name: /^Changes\b/u }) });
+	await expect(tabList.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
+	await tabList.getByRole('tab', { name: 'Untitled-1', exact: true }).click();
+	await expect(document).toBeVisible();
+	await expect(review).toBeHidden();
+	await tabList.getByRole('tab', { name: /^Changes\b/u }).click();
+	await expect(review).toBeVisible();
+	await testInfo.attach('shared-editor-tabs', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
 test('Changes editor exposes diff view modes and review help in Chinese', async ({ target, application, workbench, restartWorkbench }) => {
@@ -515,7 +544,7 @@ test('Changes editor exposes diff view modes and review help in Chinese', async 
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
-	const editor = page.locator('[data-editor-tool="changes"]');
+	const editor = page.locator('[data-editor-tool="files"]');
 	const changesPane = editor.locator('.ash-sessions-changes-editor');
 	await expect(changesPane).toBeVisible();
 	await expect(editor.getByRole('button', { name: /预览提交/u })).toHaveCount(0);
@@ -528,7 +557,7 @@ test('Changes editor exposes diff view modes and review help in Chinese', async 
 	await changesPane.focus();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/如果“全部更改”或回合更改中有可提交的文件，可以使用“预览提交”/u);
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*按空格预览并保留列表焦点[\s\S]*“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏[\s\S]*打开“差异视图”/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*按空格预览并保留列表焦点[\s\S]*“更改”和“文件”是同一编辑器组中的两个标签页[\s\S]*打开“差异视图”/u);
 	await page.keyboard.press('Escape');
 	await expect(changesPane).toBeFocused();
 });

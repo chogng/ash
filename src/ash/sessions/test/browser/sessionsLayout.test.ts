@@ -1443,7 +1443,7 @@ suite('sessions browser component', () => {
 		const filesSelector = '[data-action-id="ash.sessions.toggleFiles"] button';
 		const changesSelector = '[data-action-id="ash.sessions.toggleChanges"] button';
 		const width = (locator: Locator) => locator.evaluate(element => element.getBoundingClientRect().width);
-		await expect(titlebar.locator(filesSelector)).toBeVisible();
+		await expect(titlebar.locator(filesSelector)).toHaveCount(0);
 		await expect(bar).toHaveCount(0);
 		const originalWidth = await width(grid);
 
@@ -1478,11 +1478,11 @@ suite('sessions browser component', () => {
 		await files.press('Shift+F10');
 		await toggle.click();
 		await expect(bar).toHaveCount(0);
-		await expect(titlebar.locator(filesSelector)).toHaveAttribute('aria-pressed', 'true');
+		await expect(titlebar.locator(filesSelector)).toHaveCount(0);
 		await expect(conversation.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
 	});
 
-	test('Code window actions and card headers follow opposite sides of the tool divider', async function () {
+	test('Files and Changes share one titlebar tab list and keep their commands in the editor', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost');
@@ -1491,109 +1491,30 @@ suite('sessions browser component', () => {
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const titleMenu = titlebar.locator('.ash-sessions-titlebar-menu');
-		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
-		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
-		const filesHeader = toolHeaders.locator('[data-editor-tool="files"] > .ash-editor-group-header');
+		const strip = titlebar.locator('.ash-sessions-titlebar-editor-region');
 		const editor = page.locator('[data-part="editor"]');
-		const conversation = page.locator('[data-part="sessions"]');
-		await expect(titleMenu).toBeVisible();
-		await tools.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
-		await expect(editor).toBeVisible();
-		await expect(filesHeader).toBeVisible();
-		await expect(filesHeader.locator('.ash-sessions-tool-header-label')).toBeVisible();
-		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
-
-		const sash = conversation.locator('xpath=../../..').locator(':scope > .ash-sash-vertical[aria-disabled="false"]:not(.ash-primary-sidebar-sash)').first();
-		const header = (await titlebar.boundingBox())!;
-		const split = (await sash.boundingBox())!;
-		const toolArea = (await editor.boundingBox())!;
-		const actionBar = (await tools.boundingBox())!;
-		const menu = (await titleMenu.boundingBox())!;
-		expect(split.y).toBe(header.y + header.height);
-		expect(toolArea.y).toBe(split.y);
-		expect(split.x + split.width / 2).toBeCloseTo(toolArea.x, 0);
-		expect(await sash.evaluate(element => parseFloat(getComputedStyle(element, '::after').top))).toBeCloseTo(split.height / 2, 0);
-		expect(menu.x + menu.width).toBeLessThan(actionBar.x);
-		expect(actionBar.x + actionBar.width).toBeLessThan(toolArea.x);
-		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo(toolArea.x, 0);
-		expect((await filesHeader.boundingBox())!.y).toBe(header.y);
-
-		await sash.press('ArrowLeft');
-		await expect.poll(async () => (await editor.boundingBox())!.width).toBeGreaterThan(toolArea.width);
-		await expect.poll(async () => (await tools.boundingBox())!.x).toBeLessThan(actionBar.x);
-		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
-		expect(await titleMenu.boundingBox()).toEqual(menu);
-
-		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
-		const changesPane = editor.locator('[data-editor-tool="changes"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
-		const changesHeader = changesPane.locator('.ash-editor-group-header');
-		await expect(changesHeader).toBeVisible();
-		await expect(filesHeader).toBeVisible();
-		await expect(toolHeaders.locator('[data-editor-tool="changes"]')).toHaveCount(0);
-		const filesPane = editor.locator('[data-editor-tool="files"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
-		const filesDetails = filesHeader.locator('[data-action-id="ash.sessions.toggleDetails"] button');
-		const changesFiles = changesHeader.locator('[data-action-id="multiDiffEditor.toggleFileList"] button');
-		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
-		await expect(changesFiles).toHaveCount(0);
-		await expect(filesPane).toBeVisible();
-		const filesBounds = (await filesPane.boundingBox())!;
-		const changesBounds = (await changesPane.boundingBox())!;
-		expect(changesBounds.x).toBeCloseTo(filesBounds.x, 0);
-		expect(changesBounds.y).toBeGreaterThanOrEqual(filesBounds.y + filesBounds.height);
-		expect((await changesHeader.boundingBox())!.y).toBeCloseTo(changesBounds.y, 0);
-		await expect(changesHeader.getByRole('button', { name: 'Changes', exact: true })).toBeVisible();
-		const filesClose = filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
-		await expect(filesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
-		const changesClose = changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
-		await expect(filesClose.locator('[data-ash-icon-id="close"]')).toBeVisible();
-		await changesClose.focus();
-		await filesClose.evaluate((button: HTMLButtonElement) => button.click());
-		const dockedChanges = toolHeaders.locator('[data-editor-tool="changes"] > .ash-editor-group-header');
-		await expect(dockedChanges.locator('[data-action-id="ash.sessions.maximizeTool"] button')).toBeFocused();
-		await expect(dockedChanges.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
-		await tools.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
-		const inlineFiles = filesPane.locator('.ash-editor-group-header:visible');
-		await expect(inlineFiles).toHaveCount(1);
-		await expect(dockedChanges).toBeVisible();
-		expect((await filesPane.boundingBox())!.y).toBeGreaterThan((await changesPane.boundingBox())!.y);
-		await dockedChanges.locator('[data-action-id="ash.sessions.hideTool"] button').click();
-		await expect(filesHeader).toBeVisible();
-		const filesMaximize = filesHeader.locator('[data-action-id="ash.sessions.maximizeTool"] button');
-
-		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
-		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
-		await filesMaximize.focus();
-		const dividerX = (await editor.boundingBox())!.x;
-		const dragY = header.y + header.height + 80;
-		await page.mouse.move(dividerX, dragY);
-		await page.mouse.down();
-		try {
-			await page.mouse.move(90, dragY, { steps: 8 });
-		} finally {
-			await page.mouse.up();
+		const files = strip.getByRole('tab', { name: 'Files', exact: true });
+		const changes = strip.getByRole('tab', { name: /^Changes\b/u });
+		for (const id of ['togglePanel', 'toggleChanges', 'toggleBrowser', 'toggleFiles']) {
+			await expect(titlebar.locator(`[data-action-id="ash.sessions.${id}"]`)).toHaveCount(0);
 		}
-		await expect(toolHeaders).toBeHidden();
-		await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible')).toHaveCount(1);
-		const inlineFilesMaximize = filesPane.locator('.ash-editor-group-header:visible [data-action-id="ash.sessions.maximizeTool"] button');
-		await expect(inlineFilesMaximize).toBeFocused();
-
-		// Widen the conversation again with the tool control still focused.
-		const narrowDividerX = (await editor.boundingBox())!.x;
-		await page.mouse.move(narrowDividerX, dragY);
-		await page.mouse.down();
-		try {
-			await page.mouse.move(dividerX, dragY, { steps: 8 });
-		} finally {
-			await page.mouse.up();
-		}
-		await expect(filesMaximize).toBeFocused();
-
-		await page.setViewportSize({ width: 480, height: 900 });
-		await expect(toolHeaders).toBeHidden();
-		await expect(inlineFilesMaximize).toBeFocused();
-		await page.setViewportSize({ width: 1440, height: 900 });
-		await expect(filesMaximize).toBeFocused();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
+		await expect(files).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.locator('.ash-sessions-files-view')).toBeVisible();
+		const group = editor.locator('.ash-editor-group:not(.ash-code-page-group):visible');
+		const owner = await group.elementHandle();
+		await strip.getByRole('button', { name: 'Add Tab', exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
+		await expect(changes).toHaveAttribute('aria-selected', 'true');
+		await expect(files).toHaveAttribute('aria-selected', 'false');
+		await expect(group.locator('.ash-sessions-changes-editor')).toBeVisible();
+		await expect(group.locator('[data-action-id="submenu.SessionsChangesScope"]')).toBeVisible();
+		await expect(titlebar.locator('[data-action-id="submenu.SessionsChangesScope"]')).toHaveCount(0);
+		await files.click();
+		await expect(editor.locator('.ash-sessions-files-view')).toBeVisible();
+		await expect(group.locator('.ash-sessions-changes-editor')).toBeHidden();
+		await expect(changes).toBeVisible();
+		expect(await group.evaluate((node, previous) => node === previous, owner)).toBe(true);
 	});
 
 	test('Code window actions stay beside the conversation when the editor area is empty', async function () {
@@ -1617,28 +1538,27 @@ suite('sessions browser component', () => {
 			const split = (await editor.boundingBox())!;
 			return split.x - actions.x - actions.width;
 		}).toBeCloseTo(4, 0);
-		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').press('Enter');
-		await expect(titlebar.locator('[data-editor-tool="changes"] .ash-editor-group-header')).toBeVisible();
+		await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
+		await expect(editor.locator('.ash-sessions-changes-editor')).toBeVisible();
 	});
 
-	test('Code Flat tools fill their splits and Modern restores their cards without recreating editors', async function () {
+	test('Code Flat fills the shared editor and Modern restores its card without recreating it', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
-		const titlebar = page.locator('[data-part="titlebar"]');
-		await titlebar.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
-		await titlebar.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
+		await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 		const editor = page.locator('[data-part="editor"]');
-		const retained = await editor.locator('[data-editor-tool="changes"] [data-part="tool-editor"]').elementHandle();
+		const retained = await editor.locator('[data-editor-tool="files"] [data-part="tool-editor"]').elementHandle();
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			for (const style of ['flat', 'modern', 'flat']) {
 				await page.evaluate(style => window.ashSessionsIntegration.updateConfiguration('sessions.layoutStyle', style), style);
 				const inset = style === 'modern' ? 6 : 0;
-				for (const tool of ['files', 'changes']) {
+				for (const tool of ['files']) {
 					const workspace = editor.locator(`[data-editor-tool="${tool}"]`);
 					const part = workspace.locator(':scope > .ash-workbench-part-frame > [data-part="tool-editor"]');
 					await expect(workspace).toBeVisible();
@@ -1651,18 +1571,14 @@ suite('sessions browser component', () => {
 					if (style === 'flat' || theme.includes('contrast')) await expect(part).toHaveCSS('box-shadow', 'none');
 				}
 				await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group:not(.ash-code-page-group):visible')).toHaveCSS('border-radius', '0px');
-				const separator = editor.locator('.ash-split-view-separator-border > .ash-split-view-pane:not([hidden]) ~ .ash-split-view-pane:visible').first();
-				await expect(separator).toBeVisible();
-				const color = await separator.evaluate(element => getComputedStyle(element, '::before').backgroundColor);
-				expect(color === 'rgba(0, 0, 0, 0)').toBe(style === 'modern');
-				const title = editor.locator('[data-editor-tool="changes"] .ash-editor-title-with-group-header:visible');
+				const title = editor.locator('[data-editor-tool="files"] .ash-editor-title-with-group-header:visible');
 				const line = await title.evaluate(element => {
 					const paint = getComputedStyle(element, '::after');
 					return { content: paint.content, color: paint.backgroundColor, height: paint.height, width: parseFloat(paint.width) };
 				});
 				if (style === 'flat') {
 					expect(line.content).toBe('""');
-					expect(line.color).toBe(color);
+					expect(line.color).not.toBe('rgba(0, 0, 0, 0)');
 					expect(line.height).toBe('1px');
 					expect(line.width).toBeCloseTo((await title.boundingBox())!.width);
 				} else {
@@ -1681,16 +1597,16 @@ suite('sessions browser component', () => {
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 		const conversation = page.locator('[data-part="sessions"]');
 		const titlebar = page.locator('.ash-sessions-titlebar');
-		await titlebar.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
-		await titlebar.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
+		await expect(page.locator('.ash-sessions-files-view')).toBeVisible();
+		await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 		await titlebar.locator('[data-action-id="ash.sessions.toggleInfo"] button').click();
-		const changes = page.locator('[data-editor-tool="changes"] [data-part="tool-editor"]');
-		const files = page.locator('.ash-sessions-files-view:visible');
+		const changes = page.locator('[data-editor-tool="files"] [data-part="tool-editor"]');
+		const files = page.locator('.ash-sessions-files-view');
 		const info = conversation.locator('.ash-session-info:visible');
 		const auxiliary = page.locator('.ash-sessions-auxiliarybar-frame');
 		const checkedTools = titlebar.locator('[data-action-id] button.checked');
 		await expect(changes).toBeVisible();
-		await expect(files).toBeVisible();
 		await expect(info).toBeVisible();
 		const shellBackground = () => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-titleBar-background').trim());
 		const setTheme = (theme: string) => page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
@@ -1706,7 +1622,7 @@ suite('sessions browser component', () => {
 			await expect.poll(() => titlebar.evaluate(element => element.style.getPropertyValue('--ash-sessions-titlebar-background'))).toBe(color);
 		};
 		const expectCheckedTools = async (background: string) => {
-			for (const id of ['toggleChanges', 'toggleFiles']) {
+			for (const id of ['toggleInfo']) {
 				await expect(checkedTools.and(titlebar.locator(`[data-action-id="ash.sessions.${id}"] button`))).toHaveCSS('background-color', background);
 			}
 		};
@@ -1725,7 +1641,7 @@ suite('sessions browser component', () => {
 			}
 			const readColors = () => page.evaluate(() => ({
 				conversation: getComputedStyle(document.querySelector('[data-part="sessions"]')!).backgroundColor,
-				changes: getComputedStyle(document.querySelector('[data-editor-tool="changes"] [data-part="tool-editor"]')!).backgroundColor,
+				changes: getComputedStyle(document.querySelector('[data-editor-tool="files"] [data-part="tool-editor"]')!).backgroundColor,
 				files: getComputedStyle(document.querySelector('.ash-sessions-files-view')!).backgroundColor,
 				info: getComputedStyle(document.querySelector('.ash-session-info')!).backgroundColor,
 				titlebar: getComputedStyle(document.querySelector('.ash-sessions-titlebar')!).backgroundImage,

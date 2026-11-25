@@ -145,15 +145,14 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const fileHeader = review.getByRole('button', { name: /main.ts/ });
 		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
-		const changesTool = page.locator('[data-part="titlebar"] [data-action-id="ash.sessions.toggleChanges"] button');
-		await changesTool.click();
+		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 		await expect(review).toBeHidden();
-		await changesTool.click();
+		await page.getByRole('tab', { name: /^Changes\b/u }).click();
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
 		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'true');
 		const changes = page.locator('.ash-sessions-changes-editor:visible');
-		const header = page.locator('[data-editor-tool="changes"] .ash-editor-group-header:visible');
+		const header = page.locator('[data-editor-tool="files"] .ash-editor-group-header:visible');
 		const toggleFiles = header.getByRole('button', { name: 'Toggle Changed Files', exact: true });
 		if (await toggleFiles.getAttribute('aria-pressed') === 'false') await toggleFiles.click();
 		const rows = changes.getByRole('tree', { name: 'Changed Files', exact: true }).getByRole('treeitem');
@@ -171,7 +170,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const message = page.getByRole('textbox', { name: 'Commit message', exact: true });
 		await message.fill('commit selected A');
 		await message.press('Enter');
-		await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: /commit selected A/u })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: /commit selected A/u })).toHaveAttribute('aria-selected', 'true');
 		await expect(page.getByRole('button', { name: 'Commit this preview', exact: true })).toBeVisible();
 		await expect(page.locator('[data-part="editor"]')).toContainText('const value = 42;');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
@@ -191,7 +190,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await previewFile(/other-session\.txt/u);
 		await message.fill('commit separate B');
 		await message.press('Enter');
-		await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: /commit separate B/u })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: /commit separate B/u })).toHaveAttribute('aria-selected', 'true');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('committed');
 		expect(await git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD')).toBe('other-session.txt');
@@ -205,7 +204,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await previewFile(/remaining\.txt/u, /main\.ts/u);
 		await message.fill('commit remaining A');
 		await message.press('Enter');
-		await expect(page.locator('[data-part="editor"]').getByRole('tab', { name: /commit remaining A/u })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: /commit remaining A/u })).toHaveAttribute('aria-selected', 'true');
 		await expect(page.locator('[data-part="editor"]')).toContainText('remaining A');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], a)).changeSets[0]?.commitState).toBe('committed');

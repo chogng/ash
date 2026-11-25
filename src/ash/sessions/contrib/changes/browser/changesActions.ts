@@ -1,4 +1,3 @@
-import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileIsBinaryContext, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -140,7 +139,7 @@ export function registerChangesEditorTitleActions(editor: IEditorPart): IDisposa
 	const disposables = new DisposableStore();
 	const getGroup = (arg: unknown) =>
 		(isRecord(arg) ? editor.groups.find(group => group.id === arg.groupId) : undefined) ?? editor.activeGroup;
-	const changesTool = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), SessionsEditorToolContext.isEqualTo('changes'));
+	const changesTool = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), ActiveEditorContext.isEqualTo(SessionChangesEditor.ID));
 	const previewCommitId = 'ash.sessions.changes.previewCommit';
 	disposables.add(CommandsRegistry.register(previewCommitId, (_accessor, arg) => {
 		const pane = getGroup(arg)?.activePane;

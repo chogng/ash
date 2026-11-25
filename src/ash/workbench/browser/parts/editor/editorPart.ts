@@ -136,7 +136,6 @@ export interface IEditorPartOptions {
 	readonly headerRowHeight?: IEditorGroupViewOptions['headerRowHeight'];
 	/** Minimum height in CSS pixels of an EditorPane's content toolbar row. */
 	readonly paneToolbarHeight?: IObservable<number>;
-	readonly hideTabs?: boolean;
 	/** Restricts which tabs can be transferred into an independently routed editor part. */
 	readonly canDropEditor?: (input: IResourceEditorInput) => boolean;
 	/** Whether interactive operations can split the editor into additional groups. */
@@ -245,7 +244,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
 		this.groupOptions = {
 			headerRowHeight: options.headerRowHeight,
-			hideTabs: options.hideTabs,
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
 			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),
@@ -1117,7 +1115,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const moveGroupFromHeader = (event: KeyboardEvent) => {
 			if (!this.supportsGroupSplitting || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
 				!(event.target instanceof group.domNode.ownerDocument.defaultView!.Element) ||
-				!(group.headerElement.contains(event.target) || event.target.closest('.ash-editor-title-control'))) return;
+				!event.target.closest('.ash-editor-title-control')) return;
 			const direction = ({ ArrowLeft: GroupDirection.LEFT, ArrowRight: GroupDirection.RIGHT, ArrowUp: GroupDirection.UP, ArrowDown: GroupDirection.DOWN } as Record<string, GroupDirection | undefined>)[event.key];
 			if (direction === undefined) return;
 			const neighbor = this.findGroup({ direction }, group);
@@ -1127,9 +1125,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.moveGroup(group, neighbor.id, direction);
 		};
 		listeners.add(addDisposableListener(group.domNode, 'keydown', moveGroupFromHeader));
-		listeners.add(addDisposableListener(group.headerElement, 'keydown', event => {
-			if (!group.domNode.contains(group.headerElement)) moveGroupFromHeader(event);
-		}));
 		listeners.add(group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));

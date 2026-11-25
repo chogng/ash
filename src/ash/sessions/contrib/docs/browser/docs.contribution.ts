@@ -10,6 +10,8 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { IArtifactCatalogService } from '../../../services/artifactCatalog/common/artifactCatalogService.js';
 import { isRetainedDocsInput } from './docsArtifactCatalog.js';
 import { URI } from '../../../../base/common/uri.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { Menus } from '../../../browser/menus.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -165,7 +167,13 @@ CommandsRegistry.register('sessions.restore.docs', async (accessor, source) => {
 
 registerAction2(class NewDocumentAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), f1: true, precondition: chatWorkspace, menu: { id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 } });
+		super({
+			id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), icon: Lxicon.fileText, f1: true, precondition: chatWorkspace,
+			menu: [
+				{ id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 },
+				{ id: Menus.SessionsEditorStart, when: chatWorkspace, group: 'navigation', order: 1 },
+			],
+		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		if (accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) await createDocsDocument(accessor);

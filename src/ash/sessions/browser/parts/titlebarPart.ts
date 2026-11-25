@@ -59,7 +59,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly rightControls: HTMLElement;
 	private readonly pageContent: HTMLElement;
 	private readonly sessionContent: HTMLElement;
-	private readonly editorHeaders: HTMLElement;
+	private readonly editorRegion: HTMLElement;
 	private readonly sidePaneActions: MenuWorkbenchToolBar;
 	private readonly layoutActions: MenuWorkbenchToolBar;
 	private sidebarMinimumWidth = 0;
@@ -70,6 +70,8 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	public override get minimumHeight(): number {
 		return Math.max(super.minimumHeight, SessionsWindowTitlebarHeight);
 	}
+
+	private get minimumEditorRegionWidth(): number { return this.minimumHeight * 2; }
 
 	constructor(
 		container: HTMLElement,
@@ -191,9 +193,9 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		updatePageVisibility();
 		const right = this.rightControls = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
-		this.editorHeaders = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-editor-headers' });
-		this.editorHeaders.hidden = true;
-		this.contentDomNode.append(right, this.editorHeaders);
+		this.editorRegion = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-editor-region' });
+		this.editorRegion.hidden = true;
+		this.contentDomNode.append(right, this.editorRegion);
 		const horizontalPadding = (element: HTMLElement): number => {
 			const style = ownerWindow.getComputedStyle(element);
 			return pixels(style.paddingLeft) + pixels(style.paddingRight);
@@ -213,12 +215,14 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
-						const editorHeaderWidth = this.editorHeaders.getBoundingClientRect().width;
-						const titleMinimum = editorHeaderWidth ? pixels(ownerWindow.getComputedStyle(center).minWidth) : 0;
+						// With no conversation, tabs and layout actions share the remaining width.
+						const sharesEditorWidth = !this.editorRegion.hidden && this.domNode.classList.contains('conversation-hidden') && this.domNode.classList.contains('has-editor-region');
+						const editorRegionWidth = sharesEditorWidth ? this.minimumEditorRegionWidth : this.editorRegion.getBoundingClientRect().width;
+						const centerWidth = center.getClientRects().length ? Math.max(horizontalPadding(center), pixels(ownerWindow.getComputedStyle(center).minWidth)) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
-							+ Math.max(horizontalPadding(center), titleMinimum) + horizontalPadding(right)
-							+ accountsWidth + accountsGap + editorHeaderWidth + (this.sidePaneActions?.element.offsetWidth ?? 0);
+							+ centerWidth + horizontalPadding(right)
+							+ accountsWidth + accountsGap + editorRegionWidth + (this.sidePaneActions?.element.offsetWidth ?? 0);
 						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
 					},
 				},
@@ -241,40 +245,30 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this.updateRightControlsVisibility();
 
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders, this.sidePaneActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorRegion, this.sidePaneActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
-	public layoutEditorHeaders(left: number | undefined, page: HTMLElement | undefined, setToolHost: (host: HTMLElement | undefined) => void, browser = false, conversationVisible = true): void {
+	public layoutEditorRegion(left: number | undefined, page: HTMLElement | undefined, conversationVisible: boolean, setTabsHost: (host: HTMLElement | undefined) => void): void {
 		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
 		const row = this.contentDomNode;
-		let availableWidth = 0;
-		if (left !== undefined) {
-			const controlsEnd = this.leftControls.getBoundingClientRect().right;
-			const accountsWidth = this.activityActions.element.offsetWidth;
-			if (page || browser) {
-				// In a single-pane layout, the page starts behind the window navigation controls.
-				const rightControlsWidth = this.rightControls.getBoundingClientRect().width;
-				left = Math.max(left, controlsEnd + rightControlsWidth);
-			}
-			// Keep the conversation's title and actions usable beside the editor header.
-			if (page || browser || left - controlsEnd >= this.minimumHeight * 2 + accountsWidth) {
-				availableWidth = Math.max(0, row.getBoundingClientRect().right - left);
-			}
-		}
-		const dockTools = availableWidth > 0 && !page;
-		// Apply the docked row's padding before sizing the header host.
-		this.domNode.classList.toggle('has-tool-headers', dockTools);
-		const rightInset = availableWidth > 0 ? parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) : 0;
-		const width = Math.max(0, availableWidth - rightInset - this.sidePaneActions.element.offsetWidth);
-		// Return the focused row to its group before hiding the titlebar slot.
-		if (!dockTools) setToolHost(undefined);
-		const oldPage = this.editorHeaders.firstElementChild;
-		if (page && oldPage !== page) this.editorHeaders.replaceChildren(page);
-		else if (!page && this.domNode.classList.contains('has-editor-page-header')) oldPage?.remove();
-		this.editorHeaders.hidden = width === 0;
+		const navigationEnd = this.leftControls.getBoundingClientRect().right;
+		const rightActionsWidth = this.activityActions.element.offsetWidth;
+		const canFitBesideConversation = left !== undefined && left - navigationEnd >= this.minimumEditorRegionWidth + rightActionsWidth;
+		const start = left !== undefined && (page || !conversationVisible || canFitBesideConversation)
+			? Math.max(left, navigationEnd + (page ? this.rightControls.offsetWidth : 0)) : undefined;
+		const availableWidth = start === undefined ? 0 : Math.max(0, row.getBoundingClientRect().right - start);
+		this.domNode.classList.toggle('has-editor-region', availableWidth > 0 && !page);
+		const windowInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) || 0;
+		const width = Math.max(0, availableWidth - windowInset - this.sidePaneActions.element.offsetWidth);
+		const hostTabs = !page && width - (conversationVisible ? 0 : rightActionsWidth) >= this.minimumEditorRegionWidth;
+		// Move focused tabs back while their old host is still visible.
+		if (!hostTabs) setTabsHost(undefined);
+		if (page && this.editorRegion.firstElementChild !== page) this.editorRegion.replaceChildren(page);
+		else if (!page && this.domNode.classList.contains('has-editor-page-header')) this.editorRegion.firstElementChild?.remove();
+		this.editorRegion.hidden = width === 0 || (!conversationVisible && !page && !hostTabs);
 		this.domNode.classList.toggle('has-editor-page-header', !!page);
-		this.editorHeaders.style.flexBasis = `${width}px`;
-		if (dockTools) setToolHost(this.editorHeaders);
+		this.editorRegion.style.flexBasis = `${width}px`;
+		if (hostTabs) setTabsHost(this.editorRegion);
 	}
 
 	public override updateStyles(): void {
@@ -282,7 +276,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	}
 
 	private updateRightControlsVisibility(): void {
-		// An empty controls area would still reserve its padding before docked editor headers.
+		// An empty controls area would still reserve its padding beside the editor region.
 		this.rightControls.hidden = this.layoutActions.element.hidden && this.activityActions.getItemsLength() === 0;
 	}
 }

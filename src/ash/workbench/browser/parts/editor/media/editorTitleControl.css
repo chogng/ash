@@ -80,23 +80,52 @@
 	display: none;
 }
 
-.ash-editor-title-control.ash-editor-title-header-hosted:not(
-		.ash-editor-title-with-breadcrumbs
-	) {
-	display: none;
-}
-
 .ash-editor-tabs-and-actions.ash-editor-group-header {
 	align-items: start;
 	padding-inline: var(--ash-spacing-size40);
 	gap: var(--ash-spacing-size40);
 }
 
-.ash-editor-group-header-hosted .ash-tab,
-.ash-editor-group-header-hosted .ash-toolbar,
-.ash-editor-group-header-hosted .ash-scrollbar-track.ash-scrollbar-visible,
-.ash-editor-group-header-hosted .ash-scrollbar-track.active {
-	-webkit-app-region: no-drag;
+.ash-editor-group-header > .ash-editor-tabs-control {
+	align-self: center;
+}
+
+.ash-editor-tab-strip:not(.ash-editor-tab-strip-hosted, [hidden]) {
+	display: contents;
+}
+
+.ash-editor-tab-strip-hosted:not([hidden]) {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-editor-tab-strip > .ash-editor-tabs-control {
+	flex: 0 1 max-content;
+	align-self: center;
+}
+
+.ash-editor-tab-strip
+	> .ash-editor-tabs-control
+	.ash-tab-list
+	> .ash-scrollbar-viewport {
+	position: relative;
+	height: 100%;
+}
+
+.ash-editor-add-tab {
+	flex: none;
+	align-self: center;
+}
+
+.ash-editor-header-label {
+	min-width: 0;
+	align-self: center;
+	padding-inline: var(--ash-spacing-size40);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-editor-header-primary {

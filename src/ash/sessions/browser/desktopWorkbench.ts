@@ -38,7 +38,7 @@ import {
 } from './workbench.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
-import { DesktopEditorArea } from './parts/desktopEditorArea.js';
+import { EditorArea } from './parts/editorPart.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
 import type { EditorParts } from './parts/editorParts.js';
 import { SessionsPart } from './parts/sessionsPart.js';
@@ -568,35 +568,30 @@ export class DesktopWorkbenchLayout
 
 		const titlebar = this.view('titlebar').part;
 		const editor = this.view('editor').part;
-		if (titlebar instanceof TitlebarPart && editor instanceof DesktopEditorArea) {
-			this.registerEditorHeaderLayout(titlebar, editor, this.mainEditor);
+		if (titlebar instanceof TitlebarPart && editor instanceof EditorArea) {
+			this.registerEditorRegionLayout(titlebar, editor, this.mainEditor);
 		}
 	}
 
-	private registerEditorHeaderLayout(titlebar: TitlebarPart, editor: DesktopEditorArea, mainEditor: DesktopMainEditorPart | undefined): void {
-		const setHost = (host: HTMLElement | undefined) => editor.setToolHeaderHost(host);
+	private registerEditorRegionLayout(titlebar: TitlebarPart, editor: EditorArea, mainEditor: DesktopMainEditorPart | undefined): void {
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
 			const editorVisible = this.isPartVisible('editor');
+			const conversationVisible = this.isPartVisible('sessions');
 			const pageHeader = editorVisible && editor.hasProductPage ? mainEditor?.pageTitlebarContent : undefined;
-			const browser = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code' && this.primaryPart === 'sessions' && editorVisible && !editor.hasProductPage;
-			const dockTools = editorVisible && !editor.hasProductPage && (this.isPartVisible('sessions') || browser);
-			const left = pageHeader || dockTools ? editor.domNode.getBoundingClientRect().left : undefined;
-			titlebar.layoutEditorHeaders(left, pageHeader, setHost, browser, this.isPartVisible('sessions'));
+			const toolsVisible = editorVisible && !editor.hasProductPage;
+			const hostFileTabs = toolsVisible && editor.isFullWidthTopTool('files') && !!mainEditor?.fileTabsGroup;
+			const left = pageHeader || hostFileTabs || (toolsVisible && conversationVisible)
+				? editor.domNode.getBoundingClientRect().left : undefined;
+			titlebar.layoutEditorRegion(left, pageHeader, conversationVisible, host => mainEditor?.setFileTabsHost(hostFileTabs ? host : undefined));
 		}));
 		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
 		this._register(this.onDidChangePartVisibility(() => update.schedule()));
 		if (mainEditor) {
-			this._register(mainEditor.onDidChangeEditors(event => {
-				if (event.kind === 'groupChanged' && event.groupId === mainEditor.pageGroupId && event.event.kind === 'activeEditorChanged') {
-					update.schedule();
-				}
-			}));
+			this._register(mainEditor.onDidChangeEditors(() => update.schedule()));
+			this._register(mainEditor.onDidLayout(() => update.schedule()));
+			this._register(toDisposable(() => mainEditor.setFileTabsHost(undefined)));
 		}
 		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
-		const modeKeys = new Set([SessionsWorkspaceModeContext.key]);
-		this._register(this.contextKeys.onDidChangeContext(event => {
-			if (event.affectsSome(modeKeys)) update.schedule();
-		}));
 		update.schedule();
 	}
 
@@ -670,7 +665,7 @@ export class DesktopWorkbenchLayout
 
 	private rememberToolWidth(): void {
 		const area = this.view('editor').part;
-		if (!(area instanceof DesktopEditorArea) || this.primaryPart !== 'sessions' || this.compactTools
+		if (!(area instanceof EditorArea) || this.primaryPart !== 'sessions' || this.compactTools
 			|| !this.isPartVisible('sessions') || !this.isPartVisible('editor')) return;
 		const editorWidth = this.getViewSize(this.view('editor')).width;
 		if (this.sidePaneWidth === editorWidth) return;
@@ -726,7 +721,7 @@ export class DesktopWorkbenchLayout
 			this.focus();
 		} else if (sidebarLostFocus || (this.compactTools || this.auxiliaryBarDocked) && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
 			const area = this.view('editor').part;
-			if (area instanceof DesktopEditorArea && this.isPartVisible('editor')) area.focusCurrentTool();
+			if (area instanceof EditorArea && this.isPartVisible('editor')) area.focusCurrentTool();
 		}
 
 		// Overlay consumers observe completed Part and nested Chat geometry.
@@ -748,7 +743,7 @@ export class DesktopWorkbenchLayout
 		}
 		const editor = this.view('editor');
 		const conversation = this.view('sessions');
-		if (!(editor.part instanceof DesktopEditorArea)) return;
+		if (!(editor.part instanceof EditorArea)) return;
 		const currentWidth = this.getViewSize(editor).width;
 		if (editor.part.hasTools && !editor.part.hasProductPage) {
 			const available = currentWidth + this.getViewSize(conversation).width;
@@ -782,7 +777,7 @@ export class DesktopWorkbenchLayout
 	private layoutTools(dimension: IDimension): void {
 		const editorView = this.view('editor');
 		const area = editorView.part;
-		if (!(area instanceof DesktopEditorArea)) {
+		if (!(area instanceof EditorArea)) {
 			if (this.customViewVisible) this.applyCustomViewVisibility();
 			return;
 		}
@@ -920,7 +915,7 @@ export class DesktopWorkbenchLayout
 		return this.isPartVisible('editor');
 	}
 
-	public toggleSidePane(): boolean {
+	public async toggleSidePane(openEmpty: () => Promise<void>): Promise<boolean> {
 		const editors = this.editorParts;
 		const code = this.contextKeys.getValue(SessionsCodeEditorContext.key) === true;
 		const chat = this.contextKeys.getValue(ChatConversationPageContext.key) === true;
@@ -930,20 +925,17 @@ export class DesktopWorkbenchLayout
 				this.reopenFilesDetails = editors.filesDetailsOpen;
 				this.storageService.store(sidePaneLastOpenKey, JSON.stringify({ editor: true, details: this.reopenFilesDetails }), StorageScope.PROFILE, StorageTarget.MACHINE);
 			}
-			this.updateParts(() => {
-				// A maximized Chat editor can be the only visible center Part.
-				if (chat) this.setPartAvailable('sessions', true);
-				this.hidePart('editor');
-			});
+			this.hidePart('editor');
 			this.focus();
 			return this.isSidePaneVisible();
 		}
 
 		const groups = editors.mainWindowGroups.filter(group => group.inputs.length && editors.isGroupVisible(group.id));
 		const group = chat && groups.includes(editors.activeGroup) ? editors.activeGroup : groups[0];
+		if (!group) await openEmpty();
 		this.updateParts(() => {
-			if (code && (this.reopenFilesDetails || !group)) editors.openFiles();
-			else if (group) editors.activateGroup(group.id);
+			if (group) editors.activateGroup(group.id);
+			if (code && this.reopenFilesDetails) editors.filesPart.showDetails();
 			this.showPart('editor');
 		});
 		if (this.isSidePaneVisible()) {
@@ -1032,7 +1024,7 @@ export class DesktopWorkbenchLayout
 			this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 		}
 		if (this.primaryPart === 'sessions' && partId === 'editor' &&
-			(!(this.view('editor').part instanceof DesktopEditorArea) || !this.isPartVisible('editor') || !this.isPartVisible('sessions'))) {
+			(!(this.view('editor').part instanceof EditorArea) || !this.isPartVisible('editor') || !this.isPartVisible('sessions'))) {
 			this.sidePaneWidth = dimension.width;
 		} else if (partId === 'editor' || partId === 'sessions') {
 			this.rememberToolWidth();
@@ -1048,6 +1040,8 @@ export class DesktopWorkbenchLayout
 		if (partId === 'titlebar' || partId === 'sessions')
 			throw new Error('Required Sessions Part cannot be hidden: ' + partId);
 		this.updateParts(() => {
+			// The conversation resumes when the editor that covered it closes.
+			if (partId === 'editor' && !visible && this.primaryPart === 'sessions') this.setPartAvailable('sessions', true);
 			this.desiredVisibility[partId] = visible;
 			if (partId === 'panel') this.updatePanelVisibility();
 			else this.setViewVisible(this.view(partId), this.desiredViewVisible(partId) && !this.unavailableParts.has(partId));

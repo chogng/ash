@@ -16,6 +16,7 @@ export const SessionsEntryDetailsContext = new RawContextKey<string | undefined>
 /** The Code conversation page is active. Other pages can share its workspace mode. */
 export const CodeConversationPageContext = new RawContextKey<boolean>('sessions.activity.codeSelected', false);
 export const ChatConversationPageContext = new RawContextKey<boolean>('sessions.chatConversationPage', false);
+export const SessionBrowserTabsAvailableContext = new RawContextKey<boolean>('sessions.browserTabsAvailable', false);
 
 /** The navigation action whose context menu is being resolved. */
 export const ActivityBarItemContext = new RawContextKey<string>('sessions.activityBar.actionId', '');
@@ -31,7 +32,7 @@ export const SessionsMenuCanSetFolderContext = new RawContextKey<boolean>('sessi
 export const SessionsMenuWorkspaceIdleContext = new RawContextKey<boolean>('sessions.menu.workspaceIdle', false);
 export const SessionsMenuCanMoveConversationContext = new RawContextKey<boolean>('sessions.menu.canMoveConversation', false);
 
-export const desktopEditorTools = ['files', 'changes', 'browser', 'terminal', 'chat', 'search'] as const;
+export const desktopEditorTools = ['files', 'browser', 'terminal', 'chat', 'search'] as const;
 export type DesktopEditorTool = typeof desktopEditorTools[number];
 
 export const SessionsEditorToolContext = new RawContextKey<DesktopEditorTool | undefined>('sessions.editorTool', undefined);

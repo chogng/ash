@@ -13,17 +13,17 @@ suite('Sessions native titlebar layout', () => {
 		await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!());
 		const editor = page.locator('[data-part="editor"]');
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const editorHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
+		const editorRegion = titlebar.locator('.ash-sessions-titlebar-editor-region');
 		const conversationTitle = titlebar.locator('.ash-sessions-titlebar-session-content');
 		await expect(editor).toBeVisible();
-		await expect(editorHeaders).toBeVisible();
-		await expect.poll(async () => (await editorHeaders.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
+		await expect(editorRegion).toBeVisible();
+		await expect.poll(async () => (await editorRegion.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
 		const title = (await conversationTitle.boundingBox())!;
 		expect(title.x + title.width).toBeLessThanOrEqual((await editor.boundingBox())!.x);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`maximized Chat keeps the editor titlebar aligned in ${locale}`, async () => {
+		test(`maximized Chat keeps the editor below the window titlebar in ${locale}`, async () => {
 			const { page } = browser;
 			await page.setViewportSize({ width: 1440, height: 900 });
 			await page.goto(`/sessions.html?emptyEditorArea&locale=${locale}`);
@@ -31,13 +31,15 @@ suite('Sessions native titlebar layout', () => {
 			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(false));
 			const titlebar = page.locator('[data-part="titlebar"]');
 			const editor = page.locator('[data-part="editor"]');
-			const editorHeaders = titlebar.locator('.ash-sessions-titlebar-editor-headers');
+			const editorRegion = titlebar.locator('.ash-sessions-titlebar-editor-region');
 			const conversation = titlebar.locator('.ash-sessions-titlebar-session-content');
-			const expectEditorHeadersAligned = () =>
-				expect.poll(async () => (await editorHeaders.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
+			const expectEditorBelowTitlebar = () => expect.poll(async () => {
+				const bar = (await titlebar.boundingBox())!;
+				return (await editor.boundingBox())!.y - bar.y - bar.height;
+			}).toBeCloseTo(0, 0);
 			await expect(conversation).toBeHidden();
-			await expect(editorHeaders).toBeVisible();
-			await expectEditorHeadersAligned();
+			await expect(editorRegion).toBeHidden();
+			await expectEditorBelowTitlebar();
 			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
 			const accounts = titlebar.locator('[data-action-id="sessions.activity.accounts"] button');
 			await accounts.press('Shift+F10');
@@ -46,11 +48,11 @@ suite('Sessions native titlebar layout', () => {
 			await page.keyboard.press('Escape');
 			await expect(accounts).toBeFocused();
 			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'default'));
-			await expectEditorHeadersAligned();
+			await expectEditorBelowTitlebar();
 			for (const width of [900, 640]) {
 				await page.setViewportSize({ width, height: 900 });
-				await expectEditorHeadersAligned();
-				await expect(editorHeaders).toBeInViewport({ ratio: 1 });
+				await expectEditorBelowTitlebar();
+				await expect(editor).toBeInViewport({ ratio: 1 });
 			}
 			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(true));
 			await expect(conversation).toBeVisible();
@@ -78,21 +80,56 @@ suite('Sessions native titlebar layout', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const panel = titlebar.getByRole('toolbar', { name: '侧面板', exact: true });
 		const toggle = panel.getByRole('button', { name: '切换侧面板', exact: true });
+		const maximize = panel.getByRole('button', { name: '最大化侧面板', exact: true });
+		const restore = panel.getByRole('button', { name: '还原侧面板大小', exact: true });
+		const conversation = page.locator('[data-part="sessions"]');
 		const editor = page.locator('[data-part="editor"]');
-		const headers = titlebar.locator('.ash-sessions-titlebar-editor-headers');
+		const editorRegion = titlebar.locator('.ash-sessions-titlebar-editor-region');
+		const startTab = editorRegion.getByRole('tab', { name: '新标签页', exact: true });
+		const startSearch = editor.getByRole('textbox', { name: '搜索文件或输入 URL', exact: true });
+		const expectHostedTab = async (tabTop: number): Promise<void> => {
+			await expect(startTab).toHaveAttribute('aria-selected', 'true');
+			await expect.poll(async () => (await startTab.boundingBox())!.y).toBe(tabTop);
+			await expect(editorRegion.getByRole('button', { name: '添加标签页', exact: true })).toBeVisible();
+		};
 		await expectCenteredTitlebarIcon(toggle);
+		await expect(toggle).toHaveCSS('border-radius', '8px');
 		const chatBounds = (await toggle.boundingBox())!;
 		const windowBar = (await titlebar.boundingBox())!;
 		expect(windowBar.x + windowBar.width - chatBounds.x - chatBounds.width).toBe(8);
 		await expect(editor).toBeHidden();
+		await expect(maximize).toHaveCount(0);
 		await toggle.press('Enter');
 		await expect(editor).toBeVisible();
+		await expect(startTab).toHaveAttribute('aria-selected', 'true');
+		await expect(startSearch).toBeFocused();
+		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toHaveCount(0);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await page.mouse.move(16, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
+		await expectCenteredTitlebarIcon(maximize);
+		const maxBounds = (await maximize.boundingBox())!;
+		expect(maxBounds.x + maxBounds.width).toBeLessThanOrEqual(chatBounds.x);
+		expect(maxBounds.y).toBe(chatBounds.y);
+		await expect(editor.locator('[data-action-id="sessions.toggleSessionPart"]')).toHaveCount(0);
+		const chatTabTop = (await startTab.boundingBox())!.y;
+		await toggle.press('ArrowLeft');
+		await expect(maximize).toBeFocused();
+		await maximize.press('Enter');
+		await expect(conversation).toBeHidden();
+		await expectHostedTab(chatTabTop);
+		await expect.poll(async () => (await editorRegion.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
+		await expect(restore).toBeFocused();
+		await expect(restore).toHaveAttribute('aria-pressed', 'true');
+		await expect.poll(() => restore.boundingBox()).toEqual(maxBounds);
+		await restore.press('Enter');
+		await expect(conversation).toBeVisible();
+		await expectHostedTab(chatTabTop);
+		await expect(maximize).toBeFocused();
 		await mode.getByRole('button', { name: '代码', exact: true }).click();
 		await expect(editor).toBeHidden();
+		await expect(maximize).toHaveCount(0);
 		await expectCenteredTitlebarIcon(toggle);
 		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right-off"]')).toBeVisible();
 		const closedBounds = (await toggle.boundingBox())!;
@@ -107,32 +144,57 @@ suite('Sessions native titlebar layout', () => {
 		await page.mouse.move(16, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(editor).toBeVisible();
-		const files = headers.locator('[data-editor-tool="files"] > .ash-editor-group-header');
+		const files = editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible');
 		await expect(files).toBeVisible();
-		const addTab = files.getByRole('button', { name: '添加标签页', exact: true });
+		await expect(titlebar.locator('.ash-editor-group-header')).toHaveCount(0);
+		await expect(startTab).toHaveAttribute('aria-selected', 'true');
+		await expect(startSearch).toBeFocused();
+		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toBeVisible();
+		const addTabName = { name: '添加标签页', exact: true };
+		const addTab = editorRegion.getByRole('button', addTabName);
+		const inlineAddTab = files.getByRole('button', addTabName);
+		await expect(inlineAddTab).toHaveCount(0);
+		await expect(editor.locator('[data-action-id="ash.sessions.maximizeTool"]')).toHaveCount(0);
 		await addTab.press('Enter');
+		await expect(page.getByRole('menuitem', { name: '新标签页', exact: true })).toBeVisible();
 		await expect(page.getByRole('menuitem', { name: '打开文件', exact: true })).toBeVisible();
 		await expect(page.getByRole('menuitem', { name: '打开更改', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(addTab).toBeFocused();
 		await expect(files.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
 		const originalWidth = (await editor.boundingBox())!.width;
+		const codeTabTop = (await startTab.boundingBox())!.y;
+		await expectCenteredTitlebarIcon(maximize);
+		await maximize.press('Enter');
+		await expect(conversation).toBeHidden();
+		await expect(editor).toBeVisible();
+		await expectHostedTab(codeTabTop);
+		await expect.poll(async () => (await editor.boundingBox())!.width).toBeGreaterThan(originalWidth);
+		await restore.press('Enter');
+		await expect(conversation).toBeVisible();
+		await expectHostedTab(codeTabTop);
+		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);
+		await addTab.focus();
 		for (const width of [1440, 1060]) {
 			await page.setViewportSize({ width, height: 900 });
 			await expect.poll(async () => {
 				const [row, body, button, windowBar] = await Promise.all([
-					headers.boundingBox(), editor.boundingBox(), toggle.boundingBox(), titlebar.boundingBox(),
+					files.boundingBox(), editor.boundingBox(), toggle.boundingBox(), titlebar.boundingBox(),
 				]);
-				return [Math.round(row!.x - body!.x), Math.round(row!.x + row!.width - button!.x), Math.round(windowBar!.x + windowBar!.width - button!.x - button!.width)];
-			}).toEqual([0, 0, 8]);
+				return [row!.x >= body!.x, row!.y >= body!.y, Math.round(windowBar!.x + windowBar!.width - button!.x - button!.width)];
+			}).toEqual([true, true, 8]);
 		}
+		await page.setViewportSize({ width: 480, height: 900 });
+		await expect(inlineAddTab).toBeFocused();
+		await expect(addTab).toHaveCount(0);
 		await page.setViewportSize({ width: 1440, height: 900 });
+		await expect(addTab).toBeFocused();
 		await expect(panel).toHaveCSS('-webkit-app-region', 'no-drag');
 		await expect(toggle).toBeInViewport({ ratio: 1 });
 		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
 		await page.mouse.click(closedBounds.x + closedBounds.width / 2, closedBounds.y + closedBounds.height / 2);
 		await expect(editor).toBeHidden();
-		await expect(headers).toBeHidden();
+		await expect(editorRegion).toBeHidden();
 		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
 		await toggle.press('Enter');
 		await expect(files).toBeVisible();
@@ -142,10 +204,15 @@ suite('Sessions native titlebar layout', () => {
 		const code = mode.getByRole('button', { name: '代码', exact: true });
 		await chat.click();
 		await expect(chat).toHaveAttribute('aria-pressed', 'true');
-		await expect(files).toBeHidden();
+		await expect(startTab).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toHaveCount(0);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await maximize.click();
+		await expect(conversation).toBeHidden();
 		await toggle.click();
 		await expect(editor).toBeHidden();
+		await expect(conversation).toBeVisible();
+		await expect(restore).toHaveCount(0);
 		await code.click();
 		await expect(files).toBeVisible();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -155,31 +222,31 @@ suite('Sessions native titlebar layout', () => {
 		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
 	});
 
-	test('Code tools move into More Actions when narrow and return when widened', async () => {
+	test('Code session information moves into More Actions when narrow and returns when widened', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 		const tools = page.getByRole('toolbar', { name: 'Code layout', exact: true });
-		const files = tools.getByRole('button', { name: 'Toggle files', exact: true });
+		const info = tools.getByRole('button', { name: 'Toggle session information', exact: true });
 		const more = tools.getByRole('button', { name: 'More Actions', exact: true });
-		await expect(files).toBeInViewport({ ratio: 1 });
-		await expectCenteredTitlebarIcon(files);
-		await files.focus();
+		await expect(info).toBeInViewport({ ratio: 1 });
+		await expectCenteredTitlebarIcon(info);
+		await info.focus();
 		const viewport = page.viewportSize()!;
-		await page.setViewportSize({ width: 240, height: viewport.height });
-		await expect(files).toHaveCount(0);
+		await page.setViewportSize({ width: 200, height: viewport.height });
+		await expect(info).toHaveCount(0);
 		await expect(more).toBeInViewport({ ratio: 1 });
 		await expectCenteredTitlebarIcon(more);
 		await expect(more).toBeFocused();
 		await more.press('Enter');
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle files', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle session information', exact: true })).toBeVisible();
 		await expect(page.getByRole('menuitem', { name: 'Side Chat', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(more).toBeFocused();
 		await page.setViewportSize(viewport);
-		await expect(files).toBeInViewport({ ratio: 1 });
+		await expect(info).toBeInViewport({ ratio: 1 });
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
 		const account = page.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Accounts', exact: true });
 		await expectCenteredTitlebarIcon(account);

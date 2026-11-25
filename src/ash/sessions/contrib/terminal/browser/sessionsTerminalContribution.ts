@@ -159,12 +159,6 @@ export function registerSessionsTerminalContribution(
 					},
 					menu: [
 						{
-							id: Menus.TitleBarRightLayout,
-							group: 'navigation',
-							order: 3,
-							when: codeVisible,
-						},
-						{
 							id: MenuId.MenubarViewMenu,
 							group: '2_code_layout',
 							order: 3,

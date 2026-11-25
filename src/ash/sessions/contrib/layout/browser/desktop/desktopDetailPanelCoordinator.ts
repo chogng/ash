@@ -3,7 +3,7 @@ import type { EditorParts } from '../../../../browser/parts/editorParts.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 
-/** Tool selection is explicit; opening or closing a document never hides Files. */
+/** Opens the Files tab or reveals Details beside the active document. */
 export class DesktopDetailPanelCoordinator {
 	constructor(
 		@IEditorPart private readonly editor: IEditorPart,
@@ -14,8 +14,9 @@ export class DesktopDetailPanelCoordinator {
 		return true;
 	}
 
-	public async update(reveal: boolean): Promise<void> {
-		if (reveal && !(this.editor as EditorParts).filesDetailsOpen) await this.openFiles();
+	public showDetails(): void {
+		(this.editor as EditorParts).filesPart.showDetails();
+		this.layout.showPart('editor');
 	}
 
 	public async openFiles(): Promise<void> {

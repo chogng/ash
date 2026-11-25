@@ -662,7 +662,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)').getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await creator.click();
 	await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
@@ -704,7 +704,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)').getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await expect.poll(() => codeAuxiliary.isVisible()).toBe(codeAuxiliaryWasVisible);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
@@ -735,11 +735,11 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await new Menus(page).select(application, () => page.getByRole('button', { name: 'Accounts', exact: true }).click({ button: 'right' }), ['Activity Bar Position', 'Default']);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(viewer).toBeHidden();
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)').getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await new QuickAccess(page).runCommand('sessions.open.trace');
 	await expect(viewer).toBeVisible();
 	await expect(trace).toHaveCount(0);
-	await expect(page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { name: 'Agent Debug Logs', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('tab', { name: 'Agent Debug Logs', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await expect(viewer.getByRole('status')).toContainText('Imported');
 	await retainedChat!.dispose();
 });

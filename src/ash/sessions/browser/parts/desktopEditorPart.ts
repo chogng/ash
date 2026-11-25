@@ -20,13 +20,15 @@ import { Menus } from '../menus.js';
 import { EditorPart, type ISessionsEditorPage } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
-import './media/editorPart.css';
+import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
+import { EditorStartInput } from '../../contrib/editor/browser/emptyFileEditor.js';
 
 const DEFAULT_FILES_TREE_WIDTH = 300;
 const MINIMUM_NARROW_EDITOR_WIDTH = 160;
 
 /** Owns the main editor groups and the geometry of their docked details. */
 export class DesktopMainEditorPart extends EditorPart {
+	private hostedTabsGroup: IEditorGroupView | undefined;
 	private readonly auxiliary = this._register(new MutableDisposable<DesktopAuxiliaryBarPart>());
 	private inWorkingSet: (groupId: number) => boolean = () => true;
 	private supportsFilesDetails: () => boolean = () => true;
@@ -140,16 +142,29 @@ export class DesktopMainEditorPart extends EditorPart {
 	}
 
 	public get detailsVisible(): boolean {
-		return this.hostVisible && this.hasDetailsContent;
+		const group = this.activeGroup;
+		const input = group.activeInput;
+		if (!input || !this.hostVisible || !this.supportsFilesDetails() || this.isGroupVisible(this.pageGroupId)
+			|| !this.fileGroups.includes(group) || !this.isGroupVisible(group.id)) return false;
+		return this.filesTabActive || (this.detailsRequested && !(input instanceof EditorStartInput) && input.resource.scheme !== 'ash-session-changes');
 	}
-
-	public get hasDetailsContent(): boolean {
-		return this.supportsFilesDetails() && this.detailsRequested && !this.isGroupVisible(this.pageGroupId)
-			&& this.fileGroups.some(group => this.isGroupVisible(group.id));
-	}
-	public get isEditorVisible(): boolean { return this.showEditors; }
+	private get filesTabActive(): boolean { return this.activeGroup.activeInput instanceof EmptyFileEditorInput; }
+	public get isEditorVisible(): boolean { return this.showEditors && !this.filesTabActive; }
 	public get fileGroups(): readonly IEditorGroupView[] {
 		return this.groups.filter(group => this.inWorkingSet(group.id) && group.id !== this.pageGroupId);
+	}
+
+	public get fileTabsGroup(): IEditorGroupView | undefined {
+		const groups = this.fileGroups.filter(group => this.isGroupVisible(group.id));
+		return groups.length === 1 ? groups[0] : undefined;
+	}
+
+	public setFileTabsHost(host: HTMLElement | undefined): void {
+		const group = host ? this.fileTabsGroup : undefined;
+		const previous = this.hostedTabsGroup;
+		if (previous && previous !== group && this.groups.includes(previous)) previous.setTabStripHost(undefined);
+		this.hostedTabsGroup = group;
+		group?.setTabStripHost(host);
 	}
 
 	public setGroupScope(contains: (groupId: number) => boolean, supportsFilesDetails: () => boolean): IDisposable {
@@ -186,11 +201,8 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.layoutDetails();
 	}
 
-	public openFiles(): void {
-		const group = this.fileGroups.find(group => group === this.activeGroup) ?? this.fileGroups[0]
-			?? this.insertGroup(this.activeGroup, Direction.Right).group;
-		this.setGroupVisible(group.id, true);
-		this.activateGroup(group.id);
+	public async openFiles(): Promise<void> {
+		await this.openEditor(new EmptyFileEditorInput(), { pinned: true });
 		this.showDetails();
 		this.auxiliaryBar.focus();
 	}
@@ -199,7 +211,11 @@ export class DesktopMainEditorPart extends EditorPart {
 		// Working-set restoration temporarily detaches the entire group grid.
 		if (this.isDisposed || this.groups.length === 0) return;
 		const product = this.productDetails;
-		const files = this.auxiliary.value;
+		const files = this.filesTabActive && this.supportsFilesDetails() ? this.auxiliaryBar : this.auxiliary.value;
+		if (this.filesTabActive && files && !files.activeCompositeId) {
+			const composite = files.getCompositeIdToRestore();
+			if (composite) files.showComposite(composite);
+		}
 		if (product) {
 			files?.setVisible(false);
 			const minimumWidth = DockedAuxiliaryBarController.MIN_WIDTH;
@@ -219,7 +235,7 @@ export class DesktopMainEditorPart extends EditorPart {
 				requestedWidth: this.detailsVisible ? this.preferredDetailsWidth : undefined,
 				minimumWidth,
 				minimumEditorWidth,
-				editorVisible: this.showEditors && this.fileGroups.some(group => !!group.activeInput),
+				editorVisible: this.isEditorVisible && this.fileGroups.some(group => !!group.activeInput),
 				collapse: () => {
 					// A collapse gesture leaves the last saved width available when Files is reopened.
 					this.preferredDetailsWidth = this.storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, DEFAULT_FILES_TREE_WIDTH);
@@ -240,7 +256,8 @@ export class DesktopMainEditorPart extends EditorPart {
 
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
-			showHeader: true, menuIds: {
+			showHeader: true,
+			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,
 				editorActions: Menus.SessionsEditorTitle,

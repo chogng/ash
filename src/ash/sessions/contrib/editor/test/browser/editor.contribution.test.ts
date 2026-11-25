@@ -190,20 +190,21 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
 	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
 	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
-	const changesAction = () => layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
+	assert.ok(!layoutMenu.getActions().flatMap(([, actions]) => actions).some(action => action.id === 'ash.sessions.toggleChanges'));
+	contextKeys.setContext('sessions.sessionActivityBarVisible', true);
+	using activity = menus.createMenu(Menus.SessionActivityBar);
+	const changesAction = () => activity.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.toggleDetails']);
+	assert.equal(CommandsRegistry.getCommand('ash.sessions.maximizeTool'), undefined);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails']);
 	contextKeys.setContext('sessions.editorHasMultipleTools', true);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.toggleDetails', 'ash.sessions.hideTool']);
-	contextKeys.setContext('sessions.editorToolMaximized', true);
-	assert.equal(headerActions()[0]?.label, 'Restore Tool Size');
-	assert.equal(headerActions()[0]?.checked, true);
-	contextKeys.setContext('sessions.editorToolMaximized', false);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1].map(action => action.id),
 		['ash.sessions.toggleDetails', 'ash.sessions.showEditor']);
 	assert.ok(!MenusRegistry.getMenuItems(MenuId.EditorTitle).some(item => 'command' in item && item.command.id === 'ash.sessions.toggleDetails'));
-	editorTool.set('changes');
+	ActiveEditorContext.bindTo(contextKeys).set('ash.sessions.changesEditor');
+	ResourceSchemeContext.bindTo(contextKeys).set('ash-session-changes');
 	contextKeys.setContext('sessions.changes.hasWorkspace', true);
 	contextKeys.setContext('sessions.changes.scope', 'all');
 	assert.ok(!desktopIds().includes('ash.sessions.changes.previewCommit'));
@@ -230,6 +231,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	}
 	contextKeys.setContext('sessions.changes.scope', 'all');
 	flatLayout.set(true);
+	ActiveEditorContext.bindTo(contextKeys).reset();
+	ResourceSchemeContext.bindTo(contextKeys).reset();
 	editorTool.set('files');
 	const layoutTitleActions = () => desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1] ?? [];
 	const titleState = () => layoutTitleActions().map(action => [action.label, action.enabled, action.checked]);
@@ -250,7 +253,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
-	editorTool.set('changes');
+	ActiveEditorContext.bindTo(contextKeys).set('ash.sessions.changesEditor');
+	ResourceSchemeContext.bindTo(contextKeys).set('ash-session-changes');
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
 	flatLayout.set(false);
@@ -261,6 +265,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
 	editorTool.set('files');
+	ActiveEditorContext.bindTo(contextKeys).reset();
+	ResourceSchemeContext.bindTo(contextKeys).reset();
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.filesVisible'), true, 'Files remains selected while its editor is visible without the attached tree');
@@ -268,7 +274,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	editorChanged.fire();
 	assert.equal(layoutTitleActions().find(action => action.id === 'ash.sessions.toggleDetails')?.enabled, false);
 	editorTool.set('terminal');
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.hideTool']);
 	assert.ok(!desktopIds().includes('workbench.action.terminal.selectDefaultProfile'));
 	assert.ok(!desktopIds().includes('ash.sessions.configureTerminal'));
 	assert.ok(!desktopIds().includes('ash.sessions.closeTerminalPane'));
@@ -300,16 +306,16 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.equal(changesAction().checked, false);
 	changesVisible = true;
 	editorChanged.fire();
-	assert.equal(changesAction().checked, true, 'Opening Changes elsewhere updates the titlebar selection');
+	assert.equal(changesAction().checked, true, 'Opening Changes elsewhere updates the activity-bar selection');
 	parts.editor = false;
 	layoutChanged.fire();
-	assert.equal(changesAction().checked, false, 'Hiding the editor area clears the titlebar selection');
+	assert.equal(changesAction().checked, false, 'Hiding the editor area clears the activity-bar selection');
 	parts.editor = true;
 	layoutChanged.fire();
 	assert.equal(changesAction().checked, true);
 	changesVisible = false;
 	editorChanged.fire();
-	assert.equal(changesAction().checked, false, 'Closing Changes elsewhere clears the titlebar selection');
+	assert.equal(changesAction().checked, false, 'Closing Changes elsewhere clears the activity-bar selection');
 	parts.editor = false;
 	layoutChanged.fire();
 	documentContent.set(false, undefined);
@@ -349,17 +355,15 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		documentContent.set(true, undefined);
 		using translated = registerEntryActions();
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['最大化工具窗格', '切换详情', '隐藏工具区域']);
-		contextKeys.setContext('sessions.editorToolMaximized', true);
-		assert.equal(headerActions()[0]?.label, '还原工具窗格大小');
-		contextKeys.setContext('sessions.editorToolMaximized', false);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '隐藏工具区域']);
 		appServerAvailable.set(true);
 		assert.deepEqual(addTabLabels(), ['打开文件', '打开更改', '新建终端']);
 		appServerAvailable.reset();
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件');
+		contextKeys.setContext('sessions.sessionActivityBarVisible', true);
 		assert.equal(changesAction().label, '更改');
 		editorTool.set('terminal');
-		assert.deepEqual(headerActions().map(action => action.label), ['最大化工具窗格', '隐藏工具区域']);
+		assert.deepEqual(headerActions().map(action => action.label), ['隐藏工具区域']);
 		contextKeys.setContext('terminalEditorCanSplit', true);
 		const split = desktopTitle.getActions().flatMap(([, actions]) => actions)
 			.find(action => action instanceof SubmenuItemAction && action.item.submenu === Menus.SessionsTerminalSplit);
@@ -457,6 +461,7 @@ test('Word Wrap in Files updates the Agents Window preference and reflects the e
 	assert.equal(wordWrap()?.checked, false);
 	await wordWrap()?.run();
 	assert.deepEqual(writes, [['sessions.editor.wordWrap', 'off'], ['sessions.editor.wordWrap', 'on']]);
-	editorTool.set('changes');
+	ActiveEditorContext.bindTo(contextKeys).set('ash.sessions.changesEditor');
+	ResourceSchemeContext.bindTo(contextKeys).set('ash-session-changes');
 	assert.equal(wordWrap(), undefined);
 });

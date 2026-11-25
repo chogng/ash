@@ -1,3 +1,4 @@
+import '../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { registerDiffEditorCommands } from '../../../../workbench/browser/parts/editor/diffEditorCommands.js';
 import { DiffEditorCommandsService, type DiffEditorViewMode } from '../../../../workbench/browser/parts/editor/diffEditorCommandsService.js';

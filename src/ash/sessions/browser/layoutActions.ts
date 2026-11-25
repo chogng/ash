@@ -1,5 +1,6 @@
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../contrib/layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from '../contrib/editor/browser/addTabActions.js';
+import { EditorStartInput } from '../contrib/editor/browser/emptyFileEditor.js';
 import { isRecord } from '../../base/common/types.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
@@ -15,13 +16,15 @@ import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import type { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import {
+	EditorAreaVisibleContext,
 	SideBarVisibleContext,
 	SessionsCodeEditorContext,
 	PanelVisibleContext,
+	ResourceSchemeContext,
 } from '../../workbench/common/contextkeys.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
-import { EditorHasMultipleToolsContext, EditorToolMaximizedContext, Menus, sessionToolMenuItems } from './menus.js';
+import { EditorHasMultipleToolsContext, Menus, SessionActivityBarVisibleContext } from './menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../../workbench/contrib/sessions/common/contextkeys.js';
 import { ChatConversationPageContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext, SessionsEditorToolContext } from '../common/contextkeys.js';
 
@@ -47,6 +50,7 @@ export function registerLayoutActions(
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const covered = conversationCovered.bindTo(contextKeys);
 	const sessionsHidden = sessionsPartHidden.bindTo(contextKeys);
+	const sidePanePage = ContextKeyExpr.or(ChatConversationPageContext.isEqualTo(true), SessionsCodeEditorContext.isEqualTo(true));
 	const isNewSession = IsNewSessionContext.bindTo(contextKeys);
 	const hasUsableWorkspace = NewSessionHasUsableWorkspaceContext.bindTo(contextKeys);
 	const updateContext = (): void =>
@@ -126,16 +130,29 @@ export function registerLayoutActions(
 					tooltip: localize2('sessions.layout.exitFullScreen', 'Exit Full Screen'),
 					icon: Lxicon.minimize,
 				},
-				menu: [
-					{ id: Menus.EditorPartLayout, group: 'navigation', order: 1 },
-					{ id: Menus.SessionsEditorHeaderLayout, when: ContextKeyExpr.not(SessionsCodeEditorContext.key), group: 'navigation', order: 1 },
-				],
+				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 1 },
 			});
 		}
 
-		override run(accessor: ServicesAccessor): Promise<void> {
+		override run(accessor: ServicesAccessor): Promise<void> | undefined {
+			if (!layout.isPartVisible('editor') || (!editor.area.hasProductPage && !contextKeys.contextMatchesRules(sidePanePage))) return;
 			return accessor.get(ISessionsEntryService).setConversationVisible(!layout.isPartAvailable('sessions'), { preserveFocus: true });
 		}
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.TitleBarSidePane, {
+		command: {
+			id: 'sessions.toggleSessionPart',
+			title: localize2('sessions.layout.maximizeSidePane', 'Maximize Side Panel'),
+			icon: Lxicon.maximize,
+			toggled: {
+				condition: sessionsPartHidden.isEqualTo(true),
+				title: localize2('sessions.layout.restoreSidePane', 'Restore Side Panel Size'),
+				icon: Lxicon.minimize,
+			},
+		},
+		when: ContextKeyExpr.and(sidePanePage, EditorAreaVisibleContext.isEqualTo(true)),
+		group: 'navigation',
+		order: 1,
 	}));
 	disposables.add(registerAction2(class CloseEditorPartAction extends Action2 {
 		constructor() {
@@ -180,7 +197,10 @@ export function registerLayoutActions(
 				title: localize2({ bundle: 'ash', key: 'sessions.layout.sideChat' }, 'Side Chat'),
 				icon: Lxicon.chat,
 				precondition: sessionTools.isEqualTo(true),
-				menu: { id: Menus.TitleBarRightLayout, when: showSessionTools, group: '1_tools', order: 1 },
+				menu: [
+					{ id: Menus.TitleBarRightLayout, when: showSessionTools, group: '1_tools', order: 1 },
+					{ id: Menus.SessionsEditorStart, when: sessionTools.isEqualTo(true), group: 'navigation', order: 3 },
+				],
 			});
 		}
 
@@ -240,7 +260,11 @@ const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisibl
 const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
-const filesTool = SessionsEditorToolContext.isEqualTo('files');
+const filesTool = ContextKeyExpr.and(
+	SessionsEditorToolContext.isEqualTo('files'),
+	ContextKeyExpr.notEquals(ResourceSchemeContext.key, 'ash-session-changes'),
+	ContextKeyExpr.notEquals(ResourceSchemeContext.key, EditorStartInput.SCHEME),
+);
 
 /** Binds the desktop entry's editor commands to its layout state and navigation queue. */
 export function registerDesktopEditorLayoutActions(
@@ -310,10 +334,6 @@ export function registerDesktopEditorLayoutActions(
 			updateContext();
 		});
 	}));
-	disposables.add(CommandsRegistry.register('ash.sessions.maximizeTool', (_accessor, arg) => run(async () => {
-		const group = isRecord(arg) ? editor.groups.find(group => group.id === arg.groupId) : undefined;
-		editor.toggleMaximizeTool((group ?? editor.activeGroup).id);
-	})));
 	for (const [id, operation] of [
 		['ash.sessions.toggleDetails', () => controller.toggleDetails()],
 		['ash.sessions.toggleFiles', () => controller.toggleFiles()],
@@ -366,22 +386,6 @@ export function registerDesktopEditorLayoutActions(
 			{
 				id: Menus.SessionsEditorHeaderLayout,
 				item: {
-					command: {
-						id: 'ash.sessions.maximizeTool',
-						title: localize2('sessions.layout.maximizeTool', 'Maximize Tool'),
-						icon: Lxicon.screenFull,
-						toggled: {
-							condition: EditorToolMaximizedContext.isEqualTo(true),
-							title: localize2('sessions.layout.restoreTool', 'Restore Tool Size'),
-							icon: Lxicon.screenNormal,
-						},
-					},
-					when: codeWhen, group: 'navigation', order: 1,
-				},
-			},
-			{
-				id: Menus.SessionsEditorHeaderLayout,
-				item: {
 					command: { id: hideToolId, title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
 					when: hideToolWhen,
 					group: 'navigation',
@@ -401,31 +405,37 @@ export function registerDesktopEditorLayoutActions(
 					order: 100,
 				},
 			},
-			...sessionToolMenuItems({
-				command: {
-					id: 'ash.sessions.toggleFiles',
-					title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
-					icon: Lxicon.folder,
-					toggled: filesVisibleContext.isEqualTo(true),
+			{
+				id: Menus.SessionActivityBar,
+				item: {
+					command: {
+						id: 'ash.sessions.toggleFiles',
+						title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
+						icon: Lxicon.folder,
+						toggled: filesVisibleContext.isEqualTo(true),
+					},
+					when: ContextKeyExpr.and(codeWhen, SessionActivityBarVisibleContext.isEqualTo(true), ContextKeyExpr.or(
+						IsNewSessionContext.isEqualTo(false),
+						NewSessionHasUsableWorkspaceContext.isEqualTo(true),
+					)),
+					group: 'navigation',
+					order: 5,
 				},
-				when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.or(
-					IsNewSessionContext.isEqualTo(false),
-					NewSessionHasUsableWorkspaceContext.isEqualTo(true),
-				)),
-				group: 'navigation',
-				order: 5,
-			}),
-			...sessionToolMenuItems({
-				command: {
-					id: 'ash.sessions.toggleChanges',
-					title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
-					icon: Lxicon.diffChanges,
-					toggled: changesVisibleContext.isEqualTo(true),
+			},
+			{
+				id: Menus.SessionActivityBar,
+				item: {
+					command: {
+						id: 'ash.sessions.toggleChanges',
+						title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
+						icon: Lxicon.diffChanges,
+						toggled: changesVisibleContext.isEqualTo(true),
+					},
+					when: ContextKeyExpr.and(codeWhen, SessionActivityBarVisibleContext.isEqualTo(true), ContextKeyExpr.not(IsNewSessionContext.key)),
+					group: 'navigation',
+					order: 4,
 				},
-				when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.not(IsNewSessionContext.key)),
-				group: 'navigation',
-				order: 4,
-			}),
+			},
 			{
 				id: Menus.SessionsEditorTitle,
 				item: {

@@ -539,6 +539,8 @@
 		"--ash-shadow-lg",
 		"--ash-split-action-dropdown-width",
 		"--ash-split-view-separator-border",
+		"--ash-sessions-activity-rail-popup-width",
+		"--ash-sessions-activity-rail-width",
 		"--ash-system-font-family",
 		"--ash-tab-border-radius",
 		"--ash-tab-list-fixed-max-width",

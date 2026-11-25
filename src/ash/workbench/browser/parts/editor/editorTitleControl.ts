@@ -36,7 +36,9 @@ export class EditorTitleControl extends Disposable {
 	static readonly HEIGHT = 35;
 
 	readonly domNode: HTMLDivElement;
-	readonly headerElement: HTMLDivElement;
+	readonly tabStrip?: HTMLDivElement;
+	private readonly headerElement: HTMLDivElement;
+	private readonly headerLabel?: HTMLSpanElement;
 	private readonly heightEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
 	private readonly lockIndicator: HTMLSpanElement;
@@ -67,7 +69,7 @@ export class EditorTitleControl extends Disposable {
 	) {
 		super();
 		this.delegate = delegate;
-		this.tabsMode = viewOptions.hideTabs ? 'none' : model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
+		this.tabsMode = model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-editor-title-control';
@@ -75,6 +77,17 @@ export class EditorTitleControl extends Disposable {
 		this.headerElement = h(ownerDocument, 'div');
 		this.headerElement.className = 'ash-editor-tabs-and-actions';
 		this.domNode.append(this.headerElement);
+		if (viewOptions.menuIds?.tabsBarAddTab) {
+			this.tabStrip = h(ownerDocument, 'div', { className: 'ash-editor-tab-strip' });
+			this.headerElement.append(this.tabStrip);
+			const context = titleActions?.contextKeyService?.createScoped(this.tabStrip);
+			if (context) this._register(context);
+			this._register(toDisposable(() => this.tabStrip?.remove()));
+		}
+		if (viewOptions.showHeader) {
+			this.headerLabel = h(ownerDocument, 'span', { className: 'ash-editor-header-label' });
+			(this.tabStrip ?? this.headerElement).append(this.headerLabel);
+		}
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 		this.header = this._register(this.instantiationService.createInstance(EditorHeaderControl,
 			this.domNode,
@@ -87,6 +100,7 @@ export class EditorTitleControl extends Disposable {
 			languageFeatures,
 			showSymbolPicker,
 			viewOptions,
+			this.tabStrip,
 		));
 		this.lockIndicator = h(ownerDocument, 'span');
 		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
@@ -105,7 +119,7 @@ export class EditorTitleControl extends Disposable {
 		}
 		if (configurationService) {
 			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (!viewOptions.hideTabs && model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
+				if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
 					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
@@ -117,7 +131,6 @@ export class EditorTitleControl extends Disposable {
 		this.hasTitle = model.editorLimit === 1 || !!viewOptions.showHeader;
 		this.updateVisibility();
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(toDisposable(() => this.headerElement.remove()));
 	}
 
 	get height(): number {
@@ -126,24 +139,11 @@ export class EditorTitleControl extends Disposable {
 	}
 
 	get tabsHeight(): number {
-		if (this.domNode.hidden || this.headerElement.parentElement !== this.domNode) return 0;
+		if (this.domNode.hidden) return 0;
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		const rowHeight = this.viewOptions.headerRowHeight?.get()
 			?? (this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT);
 		return rowHeight * rows;
-	}
-
-	setHeaderHost(host: HTMLElement | undefined): void {
-		const container = host ?? this.domNode;
-		if (this.headerElement.parentElement === container) return;
-		const focused = this.headerElement.ownerDocument.activeElement as HTMLElement | null;
-		const restoreFocus = focused && this.headerElement.contains(focused);
-		this.headerElement.classList.toggle('ash-editor-group-header-hosted', host !== undefined);
-		if (host) host.append(this.headerElement);
-		else this.domNode.prepend(this.headerElement);
-		this.updateRows();
-		if (restoreFocus && focused.isConnected) focused.focus({ preventScroll: true });
-		this.heightEmitter.fire();
 	}
 
 	setVisible(visible: boolean): boolean {
@@ -151,6 +151,17 @@ export class EditorTitleControl extends Disposable {
 		this.titleVisible = visible;
 		this.updateVisibility();
 		return true;
+	}
+
+	setTabStripHost(host: HTMLElement | undefined): void {
+		const strip = this.tabStrip;
+		const target = host ?? this.headerElement;
+		if (!strip || strip.parentElement === target) return;
+		const focused = strip.ownerDocument.activeElement as HTMLElement | null;
+		const restoreFocus = strip.contains(focused);
+		strip.classList.toggle('ash-editor-tab-strip-hosted', !!host);
+		target.prepend(strip);
+		if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
@@ -184,35 +195,39 @@ export class EditorTitleControl extends Disposable {
 
 	private updateVisibility(): void {
 		this.domNode.hidden = this.headerElement.hidden = !this.titleVisible || !this.hasTitle;
+		if (this.tabStrip) this.tabStrip.hidden = this.headerElement.hidden;
 		this.updateRows();
 	}
 
 	private updateRows(): void {
-		const docked = this.headerElement.parentElement !== this.domNode;
-		this.domNode.classList.toggle('ash-editor-title-header-hosted', docked);
-		const hasTabs = this.tabsMode === 'single'
-			? this.activeInput !== undefined
-			: this.tabsMode === 'multiple' && this.editors.length > 0;
-		this.headerElement.classList.toggle('has-tabs', hasTabs);
+		if (this.headerLabel) {
+			const hasTabs = this.tabsMode === 'single'
+				? this.activeInput !== undefined
+				: this.tabsMode === 'multiple' && this.editors.length > 0;
+			const label = this.activeInput?.label ?? this.viewOptions.emptyHeaderLabel ?? '';
+			this.headerLabel.hidden = hasTabs || !label;
+			if (this.headerLabel.textContent !== label) this.headerLabel.textContent = label;
+		}
 		const rows = this.headerElement.hidden ? 0 : this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
-		this.domNode.style.setProperty('--ash-editor-tab-rows', String(docked ? 0 : rows));
+		this.domNode.style.setProperty('--ash-editor-tab-rows', String(rows));
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
 		this.headerElement.classList.toggle('multiple', mode === 'multiple');
-		const firstAction = this.headerElement.querySelector(':scope > .ash-editor-tabs-trailing, :scope > .ash-editor-header-primary, :scope > .ash-editor-title-actions');
+		const parent = this.tabStrip ?? this.headerElement;
+		const firstAction = parent.querySelector(':scope > :is(.ash-editor-add-tab, .ash-editor-tabs-trailing, .ash-editor-header-primary, .ash-editor-title-actions)');
 		const control = mode === 'single'
-			? this.instantiationService.createInstance(SingleEditorTabsControl, this.headerElement, this.delegate, this.model)
+			? this.instantiationService.createInstance(SingleEditorTabsControl, parent, this.delegate, this.model)
 			: mode === 'none'
-				? new NoEditorTabsControl(this.headerElement)
-				: this.instantiationService.createInstance(MultiRowEditorControl, this.headerElement, this.delegate, this.model);
+				? new NoEditorTabsControl(parent)
+				: this.instantiationService.createInstance(MultiRowEditorControl, parent, this.delegate, this.model);
 		this.rowsListener.value = control instanceof MultiRowEditorControl
 			? control.onDidChangeRows(() => {
 				this.updateRows();
 				this.heightEmitter.fire();
 			})
 			: undefined;
-		if (firstAction) this.headerElement.insertBefore(control.domNode, firstAction);
+		if (firstAction) parent.insertBefore(control.domNode, firstAction);
 		return control;
 	}
 

@@ -166,14 +166,14 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 			assert.equal(provider.provideContent(), pane.getAccessibleContent());
 		} else {
 			assert.match(provider.provideContent(), /The file list and comparisons share this editor/u);
-			assert.match(provider.provideContent(), /Changes is a separate tool card with a title toolbar for each editor group/u);
+			assert.match(provider.provideContent(), /Changes and Files are separate tabs in the same editor group/u);
 			assert.match(provider.provideContent(), /open Diff View to choose Inline, Side by Side, or Automatic/u);
 			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 			assert.ok(chinese);
 			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 			try {
 				assert.match(provider.provideContent(), /如果“全部更改”或回合更改中有可提交的文件，可以使用“预览提交”/u);
-				assert.match(provider.provideContent(), /“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏/u);
+				assert.match(provider.provideContent(), /“更改”和“文件”是同一编辑器组中的两个标签页/u);
 				assert.match(provider.provideContent(), /打开“差异视图”.*“行内”“并排”或“自动”/u);
 			} finally {
 				resetNlsResolver();

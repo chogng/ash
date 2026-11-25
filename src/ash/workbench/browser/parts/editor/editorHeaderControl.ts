@@ -77,6 +77,7 @@ export class EditorHeaderControl extends Disposable {
 		private readonly languageFeatures: ILanguageFeaturesService | undefined,
 		private readonly showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
 		viewOptions: IEditorGroupViewOptions = {},
+		tabStrip: HTMLElement | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
@@ -94,12 +95,13 @@ export class EditorHeaderControl extends Disposable {
 			if (viewOptions.menuIds?.tabsBarAddTab) {
 				const label = localize({ bundle: 'ash.regions', key: 'addEditorTab' }, 'Add Tab');
 				const menu = this._register(actions.menuService.createMenu(viewOptions.menuIds.tabsBarAddTab, actions.contextKeyService));
-				const toolbar = this._register(new WorkbenchToolBar(trailing, actions.contextMenuProvider, {
+				const toolbar = this._register(new WorkbenchToolBar(tabStrip ?? trailing, actions.contextMenuProvider, {
 					ariaLabel: label,
 					actionViewItemProvider: (action, options) => action instanceof SubmenuAction
 						? new DropdownMenuActionViewItem(action, action.actions, actions.contextMenuProvider, options)
 						: undefined,
 				}));
+				toolbar.element.classList.add('ash-editor-add-tab');
 				const updateAddTab = (): void => {
 					const entries = getFlatContextMenuActions(menu.getActions(menuOptions));
 					toolbar.setActions(entries.length ? [new SubmenuAction('workbench.editor.addTab', label, entries, Lxicon.add)] : []);

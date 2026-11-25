@@ -12,7 +12,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -33,6 +33,8 @@ import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLa
 import { registerDesktopEditorLayoutActions } from '../../../browser/layoutActions.js';
 import { registerChangesEditorTitleActions } from '../../changes/browser/changesActions.js';
 import { registerSessionsModalEditorActions } from '../../editor/browser/editor.contribution.js';
+import { registerEditorStartAction } from '../../editor/browser/addTabActions.js';
+import { EditorStartInput } from '../../editor/browser/emptyFileEditor.js';
 import { registerSessionsTerminalTitleActions } from '../../terminal/browser/sessionsTerminalContribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -100,6 +102,24 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		const key = this.conversationGroupKey(tool);
 		return this.editor.groups.find(group => key !== undefined && group.id === this.conversationGroups.get(key));
 	}
+	private getOrCreateConversationGroup(tool: 'browser' | 'files', key: string) {
+		const existing = this.getConversationGroup(tool);
+		if (existing) return existing;
+		const group = (this.editor as EditorParts).createRetainedGroup(tool);
+		this.conversationGroups.set(key, group.id);
+		return group;
+	}
+
+	private async openEditorStart(): Promise<void> {
+		if (this.isDocumentContent) {
+			await this.editors.openEditor(new EditorStartInput(), { pinned: true });
+		} else if (this.chatConversation.get()) {
+			const key = this.conversationGroupKey('files');
+			if (!key) return;
+			const group = this.getOrCreateConversationGroup('files', key);
+			await this.editors.openEditor(new EditorStartInput(), { pinned: true }, { groupId: group.id });
+		}
+	}
 	private get hasConversationEditors(): boolean {
 		return this.conversationEditors.length > 0 || !!this.getConversationGroup('files')?.inputs.length;
 	}
@@ -141,11 +161,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!key || signal?.aborted || this.activeEntry.get() !== source || this.customViews.activeCustomView.get()) return;
 			this.isChangingContent = true;
 			try {
-				let group = this.getConversationGroup(tool);
-				if (!group) {
-					group = (this.editor as EditorParts).createRetainedGroup(tool);
-					this.conversationGroups.set(key, group.id);
-				}
+				const group = this.getOrCreateConversationGroup(tool, key);
 				await open({ groupId: group.id });
 				if (!this.isDisposed && (tool === 'browser' || group.inputs.length)) {
 					if (tool === 'files') this.layout.setPartAvailable('sessions', true);
@@ -232,12 +248,16 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		this._register(registerChangesEditorTitleActions(editor));
 		this._register(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
 		this._register(registerSessionsModalEditorActions(editor as EditorParts, () => this.isDocumentContent));
+		this._register(registerEditorStartAction(
+			() => this.runOperation(() => this.openEditorStart()),
+			ContextKeyExpr.or(SessionsCodeEditorContext.isEqualTo(true), ChatConversationPageContext.isEqualTo(true))!,
+		));
 		this._register(BaseLayoutController.registerSidePaneToggleAction(() => {
 			const entry = this.activeEntry.get();
 			if (!this.isDocumentContent && !this.chatConversation.get()) return;
 			return this.runOperation(async () => {
 				if (this.activeEntry.get() !== entry || (!this.isDocumentContent && !this.chatConversation.get())) return;
-				const visible = layout.toggleSidePane();
+				const visible = await layout.toggleSidePane(() => this.openEditorStart());
 				status(visible
 					? localize('sessions.layout.sidePaneShown', 'Side panel shown')
 					: localize('sessions.layout.sidePaneHidden', 'Side panel hidden'));
@@ -516,7 +536,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					? JSON.stringify([entry.id, entry.workspaceMode, extUri.getComparisonKey(entry.editorInput.resource)]) : entry.id;
 				if (!this.customViews.activeCustomView.get()) this.sessions.recordEntryNavigation(navigationId, async () => {
 					if (destination.content !== 'editor' && !destination.chatSource && selection) this.sessions.activateSelection(selection);
-					await this.openEntry(destination, initialize);
+					await this.openEntry(destination, initialize, destination.content === 'documents' ? { focus: 'conversation' } : undefined);
 				}, entry.content !== 'editor');
 				if (this.customViews.activeCustomView.get()) { return; }
 				if ((options?.focus ?? entry.focus) === 'conversation') { this.layout.focus(); }
@@ -564,8 +584,12 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	}
 
 	public setConversationVisible(visible: boolean, options?: { readonly preserveFocus?: boolean; }): Promise<void> {
+		const entry = this.activeEntry.get();
 		return this.runOperation(async () => {
-			if (!this.activeEntry.get()?.conversation && !this.hasConversationEditors) { throw new Error('The active entry does not support a conversation beside its editor.'); }
+			if (entry !== this.activeEntry.get()) return;
+			if (!entry?.conversation && !this.isDocumentContent && !this.chatConversation.get() && !this.hasConversationEditors) {
+				throw new Error('The active entry does not support a conversation beside its editor.');
+			}
 			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
 			if (options?.preserveFocus) return;
 			if (visible) { this.layout.focus(); }
