@@ -25,7 +25,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { EditorToolMaximizedContext, Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
+import { EditorHasMultipleToolsContext, EditorToolMaximizedContext, Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
 import { SessionsCategories } from '../../../common/categories.js';
 import { SESSIONS_EDITOR_WORD_WRAP, SESSIONS_TERMINAL_CONFIG_SECTION } from '../../../common/configuration.js';
 import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
@@ -379,7 +379,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: { id: hideToolId, title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
-						when: codeWhen, group: 'navigation', order: 3,
+						when: ContextKeyExpr.and(codeWhen, EditorHasMultipleToolsContext.isEqualTo(true)),
+						group: 'navigation',
+						order: 3,
 					},
 				},
 				{

@@ -84,8 +84,8 @@ suite('Sessions native titlebar layout', () => {
 		await expect(hide).toHaveAttribute('aria-pressed', 'true');
 		await expect(editor).toBeVisible();
 		const files = headers.locator('[data-editor-tool="files"] > .ash-editor-group-header');
-		const closeFiles = files.locator('[data-action-id="ash.sessions.hideTool"] button');
-		await expect(closeFiles).toBeInViewport({ ratio: 1 });
+		await expect(files).toBeVisible();
+		await expect(files.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
 		const originalWidth = (await editor.boundingBox())!.width;
 		for (const width of [1440, 1060]) {
 			await page.setViewportSize({ width, height: 900 });
@@ -100,10 +100,10 @@ suite('Sessions native titlebar layout', () => {
 		await expect(panel).toHaveCSS('-webkit-app-region', 'no-drag');
 		await expect(hide).toBeInViewport({ ratio: 1 });
 		await expect.poll(() => hide.boundingBox()).toEqual(closedBounds);
-		await hide.press('Enter');
+		await page.mouse.click(closedBounds.x + closedBounds.width / 2, closedBounds.y + closedBounds.height / 2);
 		await expect(editor).toBeHidden();
 		await expect(headers).toBeHidden();
-		await expect(show).toBeVisible();
+		await expect.poll(() => show.boundingBox()).toEqual(closedBounds);
 		await show.press('Enter');
 		await expect(files).toBeVisible();
 		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);

@@ -15,7 +15,7 @@ import { GroupDirection } from '../../../workbench/services/editor/common/editor
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { EditorToolMaximizedContext } from '../menus.js';
+import { EditorHasMultipleToolsContext, EditorToolMaximizedContext } from '../menus.js';
 import './media/desktopEditorArea.css';
 
 const toolFrameInset = 6;
@@ -144,6 +144,7 @@ export class DesktopEditorArea extends Part {
 	private contentAvailable = false;
 	private maximized: { readonly tool: DesktopEditorTool; readonly layout: SerializedGridDescriptor; } | undefined;
 	private readonly maximizedContext;
+	private readonly multipleToolsContext;
 	private dragging: DesktopEditorTool | undefined;
 	private active: DesktopEditorTool | undefined;
 	private compactLayout: SerializedGridDescriptor | undefined;
@@ -167,7 +168,9 @@ export class DesktopEditorArea extends Part {
 	) {
 		super(container, 'editor', theme, toolStorage);
 		this.maximizedContext = EditorToolMaximizedContext.bindTo(contextKeys);
+		this.multipleToolsContext = EditorHasMultipleToolsContext.bindTo(contextKeys);
 		this._register(toDisposable(() => this.maximizedContext.reset()));
+		this._register(toDisposable(() => this.multipleToolsContext.reset()));
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
 		this.updateHeaders = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.layoutHeaders()));
@@ -421,6 +424,8 @@ export class DesktopEditorArea extends Part {
 		}
 		this.active = active;
 		this.desired = new Set(tools);
+		// Keep individual close actions available for tools temporarily hidden by maximize or resize.
+		this.multipleToolsContext.set(place && this.desired.size > 1);
 		this.contentAvailable = hasContent;
 		if (!tools.length) {
 			this.firstTool = undefined;

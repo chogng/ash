@@ -147,6 +147,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
 	const changesAction = () => layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.toggleDetails']);
+	contextKeys.setContext('sessions.editorHasMultipleTools', true);
 	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.toggleDetails', 'ash.sessions.hideTool']);
 	contextKeys.setContext('sessions.editorToolMaximized', true);
 	assert.equal(headerActions()[0]?.label, 'Restore Tool Size');
