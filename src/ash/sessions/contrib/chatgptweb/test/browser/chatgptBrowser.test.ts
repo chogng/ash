@@ -497,8 +497,11 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(handle).toBeHidden();
 		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
-		await expect(handle).toBeVisible();
 		const response = viewport.locator('.ash-chat-item-agentMessage').first();
+		await expect(response).toBeAttached();
+		await expect(handle).toBeHidden();
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatTimeline.display', 'gutter'));
+		await expect(handle).toBeVisible();
 		const composer = page.locator('.ash-chat-input-container');
 		const stickyPrompt = page.locator('.ash-chat-transcript-scrollable > .ash-chat-sticky-prompt');
 		let previousWidth = 0;
@@ -605,6 +608,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		expect(scroll.mountedEarlierRows).toBe(true);
 		expect(scroll.maximumError).toBeLessThanOrEqual(2);
 
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatTimeline.display', 'gutter'));
 		const handle = page.getByLabel('Show prompts', { exact: true });
 		await handle.press('Enter');
 		const prompt = page.locator('.ash-prompt-timeline-gutter').getByRole('button', { name: 'Prompt 0', exact: true });

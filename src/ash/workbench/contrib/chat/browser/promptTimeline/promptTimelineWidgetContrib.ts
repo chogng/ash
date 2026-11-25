@@ -27,7 +27,7 @@ export class PromptTimelineWidgetContrib extends Disposable {
 
 	render(model: PromptTimelineModel, visible: boolean): void {
 		const style = visible && this.viewport.clientWidth >= 320 && model.prompts.length >= 2
-			? this.configuration.getValue<PromptTimelineRailStyle>(PROMPT_TIMELINE_DISPLAY_SETTING) ?? 'gutter' : 'off';
+			? this.configuration.getValue<PromptTimelineRailStyle>(PROMPT_TIMELINE_DISPLAY_SETTING) : 'off';
 		if (this.style !== style) {
 			this.style = style;
 			this.rail.value = style === 'gutter' ? new PromptTimelineGutterRail(this.host, this.actions)

@@ -76,6 +76,9 @@ suite('Chat transcript navigation', () => {
 		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
 		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(messages), messages);
 		const gutter = page.locator('.ash-prompt-timeline-gutter');
+		await expect(page.locator('[data-item-id="second"]')).toBeVisible();
+		await expect(page.locator('.ash-prompt-timeline-gutter, .ash-prompt-timeline-ruler')).toHaveCount(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('gutter'));
 		const handle = gutter.getByLabel('显示提问', { exact: true });
 		const marks = gutter.locator('.ash-prompt-timeline-gutter-marks > span');
 		await expect(marks).toHaveCount(2);
@@ -141,7 +144,8 @@ suite('Chat transcript navigation', () => {
 	test('highlights the focused prompt, fans out the hovered marks, and scrolls the list independently', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
-		await page.evaluate(() => {
+		await page.evaluate(async () => {
+			await window.ashChatTranscriptIntegration.setPromptTimeline('gutter');
 			window.ashChatTranscriptIntegration.renderItems(Array.from({ length: 18 }, (_, index) => ({
 				id: `prompt-${index}`, type: 'userMessage', text: `Prompt ${index + 1}`, transient: false,
 			})));

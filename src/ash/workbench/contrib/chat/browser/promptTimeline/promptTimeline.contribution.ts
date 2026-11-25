@@ -23,7 +23,7 @@ registry.registerConfiguration<boolean>({
 
 registry.registerConfiguration<PromptTimelineRailStyle>({
 	key: PROMPT_TIMELINE_DISPLAY_SETTING,
-	defaultValue: 'gutter',
+	defaultValue: 'off',
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: [...PROMPT_TIMELINE_RAIL_STYLES] },
 	parse(value: unknown): PromptTimelineRailStyle {

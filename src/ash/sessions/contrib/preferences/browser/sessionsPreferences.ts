@@ -13,6 +13,7 @@ import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../../../workb
 import { MemorySettingsRenderer } from '../../../../workbench/contrib/preferences/browser/memorySettingsRenderer.js';
 import { CodeConversationDefaultsEntry } from './codeConversationDefaultsEntry.js';
 import { ChatConfiguration, ChatEditorConfiguration, ChatInputConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
+import { PROMPT_TIMELINE_DISPLAY_SETTING } from '../../../../workbench/contrib/chat/common/promptTimeline.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
@@ -685,6 +686,7 @@ export class SessionsPreferences extends Disposable {
 			defaults.get(SessionsConfiguration.chatInputLayout),
 			defaults.get(ChatConfiguration.AutoFollowReplies),
 			defaults.get(ChatConfiguration.ShowAgentReplyTimestamps),
+			defaults.get(PROMPT_TIMELINE_DISPLAY_SETTING),
 			...[SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP].map(id => defaults.get(id)),
 		];
 		const generalSettings: readonly ISetting[] = [

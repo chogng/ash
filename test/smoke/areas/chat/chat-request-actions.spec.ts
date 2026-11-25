@@ -267,9 +267,24 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 			}
 			if (scenario === 'turnChanges') {
 				const replies = transcript.locator('.ash-chat-item-agentMessage');
+				const promptList = chat.locator('summary[aria-label="Show prompts"]');
+				if (agents) {
+					await expect(transcript).toContainText('Request action answer 2');
+					await expect(chat.locator('.ash-prompt-timeline-gutter, .ash-prompt-timeline-ruler')).toHaveCount(0);
+					await window.quickaccess.runCommand('workbench.action.openSettings2');
+					const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+					await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+					const display = settings.getByRole('combobox', { name: 'Prompt timeline', exact: true });
+					await expect(display).toHaveText('Off');
+					await display.press('Enter');
+					await page.getByRole('option', { name: 'Gutter', exact: true }).click();
+					await expect(display).toHaveText('Gutter');
+					await settings.getByRole('button', { name: 'Close Dialog', exact: true }).click();
+					await expect(promptList).toBeVisible();
+				}
 				const openTurnChanges = async (answer: 1 | 2) => {
 					if (agents) {
-						await chat.locator('summary[aria-label="Show prompts"]').press('Enter');
+						await promptList.press('Enter');
 						const name = answer === 1 ? /^View turn changes for Original request/u : /^View turn changes for Follow-up request/u;
 						await chat.getByRole('button', { name }).click();
 					} else {
