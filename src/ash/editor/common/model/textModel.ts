@@ -1213,7 +1213,7 @@ export class TextModel implements ITextModel {
 		onlyMarginDecorations = false,
 	): model.IModelDecoration[] {
 		const validatedRange = this.validateRange(range);
-		const result = this.getStoredDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations, onlyMarginDecorations);
+		const result = this.getStoredDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations, onlyMinimapDecorations, onlyMarginDecorations);
 		if (!onlyMarginDecorations && !onlyMinimapDecorations) {
 			result.push(...this.bracketDecorations.getDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations));
 		}
@@ -1221,7 +1221,7 @@ export class TextModel implements ITextModel {
 	}
 
 	/** Generated bracket colors cannot contribute margin, overview, font, or injected text data. */
-	private getStoredDecorationsInRange(range: IRange, ownerId = 0, filterOutValidation = false, filterFontDecorations = false, onlyMarginDecorations = false): model.IModelDecoration[] {
+	private getStoredDecorationsInRange(range: IRange, ownerId = 0, filterOutValidation = false, filterFontDecorations = false, onlyMinimapDecorations = false, onlyMarginDecorations = false): model.IModelDecoration[] {
 		this.assertNotDisposed();
 		const validatedRange = this.validateRange(range);
 		const result: model.IModelDecoration[] = [];
@@ -1229,6 +1229,7 @@ export class TextModel implements ITextModel {
 			if (ownerId !== 0 && entry.ownerId !== 0 && entry.ownerId !== ownerId) continue;
 			if (filterOutValidation && isValidationDecoration(entry.options)) continue;
 			if (filterFontDecorations && entry.options.affectsFont) continue;
+			if (onlyMinimapDecorations && !entry.options.minimap) continue;
 			if (onlyMarginDecorations && !entry.options.glyphMarginClassName && !entry.options.glyphMargin) continue;
 			if (entry.cachedRange?.versionId !== this._version) {
 				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };

@@ -68,7 +68,7 @@ export class ViewModelDecorations extends Disposable {
 	}
 
 	public getMinimapDecorationsInRange(range: Range): ViewModelDecoration[] {
-		return this._inlineDecorationsComputer.getDecorations(range, true, false).decorations;
+		return this._inlineDecorationsComputer.getMinimapDecorations(range);
 	}
 
 	public getDecorationsViewportData(viewRange: Range): IViewDecorationsCollection {

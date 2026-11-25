@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
+import { MinimapPosition } from '../../../common/model.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { registerTestTokens } from '../../common/testTokenization.js';
 
@@ -67,17 +68,19 @@ test('Model bracket decorations honor color pools, query filters and option chan
 	assert.deepEqual(colors(), []);
 });
 
-test('Margin and injected text queries do not generate whole-document bracket colors', () => {
+test('Minimap, margin and injected text queries do not generate whole-document bracket colors', () => {
 	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
 	using model = new TextModel('{\n}', { languageId: 'typescript', languageConfigurationService: configurations });
 	let bracketQueries = 0;
 	const getBrackets = model.bracketPairs.getBracketsInRange.bind(model.bracketPairs);
 	model.bracketPairs.getBracketsInRange = (...args) => { bracketQueries++; return getBrackets(...args); };
-	const [margin, injected] = model.deltaDecorations([], [
+	const [margin, injected, minimap] = model.deltaDecorations([], [
 		{ range: new Range(1, 1, 1, 1), options: { description: 'margin', glyphMarginClassName: 'glyph' } },
 		{ range: new Range(1, 1, 1, 1), options: { description: 'injected', before: { content: 'inlay' } } },
+		{ range: new Range(2, 1, 2, 1), options: { description: 'minimap', minimap: { position: MinimapPosition.Gutter, color: '#004400' } } },
 	], 2);
+	assert.deepEqual(model.getDecorationsInRange(model.getFullModelRange(), 2, false, false, true).map(value => value.id), [minimap]);
 	assert.deepEqual(model.getAllMarginDecorations(2).map(value => value.id), [margin]);
 	assert.deepEqual(model.getInjectedTextDecorations(2).map(value => value.id), [injected]);
 	assert.equal(model.getLineInjectedText(1, 2)[0]?.options.content, 'inlay');

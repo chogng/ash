@@ -303,27 +303,35 @@ export class Minimap extends ViewPart {
 				}
 			}
 		}
-		const minimap = this._context.configuration.options.get(EditorOption.minimap);
 		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
-		const headerFontSize = minimap.sectionHeaderFontSize * pixelRatio;
-		painter.font = `600 ${headerFontSize}px ${fontInfo.fontFamily}`;
-		painter.textBaseline = 'top';
+		let headerStyle: { fontSize: number; letterSpacing: number; background: string; foreground: string; } | undefined;
 		for (const decoration of decorations) {
 			const header = decoration.options.minimap;
 			if (!header?.sectionHeaderStyle || !header.sectionHeaderText) continue;
 			const top = Math.floor((decoration.range.startLineNumber - 1 + paddingRows) * scaleY - rasterOffset);
 			if (top < 0 || top >= height) continue;
-			painter.fillStyle = this._context.theme.getColor(editorBackground)!.toString();
-			painter.fillRect(0, top, width, Math.ceil(headerFontSize * 1.3));
-			painter.fillStyle = this._context.theme.getColor(editorForeground)!.toString();
+			if (!headerStyle) {
+				const minimap = this._context.configuration.options.get(EditorOption.minimap);
+				headerStyle = {
+					fontSize: minimap.sectionHeaderFontSize * pixelRatio,
+					letterSpacing: minimap.sectionHeaderLetterSpacing * pixelRatio,
+					background: this._context.theme.getColor(editorBackground)!.toString(),
+					foreground: this._context.theme.getColor(editorForeground)!.toString(),
+				};
+				painter.font = `600 ${headerStyle.fontSize}px ${fontInfo.fontFamily}`;
+				painter.textBaseline = 'top';
+			}
+			painter.fillStyle = headerStyle.background;
+			painter.fillRect(0, top, width, Math.ceil(headerStyle.fontSize * 1.3));
+			painter.fillStyle = headerStyle.foreground;
 			let left = 2 * pixelRatio;
 			for (const character of header.sectionHeaderText) {
 				painter.fillText(character, left, top);
-				left += painter.measureText(character).width + minimap.sectionHeaderLetterSpacing * pixelRatio;
+				left += painter.measureText(character).width + headerStyle.letterSpacing;
 				if (left >= width) break;
 			}
 			if (header.sectionHeaderStyle === MinimapSectionHeaderStyle.Underlined) {
-				painter.fillRect(0, top + Math.ceil(headerFontSize * 1.2), width, Math.max(1, pixelRatio));
+				painter.fillRect(0, top + Math.ceil(headerStyle.fontSize * 1.2), width, Math.max(1, pixelRatio));
 			}
 		}
 	}

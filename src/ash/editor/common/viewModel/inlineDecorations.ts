@@ -79,6 +79,17 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 		return decorationsViewportData.inlineDecorations;
 	}
 
+	public getMinimapDecorations(viewRange: Range): ViewModelDecoration[] {
+		// Minimap painting uses projected ranges without per-line inline decoration data.
+		const decorations: ViewModelDecoration[] = [];
+		for (const decoration of this.context.getModelDecorations(viewRange, true, false)) {
+			if (isModelDecorationVisible(this.model, decoration)) {
+				decorations.push(this._getOrCreateViewModelDecoration(decoration));
+			}
+		}
+		return decorations;
+	}
+
 	public getDecorations(viewRange: Range, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IViewDecorationsCollection {
 		const modelDecorations = this.context.getModelDecorations(viewRange, onlyMinimapDecorations, onlyMarginDecorations);
 		const startLineNumber = viewRange.startLineNumber;
