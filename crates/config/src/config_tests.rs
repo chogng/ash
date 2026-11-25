@@ -2245,48 +2245,6 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
 }
 
 #[test]
-fn config_rewrites_retired_tui_mode_settings_without_reordering_the_other_rules() {
-    let database = config_path("retired-tui-mode");
-    let store = ConfigStore::open(&database).unwrap();
-    let config_path = store.config_path().to_path_buf();
-    drop(store);
-    std::fs::write(
-        &config_path,
-        r#"
-schemaVersion = 12
-[tui]
-statusLine = ["model", "mode", "git-branch"]
-keybindings = [
-    { key = "ctrl+x", command = "ashCode.action.increaseReasoningEffort" },
-    { key = "shift+tab", command = "ashCode.action.cycleAgentMode" },
-    { key = "ctrl+y", command = "ashCode.action.decreaseReasoningEffort" }
-]
-"#,
-    )
-    .unwrap();
-    let reopened = ConfigStore::open(&database).unwrap();
-    let snapshot = reopened.read_snapshot().unwrap();
-    assert_eq!(
-        snapshot.values.tui["statusLine"],
-        serde_json::json!(["model", "git-branch"])
-    );
-    let binding_keys = snapshot.values.tui["keybindings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|rule| rule["key"].as_str().unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(binding_keys, ["ctrl+x", "ctrl+y"]);
-    let rewritten = std::fs::read_to_string(&config_path).unwrap();
-    assert!(rewritten.contains("schemaVersion = 13"));
-    assert!(!rewritten.contains("cycleAgentMode"));
-    drop(reopened);
-    assert!(ConfigStore::open(&database).is_ok());
-    assert_eq!(std::fs::read_to_string(&config_path).unwrap(), rewritten);
-    remove_config_files(&database);
-}
-
-#[test]
 fn external_migration_waits_for_the_config_writer_even_if_the_values_match() {
     use rusqlite::TransactionBehavior;
     use std::time::Duration;

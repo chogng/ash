@@ -228,7 +228,6 @@ fn history_prefix(id: &str) -> ash_history::HistoryPrefix {
     let thread_id = ThreadId::new(id).unwrap();
     let prefix = ash_history::HistoryPrefix {
         events: vec![ash_history::StoredEvent {
-            encoding: Default::default(),
             thread_created_kind_encoding: Default::default(),
             time_context: None,
             schema_version: ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION,

@@ -3,14 +3,9 @@
 //! This crate defines the data that survives process restarts. It deliberately owns no database,
 //! filesystem, pagination, append transaction, or reducer implementation.
 
-mod context_seed;
 mod prefix;
 mod record;
-mod retired_fields;
-pub use context_seed::context_seed_digest;
 pub use prefix::HistoryPrefix;
-pub use retired_fields::discard_retired_agent_fields;
-pub use retired_fields::discard_retired_turn_fields;
 
 /// Reachability roots for file snapshots embedded in immutable history records.
 pub fn repository_checkpoints(
@@ -48,7 +43,6 @@ pub use record::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 pub use record::EventId;
 pub use record::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
 pub use record::StoredEvent;
-pub use record::StoredEventEncoding;
 pub use record::ThreadCommandReceipt;
 pub use record::ThreadCreatedKindEncoding;
 pub use record::Timestamp;

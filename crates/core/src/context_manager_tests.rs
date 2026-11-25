@@ -124,7 +124,6 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             nonterminal_continuations: 0,
-            execution_restart_required: false,
         }],
         items: vec![ThreadItem::UserMessage {
             client_id: None,

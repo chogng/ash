@@ -91,7 +91,7 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
 }
 
 #[test]
-fn history_discards_schema_38_mode_fields_and_keeps_schema_39_strict() {
+fn task_instructions_round_trip_and_reject_retired_mode_fields() {
     let base =
         ash_protocol::TurnInstructions::new("modes", "swarm", "v1", "Coordinate workers.").unwrap();
     let instructions = base
@@ -163,7 +163,7 @@ fn history_discards_schema_38_mode_fields_and_keeps_schema_39_strict() {
         value["threadId"] = "old".into();
         value["sequence"] = 2.into();
         value["recordedAt"] = 1.into();
-        value["schemaVersion"] = 39.into();
+        value["schemaVersion"] = CURRENT_STORED_EVENT_SCHEMA_VERSION.into();
         let record: StoredEvent = serde_json::from_value(value.clone()).unwrap();
         let encoded = serde_json::to_string(&record).unwrap();
         let restored: StoredEvent = serde_json::from_str(&encoded).unwrap();
@@ -174,13 +174,9 @@ fn history_discards_schema_38_mode_fields_and_keeps_schema_39_strict() {
             .replace(r#""taskCommands":"#, r#""agentModes":"#);
         assert_ne!(retired, encoded);
         assert!(serde_json::from_str::<StoredEvent>(&retired).is_err());
-        let legacy = retired.replace(r#""schemaVersion":39"#, r#""schemaVersion":38"#);
-        let decoded: StoredEvent = serde_json::from_str(&legacy).unwrap();
-        assert_eq!(serde_json::to_string(&decoded).unwrap(), legacy);
-        let projected = serde_json::to_string(&(decoded.event, decoded.command)).unwrap();
-        assert!(projected.contains(r#""taskCommand":"swarm""#));
-        assert!(projected.contains(r#""taskCommands":{}"#));
-        assert!(!projected.contains(r#""taskInstructions""#));
+        let mut legacy: Value = serde_json::from_str(&retired).unwrap();
+        legacy["schemaVersion"] = 38.into();
+        assert!(serde_json::from_value::<StoredEvent>(legacy).is_err());
         assert!(
             serde_json::from_str::<StoredEvent>(
                 &encoded.replace(r#""taskCommand":"swarm""#, r#""taskCommand":"multitask""#)
@@ -207,81 +203,9 @@ fn history_discards_schema_38_mode_fields_and_keeps_schema_39_strict() {
 }
 
 #[test]
-fn legacy_mode_changes_preserve_the_event_used_by_history_and_checkpoint_digests() {
-    let creation = r#"{"schemaVersion":38,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","kind":"code"}}"#;
-    let change = r#"{"schemaVersion":38,"eventId":"change","sequence":2,"threadId":"old","recordedAt":2,"event":{"type":"turnModeChanged","threadId":"old","turnId":"turn","fromMode":"agent","mode":"plan","instructions":{"owner":"test","id":"base","revision":"1","body":"Base","modeInstructions":{"owner":"test","id":"plan","revision":"1","body":"Plan"}}}}"#;
-    let record: StoredEvent = serde_json::from_str(change).unwrap();
-    assert!(matches!(
-        &record.event,
-        ThreadEvent::RetiredTurnEvent { turn_id, .. } if turn_id.as_str() == "turn"
-    ));
-    assert_eq!(
-        record.event_value_for_digest().unwrap(),
-        serde_json::from_str::<Value>(change).unwrap()["event"]
-    );
-    let prefix = crate::HistoryPrefix {
-        events: vec![serde_json::from_str(creation).unwrap(), record],
-    };
-    let bytes = format!(r#"{{"events":[{creation},{change}]}}"#);
-    assert_eq!(serde_json::to_string(&prefix).unwrap(), bytes);
-    assert_eq!(
-        prefix.reference().unwrap().digest,
-        ash_protocol::ContentDigest::sha256(bytes.as_bytes()),
-    );
-    assert!(
-        serde_json::from_str::<StoredEvent>(&change.replace("Version\":38", "Version\":39"))
-            .is_err()
-    );
-}
-
-#[test]
-fn legacy_delegation_seed_is_verified_before_retired_guidance_is_discarded() {
-    let revision = ash_protocol::ContentDigest::sha256(b"Coordinate.");
-    let guidance =
-        format!(r#"{{"owner":"test","id":"swarm","revision":"{revision}","body":"Coordinate."}}"#);
-    for (version, key, mode) in [
-        (38, "agentModes", "swarm"),
-        (36, "collaborationModes", "swarm"),
-        (35, "collaborationModes", "multitask"),
-    ] {
-        let instructions = format!(
-            r#"{{"owner":"test","id":"base","revision":"1","body":"Base","modelGuidance":{{"type":"specialized","model":{{"provider":"test","model":"test"}},"instructions":{guidance},"digest":"{revision}","messages":{{"tools":{{}},"{key}":{{"{mode}":{guidance}}},"root":null,"subagent":null}}}},"modeInstructions":{guidance}}}"#
-        );
-        let material = format!(
-            r#"{{"delegationId":"d","parentThreadId":"parent","parentTurnId":"turn","parentSequence":3,"task":{{"title":"Task","instructions":"Do the work."}},"role":null,"inheritance":{{"type":"fresh"}},"policyCeiling":{{"policyRevision":"policy"}},"capabilityScope":{{"tools":[],"skills":[]}},"baseInstructions":{instructions}}}"#
-        );
-        let digest = ash_protocol::ContentDigest::sha256(material.as_bytes());
-        let seed_material = material.strip_suffix('}').unwrap();
-        let event = format!(
-            r#"{{"schemaVersion":{version},"eventId":"delegation","sequence":4,"threadId":"parent","recordedAt":1,"event":{{"type":"delegationRequested","threadId":"parent","seed":{seed_material},"digest":"{digest}"}}}}}}"#
-        );
-        let decoded: StoredEvent = serde_json::from_str(&event).unwrap();
-        assert_eq!(serde_json::to_string(&decoded).unwrap(), event);
-        let ThreadEvent::DelegationRequested { seed, .. } = decoded.event else {
-            panic!("expected a delegation request");
-        };
-        assert_ne!(seed.digest.as_str(), digest.as_str());
-        assert_eq!(crate::context_seed_digest(&seed).unwrap(), seed.digest);
-        assert!(
-            seed.agent
-                .base_instructions
-                .as_ref()
-                .unwrap()
-                .task_instructions()
-                .is_none()
-        );
-        assert!(
-            serde_json::from_str::<StoredEvent>(&event.replace("Do the work.", "Different task."))
-                .is_err()
-        );
-    }
-}
-
-#[test]
 fn stored_event_round_trip_preserves_history_contract() {
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
-        encoding: Default::default(),
         thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -400,7 +324,6 @@ fn imported_turns_preserve_legacy_approval_bytes_without_agent_mode() {
             },
         ] {
             let mut current = StoredEvent {
-                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: 22,

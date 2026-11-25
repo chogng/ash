@@ -16,7 +16,6 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
         thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
         expected_sequence,
         events: vec![StoredEvent {
-            encoding: Default::default(),
             thread_created_kind_encoding: Default::default(),
             time_context: None,
             schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,

@@ -5,6 +5,6 @@
 - Store 校验与追加属于 `ash-thread-store`，SQLite 映射属于 `ash-state`，reducer 与恢复属于 `ash-core`。
 - 定义带摘要校验的不可变原事件前缀；嵌套引用保持原 Thread、sequence 与 event identity。
 
-Schema 39 通过 `instructions.taskCommand` 记录任务命令，普通消息使用默认执行。冻结的任务提示词使用 `taskInstructions` 和 `taskCommands`。回放早期记录时丢弃旧模式字段与切换行为，保留已记录的任务命令。依赖旧模式的未完成轮次在恢复时中断。历史摘要仍使用原始记录。
+Schema 39 通过 `instructions.taskCommand` 记录任务命令，普通消息使用默认执行。冻结的任务提示词使用 `taskInstructions` 和 `taskCommands`。含旧 Agent Mode 字段或切换事件的记录会被拒绝。
 
 Thread 标题变更保留自动和手动来源，已有手动命名会拒绝迟到的自动命名。用户文本输入的时间参照保存在 envelope 的可选 `timeContext` 中，模型请求的当前时间快照进入调用记录。恢复旧记录时保留原有时间参照。语义和恢复规则见 [Agent 时间与等待](../docs/agent-wait.md)。

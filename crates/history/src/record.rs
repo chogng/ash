@@ -1,5 +1,3 @@
-use crate::context_seed;
-use crate::retired_fields;
 use ash_protocol::CommandId;
 use ash_protocol::ThreadCommand;
 use ash_protocol::ThreadEvent;
@@ -10,9 +8,6 @@ use serde::Serialize;
 use serde::Serializer;
 use serde::de::Error;
 use serde::ser::SerializeStruct;
-use serde_json::Value;
-use serde_json::value::RawValue;
-use std::sync::Arc;
 
 /// Schema version written for newly persisted Thread history records.
 /// Version 39 stores task execution only in frozen task instructions.
@@ -30,8 +25,7 @@ use std::sync::Arc;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Supported older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 =
-    retired_fields::TASK_INSTRUCTIONS_SCHEMA_VERSION;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 39;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
@@ -126,25 +120,6 @@ pub enum ThreadCreatedKindEncoding {
     Omitted,
 }
 
-/// Original JSON for historical payloads that need a different representation for replay.
-#[derive(Clone, Debug, Default)]
-pub struct StoredEventEncoding {
-    event: Option<Arc<RawValue>>,
-    command: Option<Arc<RawValue>>,
-    restart_turn: bool,
-}
-
-impl PartialEq for StoredEventEncoding {
-    fn eq(&self, other: &Self) -> bool {
-        self.event.as_deref().map(RawValue::get) == other.event.as_deref().map(RawValue::get)
-            && self.command.as_deref().map(RawValue::get)
-                == other.command.as_deref().map(RawValue::get)
-            && self.restart_turn == other.restart_turn
-    }
-}
-
-impl Eq for StoredEventEncoding {}
-
 /// Canonical persisted envelope for one durable Thread fact.
 ///
 /// Only durable [`ThreadEvent`] values can enter this envelope. Core constructs the record when a
@@ -152,7 +127,6 @@ impl Eq for StoredEventEncoding {}
 /// deltas, storage transactions, and query cursors do not belong to this data contract.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredEvent {
-    pub encoding: StoredEventEncoding,
     /// Present for user-message facts captured with an enabled time-context policy.
     pub time_context: Option<ash_protocol::TimeContext>,
     pub schema_version: u32,
@@ -166,19 +140,6 @@ pub struct StoredEvent {
 }
 
 impl StoredEvent {
-    /// Whether a Turn was accepted under a removed execution policy.
-    pub fn execution_restart_required(&self) -> bool {
-        self.encoding.restart_turn
-    }
-
-    /// Returns the event payload used to hash history for context checkpoints.
-    pub fn event_value_for_digest(&self) -> serde_json::Result<Value> {
-        match self.encoding.event.as_deref() {
-            Some(original) => serde_json::from_str(original.get()),
-            None => serde_json::to_value(&self.event),
-        }
-    }
-
     /// Time of a durable user message or assistant reply, from the original journal record.
     pub fn message_timestamp(&self) -> Option<u64> {
         match &self.event {
@@ -207,23 +168,13 @@ impl Serialize for StoredEvent {
         record.serialize_field("sequence", &self.sequence)?;
         record.serialize_field("threadId", &self.thread_id)?;
         record.serialize_field("recordedAt", &self.recorded_at)?;
-        if self.schema_version < retired_fields::TASK_INSTRUCTIONS_SCHEMA_VERSION
-            && let Some(original) = self.encoding.command.as_deref()
-        {
-            record.serialize_field("command", original)?;
-        } else if let Some(command) = &self.command {
+        if let Some(command) = &self.command {
             record.serialize_field(
                 "command",
                 &StoredCommandReceipt(command, self.schema_version),
             )?;
         }
-        if self.schema_version < retired_fields::TASK_INSTRUCTIONS_SCHEMA_VERSION
-            && let Some(original) = self.encoding.event.as_deref()
-        {
-            record.serialize_field("event", original)?;
-        } else {
-            record.serialize_field("event", &StoredThreadEvent(self))?;
-        }
+        record.serialize_field("event", &StoredThreadEvent(self))?;
         record.end()
     }
 }
@@ -576,22 +527,15 @@ impl<'de> Deserialize<'de> for StoredEvent {
             thread_id: ThreadId,
             recorded_at: Timestamp,
             #[serde(default)]
-            command: Option<Box<RawValue>>,
-            event: Box<RawValue>,
+            command: Option<serde_json::Value>,
+            event: serde_json::Value,
         }
 
-        let record = Record::deserialize(deserializer)?;
-        let mut event: Value =
-            serde_json::from_str(record.event.get()).map_err(D::Error::custom)?;
-        let mut command: Option<Value> = record
-            .command
-            .as_deref()
-            .map(|raw| serde_json::from_str(raw.get()))
-            .transpose()
-            .map_err(D::Error::custom)?;
+        let mut record = Record::deserialize(deserializer)?;
         if record.schema_version < 23 {
-            migrate_event_approval(&mut event);
-            if let Some(command) = command
+            migrate_event_approval(&mut record.event);
+            if let Some(command) = record
+                .command
                 .as_mut()
                 .and_then(|receipt| receipt.get_mut("command"))
             {
@@ -600,9 +544,10 @@ impl<'de> Deserialize<'de> for StoredEvent {
         }
         let mut thread_created_kind_encoding = ThreadCreatedKindEncoding::Kind;
         if record.schema_version < SESSION_KIND_SCHEMA_VERSION
-            && event.get("type").and_then(Value::as_str) == Some("threadCreated")
+            && record.event.get("type").and_then(serde_json::Value::as_str) == Some("threadCreated")
         {
-            let fields = event
+            let fields = record
+                .event
                 .as_object_mut()
                 .ok_or_else(|| D::Error::custom("Thread creation event must be an object"))?;
             if record.schema_version < 21
@@ -626,55 +571,19 @@ impl<'de> Deserialize<'de> for StoredEvent {
                 thread_created_kind_encoding = ThreadCreatedKindEncoding::Omitted;
             }
         }
-        let mut encoding = StoredEventEncoding::default();
-        let event = if record.schema_version < retired_fields::TASK_INSTRUCTIONS_SCHEMA_VERSION {
-            let event_type = event.get("type").and_then(Value::as_str);
-            if let Some(start) = command.as_mut().and_then(retired_fields::start_command) {
-                encoding.restart_turn = retired_fields::used_retired_execution(start);
-                if retired_fields::discard_retired_turn_fields(start) {
-                    encoding.command = record.command.map(Arc::from);
-                }
-            }
-            if event_type == Some("turnModeChanged") {
-                let thread_id =
-                    serde_json::from_value(event["threadId"].take()).map_err(D::Error::custom)?;
-                let turn_id =
-                    serde_json::from_value(event["turnId"].take()).map_err(D::Error::custom)?;
-                encoding.event = Some(Arc::from(record.event));
-                ThreadEvent::RetiredTurnEvent { thread_id, turn_id }
-            } else {
-                encoding.restart_turn |= event_type == Some("turnAccepted")
-                    && retired_fields::used_retired_execution(&event);
-                let changed = retired_fields::strip_event(&mut event);
-                let mut event = serde_json::from_value(event).map_err(D::Error::custom)?;
-                if changed {
-                    if let ThreadEvent::DelegationRequested { seed, .. }
-                    | ThreadEvent::AgentContextSeedCommitted { seed, .. } = &mut event
-                    {
-                        context_seed::project_seed(seed, &record.event)
-                            .map_err(D::Error::custom)?;
-                    }
-                    encoding.event = Some(Arc::from(record.event));
-                }
-                event
-            }
-        } else {
-            serde_json::from_value(event).map_err(D::Error::custom)?
-        };
-
         Ok(Self {
-            encoding,
             time_context: record.time_context,
             schema_version: record.schema_version,
             event_id: record.event_id,
             sequence: record.sequence,
             thread_id: record.thread_id,
             recorded_at: record.recorded_at,
-            command: command
+            command: record
+                .command
                 .map(serde_json::from_value)
                 .transpose()
                 .map_err(D::Error::custom)?,
-            event,
+            event: serde_json::from_value(record.event).map_err(D::Error::custom)?,
             thread_created_kind_encoding,
         })
     }

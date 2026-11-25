@@ -280,14 +280,6 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
     },
-    /// Occupies the original sequence of an event whose execution behavior has been removed.
-    #[serde(skip)]
-    #[schemars(skip)]
-    #[ts(skip)]
-    RetiredTurnEvent {
-        thread_id: ThreadId,
-        turn_id: TurnId,
-    },
     TurnSteered {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -485,7 +477,6 @@ impl ThreadEvent {
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
-            Self::RetiredTurnEvent { .. } => "turn.retired_event",
             Self::TurnSkillsLoaded { .. } => "turn.skills_loaded",
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
@@ -549,7 +540,6 @@ impl ThreadEvent {
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
-            | Self::RetiredTurnEvent { thread_id, .. }
             | Self::TurnSkillsLoaded { thread_id, .. }
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }

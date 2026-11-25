@@ -40,7 +40,6 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
         _ => None,
     };
     StoredEvent {
-        encoding: Default::default(),
         thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -80,39 +79,6 @@ fn reducer_preserves_the_thread_creation_timestamp() {
     .unwrap();
 
     assert_eq!(thread.created_at_unix_ms, 1);
-}
-
-#[test]
-fn reducer_discards_old_mode_and_mode_changes_without_skipping_history() {
-    let events = [
-        r#"{"schemaVersion":38,"eventId":"created","sequence":1,"threadId":"thread_1","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session_1","threadId":"thread_1","title":"Test","kind":"code"}}"#,
-        r#"{"schemaVersion":38,"eventId":"accepted","sequence":2,"threadId":"thread_1","recordedAt":2,"command":{"commandId":"start","command":{"type":"startTurn","kind":"coding","mode":"debug","instructions":{"owner":"test","id":"base","revision":"1","body":"Base"},"input":[{"type":"text","text":"Check this"}]}},"event":{"type":"turnAccepted","threadId":"thread_1","turnId":"turn_1","kind":"coding","mode":"debug","instructions":{"owner":"test","id":"base","revision":"1","body":"Base"}}}"#,
-        r#"{"schemaVersion":38,"eventId":"started","sequence":3,"threadId":"thread_1","recordedAt":3,"event":{"type":"turnStarted","threadId":"thread_1","turnId":"turn_1"}}"#,
-        r#"{"schemaVersion":38,"eventId":"changed","sequence":4,"threadId":"thread_1","recordedAt":4,"event":{"type":"turnModeChanged","threadId":"thread_1","turnId":"turn_1","fromMode":"debug","mode":"plan","instructions":{"owner":"test","id":"base","revision":"1","body":"Base","modeInstructions":{"owner":"test","id":"plan","revision":"1","body":"Plan the work"}}}}"#,
-        r#"{"schemaVersion":38,"eventId":"finished","sequence":5,"threadId":"thread_1","recordedAt":5,"event":{"type":"turnCompleted","threadId":"thread_1","turnId":"turn_1"}}"#,
-    ];
-    let snapshot = events
-        .iter()
-        .fold(None, |snapshot, json| {
-            let event = serde_json::from_str(json).unwrap();
-            Some(reduce_thread_event(snapshot, &event).unwrap())
-        })
-        .unwrap();
-    assert_eq!(snapshot.sequence, 5);
-    let turn = &snapshot.turns[0];
-    assert_eq!(turn.status, TurnStatus::Completed);
-    assert_eq!(
-        turn.execution_approach(),
-        ash_protocol::TaskExecution::Agent
-    );
-    assert!(
-        turn.instructions
-            .as_ref()
-            .unwrap()
-            .task_instructions()
-            .is_none()
-    );
-    assert!(turn.execution_restart_required);
 }
 
 #[test]

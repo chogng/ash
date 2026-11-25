@@ -181,7 +181,7 @@ fn concurrent_open_installs_an_empty_queue_once() {
             Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?))
         })
         .unwrap();
-    assert_eq!(metadata, (MIGRATIONS.len() as u32, 0));
+    assert_eq!(metadata, (QUEUE_SCHEMA_VERSION, 0));
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
                             row.get::<_, u32>(0)
                         })
                         .unwrap(),
-                    MIGRATIONS.len() as u32
+                    QUEUE_SCHEMA_VERSION
                 );
             });
         }
@@ -487,48 +487,6 @@ fn queue_reopen_preserves_task_command_and_model_choices() {
         reopened.enqueue(&request),
         Err(QueueError::Conflict)
     ));
-}
-
-#[test]
-fn mode_migration_preserves_queue_rows_and_pauses_retired_execution() {
-    let root = tempfile::tempdir().unwrap();
-    let path = root.path().join("state.sqlite");
-    let store = QueueStore::open(&path).unwrap();
-    let legacy = store.enqueue(&input("legacy-plan")).unwrap();
-    let mut explicit_input = input("explicit-swarm");
-    explicit_input.task_command = Some(protocol::TaskExecution::Swarm);
-    let explicit = store.enqueue(&explicit_input).unwrap();
-    let default = store.enqueue(&input("default-agent")).unwrap();
-    let prior_revision = store.revision().unwrap();
-    drop(store);
-    let database = Connection::open(&path).unwrap();
-    database.execute_batch(
-        "UPDATE queue_metadata SET version=4 WHERE id=1;
-         UPDATE queued_messages SET request=json_set(request,'$.mode','plan'), status='delivering', lease_until=100 WHERE id='legacy-plan';
-         UPDATE queued_messages SET request=json_set(request,'$.mode','agent') WHERE id IN ('explicit-swarm','default-agent');",
-    ).unwrap();
-    drop(database);
-
-    for _ in 0..2 {
-        let store = QueueStore::open(&path).unwrap();
-        let list = store
-            .list(&legacy.request.session_id, &legacy.request.thread_id)
-            .unwrap();
-        assert_eq!(list.len(), 3);
-        let paused = store.get(&legacy.request.command_id).unwrap().unwrap();
-        assert_eq!(paused.request, legacy.request);
-        assert_eq!(paused.status, QueueStatus::Paused);
-        assert_eq!(paused.revision, prior_revision + 1);
-        assert_eq!(
-            store.get(&explicit.request.command_id).unwrap(),
-            Some(explicit.clone())
-        );
-        assert_eq!(
-            store.get(&default.request.command_id).unwrap(),
-            Some(default.clone())
-        );
-        assert_eq!(store.revision().unwrap(), prior_revision + 1);
-    }
 }
 
 #[test]

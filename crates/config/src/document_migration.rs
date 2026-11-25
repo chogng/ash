@@ -82,8 +82,6 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let migrate_grants = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 11);
     let migrate_commit_messages =
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 12);
-    let migrate_tui_agent_mode =
-        !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 13);
     let obsolete_selection = root.remove("activeConnections").is_some();
     let rewrite_required = (match version {
         None => {
@@ -147,9 +145,6 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     if migrate_commit_messages {
         migrate_commit_message_enablement(root)?;
     }
-    if migrate_tui_agent_mode {
-        discard_retired_tui_agent_mode(root);
-    }
     let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
@@ -161,27 +156,6 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         document,
         rewrite_required,
     })
-}
-
-fn discard_retired_tui_agent_mode(root: &mut toml::Table) {
-    let Some(tui) = root.get_mut("tui").and_then(toml::Value::as_table_mut) else {
-        return;
-    };
-    if let Some(bindings) = tui
-        .get_mut("keybindings")
-        .and_then(toml::Value::as_array_mut)
-    {
-        bindings.retain(|binding| {
-            binding.get("command").and_then(toml::Value::as_str)
-                != Some("ashCode.action.cycleAgentMode")
-        });
-    }
-    if let Some(items) = tui
-        .get_mut("statusLine")
-        .and_then(toml::Value::as_array_mut)
-    {
-        items.retain(|item| item.as_str() != Some("mode"));
-    }
 }
 
 /// Schema 12 separates automatic generation from the optional model override. Older documents

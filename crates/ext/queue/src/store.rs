@@ -17,12 +17,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-const MIGRATIONS: &[&str] = &[
-    include_str!("../migrations/0001_queue.sql"),
-    include_str!("../migrations/0002_approval_modes.sql"),
-    include_str!("../migrations/0003_reference_read_scope.sql"),
-    include_str!("../migrations/0004_scoped_invalidations.sql"),
-    include_str!("../migrations/0005_retired_agent_mode.sql"),
+// Version 5 is already recorded in current profiles. Its request rewrite has been removed.
+const QUEUE_SCHEMA_VERSION: u32 = 5;
+const MIGRATIONS: &[(u32, &str)] = &[
+    (1, include_str!("../migrations/0001_queue.sql")),
+    (2, include_str!("../migrations/0002_approval_modes.sql")),
+    (
+        3,
+        include_str!("../migrations/0003_reference_read_scope.sql"),
+    ),
+    (
+        4,
+        include_str!("../migrations/0004_scoped_invalidations.sql"),
+    ),
 ];
 
 const INVALIDATION_HISTORY: i64 = 2048;
@@ -93,21 +100,24 @@ impl QueueStore {
             )
             .optional()?;
         if let Some(version) = version
-            && !(1..=MIGRATIONS.len() as u32).contains(&version)
+            && !(1..=QUEUE_SCHEMA_VERSION).contains(&version)
         {
             return Err(QueueError::Storage(format!(
                 "unsupported queue schema {version}"
             )));
         }
-        for (target, sql) in (1_u32..)
-            .zip(MIGRATIONS)
-            .skip(version.unwrap_or(0) as usize)
+        let installed_version = version.unwrap_or(0);
+        for &(_, sql) in MIGRATIONS
+            .iter()
+            .skip_while(|(target, _)| *target <= installed_version)
         {
             transaction.execute_batch(sql)?;
+        }
+        if version != Some(QUEUE_SCHEMA_VERSION) {
             transaction.execute(
                 "INSERT INTO queue_metadata (id, version, revision) VALUES (1, ?1, 0)
                  ON CONFLICT(id) DO UPDATE SET version = excluded.version",
-                [target],
+                [QUEUE_SCHEMA_VERSION],
             )?;
         }
         transaction.commit()?;
