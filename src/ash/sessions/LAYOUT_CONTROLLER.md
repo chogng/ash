@@ -61,6 +61,8 @@ The controller suppresses editor auto-visibility while restoring a working set. 
 
 DesktopWorkbenchLayout owns outer Workbench Parts. DesktopEditorArea arranges tool cards, and each EditorPart hosts its tool's tabs for the active working set. Tool visibility commands hide the retained tabs and panes while keeping their processes and pages alive. Restoring a legacy working set consolidates its tabs by tool.
 
+The shared `toggleSidePane()` layout operation returns the editor area's effective visibility and restores Code's Files details when needed. The entry service serializes the command with navigation and remembers each entry's requested visibility.
+
 DesktopLayoutController retains live group identities for session working sets. The base controller remains the single owner of serialized working-set state and restoration sequencing. Switching to an already retained set restores its group geometry and visibility without closing its panes; loading a cold set preserves other live groups and the product-page group. Entry changes hide Code groups while remembering which were already hidden. Default opens target the current set rather than inactive session groups.
 
 DesktopMainEditorPart selects the group for its registered Files Details. The Files contribution owns the retained Explorer View and its attachment; the tree moves with that group, keeps its expansion and selection state, and reserves space beside the group’s document content. The shared group Header remains visible without creating an EditorInput; document tabs appear only when files are opened. Closing the last document retains the group's Details. AuxiliaryBarPart is reserved for independently contributed product properties.

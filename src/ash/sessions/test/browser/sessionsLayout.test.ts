@@ -2124,7 +2124,8 @@ suite('sessions browser component', () => {
 		const editor = page.locator('[data-part="editor"]');
 		const controls = editor.getByRole('group', { name: 'PDF controls', exact: true });
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const closePreview = titlebar.locator('.ash-sessions-titlebar-editor-headers [data-action-id="sessions.closeEditorPart"] button');
+		const sidePanel = titlebar.getByRole('toolbar', { name: 'Side panel', exact: true });
+		const togglePanel = sidePanel.getByRole('button', { name: 'Toggle Side Panel', exact: true });
 		const tab = page.getByRole('tab', { name: 'report.pdf', exact: true });
 		await project.press('ArrowRight');
 		await expect(file).toBeVisible();
@@ -2136,21 +2137,34 @@ suite('sessions browser component', () => {
 			if (fromProjects) await file.click();
 			else await file.press('Enter');
 			await expect(controls).toBeVisible();
-			await expect(closePreview).toHaveCSS('border-radius', '8px');
+			await expect(togglePanel.locator('[data-ash-icon-id="layout-sidebar-right"]')).toBeVisible();
+			await expect(togglePanel).toHaveCSS('border-radius', '8px');
+			await expect(titlebar.locator('[data-action-id="sessions.closeEditorPart"], [data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
 			const titlebarBounds = (await titlebar.boundingBox())!;
-			const closeBounds = (await closePreview.boundingBox())!;
+			const closeBounds = (await togglePanel.boundingBox())!;
 			expect([closeBounds.width, closeBounds.height]).toEqual([28, 28]);
 			expect([
 				closeBounds.y - titlebarBounds.y,
 				titlebarBounds.y + titlebarBounds.height - closeBounds.y - closeBounds.height,
 				titlebarBounds.x + titlebarBounds.width - closeBounds.x - closeBounds.width,
 			]).toEqual([8, 8, 8]);
+			await expect.poll(async () => {
+				const toggle = (await togglePanel.boundingBox())!;
+				const tabBackground = (await tab.locator('..').boundingBox())!;
+				return [tabBackground.y, tabBackground.height, toggle.y, toggle.height];
+			}).toEqual([closeBounds.y, 28, closeBounds.y, 28]);
 			await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
 			await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 			await expect(conversation).toBeVisible();
 			const chatBounds = (await conversation.boundingBox())!;
 			const editorBounds = (await editor.boundingBox())!;
 			expect(chatBounds.x + chatBounds.width).toBeLessThanOrEqual(editorBounds.x + 1);
+			await togglePanel.press('Enter');
+			await expect(editor).toBeHidden();
+			await expect(tab).toBeHidden();
+			await togglePanel.press('Enter');
+			await expect(controls).toBeVisible();
+			await expect(tab).toBeVisible();
 			await tab.hover();
 			await page.getByRole('button', { name: 'Close report.pdf', exact: true }).click();
 			await expect(controls).toHaveCount(0);

@@ -232,9 +232,8 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		} satisfies IMenuWorkbenchToolBarOptions));
 		this._register(activityActions.onDidChangeMenuItems(() => this.updateRightControlsVisibility()));
 		this.sidePaneActions = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.contentDomNode, Menus.TitleBarSidePane, {
-			ariaLabel: localize({ bundle: 'ash', key: 'sessions.layout.sidePane' }, 'Code side panel'),
+			ariaLabel: localize({ bundle: 'ash', key: 'sessions.layout.sidePane' }, 'Side panel'),
 			presentation: 'inherit-foreground',
-			highlightToggledItems: true,
 			contextKeyService: contextKeys,
 		}));
 		this.sidePaneActions.element.classList.add('ash-sessions-titlebar-side-pane', 'ash-titlebar-interactive-region');

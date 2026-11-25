@@ -393,8 +393,8 @@ export class EditorParts extends WorkbenchEditorParts {
 		}
 	}
 
-	public async openFiles(): Promise<void> {
-		await this.filesPart.openFiles();
+	public openFiles(): void {
+		this.filesPart.openFiles();
 		this.syncArea();
 	}
 

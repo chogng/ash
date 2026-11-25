@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { observableValue } from '../../../../../base/common/observable.js';
+import { autorun, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MenuId, MenusRegistry, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
@@ -18,7 +18,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { CODE_EDITOR_ID } from '../../../../../workbench/browser/parts/editor/textResourceEditor.js';
-import { AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../../workbench/common/contextkeys.js';
 import { IChatAttachmentResolveService } from '../../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../../workbench/contrib/terminal/common/terminal.js';
@@ -88,6 +88,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	using layoutChanged = new Emitter<void>();
 	using editorChanged = new Emitter<void>();
 	const documentContent = observableValue('document content', true);
+	const codeEditor = SessionsCodeEditorContext.bindTo(contextKeys);
+	using entryContext = autorun(reader => codeEditor.set(documentContent.read(reader)));
 	const parts = { editor: false, auxiliarybar: true };
 	const filesDetails = { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None };
 	const effects: string[] = [];
@@ -121,7 +123,6 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		async hideEditor() { filesDetails.isEditorVisible = false; parts.auxiliarybar = true; },
 		async showEditor() { parts.editor = true; filesDetails.isEditorVisible = true; },
 		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
-		async toggleSidePane() { parts.editor = false; parts.auxiliarybar = false; },
 	} as unknown as DesktopLayoutController;
 	services.registerInstance(ILayoutService, {
 		isPartVisible: (part: keyof typeof parts) => parts[part],
@@ -205,7 +206,6 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		...existingPaletteIds,
 		NEW_FILE_TAB_COMMAND_ID,
 		'workbench.agentSessions.action.viewChanges',
-		'ash.sessions.toggleSidePane',
 		'ash.sessions.toggleDetails',
 		'ash.sessions.showEditor',
 	].sort());
@@ -276,6 +276,12 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	layoutChanged.fire();
 	documentContent.set(false, undefined);
 	assert.deepEqual(headerActions(), []);
+	contextKeys.setContext('sessions.chatConversationPage', true);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.hideTool']);
+	contextKeys.setContext('sessions.editorHasMultipleTools', false);
+	assert.deepEqual(headerActions(), []);
+	contextKeys.setContext('sessions.chatConversationPage', false);
+	contextKeys.setContext('sessions.editorHasMultipleTools', true);
 	assert.deepEqual(title.getActions(), []);
 	assert.deepEqual(paletteIds(), existingPaletteIds);
 	await commands.executeCommand('workbench.agentSessions.action.viewChanges');
@@ -289,7 +295,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.openFilesTab'), undefined);
 	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.expand'), undefined);
 	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.close'), undefined);
-	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane', 'toggleChanges']) {
+	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleChanges']) {
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.' + id), undefined);
 	}
 	assert.equal(layoutChanged.hasListeners(), false);
@@ -339,6 +345,7 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 	contextKeys.setContext('sessions.editorTool', 'terminal');
 	contextKeys.setContext('appServerAvailable', true);
 	contextKeys.setContext('terminalEditorCanSplit', true);
+	SessionsCodeEditorContext.bindTo(contextKeys).set(true);
 	services.registerInstance(IContextKeyService, contextKeys);
 	const input = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
 	const source = { id: 1, activeInput: input, inputs: [input], selectedInputs: [input] };

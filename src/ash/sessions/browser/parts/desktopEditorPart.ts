@@ -186,7 +186,7 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.layoutDetails();
 	}
 
-	public async openFiles(): Promise<void> {
+	public openFiles(): void {
 		const group = this.fileGroups.find(group => group === this.activeGroup) ?? this.fileGroups[0]
 			?? this.insertGroup(this.activeGroup, Direction.Right).group;
 		this.setGroupVisible(group.id, true);

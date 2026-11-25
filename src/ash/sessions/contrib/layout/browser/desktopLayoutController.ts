@@ -1,12 +1,11 @@
 import { type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
@@ -36,8 +35,6 @@ export interface IDesktopLayoutContext {
 	runOperation(operation: () => Promise<void>): Promise<void>;
 }
 
-const lastOpenKey = 'sessions.layout.sidePane.lastOpen';
-
 /** Restores session documents and coordinates desktop Editor/Details behavior. */
 export class DesktopLayoutController extends BaseLayoutController {
 	/** Retain live group identities across session switches; workingSets remains the layout/state owner. */
@@ -51,7 +48,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private readonly tabs: DesktopDockedTabsCoordinator;
 	private readonly detailPanel: DesktopDetailPanelCoordinator;
 	private readonly existingSession: DesktopExistingSessionStrategy;
-	private closedProfile = { documents: true, details: true };
 
 	constructor(private readonly pageGroupId: number, private readonly context: IDesktopLayoutContext,
 		@ISessionsService sessions: ISessionsService,
@@ -76,12 +72,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		this.existingSession = instantiation.createInstance(DesktopExistingSessionStrategy);
-		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);
-		if (lastOpen !== undefined) {
-			const profile: unknown = JSON.parse(lastOpen);
-			if (!isRecord(profile) || typeof profile.editor !== 'boolean' || typeof profile.details !== 'boolean') { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
-			this.closedProfile = { documents: profile.editor, details: profile.details };
-		}
 	}
 
 	/** Save the restored editor working set before removing the old Browser snapshot. */
@@ -315,25 +305,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (this.existingSession.toggleDetails()) { await this.detailPanel.openFiles(); }
 		else if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		if (!this.isDisposed) { this.focus(); }
-	}
-	public async toggleSidePane(): Promise<void> {
-		if (this.isDisposed) { return; }
-		const editor = this.editor as EditorParts;
-		if (this.documentsVisible) {
-			this.closedProfile = { documents: true, details: editor.filesDetailsOpen };
-			this.storage.store(lastOpenKey, JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }), StorageScope.PROFILE, StorageTarget.MACHINE);
-			this.setDocumentsVisible(false);
-			this.layout.focus();
-		} else {
-			const group = this.documentGroups.find(group => this.editor.isGroupVisible(group.id) && group.inputs.length > 0);
-			if (this.closedProfile.details || !group) {
-				await this.detailPanel.openFiles();
-			} else {
-				this.editor.activateGroup(group.id);
-				this.setDocumentsVisible(true);
-			}
-			this.focus();
-		}
 	}
 
 	public async openFiles(): Promise<void> {

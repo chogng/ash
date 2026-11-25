@@ -656,7 +656,7 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 			await page.getByRole('link', { name: 'First browser tab', exact: true }).click();
 			await page.getByRole('link', { name: 'Second browser tab', exact: true }).click();
 			await expect(browser).not.toHaveClass(/checked/);
-			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await page.locator('[data-action-id="workbench.action.agentToggleSidePanel"] button').click();
 			await expect(browser).not.toHaveAttribute('aria-pressed', /.*/);
 			await browser.click();
 			const first = popup.locator(':scope > .ash-action-view-item:not(.ash-action-view-item-separator)').filter({ hasText: 'https://example.com/browser-one' });
@@ -746,7 +746,7 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 			const horizontalTab = page.getByRole('tab', { name: 'First browser tab', exact: true });
 			await expect(horizontalTab).toHaveAttribute('aria-selected', 'true');
 			await expect(horizontalTab.locator('img')).toHaveAttribute('src', iconSource);
-			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await page.locator('[data-action-id="workbench.action.agentToggleSidePanel"] button').click();
 			await browser.click();
 			await first.hover();
 			await first.getByRole('button', { name: closeTab, exact: true }).click();
@@ -760,7 +760,7 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 			await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 			await page.locator('[data-action-id="sessions.toggleSessionPart"] button:visible').click();
 			await expect(browser).not.toHaveClass(/checked/);
-			await page.locator('[data-action-id="sessions.closeEditorPart"] button:visible').click();
+			await page.locator('[data-action-id="workbench.action.agentToggleSidePanel"] button').click();
 			await browser.click();
 			await popup.getByRole('menuitem', { name: newTab, exact: true }).click();
 			await expect(editor).toBeVisible();
@@ -2502,7 +2502,7 @@ test.describe('Ash project file copies', () => {
 		await expect(page.locator('.ash-chatgpt-widget:visible')).toContainText('PDF association question');
 	});
 
-	test('Chat tool panes close independently while a project file stays open', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench, testWorkspace }, testInfo) => {
+	test('Chat shares the container toggle and can hide one of multiple tools', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench, testWorkspace }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application, false, { suffix: '', streamSuffix: '\n\n[Browser reference](https://example.com/reference)' }, false, true, false, { name: 'project-fixture.pdf', body: await readFile(testWorkspace.pdfFile, 'utf8') });
 		const page = await workbench.openAgentsWindow('electron');
@@ -2521,6 +2521,12 @@ test.describe('Ash project file copies', () => {
 		const openBrowser = () => native.getByRole('link', { name: 'Browser reference', exact: true }).click();
 		const fileTab = page.getByRole('tab', { name: 'project-fixture.pdf', exact: true });
 		await expect(fileTab).toBeVisible();
+		const closePage = page.locator('[data-action-id="sessions.closeEditorPart"] button:visible');
+		const hideTool = page.getByRole('button', { name: '隐藏工具区域', exact: true });
+		const toggle = page.locator('[data-action-id="workbench.action.agentToggleSidePanel"] button');
+		await expect(closePage).toHaveCount(0);
+		await expect(hideTool).toHaveCount(0);
+		await expect(toggle).toHaveAccessibleName('切换侧面板');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
 		await openBrowser();
 		const browserPane = page.locator('.ash-tool-editor-workspace[data-editor-tool="browser"]');
@@ -2531,7 +2537,8 @@ test.describe('Ash project file copies', () => {
 		await openBrowser();
 		await expect(browserPane).toBeVisible();
 		const browserControls = page.locator('[data-editor-tool="browser"] .ash-editor-header-layout:visible');
-		await expect(page.locator('[data-action-id="sessions.closeEditorPart"] button:visible')).toHaveCount(2);
+		await expect(closePage).toHaveCount(0);
+		await expect(hideTool).toHaveCount(2);
 		const controlsBounds = (await browserControls.boundingBox())!;
 		const paneBounds = (await browserPane.boundingBox())!;
 		expect(controlsBounds.y).toBeGreaterThanOrEqual(paneBounds.y);
@@ -2542,11 +2549,18 @@ test.describe('Ash project file copies', () => {
 		await expect(fileTab).toBeVisible();
 		await browserControls.getByRole('button', { name: '显示聊天', exact: true }).click();
 		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-		await browserControls.locator('[data-action-id="sessions.closeEditorPart"] button').click();
+		await toggle.press('Enter');
+		await expect(browserPane).toBeHidden();
+		await expect(fileTab).toBeHidden();
+		await toggle.press('Enter');
+		await expect(browserPane).toBeVisible();
+		await expect(fileTab).toBeVisible();
+		await browserControls.getByRole('button', { name: '隐藏工具区域', exact: true }).click();
 		await expect(browserPane).toBeHidden();
 		await expect(fileTab).toBeVisible();
-		await page.screenshot({ path: testInfo.outputPath('pdf-after-browser-close.png') });
-		await page.locator('[data-editor-tool="files"] .ash-editor-header-layout:visible [data-action-id="sessions.closeEditorPart"] button').click();
+		await expect(hideTool).toHaveCount(0);
+		await page.screenshot({ path: testInfo.outputPath('pdf-after-browser-hidden.png') });
+		await toggle.click();
 		await expect(fileTab).toBeHidden();
 		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		await sidebar.getByRole('button', { name: 'project-fixture.pdf', exact: true }).press('Enter');

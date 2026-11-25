@@ -163,7 +163,9 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		const input = { resource: URI.file('/fixture/retained.md'), editorId: 'test.retainedLayout' };
-		await hosts.editor.openEditor(input, { pinned: true });
+		const pageGroupId = hosts.editor.pageGroupId;
+		hosts.editor.setGroupVisible(pageGroupId, true);
+		await hosts.editor.openEditor(input, { pinned: true }, { groupId: pageGroupId });
 		const group = hosts.editor.activeGroup;
 		layout.showPart('editor');
 		layout.setPartAvailable('sessions', false);
@@ -171,37 +173,33 @@ test('Sessions layout commands update menu state from their owners and release w
 		const partActions = () => partMenu.getActions().flatMap(([, actions]) => actions);
 		assert.deepEqual(partActions().map(action => [action.id, action.label, action.tooltip, action.icon]), [
 			['sessions.toggleSessionPart', 'Show Chat', 'Exit Full Screen', Lxicon.minimize],
-			['sessions.closeEditorPart', 'Close editor', 'Close', Lxicon.close],
+			['sessions.closeEditorPart', 'Close editor', 'Close', Lxicon.layoutSidebarRightOff],
 		]);
 		await partActions()[1]!.run();
 		assert.equal(layout.isPartVisible('editor'), false);
 		assert.equal(layout.isPartVisible('sessions'), true);
 		assert.equal(group.activeInput, input);
-		assert.deepEqual(group.inputs, [input], 'Hiding the Part retains its document working set');
+		assert.deepEqual(group.inputs, [input], 'Hiding the Part retains its product page');
 		assert.equal(partActions()[0]!.label, 'Maximize');
 		assert.equal(partActions()[0]!.tooltip, 'Maximize');
 		layout.showPart('editor');
 		assert.equal(group.activeInput, input);
 
-		hosts.editor.setGroupVisible(group.id, true);
+		hosts.editor.setGroupVisible(pageGroupId, false);
 		const browserInput = { resource: URI.parse('ash-browser:/retained-reference'), editorId: 'test.retainedLayout' };
 		const browserGroup = hosts.editor.createRetainedGroup('browser');
-		// Chat retained groups are outside the Code working-set scope.
-		using chatScope = hosts.editor.setGroupScope(id => id === group.id);
 		await hosts.editor.openEditor(browserInput, { pinned: true }, { groupId: browserGroup.id });
 		SessionsCodeEditorContext.bindTo(contextKeys).set(false);
 		using toolMenu = new MenuService(commands, contextKeys).createMenu(Menus.SessionsEditorHeaderLayout);
 		assert.deepEqual(toolMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), [
-			'sessions.toggleSessionPart', 'sessions.closeEditorPart',
+			'sessions.toggleSessionPart',
 		]);
 		await commands.executeCommand('sessions.closeEditorPart', { groupId: browserGroup.id });
-		assert.equal(hosts.editor.isGroupVisible(browserGroup.id), false);
-		assert.equal(hosts.editor.isGroupVisible(group.id), true);
+		assert.equal(hosts.editor.isGroupVisible(browserGroup.id), true);
 		assert.equal(layout.isPartVisible('editor'), true);
 		assert.deepEqual(group.inputs, [input]);
 		assert.deepEqual(browserGroup.inputs, [browserInput]);
 
-		chatScope.dispose();
 		await browserGroup.closeEditor(browserInput);
 		await new Promise<void>(resolve => queueMicrotask(resolve));
 		actions.dispose();

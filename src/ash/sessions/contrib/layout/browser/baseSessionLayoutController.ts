@@ -1,13 +1,16 @@
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import type { IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -16,7 +19,10 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatLayoutContext, ChatLayoutPresentation, chatLayoutOwnersEqual, type IChatLayoutOwner, type IChatLayoutSnapshot } from '../../../common/chatLayout.js';
 import '../../../common/sessionConfig.js';
+import { Menus } from '../../../browser/menus.js';
+import { ChatConversationPageContext } from '../../../common/contextkeys.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { EditorAreaVisibleContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -29,6 +35,28 @@ const layoutStateKey = 'sessions.singlePane.layoutState';
 
 /** Editor working sets follow the selected session, independently of window geometry. */
 export abstract class BaseLayoutController extends Disposable {
+	static registerSidePaneToggleAction(toggle: () => Promise<void> | undefined): IDisposable {
+		const conversation = ContextKeyExpr.or(ChatConversationPageContext.isEqualTo(true), SessionsCodeEditorContext.isEqualTo(true));
+		return registerAction2(class ToggleSidePaneAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.agentToggleSidePanel',
+					title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleSidePane' }, 'Toggle Side Panel'),
+					icon: Lxicon.layoutSidebarRightOff,
+					toggled: { condition: EditorAreaVisibleContext.isEqualTo(true), icon: Lxicon.layoutSidebarRight },
+					precondition: conversation,
+					f1: true,
+					menu: [
+						{ id: Menus.TitleBarSidePane, when: conversation, group: 'navigation' },
+						{ id: MenuId.MenubarViewMenu, when: conversation, group: '2_code_layout', order: 0 },
+					],
+				});
+			}
+
+			override run(): Promise<void> | undefined { return toggle(); }
+		});
+	}
+
 	private readonly workingSets = new Map<string, EditorWorkingSet>();
 
 	private readonly chatVisibility = new Map<string, { readonly editor: boolean; readonly auxiliarybar: boolean; }>();

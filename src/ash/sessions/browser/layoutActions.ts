@@ -20,7 +20,6 @@ import type { ISessionsService } from '../services/sessions/browser/sessionsServ
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
 import { CanGoBackContext, CanGoForwardContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../common/contextkeys.js';
-import { isRecord } from '../../base/common/types.js';
 import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
@@ -85,15 +84,33 @@ export function registerLayoutActions(
 			}),
 		),
 	);
-	disposables.add(
-		CommandsRegistry.register('ash.sessions.toggleSidebar', () => {
+	disposables.add(registerAction2(class ToggleSidebarVisibilityAction extends Action2 {
+		constructor() {
+			super({
+				id: 'ash.sessions.toggleSidebar',
+				title: localize2({ bundle: 'ash', key: 'sessions.navigation.showSidebar' }, 'Show sidebar'),
+				icon: Lxicon.layoutSidebarLeftOff,
+				toggled: {
+					condition: SideBarVisibleContext.isEqualTo(true),
+					title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
+					tooltip: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
+					icon: Lxicon.layoutSidebarLeft,
+				},
+				menu: [
+					{ id: Menus.TitleBarLeftLayout, group: 'navigation', order: 0 },
+					{ id: Menus.TitleBarContext, group: 'navigation', order: 0 },
+				],
+			});
+		}
+
+		override run(): void {
 			if (layout.isPartVisible('sidebar')) {
 				layout.hidePart('sidebar');
 			} else {
 				layout.showPart('sidebar');
 			}
-		}),
-	);
+		}
+	}));
 	disposables.add(registerAction2(class ToggleSessionPartAction extends Action2 {
 		constructor() {
 			super({
@@ -123,23 +140,13 @@ export function registerLayoutActions(
 				id: 'sessions.closeEditorPart',
 				title: localize2('sessions.layout.closeEditor', 'Close editor'),
 				tooltip: localize2('sessions.layout.closeEditorTooltip', 'Close'),
-				icon: Lxicon.close,
-				menu: [
-					{ id: Menus.EditorPartLayout, group: 'navigation', order: 2 },
-					{ id: Menus.SessionsEditorHeaderLayout, when: ContextKeyExpr.not(SessionsCodeEditorContext.key), group: 'navigation', order: 3 },
-				],
+				icon: Lxicon.layoutSidebarRightOff,
+				menu: { id: Menus.EditorPartLayout, group: 'navigation', order: 2 },
 			});
 		}
 
-		override run(_accessor: ServicesAccessor, arg?: unknown): void {
-			const groupId = isRecord(arg) && typeof arg.groupId === 'number' ? arg.groupId
-				: editor.area.hasProductPage ? undefined : editor.activeGroup.id;
-			if (groupId !== undefined) {
-				if (!editor.mainWindowGroups.some(group => group.id === groupId)) return;
-				editor.hideTool(groupId);
-				if (editor.mainWindowGroups.some(group => editor.isGroupVisible(group.id))) return;
-			}
-			// Product pages own the whole editor area; tool headers supply their group.
+		override run(): void {
+			if (!editor.area.hasProductPage || !layout.isPartVisible('editor')) return;
 			layout.updateParts(() => {
 				layout.setPartAvailable('sessions', true);
 				layout.hidePart('editor');
@@ -197,31 +204,6 @@ export function registerLayoutActions(
 		group: '1_tools',
 		order: 2,
 	}));
-	disposables.add(
-		MenusRegistry.appendMenuItems([
-			...[Menus.TitleBarLeftLayout, Menus.TitleBarContext].map(id => ({
-				id,
-				item: {
-					command: {
-						id: 'ash.sessions.toggleSidebar',
-						title: localize2({ bundle: 'ash', key: 'sessions.navigation.showSidebar' }, 'Show sidebar'),
-						icon: Lxicon.layoutSidebarLeftOff,
-						toggled: {
-							condition: SideBarVisibleContext.isEqualTo(true),
-							title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
-							tooltip: localize2(
-								{ bundle: 'ash', key: 'sessions.navigation.hideSidebar' },
-								'Hide sidebar',
-							),
-							icon: Lxicon.layoutSidebarLeft,
-						},
-					},
-					group: 'navigation',
-					order: 0,
-				},
-			})),
-		]),
-	);
 	for (const [id, title, icon, precondition, order] of [
 		[
 			'ash.sessions.back',

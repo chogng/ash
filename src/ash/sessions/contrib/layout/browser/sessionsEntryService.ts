@@ -1,3 +1,4 @@
+import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { BROWSER_FOLLOWS_SESSION_SETTING } from '../../../common/sessionConfig.js';
@@ -17,6 +18,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -25,7 +27,8 @@ import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { ISessionsEntryService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
-import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryDetailsContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { ChatConversationPageContext, CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryDetailsContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
@@ -58,6 +61,11 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	private readonly activeEntry = observableValue<ActiveEntry | undefined>(this, undefined);
 	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
+	private readonly chatConversation = derived(reader => {
+		const entry = this.activeEntry.read(reader);
+		return !this.customViews.activeCustomView.read(reader) && entry?.content === 'conversation'
+			&& entry.workspaceMode !== 'code' && (entry.id === 'chat' || entry.chatSource !== undefined);
+	});
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly workspaceSidebars = new Map<'chat' | 'code', string>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
@@ -198,12 +206,37 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
 		this.controller.start();
+		const codeEditor = SessionsCodeEditorContext.bindTo(this.contextKeys);
+		const chatConversation = ChatConversationPageContext.bindTo(this.contextKeys);
+		this._register(toDisposable(() => {
+			codeEditor.reset();
+			chatConversation.reset();
+		}));
+		this._register(autorun(reader => {
+			const code = this.documentContent.read(reader);
+			const chat = this.chatConversation.read(reader);
+			this.contextKeys.bufferChangeEvents(() => {
+				codeEditor.set(code);
+				chatConversation.set(chat);
+			});
+		}));
 		this._register((editor as EditorParts).bindWindowEditorReturn(async () => {
 			// Code restores its session's editor groups on entry. Pick the destination after that restore.
 			if (!this.isDocumentContent) await this.openEntry(documentEntry);
 			await this.controller.whenSettled();
 		}));
 		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
+		this._register(BaseLayoutController.registerSidePaneToggleAction(() => {
+			const entry = this.activeEntry.get();
+			if (!this.isDocumentContent && !this.chatConversation.get()) return;
+			return this.runOperation(async () => {
+				if (this.activeEntry.get() !== entry || (!this.isDocumentContent && !this.chatConversation.get())) return;
+				const visible = layout.toggleSidePane();
+				status(visible
+					? localize('sessions.layout.sidePaneShown', 'Side panel shown')
+					: localize('sessions.layout.sidePaneHidden', 'Side panel hidden'));
+			});
+		}));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
 		this._register(lifecycle.onDidShutdown(() => this.dispose()));
@@ -212,7 +245,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
 			if (!(editor as EditorParts).mainWindowGroups.some(group => group.id === editor.activeGroup.id)) return;
 			if (this.isConversationEditorGroup(editor.activeGroup.id)) {
-				if (this.isActiveConversationEditorGroup(editor.activeGroup.id)) this.layout.showPart('editor');
+				if (explicit && this.isActiveConversationEditorGroup(editor.activeGroup.id)) this.layout.showPart('editor');
 				return;
 			}
 			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) { return; }
@@ -407,14 +440,19 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 						this.savedConversationEditors.delete(previousKey);
 						this.conversationGroups.set(browserKey, group);
 					}
+					const previousVisibility = this.visibility.get(previousKey);
+					if (previousVisibility && (group !== undefined || !this.visibility.has(browserKey))) {
+						this.visibility.set(browserKey, previousVisibility);
+					}
 				}
 				this.activeBrowserKey.set(browserKey, undefined);
 				this.activeEntry.set(chatActivityContext ? { ...entry, chatActivityContext } : entry, undefined);
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
+				const chatConversation = this.chatConversation.get();
 				// Navigation visibility belongs to the window, independently of the page's side content.
 				const sidebarVisible = this.layout.isPartRequested('sidebar');
-				const state = (browserKey !== entry.id ? undefined : this.visibility.get(entry.id)) ?? {
+				const state = this.visibility.get(chatConversation ? browserKey : entry.id) ?? {
 					details: entry.showDetailsByDefault ?? entry.detailsContainerId !== undefined,
 					documents: documents ? this.controller.hasDocumentEditors : this.hasConversationEditors,
 				};
@@ -423,7 +461,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					this.controller.setDocumentGroupsVisible(documents);
 					for (const groupId of this.conversationGroups.values()) {
 						const group = this.editor.groups.find(candidate => candidate.id === groupId);
-						if (group) this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && state.documents && group.inputs.length > 0);
+						if (group) this.editor.setGroupVisible(groupId, this.isActiveConversationEditorGroup(groupId) && (chatConversation || state.documents) && group.inputs.length > 0);
 					}
 					this.editor.setGroupVisible(this.pageGroupId, productEditor);
 					this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
@@ -436,7 +474,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					this.layout.setPartAvailable('sessions', !productEditor || entry.conversation === 'visible');
 					this.layout.setAuxiliaryBarDocked(productEditor && entry.detailsContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
-					this.setVisible('editor', productEditor || (state.documents && (documents || this.hasConversationEditors)));
+					this.setVisible('editor', productEditor || (state.documents && (documents || chatConversation || this.hasConversationEditors)));
 					// A saved visibility flag can outlive the view that once occupied the side bar.
 					if (!detailsContainerId || this.views.getVisibleViewContainer(ViewContainerLocation.AuxiliaryBar)?.id !== detailsContainerId) {
 						this.layout.hidePart('auxiliarybar');
@@ -538,10 +576,14 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		const entry = this.activeEntry.get();
 		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
 		const files = this.isDocumentContent ? (this.editor as EditorParts) : undefined;
-		this.visibility.set(entry.id, {
+		const chatConversation = this.chatConversation.get();
+		const key = chatConversation ? this.activeBrowserKey.get() ?? entry.id : entry.id;
+		const documents = (this.isDocumentContent || chatConversation || this.hasConversationEditors) && this.layout.isPartRequested('editor');
+		if (key !== entry.id && !documents && !this.hasConversationEditors) this.visibility.delete(key);
+		else this.visibility.set(key, {
 			// File navigation belongs to the retained editor group, independently of properties.
 			details: files?.filesDetailsOpen ?? (entry.detailsContainerId !== undefined && this.layout.isPartRequested('auxiliarybar')),
-			documents: (this.isDocumentContent || this.hasConversationEditors) && this.layout.isPartRequested('editor'),
+			documents,
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 		for (const [id, groupId] of this.conversationGroups) {

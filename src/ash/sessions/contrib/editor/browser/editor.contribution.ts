@@ -29,7 +29,7 @@ import { EditorHasMultipleToolsContext, EditorToolMaximizedContext, Menus, Sessi
 import { SessionsCategories } from '../../../common/categories.js';
 import { SESSIONS_EDITOR_WORD_WRAP } from '../../../common/configuration.js';
 import { TERMINAL_CONFIG_SECTION } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
+import { ChatConversationPageContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
@@ -38,7 +38,6 @@ import { isRecord } from '../../../../base/common/types.js';
 import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
-const sidePaneVisibleContext = new RawContextKey<boolean>('sessions.sidePaneVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
@@ -97,16 +96,12 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		}));
 		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
-		const sidePaneVisible = sidePaneVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
 		const changesVisible = changesVisibleContext.bindTo(contextKeys);
-		const code = SessionsCodeEditorContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
-				code.set(context.isDocumentContent);
-				sidePaneVisible.set(context.isDocumentContent && layout.isPartVisible('editor'));
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
 					(!(editor as EditorParts).filesDetailsVisible || (editor as EditorParts).filesPart.isEditorVisible));
 				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as EditorParts).filesDetailsVisible);
@@ -117,7 +112,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, sidePaneVisible, detailsVisible, fileEditorsVisible, changesVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, changesVisible, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -235,12 +230,28 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			when: flatTerminal, group: '1_terminal', order: 2,
 		}));
 		const hideToolId = 'ash.sessions.hideTool';
-		this._register(CommandsRegistry.register(hideToolId, (_accessor, arg) => run(async () => {
+		const chatTools = ChatConversationPageContext.isEqualTo(true);
+		const codeWhen = SessionsCodeEditorContext.isEqualTo(true);
+		const multipleTools = EditorHasMultipleToolsContext.isEqualTo(true);
+		const hideToolWhen = ContextKeyExpr.and(ContextKeyExpr.or(codeWhen, chatTools), multipleTools);
+		this._register(CommandsRegistry.register(hideToolId, (_accessor, arg) => {
+			const code = context.isDocumentContent;
+			if (!code && !contextKeys.contextMatchesRules(hideToolWhen)) return;
 			const groupId = isRecord(arg) && typeof arg.groupId === 'number' ? arg.groupId : editor.activeGroup.id;
-			if (!editor.groups.some(group => group.id === groupId)) return;
-			(editor as EditorParts).hideTool(groupId);
-			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
-		})));
+			return context.runOperation(async () => {
+				if (context.isDocumentContent !== code || !layout.isPartVisible('editor')) return;
+				const parts = editor as EditorParts;
+				if (!parts.mainWindowGroups.some(group => group.id === groupId) || !editor.isGroupVisible(groupId)) return;
+				if (code) {
+					if (groupId === parts.pageGroupId || context.isConversationEditorGroup(groupId)) return;
+				} else if (!contextKeys.contextMatchesRules(hideToolWhen) || !context.isActiveConversationEditorGroup(groupId)) {
+					return;
+				}
+				parts.hideTool(groupId);
+				if (parts.mainWindowGroups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
+				updateContext();
+			});
+		}));
 		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', (_accessor, arg) => run(async () => {
 			(editor as EditorParts).toggleMaximizeTool(toolGroup(arg));
 		})));
@@ -256,7 +267,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
 			['ash.sessions.showEditor', () => controller.showEditor()],
-			['ash.sessions.toggleSidePane', () => controller.toggleSidePane()],
 		] as const) {
 			this._register(CommandsRegistry.register(id, () => run(operation)));
 		}
@@ -267,7 +277,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				SessionsCodeEditorContext.isEqualTo(true),
 			),
 		);
-		const codeWhen = SessionsCodeEditorContext.isEqualTo(true);
 		const modalVisible = EditorPartModalVisibleContext.isEqualTo(true);
 		const modalToEditor = ContextKeyExpr.and(codeWhen, modalVisible);
 		this._register(registerAction2(class OpenModalEditorInEditorAction extends Action2 {
@@ -301,11 +310,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		}));
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));
-		const toggleSidePane = {
-			id: 'ash.sessions.toggleSidePane',
-			title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleSidePane' }, 'Toggle Code side panel'),
-			toggled: sidePaneVisibleContext.isEqualTo(true),
-		};
 		const toggleDetails = {
 			id: 'ash.sessions.toggleDetails',
 			title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleDetails' }, 'Toggle details'),
@@ -322,23 +326,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		};
 		this._register(
 			MenusRegistry.appendMenuItems([
-				{
-					id: Menus.TitleBarSidePane,
-					item: {
-						command: {
-							...toggleSidePane,
-							title: localize2({ bundle: 'ash', key: 'sessions.layout.showSidePane' }, 'Show Code side panel'),
-							icon: Lxicon.layoutSidebarRightOff,
-							toggled: {
-								condition: sidePaneVisibleContext.isEqualTo(true),
-								title: localize2({ bundle: 'ash', key: 'sessions.layout.hideSidePane' }, 'Hide Code side panel'),
-								icon: Lxicon.layoutSidebarRight,
-							},
-						},
-						when: codeWhen,
-						group: 'navigation',
-					},
-				},
 				{
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
@@ -380,7 +367,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: { id: hideToolId, title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
-						when: ContextKeyExpr.and(codeWhen, EditorHasMultipleToolsContext.isEqualTo(true)),
+						when: hideToolWhen,
 						group: 'navigation',
 						order: 3,
 					},
@@ -453,7 +440,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			]),
 		);
 		const codeLayoutCommands = [
-			{ command: toggleSidePane, when: codeWhen, order: 0 },
 			{ command: toggleDetails, when: codeWhen, order: 1 },
 			{ command: hideEditor, when: editorShown, order: 2 },
 			{ command: showEditor, when: editorHidden, order: 2 },

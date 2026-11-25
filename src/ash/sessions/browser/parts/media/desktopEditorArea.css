@@ -37,40 +37,23 @@
 	pointer-events: none;
 }
 
-.ash-sessions-tool-editor .ash-editor-group-header .ash-tab-list-inset {
-	--ash-tabList-activeBackground: var(--ash-sessions-selectionBackground);
-	--ash-tab-list-inactive-background: transparent;
-	--ash-actionBar-gap: var(--ash-spacing-size40);
+.ash-sessions-tool-editor .ash-editor-group-header {
+	& > .ash-editor-tabs-control {
+		align-self: center;
+	}
+
+	& .ash-tab-list-inset {
+		--ash-tab-height: var(--ash-toolbar-actionSize);
+		--ash-tabList-activeBackground: var(--ash-sessions-selectionBackground);
+		--ash-tab-list-inactive-background: transparent;
+		--ash-actionBar-gap: var(--ash-spacing-size40);
+	}
 }
 
 .ash-sessions-tool-editor[data-editor-tool="browser"]
 	:is(.ash-tab-list-sizing-fit, .ash-tab-list-sizing-shrink)
 	.ash-tab {
 	max-width: 240px;
-}
-
-.ash-sessions-window[data-layout-style="flat"]
-	.ash-sessions-tool-editor
-	.ash-editor-group-header {
-	& .ash-tab-list-inset {
-		/* Match the editor group header's leading inset on both block edges. */
-		--ash-tab-height: calc(
-			var(--ash-pane-titleHeight) - 2 * var(--ash-spacing-size40)
-		);
-	}
-
-	&.ash-editor-group-header-hosted {
-		/* The native title bar can be taller than an inline editor header. */
-		& > .ash-editor-tabs-control,
-		& .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
-			height: 100%;
-		}
-
-		& .ash-tab-list-inset {
-			--ash-tab-height: 100%;
-			height: calc(100% - 2 * var(--ash-spacing-size40));
-		}
-	}
 }
 
 .ash-sessions-tool-editor

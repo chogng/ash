@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -20,6 +21,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
@@ -49,6 +52,74 @@ import type { ISessionsEntry } from '../../../../services/layout/common/sessions
 import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../../common/chatWorkspace.js';
 
 suite('SessionsEntryService lifecycle and focus', () => {
+	test('the shared side panel command is scoped to conversation pages', async () => {
+		using fixture = new EntryFixture();
+		const commands = fixture.commands;
+		const id = 'workbench.action.agentToggleSidePanel';
+		using palette = new MenuService(commands, fixture.contextKeys).createMenu(MenuId.CommandPalette);
+		const paletteAction = () => palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === id);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), false);
+		await paletteAction()!.run();
+		assert.equal(fixture.visible.get('editor'), true);
+		await commands.executeCommand(id);
+		assert.equal(fixture.visible.get('editor'), false);
+
+		await fixture.service.openEntry({ ...chatEntry, id: 'projects', content: 'editor' });
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(paletteAction(), undefined);
+		await commands.executeCommand(id);
+		assert.equal(fixture.visible.get('editor'), true);
+		fixture.service.dispose();
+		assert.equal(CommandsRegistry.getCommand(id), undefined);
+	});
+
+	test('Chat toggles its container independently of Code and retains browser and file tabs', async () => {
+		using fixture = new EntryFixture();
+		const command = 'workbench.action.agentToggleSidePanel';
+		const entry = { ...chatEntry, chatSource: 'desktop-chat' };
+		using palette = new MenuService(fixture.commands, fixture.contextKeys).createMenu(MenuId.CommandPalette);
+		const paletteShowsToggle = () => palette.getActions().some(([, actions]) => actions.some(action => action.id === command));
+		await fixture.service.openEntry(entry);
+		assert.equal(paletteShowsToggle(), true);
+		await fixture.commands.executeCommand(command);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.deepEqual(fixture.service.conversationEditors, []);
+
+		const browser = { resource: URI.parse('ash-browser:/retained') };
+		await fixture.service.openConversationBrowser(target => fixture.openEditor(browser, target));
+		const pdf = { resource: URI.file('/report.pdf') };
+		await fixture.service.openConversationFile(pdf, () => { }, new AbortController().signal);
+		const fileGroup = fixture.activeGroupId;
+		await fixture.service.setConversationVisible(false);
+		await fixture.commands.executeCommand(command);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.visible.get('sessions'), true);
+		assert.equal(fixture.focused, 'conversation');
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: fileGroup });
+		assert.equal(fixture.visible.get('editor'), false);
+
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(paletteShowsToggle(), true);
+		assert.equal(fixture.visible.get('editor'), false);
+		await fixture.commands.executeCommand(command);
+		assert.equal(fixture.visible.get('editor'), true);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.deepEqual(fixture.service.conversationEditors, [browser]);
+		assert.equal(fixture.service.isConversationEditor(pdf.resource, true), true);
+		await fixture.commands.executeCommand(command);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.focused, 'editor');
+
+		await fixture.service.openEntry(documentEntry);
+		await fixture.commands.executeCommand(command);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.visible.get('editor'), true);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), false);
+	});
+
 	test('Chat browser editors stay in Chat and retain a separate group across Code switches', async () => {
 		using fixture = new EntryFixture();
 		const entry = { ...chatEntry, chatSource: 'desktop-chat' };
@@ -94,9 +165,15 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.runOperation(async () => { });
 		assert.deepEqual(fixture.service.conversationEditors, [first]);
 		assert.equal(fixture.visible.get('editor'), true);
+		await fixture.commands.executeCommand('workbench.action.agentToggleSidePanel');
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.deepEqual(fixture.service.conversationEditors, [first]);
 		browserContext.set('two', undefined);
 		await fixture.service.runOperation(async () => { });
 		assert.deepEqual(fixture.service.conversationEditors, [second]);
+		assert.equal(fixture.visible.get('editor'), true);
 		await fixture.configuration.updateValue(BROWSER_FOLLOWS_SESSION_SETTING, false);
 		await fixture.service.runOperation(async () => { });
 		const shared = { resource: URI.parse('ash-browser:/shared') };
@@ -796,6 +873,7 @@ class EntryFixture extends Disposable {
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
+	public readonly commands = this._register(new CommandService(this.services));
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle: TestLifecycle;
 	public readonly contextKeys = this._register(new ContextKeyService());
@@ -852,6 +930,7 @@ class EntryFixture extends Disposable {
 		super();
 		this.lifecycle = this._register(new TestLifecycle(startupKind, new NullLoggerService(), this.storage));
 		this._register(toDisposable(() => this.dom.window.close()));
+		this._register(setARIAContainer(this.container));
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
 		const fixture = this;
 		const documentGroup = {
@@ -922,7 +1001,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
 		this.services.registerInstance(ILogService, new NullLoggerService());
-		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
+		this.services.registerInstance(ICommandService, this.commands);
 		this.services.registerInstance(ISessionsConversationService, {
 			newDraftVisible: this.conversationDraft,
 			hasDesktopChatSource: constObservable(false),
@@ -960,6 +1039,13 @@ class EntryFixture extends Disposable {
 			isEditorPartAutoVisibilitySuppressed: () => false,
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
+			toggleSidePane: () => {
+				const visible = !this.visible.get('editor');
+				this.visible.set('editor', visible);
+				if (!visible) this.visible.set('sessions', true);
+				this.focused = visible ? 'editor' : 'conversation';
+				return visible;
+			},
 			isPartRequested: (id: string) => this.visible.get(id) ?? false,
 			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },
 			hidePart: (id: string) => { this.visible.set(id, false); this.partChanges.push('hide:' + id); },

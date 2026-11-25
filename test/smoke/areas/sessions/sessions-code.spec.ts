@@ -249,7 +249,7 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	const editor = page.locator('[data-part="editor"]');
 	const files = editor.locator('.ash-desktop-auxiliarybar');
 	const commands = new QuickAccess(page);
-	await page.getByRole('button', { name: 'Show Code side panel', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle Side Panel', exact: true, pressed: false }).click();
 	await expect(editor).toBeVisible();
 	await expect(files).toBeVisible();
 	await commands.runCommand('workbench.action.files.newUntitledFile');

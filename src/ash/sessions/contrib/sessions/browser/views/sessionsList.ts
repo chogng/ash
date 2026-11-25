@@ -1692,7 +1692,6 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 	const toolbar = disposables.add(instantiation.createInstance(MenuWorkbenchToolBar, container, menuId, {
 		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
 		contextKeyService: contextKeys,
-		leadingActions: createProject && [createProject],
 		// The popup reads list state even when the submenu has no registered commands.
 		menuOptions: { preserveEmptySubmenus: true },
 		actionViewItemProvider: (action, options) => {
@@ -1719,6 +1718,9 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 			);
 		},
 	} satisfies IMenuWorkbenchToolBarOptions));
+	if (createProject) {
+		toolbar.setTrailingActions([createProject]);
+	}
 	toolbar.element.classList.add('ash-sessions-list-more');
 	// Toolbar inputs stay within the header without activating tree rows.
 	disposables.add(addDisposableListener(toolbar.element, 'click', event => event.stopPropagation()));

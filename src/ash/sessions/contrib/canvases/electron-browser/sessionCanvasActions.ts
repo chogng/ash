@@ -159,7 +159,7 @@ export function registerSessionCanvasActions(canvases: ICanvasService, registry:
 			menu.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTabCanvas, { command: { id, title: localize('canvas.reopenNamed', 'Reopen {0}', liveLabels[index]!) }, group: 'live', order: index }));
 		}
 		if (definitions.length || live.length) {
-			menu.add(MenusRegistry.appendMenuItem(Menus.CodeAddTab, { submenu: Menus.SessionsEditorTabsBarAddTabCanvas, title: localize2('canvas.editorName', 'Canvas'), group: 'navigation', order: 20 }));
+			menu.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, { submenu: Menus.SessionsEditorTabsBarAddTabCanvas, title: localize2('canvas.editorName', 'Canvas'), group: 'navigation', order: 20 }));
 			if (!activity.value) { activity.value = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: OPEN_SESSION_CANVAS_COMMAND_ID, title: localize2('canvas.editorName', 'Canvas'), icon: Lxicon.preview }, group: 'navigation', order: 40 }); }
 		} else { activity.clear(); }
 		for (const id of commands.keys()) { if (!active.has(id)) { commands.deleteAndDispose(id); } }

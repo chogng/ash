@@ -248,7 +248,7 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 		const registrations = new DisposableStore();
 		registrations.add(registerChatWorkspaceNavigation({ verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' }));
 		const entry = {
-			id: 'fixture.chat', content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
+			id: 'chat', workspaceMode: 'chat', content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
 			restoreCommand: SHOW_CHAT_WORKSPACE_COMMAND, conversationKind: 'chat', activityContext: 'sessions.activity.chatSelected', focus: 'conversation',
 		} as const;
 		registrations.add(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (accessor, source) => source === CHAT_WORKSPACE_ENTRY_REQUEST

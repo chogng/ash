@@ -69,51 +69,90 @@ suite('Sessions native titlebar layout', () => {
 		expect(glyph.y + glyph.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
 	}
 
-	test('Code keeps the side panel toggle at the trailing edge when its header opens and closes', async () => {
+	test('Chat and Code keep independent side panels with toggles at the trailing edge', async () => {
 		const { page } = browser;
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const mode = page.locator('.ash-window-mode-control');
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const panel = titlebar.getByRole('toolbar', { name: 'Code 侧面板', exact: true });
-		const show = panel.getByRole('button', { name: '显示 Code 侧面板', exact: true });
-		const hide = panel.getByRole('button', { name: '隐藏 Code 侧面板', exact: true });
+		const panel = titlebar.getByRole('toolbar', { name: '侧面板', exact: true });
+		const toggle = panel.getByRole('button', { name: '切换侧面板', exact: true });
 		const editor = page.locator('[data-part="editor"]');
 		const headers = titlebar.locator('.ash-sessions-titlebar-editor-headers');
-		await expect(panel).toBeHidden();
+		await expectCenteredTitlebarIcon(toggle);
+		const chatBounds = (await toggle.boundingBox())!;
+		const windowBar = (await titlebar.boundingBox())!;
+		expect(windowBar.x + windowBar.width - chatBounds.x - chatBounds.width).toBe(8);
+		await expect(editor).toBeHidden();
+		await toggle.press('Enter');
+		await expect(editor).toBeVisible();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await page.mouse.move(16, 180);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
 		await mode.getByRole('button', { name: '代码', exact: true }).click();
 		await expect(editor).toBeHidden();
-		await expectCenteredTitlebarIcon(show);
-		const closedBounds = (await show.boundingBox())!;
+		await expectCenteredTitlebarIcon(toggle);
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right-off"]')).toBeVisible();
+		const closedBounds = (await toggle.boundingBox())!;
 
-		await show.press('Enter');
-		await expect(hide).toHaveAttribute('aria-pressed', 'true');
+		await toggle.press('Enter');
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await page.mouse.move(16, 180);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right"]')).toBeVisible();
+		await toggle.hover();
+		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await page.mouse.move(16, 180);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(editor).toBeVisible();
 		const files = headers.locator('[data-editor-tool="files"] > .ash-editor-group-header');
 		await expect(files).toBeVisible();
+		const addTab = files.getByRole('button', { name: '添加标签页', exact: true });
+		await addTab.press('Enter');
+		await expect(page.getByRole('menuitem', { name: '打开文件', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: '打开更改', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(addTab).toBeFocused();
 		await expect(files.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
 		const originalWidth = (await editor.boundingBox())!.width;
 		for (const width of [1440, 1060]) {
 			await page.setViewportSize({ width, height: 900 });
 			await expect.poll(async () => {
-				const [row, body, toggle, windowBar] = await Promise.all([
-					headers.boundingBox(), editor.boundingBox(), hide.boundingBox(), titlebar.boundingBox(),
+				const [row, body, button, windowBar] = await Promise.all([
+					headers.boundingBox(), editor.boundingBox(), toggle.boundingBox(), titlebar.boundingBox(),
 				]);
-				return [Math.round(row!.x - body!.x), Math.round(row!.x + row!.width - toggle!.x), Math.round(windowBar!.x + windowBar!.width - toggle!.x - toggle!.width)];
-			}).toEqual([0, 0, 4]);
+				return [Math.round(row!.x - body!.x), Math.round(row!.x + row!.width - button!.x), Math.round(windowBar!.x + windowBar!.width - button!.x - button!.width)];
+			}).toEqual([0, 0, 8]);
 		}
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await expect(panel).toHaveCSS('-webkit-app-region', 'no-drag');
-		await expect(hide).toBeInViewport({ ratio: 1 });
-		await expect.poll(() => hide.boundingBox()).toEqual(closedBounds);
+		await expect(toggle).toBeInViewport({ ratio: 1 });
+		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
 		await page.mouse.click(closedBounds.x + closedBounds.width / 2, closedBounds.y + closedBounds.height / 2);
 		await expect(editor).toBeHidden();
 		await expect(headers).toBeHidden();
-		await expect.poll(() => show.boundingBox()).toEqual(closedBounds);
-		await show.press('Enter');
+		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
+		await toggle.press('Enter');
 		await expect(files).toBeVisible();
 		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);
+
+		const chat = mode.getByRole('button', { name: '聊天 / Agents', exact: true });
+		const code = mode.getByRole('button', { name: '代码', exact: true });
+		await chat.click();
+		await expect(chat).toHaveAttribute('aria-pressed', 'true');
+		await expect(files).toBeHidden();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await toggle.click();
+		await expect(editor).toBeHidden();
+		await code.click();
+		await expect(files).toBeVisible();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await chat.click();
+		await expect(editor).toBeHidden();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
 	});
 
 	test('Code tools move into More Actions when narrow and return when widened', async () => {

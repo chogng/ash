@@ -28,7 +28,7 @@ test('The sample Docs editor stays in Chat when Code opens or restores its side 
 	const docs = editor.locator('.ash-docs-workspace:visible');
 	const verifyCode = async () => {
 		await expect(code).toHaveAttribute('aria-pressed', 'true');
-		const show = page.getByRole('button', { name: 'Show Code side panel', exact: true });
+		const show = page.getByRole('button', { name: 'Toggle Side Panel', exact: true, pressed: false });
 		if (await show.isVisible()) await show.click();
 		await expect(editor).toBeVisible();
 		await expect(page.getByRole('tab', { name: /studio-launch\.md/u })).toHaveCount(0);

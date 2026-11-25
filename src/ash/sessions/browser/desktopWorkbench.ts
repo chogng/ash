@@ -12,6 +12,8 @@ import {
 } from '../../base/browser/ui/grid/grid.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { combinedDisposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { isRecord } from '../../base/common/types.js';
+import { localize } from '../../nls.js';
 import {
 	BrowserLayoutService,
 	getContainerDimension,
@@ -27,7 +29,7 @@ import { SessionsCodeEditorContext } from '../../workbench/common/contextkeys.js
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
-import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { ChatConversationPageContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import {
 	Workbench,
 	type IWorkbenchOptions,
@@ -38,6 +40,7 @@ import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { DesktopEditorArea } from './parts/desktopEditorArea.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import type { EditorParts } from './parts/editorParts.js';
 import { SessionsPart } from './parts/sessionsPart.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
@@ -199,6 +202,7 @@ function storedEditorWidth(value: number | undefined, fallback: number): number 
 
 const SESSIONS_LAYOUT_PRIORITY = LayoutPriority.High;
 const TERMINAL_PANEL_INITIAL_HEIGHT = 235;
+const sidePaneLastOpenKey = 'sessions.layout.sidePane.lastOpen';
 
 function createSessionsWorkbenchGridDescriptor(
 	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
@@ -388,7 +392,9 @@ export class DesktopWorkbenchLayout
 
 	private primaryPart: 'sessions' | 'editor' = 'sessions';
 	private customViewVisible = false;
-	private mainEditor: DesktopMainEditorPart | undefined;
+	private editorParts: EditorParts | undefined;
+	private reopenFilesDetails = true;
+	private get mainEditor(): DesktopMainEditorPart | undefined { return this.editorParts?.filesPart; }
 	private auxiliaryBarDocked = false;
 	private readonly auxiliaryContainers = this._register(new DisposableMap<IAuxiliaryWindow, DisposableStore>());
 	private focusedContainer: HTMLElement | undefined;
@@ -413,6 +419,14 @@ export class DesktopWorkbenchLayout
 			options.initialState ?? createDefaultSessionsWorkbenchLayoutState(this.layoutPolicy, this.initialDimension),
 		);
 		const state = this.stateModel.state;
+		const lastOpen = storageService.get(sidePaneLastOpenKey, StorageScope.PROFILE);
+		if (lastOpen !== undefined) {
+			const composition: unknown = JSON.parse(lastOpen);
+			if (!isRecord(composition) || typeof composition.editor !== 'boolean' || typeof composition.details !== 'boolean') {
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
+			}
+			this.reopenFilesDetails = composition.details;
+		}
 		this.sidebarWidth = state.sidebar.width;
 		for (const suffix of ['position', 'width', 'height', 'visible']) storageService.remove(`sessions.layout.panel.${suffix}`, StorageScope.PROFILE);
 		this.sidePaneWidth = state.editor.width;
@@ -497,12 +511,12 @@ export class DesktopWorkbenchLayout
 		if (window.window.document.hasFocus()) this.activateContainer(container);
 	}
 
-	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>, mainEditor?: DesktopMainEditorPart): void {
+	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>, editorParts?: EditorParts): void {
 		validateParts(parts);
 		if (this.grid) {
 			throw new Error('Sessions Parts are already attached');
 		}
-		this.mainEditor = mainEditor;
+		this.editorParts = editorParts;
 		for (const partId of parts.keys()) {
 			this.views.set(
 				partId,
@@ -555,7 +569,7 @@ export class DesktopWorkbenchLayout
 		const titlebar = this.view('titlebar').part;
 		const editor = this.view('editor').part;
 		if (titlebar instanceof TitlebarPart && editor instanceof DesktopEditorArea) {
-			this.registerEditorHeaderLayout(titlebar, editor, mainEditor);
+			this.registerEditorHeaderLayout(titlebar, editor, this.mainEditor);
 		}
 	}
 
@@ -778,8 +792,10 @@ export class DesktopWorkbenchLayout
 		const details = !this.auxiliaryBarDocked && wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
 		const conversationView = this.view('sessions');
 		const workspaceWidth = dimension.width;
-		// Retain the requested split while its companion conversation can fill an empty editor's space.
-		const showEditor = wanted('editor') && (area.hasContent || this.primaryPart === 'editor' || !wanted('sessions'));
+		// Chat can explicitly show its container before opening a tab, when both Parts fit.
+		const emptyChatPane = this.contextKeys.getValue(ChatConversationPageContext.key) === true
+			&& workspaceWidth >= conversationView.part.minimumWidth + editorView.minimumWidth;
+		const showEditor = wanted('editor') && (area.hasContent || emptyChatPane || this.primaryPart === 'editor' || !wanted('sessions'));
 		const eligible = !this.customViewVisible && showEditor && area.hasTools;
 		// Product editors also borrow width from their companion conversation so
 		// opening navigation does not immediately hide it again beside a document.
@@ -899,6 +915,46 @@ export class DesktopWorkbenchLayout
 		if (partId === 'auxiliarybar' && this.auxiliaryBarDocked) return !this.view(partId).part.domNode.hidden;
 		return this.isViewVisible(this.view(partId as SessionsPartId));
 	}
+
+	public isSidePaneVisible(): boolean {
+		return this.isPartVisible('editor');
+	}
+
+	public toggleSidePane(): boolean {
+		const editors = this.editorParts;
+		const code = this.contextKeys.getValue(SessionsCodeEditorContext.key) === true;
+		const chat = this.contextKeys.getValue(ChatConversationPageContext.key) === true;
+		if (!editors || this.customViewVisible || (!code && !chat)) return this.isSidePaneVisible();
+		if (this.isSidePaneVisible()) {
+			if (code) {
+				this.reopenFilesDetails = editors.filesDetailsOpen;
+				this.storageService.store(sidePaneLastOpenKey, JSON.stringify({ editor: true, details: this.reopenFilesDetails }), StorageScope.PROFILE, StorageTarget.MACHINE);
+			}
+			this.updateParts(() => {
+				// A maximized Chat editor can be the only visible center Part.
+				if (chat) this.setPartAvailable('sessions', true);
+				this.hidePart('editor');
+			});
+			this.focus();
+			return this.isSidePaneVisible();
+		}
+
+		const groups = editors.mainWindowGroups.filter(group => group.inputs.length && editors.isGroupVisible(group.id));
+		const group = chat && groups.includes(editors.activeGroup) ? editors.activeGroup : groups[0];
+		this.updateParts(() => {
+			if (code && (this.reopenFilesDetails || !group)) editors.openFiles();
+			else if (group) editors.activateGroup(group.id);
+			this.showPart('editor');
+		});
+		if (this.isSidePaneVisible()) {
+			if (code && editors.filesDetailsVisible && !editors.filesPart.isEditorVisible) editors.filesPart.auxiliaryBar.focus();
+			else if (code || group) editors.focus();
+		} else if (code) {
+			this.focus();
+		}
+		return this.isSidePaneVisible();
+	}
+
 	suppressEditorPartAutoVisibility(): IDisposable {
 		this.editorAutoVisibilitySuppressions++;
 		return toDisposable(() => this.editorAutoVisibilitySuppressions--);
