@@ -140,6 +140,24 @@ test('Typing a declared completion commit character accepts it atomically before
 	assert.equal(fixture.model.getText(), 'con');
 });
 
+test('Completion only accepts Tab when the editor uses it for editing', () => {
+	using fixture = createFixture('con');
+	accept(fixture.store, fixture.model, 1, [completion('console', 'console', LanguageCompletionItemKind.Variable)]);
+
+	fixture.editor.updateOptions({ tabFocusMode: true });
+	const navigate = keyboardEvent(fixture.dom.window, 'Tab');
+	fixture.input.element.dispatchEvent(navigate);
+	assert.equal(navigate.defaultPrevented, false);
+	assert.equal(fixture.model.getText(), 'con');
+	assert.equal(fixture.suggest.widget.visible, true);
+
+	fixture.editor.updateOptions({ tabFocusMode: false });
+	const complete = keyboardEvent(fixture.dom.window, 'Tab');
+	fixture.input.element.dispatchEvent(complete);
+	assert.equal(complete.defaultPrevented, true);
+	assert.equal(fixture.model.getText(), 'console');
+});
+
 test('Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeholder navigation', () => {
 	const fixture = createFixture('fn');
 	using resources = fixture;
@@ -165,7 +183,18 @@ test('Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, 'Tab');
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	const secondPlaceholder = Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1));
+	assert.deepEqual(fixture.editor.getSelection(), secondPlaceholder);
+
+	fixture.editor.updateOptions({ tabFocusMode: true });
+	for (const shiftKey of [false, true]) {
+		const navigate = keyboardEvent(fixture.dom.window, 'Tab', shiftKey);
+		fixture.input.element.dispatchEvent(navigate);
+		assert.equal(navigate.defaultPrevented, false);
+		assert.deepEqual(fixture.editor.getSelection(), secondPlaceholder);
+	}
+	fixture.editor.updateOptions({ tabFocusMode: false });
+
 	const previous = keyboardEvent(fixture.dom.window, 'Tab', true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);

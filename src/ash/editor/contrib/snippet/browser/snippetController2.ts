@@ -2,6 +2,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import type { Range } from '../../../common/core/range.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -84,6 +85,7 @@ export class SnippetController2 extends Disposable implements IEditorContributio
 		if (!this.isInSnippet() || event.defaultPrevented || event.isComposing || !this.editor.hasTextFocus()) return;
 		let handled = false;
 		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+			if (this.editor.getOption(EditorOption.tabFocusMode)) return;
 			handled = event.shiftKey ? this.retreat() : this.advance();
 		} else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp')
 			&& event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {

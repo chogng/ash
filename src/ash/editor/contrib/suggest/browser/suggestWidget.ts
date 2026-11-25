@@ -176,7 +176,7 @@ export class SuggestWidget extends Disposable implements IContentWidget {
 				this.accept();
 				return;
 			case 'Tab':
-				if (event.shiftKey) return;
+				if (event.shiftKey || this.editor.getOption(EditorOption.tabFocusMode)) return;
 				if (this.readState()?.selectedIndex === -1) return;
 				stopEvent(event);
 				this.accept();

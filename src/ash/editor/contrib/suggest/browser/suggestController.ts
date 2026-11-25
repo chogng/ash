@@ -170,15 +170,16 @@ export class SuggestController extends Disposable {
 			return;
 		}
 		if (
+			event.key === 'Tab' &&
+			!event.shiftKey &&
 			!event.ctrlKey &&
 			!event.altKey &&
 			!event.metaKey &&
-			event.key === 'Tab'
+			state && state.selectedIndex >= 0 &&
+			!this.editor.getOption(EditorOption.tabFocusMode)
 		) {
-			if (!event.shiftKey && state && state.selectedIndex >= 0) {
-				stopEvent(event);
-				this.acceptSelected();
-			}
+			stopEvent(event);
+			this.acceptSelected();
 		}
 	}
 
