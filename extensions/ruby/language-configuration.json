@@ -31,7 +31,7 @@
     ["'", "'"]
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(?:(?:class|module|def|if|unless|case|while|until|for|begin)\\b.*|.*\\bdo(?:\\s*\\|[^|]*\\|)?|else|elsif\\b.*|rescue\\b.*|ensure)\\s*$",
+    "increaseIndentPattern": "^(?:\\s*(?:(?:class|module|def|if|unless|case|while|until|for|begin|elsif|rescue)\\b.*|else|ensure)|(?=[^#]*$|[^#/%]*[/%]).*\\bdo(?:\\s*\\|[^|]*\\|)?|(?:[^#\"'`/%]|([\"'`])(?:\\\\.|(?!\\1)[^\\\\])*\\1)*(?<![.:@$])\\bdo(?:[ \\t]*\\|[^|]*\\|)?(?:[ \\t]*#.*)?)\\s*$",
     "decreaseIndentPattern": "^\\s*(?:end|else|elsif|when|rescue|ensure)\\b"
   },
   "folding": {

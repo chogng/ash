@@ -1,6 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 test('Stanza navigation undo and reopened history preserve subsequent edits in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
 	const page = workbench.page;
@@ -42,6 +43,40 @@ test('Stanza navigation undo and reopened history preserve subsequent edits in A
 	await file.dblclick();
 	await editor.waitForEditorContents(text => text === 'a\n\n');
 	await page.screenshot({ path: testInfo.outputPath('stanza-restored-history.png') });
+});
+
+test('Ruby Enter indents do blocks with inline comments', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const page = workbench.page;
+	const lines = [
+		['records.each do |record|', '    render'],
+		['records.each do # process each record', '    render'],
+		["records.fetch('#ready').each do |record| # process each record", '    render'],
+		['records.fetch("a \\"#ready").each do # process each record', '    render'],
+		['run(`echo #ready`) do # process the result', '    render'],
+		["records.grep(/# don't/).each do", '    render'],
+		['records.each # use do', 'render'],
+		['# use do |record|', 'render'],
+		['message = "explain do # here"', 'render'],
+		['pattern = /explain do # here/', 'render'],
+		['message = %q{explain do # here}', 'render'],
+		['record = :do # symbol', 'render'],
+	] as const;
+	const files = lines.map(([line], index) => ({ name: `block-${index}.rb`, line }));
+	await Promise.all(files.map(({ name, line }) => writeFile(join(testWorkspace.directory, name), line)));
+	await workbench.openExplorer();
+	const editor = workbench.editors.groupAt(0).editor;
+	const observed: string[][] = [];
+	for (const { name, line } of files) {
+		await page.locator('.ash-explorer').getByRole('treeitem', { name, exact: true }).dblclick();
+		await editor.waitForEditorContents(text => text === line);
+		await expect(page.locator('[data-statusbar-item-id="ash.status.editor.language"]')).toHaveText('Ruby');
+		await editor.waitForEditorFocus();
+		await editor.input.press('ControlOrMeta+End');
+		await editor.input.press('Enter');
+		await editor.waitForTypeInEditor('render');
+		observed.push((await editor.lines.allTextContents()).map(text => text.replace(/\u00a0/g, ' ')));
+	}
+	expect(observed).toEqual(lines);
 });
 
 test('Unicode overtype preserves text and undo in Ash', { tag: ['@electron-ui', '@electron-app-server', '@browser-app-server'] }, async ({ target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
