@@ -4,6 +4,36 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ useDefaultLanguageServer: false });
 
+test('built-in Lua indents open function bodies on Enter', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const cases = [
+		{ name: 'comment.lua', line: 'local function greet() -- end goes on a later line', next: '    probe' },
+		{ name: 'string.lua', line: 'function greet() print("end")', next: '    probe' },
+		{ name: 'nested.lua', line: 'function greet() if ready then print("hi") end', next: '    probe' },
+		{ name: 'closed.lua', line: 'function greet() return 42 end -- complete', next: 'probe' },
+		{ name: 'unfinished.lua', line: 'function', next: 'probe' },
+	];
+	for (const { name, line } of cases) {
+		await writeFile(join(testWorkspace.directory, name), line);
+	}
+	await workbench.openExplorer();
+	const page = workbench.page;
+	const editor = workbench.editors.groupAt(0).editor;
+	const explorer = page.locator('.ash-explorer');
+	const actual: Record<string, string | null> = {};
+	for (const { name, line } of cases) {
+		await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
+		await editor.waitForEditorContents(contents => contents === line);
+		await expect(page.locator('[data-statusbar-item-id="ash.status.editor.language"]')).toHaveText('Lua');
+		await editor.waitForEditorFocus();
+		await editor.input.press('End');
+		await editor.input.press('Enter');
+		await editor.waitForTypeInEditor('probe');
+		await expect(editor.lines).toHaveCount(2);
+		actual[name] = (await editor.lines.last().textContent())?.replace(/\u00a0/g, ' ') ?? null;
+	}
+	expect(actual).toEqual(Object.fromEntries(cases.map(({ name, next }) => [name, next])));
+});
+
 test('built-in CSS supplies completion, diagnostics, hover and formatting without installing extensions', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
 	await writeFile(join(testWorkspace.directory, 'style.css'), 'body {\n  col\n}\n');
 	await writeFile(join(testWorkspace.directory, 'format.css'), 'body{color:red;madeupprop:1;}');
