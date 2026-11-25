@@ -636,6 +636,71 @@ async fn history_reads_bypass_cached_comparisons_and_children_for_loose_and_pack
 }
 
 #[tokio::test]
+async fn commit_file_uses_tree_gitlinks_for_submodule_history() {
+    let parent = TestRepository::init();
+    parent.write("file.txt", "parent repository\n");
+    parent.commit_all("Parent commit");
+    let present = parent.git(&["rev-parse", "HEAD"]);
+
+    let dependency = TestRepository::init();
+    dependency.write("file.txt", "submodule repository\n");
+    dependency.commit_all("Submodule commit");
+    let absent = dependency.git(&["rev-parse", "HEAD"]);
+
+    let path = "vendor/dependency[1]";
+    let commit_gitlink = |target: &str| {
+        parent.git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{target},{path}"),
+        ]);
+        parent.git(&["commit", "-m", "Update submodule pointer"]);
+        parent.git(&["rev-parse", "HEAD"])
+    };
+    let added = commit_gitlink(&present);
+    let updated = commit_gitlink(&absent);
+    parent.git(&["update-index", "--force-remove", "--", path]);
+    parent.git(&["commit", "-m", "Remove submodule pointer"]);
+    let removed = parent.git(&["rev-parse", "HEAD"]);
+
+    let client = GitClient::system();
+    let repository = client.open_repository(parent.root()).await.unwrap();
+    let present_pointer = format!("Subproject commit {present}\n");
+    let absent_pointer = format!("Subproject commit {absent}\n");
+    for (before, after, original, modified) in [
+        (&present, &added, None, Some(present_pointer.as_bytes())),
+        (
+            &added,
+            &updated,
+            Some(present_pointer.as_bytes()),
+            Some(absent_pointer.as_bytes()),
+        ),
+        (&updated, &removed, Some(absent_pointer.as_bytes()), None),
+    ] {
+        let file = client
+            .commit_file(
+                &repository,
+                after,
+                Some(before),
+                Path::new(path),
+                None,
+                1024,
+            )
+            .await
+            .unwrap();
+        assert_eq!(file.original(), original);
+        assert_eq!(file.modified(), modified);
+    }
+    assert!(matches!(
+        client
+            .commit_file(&repository, &updated, None, Path::new(path), None, 1)
+            .await,
+        Err(crate::GitError::OutputLimitExceeded { .. })
+    ));
+}
+
+#[tokio::test]
 async fn history_batch_preserves_limits_missing_files_binary_and_newline_paths() {
     let source = TestRepository::init();
     source.write("file.txt", "hello\n");

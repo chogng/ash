@@ -470,7 +470,7 @@ impl GitClient {
         self.read_batch(
             repository,
             path,
-            OsString::from(":"),
+            None,
             BatchVersion::Index(version),
             maximum_bytes,
         )
@@ -488,7 +488,7 @@ impl GitClient {
         self.read_batch(
             repository,
             path,
-            OsString::from(format!("{object_id}:")),
+            Some(object_id),
             BatchVersion::History(version),
             maximum_bytes,
         )
@@ -499,7 +499,7 @@ impl GitClient {
         &self,
         repository: &crate::GitRepository,
         path: &Path,
-        prefix: OsString,
+        object_id: Option<&str>,
         version: BatchVersion,
         maximum_bytes: usize,
     ) -> GitResult<Option<Vec<u8>>> {
@@ -519,9 +519,21 @@ impl GitClient {
                 Some(batch) => batch,
                 None => {
                     let Ok(permit) = Arc::clone(&BATCH_PROCESSES).try_acquire_owned() else {
-                        let contents = self
-                            .read_content_object(repository, path, prefix.clone(), maximum_bytes)
-                            .await?;
+                        let contents = match object_id {
+                            Some(object_id) => {
+                                self.read_history_object(repository, path, object_id, maximum_bytes)
+                                    .await?
+                            }
+                            None => {
+                                self.read_content_object(
+                                    repository,
+                                    path,
+                                    OsString::from(":"),
+                                    maximum_bytes,
+                                )
+                                .await?
+                            }
+                        };
                         if !version.is_current(repository) {
                             return Err(GitError::IndexChanged);
                         }
@@ -554,8 +566,10 @@ impl GitClient {
                 .replace('\\', "/");
             #[cfg(windows)]
             let path_bytes = normalized.as_bytes();
-            let mut request = Vec::with_capacity(prefix.len() + path_bytes.len() + 1);
-            request.extend_from_slice(prefix.as_encoded_bytes());
+            let revision = object_id.unwrap_or_default();
+            let mut request = Vec::with_capacity(revision.len() + path_bytes.len() + 2);
+            request.extend_from_slice(revision.as_bytes());
+            request.push(b':');
             request.extend_from_slice(path_bytes);
             request.push(b'\n');
             let stdin = stream.stdin.as_mut().expect("batch stdin is captured");
@@ -635,6 +649,13 @@ impl GitClient {
                 return Err(GitError::IndexChanged);
             }
             *pool = Some(batch);
+            drop(pool);
+            if let (None, Some(object_id)) = (&result, object_id) {
+                // A gitlink target may live only in the submodule's object database.
+                return self
+                    .read_history_gitlink(repository, path, object_id, maximum_bytes)
+                    .await;
+            }
             Ok(result)
         })
         .await

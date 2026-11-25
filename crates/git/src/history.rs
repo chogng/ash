@@ -525,38 +525,94 @@ impl GitClient {
                 }
             }
         }
-        let mut object = OsString::from(object_id);
-        object.push(":");
-        object.push(path);
+        self.read_history_object(repository, path, object_id, maximum_bytes)
+            .await
+    }
+
+    pub(crate) async fn read_history_object(
+        &self,
+        repository: &GitRepository,
+        path: &Path,
+        object_id: &str,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
+        // `git show` prints the referenced commit when its object happens to
+        // exist in the superproject. Check the recorded tree mode first.
+        if let Some(pointer) = self
+            .read_history_gitlink(repository, path, object_id, maximum_bytes)
+            .await?
+        {
+            return Ok(Some(pointer));
+        }
+        self.read_content_object(
+            repository,
+            path,
+            OsString::from(format!("{object_id}:")),
+            maximum_bytes,
+        )
+        .await
+    }
+
+    pub(crate) async fn read_history_gitlink(
+        &self,
+        repository: &GitRepository,
+        path: &Path,
+        object_id: &str,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
+        #[cfg(not(windows))]
+        let pathspec = path.as_os_str().to_owned();
+        #[cfg(windows)]
+        let pathspec = OsString::from(
+            path.to_str()
+                .ok_or_else(|| GitError::invalid_output("git ls-tree", "non-UTF-8 Git path"))?
+                .replace('\\', "/"),
+        );
         let output = self
-            .run_query_unchecked(
+            .run_query(
                 repository.worktree_root(),
                 [
-                    OsString::from("show"),
-                    OsString::from("--no-textconv"),
-                    object,
+                    OsString::from("--literal-pathspecs"),
+                    "ls-tree".into(),
+                    "--full-tree".into(),
+                    "-z".into(),
+                    object_id.into(),
+                    "--".into(),
+                    pathspec,
                 ],
             )
             .await?;
-        if !output.status.success() {
-            return if missing_object(&output.stderr) {
-                Ok(None)
-            } else {
-                Err(GitError::CommandFailed {
-                    command: output.command,
-                    exit_code: output.status.code(),
-                    stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-                })
+        for entry in output.stdout.split(|byte| *byte == 0) {
+            let Some(metadata) = entry.strip_prefix(b"160000 commit ") else {
+                continue;
             };
+            let Some(tab) = metadata.iter().position(|byte| *byte == b'\t') else {
+                return Err(GitError::invalid_output(
+                    &output.command,
+                    "missing gitlink path",
+                ));
+            };
+            if path_from_git_bytes(&metadata[tab + 1..], &output.command)? != path {
+                continue;
+            }
+            let target = std::str::from_utf8(&metadata[..tab])
+                .ok()
+                .filter(|target| validate_object_id(target).is_ok())
+                .ok_or_else(|| {
+                    GitError::invalid_output(&output.command, "invalid gitlink object id")
+                })?;
+            let pointer = format!("Subproject commit {target}\n").into_bytes();
+            let limit_bytes = maximum_bytes.min(self.limits().max_output_bytes());
+            if pointer.len() > limit_bytes {
+                return Err(GitError::OutputLimitExceeded {
+                    command: output.command,
+                    stream: "stdout",
+                    limit_bytes,
+                });
+            }
+            return Ok(Some(pointer));
         }
-        if output.stdout.len() > maximum_bytes {
-            return Err(GitError::OutputLimitExceeded {
-                command: output.command,
-                stream: "stdout",
-                limit_bytes: maximum_bytes,
-            });
-        }
-        Ok(Some(output.stdout))
+        Ok(None)
     }
 }
 
@@ -676,13 +732,6 @@ fn validate_relative_path(path: &Path) -> GitResult<()> {
         ));
     }
     Ok(())
-}
-
-fn missing_object(stderr: &[u8]) -> bool {
-    let stderr = String::from_utf8_lossy(stderr);
-    stderr.contains("does not exist in")
-        || stderr.contains("exists on disk, but not in")
-        || stderr.contains("Path '")
 }
 
 #[cfg(test)]

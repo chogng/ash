@@ -11,6 +11,35 @@ const run = promisify(execFile);
 test.use({ gitRepository: true });
 
 
+test('SCM history shows both submodule commit pointers in the file diff', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, reloadWorkbench }) => {
+	const cwd = testWorkspace.directory;
+	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+	const present = await git('rev-parse', 'HEAD');
+	const absent = 'a'.repeat(present.length);
+	const path = 'vendor/dependency[1]';
+	await git('update-index', '--add', '--cacheinfo', `160000,${present},${path}`);
+	await git('commit', '-m', 'Add submodule');
+	await git('update-index', '--cacheinfo', `160000,${absent},${path}`);
+	await git('commit', '-m', 'Update submodule');
+
+	const { workbench } = await reloadWorkbench();
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	const toggle = history.getByRole('button', { name: 'Graph', exact: true });
+	if (await toggle.getAttribute('aria-expanded') === 'false') {
+		await toggle.click();
+	}
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	const commit = history.getByRole('treeitem', { name: /Update submodule/u });
+	await commit.getByText('Update submodule', { exact: true }).click();
+	await expect(commit).toHaveAttribute('aria-expanded', 'true');
+	await history.locator(`[data-history-path="${path}"]`).click();
+	const diff = workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible');
+	await expect(diff.locator('.stanza-diff-editor-side.original')).toContainText(`Subproject commit ${present}`);
+	await expect(diff.locator('.stanza-diff-editor-side.modified')).toContainText(`Subproject commit ${absent}`);
+});
+
 test('SCM history retains the reading position, expanded files and row actions after a commit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
