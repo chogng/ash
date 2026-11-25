@@ -1,7 +1,7 @@
 import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
@@ -83,4 +83,37 @@ test('Changes title open worktree menu switches to the resolved workspace on bot
 	}
 
 	await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeVisible();
+});
+
+test('Switch Folder Location keeps the active worktree focused when discovery omits it', { tag: ['@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const cwd = testWorkspace.directory;
+	const branch = 'folder-location-review';
+	const checkout = join(cwd, '.git', branch);
+	const marker = 'alternate-only.txt';
+	await run('git', ['worktree', 'add', '-b', branch, checkout], { cwd });
+	await writeFile(join(checkout, marker), 'alternate workspace');
+	const { page, quickaccess } = workbench;
+	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: marker, exact: true });
+	await quickaccess.runCommand('workbench.action.switchFolderLocation');
+	await quickaccess.select(branch);
+	const prompt = directoryPermissionPrompt(page);
+	await expect(prompt).toBeVisible();
+	await prompt.getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
+	await expect(file).toBeVisible();
+
+	await run('git', ['worktree', 'lock', checkout], { cwd });
+	try {
+		await quickaccess.runCommand('workbench.action.switchFolderLocation');
+		const option = (label: string) => quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-label').getByText(label, { exact: true }) });
+		// The primary appears after discovery, so the active row must survive that update.
+		await expect(option(basename(cwd))).toBeVisible();
+		const active = option(branch);
+		await expect(active).toBeVisible();
+		await expect(quickaccess.input).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id'))!);
+		await quickaccess.input.press('Enter');
+		await expect(quickaccess.element).toBeHidden();
+		await expect(file).toBeVisible();
+	} finally {
+		await run('git', ['worktree', 'unlock', checkout], { cwd });
+	}
 });

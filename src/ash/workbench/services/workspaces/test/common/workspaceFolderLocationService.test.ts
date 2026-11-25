@@ -13,7 +13,7 @@ import { ILocalGitService } from '../../../../../platform/git/common/localGitSer
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IWorkspaceFolderLocationService, type IFolderLocationChangeEvent } from '../../../../../platform/workspace/common/folderLocations.js';
+import { IWorkspaceFolderLocationService, type IFolderLocation, type IFolderLocationChangeEvent } from '../../../../../platform/workspace/common/folderLocations.js';
 import { IWorkspaceContextService, workspaceFromIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkspaceContextApi, WorkspaceEditRequest } from '../../../../../platform/workspace/common/workspaceIpc.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -26,18 +26,33 @@ import { WorkspaceFolderLocationService } from '../../common/workspaceFolderLoca
 import { IWorkspaceEditingService } from '../../common/workspaceEditing.js';
 import { WorkspaceEditingService } from '../../electron-browser/workspaceEditingService.js';
 
+type FolderLocationItem = IQuickPickItem & IFolderLocation;
+
 class TestFolderLocationPicker extends Disposable {
 	private readonly acceptEmitter = this._register(new Emitter<void>());
 	private readonly hideEmitter = this._register(new Emitter<void>());
+	private readonly itemsEmitter = this._register(new Emitter<readonly FolderLocationItem[]>());
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;
-	readonly ready = new DeferredPromise<readonly IQuickPickItem[]>();
+	private rows: readonly FolderLocationItem[] = [];
 	title = '';
-	selectedItems: readonly IQuickPickItem[] = [];
-	set items(value: readonly IQuickPickItem[]) { this.ready.complete(value); }
+	activeItems: readonly FolderLocationItem[] = [];
+	selectedItems: readonly FolderLocationItem[] = [];
+	get items(): readonly FolderLocationItem[] { return this.rows; }
+	set items(value: readonly FolderLocationItem[]) {
+		this.rows = value;
+		this.activeItems = value.slice(0, 1);
+		this.itemsEmitter.fire(value);
+	}
+	nextItems(): Promise<readonly FolderLocationItem[]> {
+		return new Promise(resolve => Event.once(this.itemsEmitter.event)(resolve));
+	}
 	show(): void { }
 	hide(): void { this.hideEmitter.fire(); }
-	accept(): void { this.acceptEmitter.fire(); }
+	accept(): void {
+		this.selectedItems = this.activeItems;
+		this.acceptEmitter.fire();
+	}
 }
 
 test('Desktop folder location command switches from the primary location and back through the host', async () => {
@@ -101,10 +116,11 @@ test('Desktop folder location command switches from the primary location and bac
 	assert.deepEqual(submitted, []);
 	dirty = false;
 	const command = commands.executeCommand('workbench.action.switchFolderLocation');
-	const items = await picker.ready.p;
+	assert.deepEqual(picker.activeItems.map(item => item.uri), [primary]);
+	const items = await picker.nextItems();
 	assert.equal(picker.title, '切换文件夹位置');
 	assert.deepEqual(items.map(item => [item.label, item.picked]), [['project', true], ['review', false]]);
-	picker.selectedItems = [items[1]!];
+	picker.activeItems = [items[1]!];
 	picker.accept();
 	await command;
 	const active = context.getWorkspace().folders[0]!;
@@ -115,6 +131,56 @@ test('Desktop folder location command switches from the primary location and bac
 	assert.equal(submitted.length, 2);
 	assert.equal(locations.isAtAlternateLocation(context.getWorkspace().folders[0]!), false);
 	assert.equal(changes[1]?.reason, 'programmatic');
+});
+
+test('Desktop folder location command preserves a focused URI across provider updates', async () => {
+	const primary = URI.file('/project');
+	const first = { uri: URI.file('/first/review'), label: 'review' };
+	const second = { uri: URI.file('/second/review'), label: 'review' };
+	using context = new TestWorkspaceService({ id: 'project', uri: primary });
+	using services = new InstantiationService();
+	using picker = new TestFolderLocationPicker();
+	services.registerInstance(IWorkspaceContextService, context);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerInstance(ILocalGitService, { listWorktrees: async () => [] } as unknown as ILocalGitService);
+	services.registerInstance(IContextKeyService, { getValue: () => undefined } as unknown as IContextKeyService);
+	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+	const submitted: URI[] = [];
+	services.registerInstance(IWorkspaceEditingService, { setFolderLocation: async (uri: URI) => { submitted.push(uri); } } as IWorkspaceEditingService);
+	using locations = services.createInstance(WorkspaceFolderLocationService);
+	services.registerInstance(IWorkspaceFolderLocationService, locations);
+	using registration = registerAction2(SwitchFolderLocationAction);
+	using commands = new CommandService(services);
+	using changes = new Emitter<void>();
+	const superseded = new DeferredPromise<IFolderLocation[]>();
+	let response = Promise.resolve([first, second]);
+	let latestToken: CancellationToken | undefined;
+	using provider = locations.registerProvider({
+		id: 'review',
+		onDidChangeLocations: changes.event,
+		provideLocations: (_primary, token) => {
+			latestToken = token;
+			return response;
+		},
+		resolveLocation: async () => undefined,
+	});
+
+	const command = commands.executeCommand('workbench.action.switchFolderLocation');
+	const initial = await picker.nextItems();
+	picker.activeItems = [initial[2]!];
+	response = superseded.p;
+	changes.fire();
+	const supersededToken = latestToken;
+	response = Promise.resolve([second, first]);
+	changes.fire();
+	const updated = await picker.nextItems();
+	assert.deepEqual(updated.map(item => item.uri), [primary, second.uri, first.uri]);
+	assert.equal(picker.activeItems[0], updated[1]);
+	assert.equal(supersededToken?.isCancellationRequested, true);
+	await superseded.complete([first]);
+	picker.accept();
+	await command;
+	assert.deepEqual(submitted, [second.uri]);
 });
 
 test('provider removal and cancellation discard in-flight folder location results', async () => {

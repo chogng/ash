@@ -1,8 +1,10 @@
 import { localize2 } from '../../../nls.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../base/common/errors.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
-import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
+import { Event } from '../../../base/common/event.js';
+import { DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
+import { basenameOrAuthority, extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceFolderLocationService, type IFolderLocation } from '../../../platform/workspace/common/folderLocations.js';
@@ -45,7 +47,7 @@ export class SwitchFolderLocationAction extends Action2 {
 		const editing = accessor.get(IWorkspaceEditingService);
 		const quickInput = accessor.get(IQuickInputService);
 		using picker = quickInput.createQuickPick<IQuickPickItem & IFolderLocation>();
-		using cancellation = new CancellationTokenSource();
+		using request = new MutableDisposable<CancellationTokenSource>();
 		using disposables = new DisposableStore();
 		disposables.add(context.onDidChangeWorkspace(() => picker.hide()));
 		const title = localize('workspace.folderLocation.switch', 'Switch Folder Location');
@@ -53,33 +55,65 @@ export class SwitchFolderLocationAction extends Action2 {
 		picker.ariaLabel = title;
 		picker.placeholder = localize('workspace.folderLocation.placeholder', 'Select a folder location');
 		picker.sortByLabel = false;
-		picker.busy = true;
-
-		let selection: IFolderLocation | undefined;
-		const closed = new Promise<void>(resolve => {
-			disposables.add(picker.onDidAccept(() => {
-				selection = picker.selectedItems[0];
-				if (selection) picker.hide();
-			}));
-			disposables.add(picker.onDidHide(() => {
-				cancellation.cancel();
-				resolve();
-			}));
+		const toItem = (location: IFolderLocation): IQuickPickItem & IFolderLocation => ({
+			...location,
+			description: location.description ?? location.uri.fsPath,
+			picked: extUriBiasedIgnorePathCase.isEqual(location.uri, folder.uri),
 		});
+		const current = toItem(locations.getLocation(folder) ?? { uri: folder.uri, label: basenameOrAuthority(folder.uri) });
+		picker.items = [current];
+
+		const selected = new DeferredPromise<IFolderLocation | undefined>();
+		disposables.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (item) {
+				void selected.complete(item);
+				picker.hide();
+			}
+		}));
+		disposables.add(picker.onDidHide(() => {
+			request.value?.cancel();
+			void selected.complete(undefined);
+		}));
+		const refresh = async (): Promise<void> => {
+			if (selected.isSettled) {
+				return;
+			}
+			request.value?.cancel();
+			const pending = new CancellationTokenSource();
+			request.value = pending;
+			picker.busy = true;
+			try {
+				const known = await locations.getFolderLocations(folder, pending.token);
+				if (pending.token.isCancellationRequested) {
+					return;
+				}
+				const active = picker.activeItems[0];
+				const items = known.map(toItem);
+				const currentItem = items.find(item => item.picked) ?? current;
+				if (currentItem === current) {
+					// Discovery can omit the directory the window is still using.
+					items.push(current);
+				}
+				const next = active && items.find(item => extUriBiasedIgnorePathCase.isEqual(item.uri, active.uri));
+				picker.items = items;
+				picker.activeItems = [next ?? currentItem];
+			} catch (error) {
+				if (!pending.token.isCancellationRequested) {
+					void selected.error(error);
+					picker.hide();
+				}
+			} finally {
+				if (!pending.token.isCancellationRequested) {
+					picker.busy = false;
+				}
+			}
+		};
+		disposables.add(Event.any(locations.onDidChangeProviders, locations.onDidChangeLocations)(refresh));
 		picker.show();
+		void refresh();
 		try {
-			const known = await locations.getFolderLocations(folder, cancellation.token);
-			if (cancellation.token.isCancellationRequested) return;
-			const items = known.map(location => ({
-				...location,
-				description: location.description ?? location.uri.fsPath,
-				picked: extUriBiasedIgnorePathCase.isEqual(location.uri, folder.uri),
-			}));
-			picker.items = items;
-			const current = items.find(item => item.picked);
-			if (current) picker.activeItems = [current];
-			picker.busy = false;
-			await closed;
+			const selection = await selected.p;
 			if (selection) await editing.setFolderLocation(selection.uri, { folder: folder.uri, reason: 'user' });
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
