@@ -43,6 +43,8 @@ export interface IGitHubService {
 
 export const IGitHubService = createServiceIdentifier<IGitHubService>('sessionsGitHubService');
 const artifactRuntimeId = 'sessions';
+// Each PR can read checks and reviews in parallel. Leave room for other requests in App Server's network lane.
+const pullRequestBatchSize = 2;
 
 /** Resolves live Issue and PR state from durable references and execution-directory branches. */
 export class GitHubService extends Disposable implements IGitHubService {
@@ -536,29 +538,30 @@ export class GitHubService extends Disposable implements IGitHubService {
 					this.changed.fire();
 				}
 			}
-			const recorded = await Promise.all(references.map(reference => this.resolveReference(binding, reference, accounts, token)));
-			const results = await Promise.all(repositories.map(async repository => {
-
-				if (token.isCancellationRequested || repository.head.type !== 'branch') {
+			const recorded = await resolvePullRequestsInBatches(references, token, reference => this.resolveReference(binding, reference, accounts, token));
+			const candidates = repositories.flatMap(repository => {
+				if (repository.head.type !== 'branch') {
 					return [];
 				}
 				// Enterprise remotes can be classified as "other" by Git; a GitHub grant identifies their host.
 				const identities = repository.remotes.flatMap(remote => remote.identity && hosts.has(remote.identity.host.toLowerCase()) ? [remote.identity] : []);
 				const branch = repository.head.name;
 				const unique = new Map(identities.map(identity => [`${identity.host}/${identity.owner}/${identity.repository}`.toLowerCase(), identity]));
-				return Promise.all([...unique.values()].flatMap(identity => {
+				return [...unique.values()].flatMap(identity => {
 					const account = accounts.find(account => account.host.toLowerCase() === identity.host.toLowerCase() && account.status === 'ready');
-					return account ? [this.resolveRepository(binding, identity, branch, identities, account.id, token, references)] : [];
-				}));
-			}));
+					return account ? [{ identity, branch, identities, accountId: account.id }] : [];
+				});
+			});
+			const discovered = await resolvePullRequestsInBatches(candidates, token, ({ identity, branch, identities, accountId }) =>
+				this.resolveRepository(binding, identity, branch, identities, accountId, token, references));
 			if (token.isCancellationRequested || this.isDisposed || (!selected && !this.management.sessions.some(candidate =>
 				candidate.sessionId === session.sessionId && this.watched.has(candidate.sessionId) && directoryKey(candidate) === directory))) {
 				return;
 			}
 			binding.assertCurrent();
-			const values = new Map(results.flat().filter(value => value !== undefined).map(value => [linkKey(value.uri.toString()), value]));
+			const values = new Map(discovered.map(value => [linkKey(value.uri.toString()), value]));
 			for (const request of recorded) {
-				if (request) { values.set(linkKey(request.uri.toString()), request); }
+				values.set(linkKey(request.uri.toString()), request);
 			}
 			this.requests.set(session.sessionId, { directory, values: [...values.values()] });
 			this.branches.set(session.sessionId, branches);
@@ -686,7 +689,8 @@ export class GitHubService extends Disposable implements IGitHubService {
 		let latestCheckAtUnixMs: number | undefined;
 		let copilotReview: IResolvedSessionPullRequest['copilotReview'];
 		if (state === 'open' || state === 'draft') {
-			const [checks, comments] = await Promise.all([
+			// Keep this batch's slot until both reads settle, even if one fails near the start.
+			const [checkResult, reviewResult] = await Promise.allSettled([
 				binding.github.readPullRequestChecks(repository, pullRequest.number, pullRequest.headCommit, token).catch(error => {
 					if (token.isCancellationRequested || isCancellationError(error)) throw error;
 					this.log.error('sessions.github', 'Unable to read the checks required by this pull request', error);
@@ -694,6 +698,10 @@ export class GitHubService extends Disposable implements IGitHubService {
 				}),
 				this.readReviewStatus(binding, repository, pullRequest.number, token),
 			]);
+			if (checkResult.status === 'rejected') throw checkResult.reason;
+			if (reviewResult.status === 'rejected') throw reviewResult.reason;
+			const checks = checkResult.value;
+			const comments = reviewResult.value;
 			checksPassed = checks.status === 'success';
 			latestCheckAtUnixMs = checks.latestCheckAtUnixMs;
 			copilotReview = comments.copilotReview;
@@ -753,6 +761,20 @@ export class GitHubService extends Disposable implements IGitHubService {
 		digest.update(JSON.stringify(revisions.sort()));
 		return { unresolved, copilotReview: { revision: digest.digest(), timestamp } };
 	}
+}
+
+async function resolvePullRequestsInBatches<T>(
+	candidates: readonly T[], token: CancellationToken, resolve: (candidate: T) => Promise<IResolvedSessionPullRequest | undefined>,
+): Promise<IResolvedSessionPullRequest[]> {
+	const requests: IResolvedSessionPullRequest[] = [];
+	for (let offset = 0; offset < candidates.length && !token.isCancellationRequested; offset += pullRequestBatchSize) {
+		const batch = await Promise.allSettled(candidates.slice(offset, offset + pullRequestBatchSize).map(resolve));
+		for (const result of batch) {
+			if (result.status === 'rejected') throw result.reason;
+			if (result.value) requests.push(result.value);
+		}
+	}
+	return requests;
 }
 
 function parseGitHubTimestamp(value: string | null | undefined): number | undefined {

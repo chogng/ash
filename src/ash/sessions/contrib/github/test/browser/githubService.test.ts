@@ -399,6 +399,75 @@ suite('Session GitHub associations', () => {
 		assert.deepEqual(requests[0].recordedReference, reference);
 	});
 
+	test('session PR refresh leaves network capacity for other requests', async () => {
+		const attached = [11, 12, 13, 14, 15, 16];
+		const discovered = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'];
+		const referenceRepository = { host: 'github.com', owner: 'team', name: 'attached' };
+		const url = (name: string, number: number) => `https://github.com/team/${name}/pull/${number}`;
+		let calls = 0;
+		let inFlight = 0;
+		let peak = 0;
+		const networkRequest = async <T>(result: T): Promise<T> => {
+			calls++;
+			inFlight++;
+			peak = Math.max(peak, inFlight);
+			await yieldEventLoop();
+			inFlight--;
+			return result;
+		};
+		using context = fixture({
+			listSessionPullRequests: async () => attached.map(number => ({ repository: referenceRepository, number })),
+			listPullRequests: (repository, state) => networkRequest({
+				items: state === GitHubIssueState.Open ? [{ ...pullRequest, headRepository: `team/${repository.name}` }] : [], nextPage: null,
+			}),
+			readPullRequest: (repository, number) => networkRequest({ ...pullRequest, number, url: url(repository.name, number) }),
+			readPullRequestChecks: () => networkRequest({ status: 'success' }),
+			listReviewThreads: () => networkRequest({ threads: [], nextCursor: null }),
+		}, {
+			graph: async () => ({ remotes: discovered.map(name => ({ name, identity: { provider: 'github', host: 'github.com', owner: 'team', repository: name } })) }),
+		});
+		const requests = await context.load();
+		assert.deepEqual(requests.map(request => request.uri.toString()), [
+			...discovered.map(name => url(name, pullRequest.number)),
+			...attached.map(number => url(referenceRepository.name, number)),
+		]);
+		assert.equal(requests.every(request => request.checksPassed), true);
+		assert.equal(peak, 4);
+		assert.equal(inFlight, 0);
+		assert.equal(calls, (attached.length + discovered.length) * 3 + discovered.length);
+	});
+
+	test('a failed review waits for its in-flight check request before starting the next batch', async () => {
+		const repository = { host: 'github.com', owner: 'team', name: 'repo' };
+		const pendingChecks = new DeferredPromise<Awaited<ReturnType<IGitHubService['readPullRequestChecks']>>>();
+		const secondReview = new DeferredPromise<void>();
+		const reads: number[] = [];
+		using context = fixture({
+			listSessionPullRequests: async () => [11, 12, 13].map(number => ({ repository, number })),
+			listPullRequests: async () => ({ items: [], nextPage: null }),
+			readPullRequest: async (_repository, number) => {
+				reads.push(number);
+				return { ...pullRequest, number, url: `https://github.com/team/repo/pull/${number}` };
+			},
+			readPullRequestChecks: async (_repository, number) => number === 11 ? pendingChecks.p : { status: 'success' },
+			listReviewThreads: async (_repository, number) => {
+				if (number === 11) throw new Error('Review unavailable');
+				if (number === 12) await secondReview.complete();
+				return { threads: [], nextCursor: null };
+			},
+		});
+		const loaded = context.load();
+		try {
+			await secondReview.p;
+			await yieldEventLoop();
+			assert.deepEqual(reads, [11, 12]);
+		} finally {
+			await pendingChecks.complete({ status: 'success' });
+		}
+		const requests = await loaded;
+		assert.deepEqual(requests.map(request => [request.number, request.state]), [[11, 'unavailable'], [12, 'open'], [13, 'open']]);
+	});
+
 	test('PR artifact merge rejects a head change after selection and dispatches against a fresh head', async () => {
 		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
 		let headCommit = 'a'.repeat(40);
@@ -639,15 +708,26 @@ suite('Session GitHub associations', () => {
 		}
 	});
 
-	test('disposing the owner cancels the in-flight GitHub request', async () => {
+	test('disposing the owner cancels in-flight PR requests and skips queued PRs', async () => {
 		const started = new DeferredPromise<CancellationToken>();
 		const pending = new DeferredPromise<GitHubPullRequest>();
-		using context = fixture({ readPullRequest: async (_repository, _number, token) => { await started.complete(token!); return pending.p; } });
+		const reads: number[] = [];
+		const repository = { host: 'github.com', owner: 'team', name: 'repo' };
+		using context = fixture({
+			listSessionPullRequests: async () => [7, 8, 9].map(number => ({ repository, number })),
+			readPullRequest: async (_repository, number, token) => {
+				reads.push(number);
+				if (number === 7) await started.complete(token!);
+				return pending.p;
+			},
+		});
 		context.service.initialize();
 		const token = await started.p;
 		context.service.dispose();
 		assert.equal(token.isCancellationRequested, true);
 		await pending.complete(pullRequest);
+		await yieldEventLoop();
+		assert.deepEqual(reads, [7, 8]);
 	});
 });
 
