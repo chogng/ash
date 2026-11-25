@@ -6,6 +6,14 @@ use std::time::Duration;
 
 pub type GitResult<T> = Result<T, GitError>;
 
+/// Known failures that prevent a linked checkout from being prepared.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitWorktreeSetupFailure {
+    PathTooLong,
+    LfsUnavailable,
+    Locked,
+}
+
 /// Failure returned while configuring, invoking, or parsing a Git operation.
 #[derive(Clone, Debug)]
 pub enum GitError {
@@ -51,6 +59,10 @@ pub enum GitError {
         exit_code: Option<i32>,
         stderr: String,
     },
+    WorktreeSetupFailed {
+        reason: GitWorktreeSetupFailure,
+        source: Box<GitError>,
+    },
     TagConflict {
         tags: Vec<String>,
     },
@@ -73,6 +85,45 @@ impl GitError {
             operation,
             detail: detail.into(),
         }
+    }
+
+    pub(crate) fn classify_worktree_setup(self) -> Self {
+        let Self::CommandFailed { stderr, .. } = &self else {
+            return self;
+        };
+        for line in stderr.lines() {
+            let diagnostic = line.to_ascii_lowercase();
+            let reason = if diagnostic.ends_with("file name too long")
+                || diagnostic.ends_with("filename too long")
+            {
+                GitWorktreeSetupFailure::PathTooLong
+            } else if diagnostic.contains("git-lfs: not found")
+                || (diagnostic.contains("git-lfs:")
+                    || diagnostic.contains("'git-lfs'")
+                    || diagnostic.contains("\"git-lfs\""))
+                    && [
+                        "command not found",
+                        "not recognized",
+                        "no such file",
+                        "was not found",
+                    ]
+                    .iter()
+                    .any(|cause| diagnostic.contains(cause))
+            {
+                GitWorktreeSetupFailure::LfsUnavailable
+            } else if diagnostic.contains("unable to create '")
+                && diagnostic.contains(".lock': file exists")
+            {
+                GitWorktreeSetupFailure::Locked
+            } else {
+                continue;
+            };
+            return Self::WorktreeSetupFailed {
+                reason,
+                source: Box::new(self),
+            };
+        }
+        self
     }
 
     pub fn invalid_output(command: impl Into<String>, detail: impl Into<String>) -> Self {
@@ -134,6 +185,7 @@ impl fmt::Display for GitError {
                 formatter,
                 "`{command}` failed with exit code {exit_code:?}: {stderr}"
             ),
+            Self::WorktreeSetupFailed { source, .. } => source.fmt(formatter),
             Self::InvalidOutput { command, detail } => {
                 write!(formatter, "`{command}` returned invalid output: {detail}")
             }
@@ -150,6 +202,7 @@ impl std::error::Error for GitError {
             Self::Io { source, .. }
             | Self::ExecutableNotFound { source }
             | Self::LaunchFailed { source } => Some(source.as_ref()),
+            Self::WorktreeSetupFailed { source, .. } => Some(source),
             _ => None,
         }
     }

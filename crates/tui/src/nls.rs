@@ -2993,6 +2993,24 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Créer l'arbre de travail",
     ),
     translation(
+        "A worktree path is too long. Shorten the workspace path or the affected file or folder name.",
+        "ワークツリーのパスが長すぎます。ワークスペースのパスか、対象のファイル名またはフォルダー名を短くしてください。",
+        "工作树路径过长。请缩短工作区路径或相关文件、文件夹的名称。",
+        "Un chemin de l’arbre de travail est trop long. Raccourcissez le chemin de l’espace de travail ou le nom du fichier ou du dossier concerné.",
+    ),
+    translation(
+        "Install Git LFS on the workspace host, add git-lfs to PATH, and retry.",
+        "ワークスペースのホストに Git LFS をインストールし、git-lfs を PATH に追加して、再試行してください。",
+        "请在工作区主机上安装 Git LFS，将 git-lfs 加入 PATH 后重试。",
+        "Installez Git LFS sur l’hôte de l’espace de travail, ajoutez git-lfs au PATH, puis réessayez.",
+    ),
+    translation(
+        "A Git lock is blocking worktree setup. Wait for the other Git operation to finish, then retry.",
+        "Git のロックによりワークツリーを作成できません。別の Git 操作が終わってから再試行してください。",
+        "Git 锁阻止了工作树创建。请等待其他 Git 操作完成后重试。",
+        "Un verrou Git empêche la création de l’arbre de travail. Attendez la fin de l’autre opération Git, puis réessayez.",
+    ),
+    translation(
         "Worktree created at",
         "ワークツリーの作成先:",
         "工作树已创建于",

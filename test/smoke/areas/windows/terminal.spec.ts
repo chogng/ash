@@ -1064,11 +1064,16 @@ test('terminal Panel position commands rotate real splits while preserving sizes
 		await expect.poll(async () => {
 			const panel = (await page.locator('[data-part="panel"]').boundingBox())!;
 			const editor = (await page.locator('[data-part="editor"]').boundingBox())!;
+			const chat = page.locator('[data-part="chat"]:visible');
+			const chatBounds = await chat.count() ? await chat.boundingBox() : null;
+			// Chat and the editor share the center. The Panel borders their combined bounds.
+			const left = Math.min(editor.x, chatBounds?.x ?? editor.x);
+			const right = Math.max(editor.x + editor.width, chatBounds ? chatBounds.x + chatBounds.width : 0);
 			switch (position) {
-				case 'Left': return Math.abs(panel.x + panel.width - editor.x) <= 8 && Math.abs(panel.y - editor.y) <= 4;
-				case 'Right': return Math.abs(editor.x + editor.width - panel.x) <= 8 && Math.abs(panel.y - editor.y) <= 4;
-				case 'Top': return Math.abs(panel.y + panel.height - editor.y) <= 8 && Math.abs(panel.x - editor.x) <= 4;
-				case 'Bottom': return Math.abs(editor.y + editor.height - panel.y) <= 8 && Math.abs(panel.x - editor.x) <= 4;
+				case 'Left': return Math.abs(panel.x + panel.width - left) <= 8 && Math.abs(panel.y - editor.y) <= 4;
+				case 'Right': return Math.abs(right - panel.x) <= 8 && Math.abs(panel.y - editor.y) <= 4;
+				case 'Top': return Math.abs(panel.y + panel.height - editor.y) <= 8 && Math.abs(panel.x - left) <= 4;
+				case 'Bottom': return Math.abs(editor.y + editor.height - panel.y) <= 8 && Math.abs(panel.x - left) <= 4;
 			}
 		}).toBe(true);
 	}

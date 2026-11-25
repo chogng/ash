@@ -300,41 +300,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const initialState = this.stateModel.state;
 		this.setChatEditorRestoreWidth(initialState.chat.visible && initialState.chat.editorHidden ? initialState.chat.width : undefined);
 		this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
-		this.projectPartFrameInsets(
-			initialState.sidebar.visible,
-			initialState.auxiliarybar.visible,
-			initialState.agentSidebar.visible,
-			initialState.panel.visible,
-			initialState.chat.visible,
-			!this.isEditorHiddenByChat(),
-		);
-		this.grid = SerializableGrid.deserialize(
-			this.domNode,
-			createWorkbenchGridDescriptor(
-				this.views,
-				this.initialDimension,
-				initialState,
-				this.activityBarLocation,
-				this.sideBarLocation,
-				!this.isEditorHiddenByChat(),
-			),
-			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
-			{
-				sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined,
-				edgeSnapping: true,
-			},
-		);
-		this.gridHandle.value = this.grid;
-		this.grid.setViewVisible(
-			this.view('statusbar'),
-			this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false,
-		);
-		this.gridChangeHandle.value = this.grid.onDidChange(() => {
-			this.projectPartFrameInsets();
-			this.publishPartVisibility();
-			// A sash changes Part geometry without resizing the window.
-			super.layout(new Dimension(this.grid.width, this.grid.height));
-		});
+		this.installGrid(initialState, this.initialDimension, !this.isEditorHiddenByChat());
 		if (this.stateModel.shouldMaximizeAuxiliaryBar) {
 			this.setAuxiliaryBarMaximized(true);
 		}
@@ -425,17 +391,45 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	private rebuildGrid(restoredState?: WorkbenchLayoutState): void {
-		const focusedElement = this.domNode.ownerDocument.activeElement as HTMLElement | null;
-		const restoreFocus = focusedElement && this.domNode.contains(focusedElement);
 		const auxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(false);
 		const state = restoredState ?? this.state;
 		const visibleState = this.restoreChatWithEditor ? { ...state, chat: { ...state.chat, visible: false } } : state;
-		const editorVisible = this.isPartVisible('editor');
-		const bannerVisible = this.isPartVisible('banner');
+		this.replaceGrid(visibleState, this.isPartVisible('editor'));
+		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(true);
+	}
+
+	private replaceGrid(state: WorkbenchLayoutState, editorVisible: boolean): void {
+		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+		const focusedPart = focused && [...this.views.values()].find(view => view.part.domNode.contains(focused));
 		const dimension = new Dimension(
 			this.grid.width || getContainerDimension(this.domNode).width,
 			this.grid.height || getContainerDimension(this.domNode).height,
+		);
+		this.installGrid(state, dimension, editorVisible, this.isPartVisible('banner'));
+		this.layout(dimension);
+		// The new Grid reparents the existing Parts and can blur a surviving input.
+		if (focusedPart && focused?.isConnected && this.grid.isViewVisible(focusedPart)) {
+			focused.focus({ preventScroll: true });
+		} else if (focusedPart?.part === this.views.get('editor')?.part && this.isEditorHiddenByChat()) {
+			this.focus();
+		}
+	}
+
+	private installGrid(
+		state: WorkbenchLayoutState,
+		dimension: IDimension,
+		editorVisible: boolean,
+		bannerVisible = false,
+	): void {
+		const auxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
+		this.projectPartFrameInsets(
+			!auxiliaryBarMaximized && state.sidebar.visible,
+			auxiliaryBarMaximized || state.auxiliarybar.visible,
+			!auxiliaryBarMaximized && state.agentSidebar.visible,
+			!auxiliaryBarMaximized && state.panel.visible,
+			!auxiliaryBarMaximized && state.chat.visible,
+			!auxiliaryBarMaximized && editorVisible,
 		);
 		this.gridChangeHandle.clear();
 		this.gridHandle.clear();
@@ -444,11 +438,12 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			createWorkbenchGridDescriptor(
 				this.views,
 				dimension,
-				visibleState,
+				state,
 				this.activityBarLocation,
 				this.sideBarLocation,
 				editorVisible,
 				bannerVisible,
+				auxiliaryBarMaximized,
 			),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
 			{
@@ -467,10 +462,6 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			// A sash changes Part geometry without resizing the window.
 			super.layout(new Dimension(this.grid.width, this.grid.height));
 		});
-		this.layout(dimension);
-		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(true);
-		// Rebuilding the topology reparents surviving Parts and otherwise blurs their inputs.
-		if (restoreFocus && focusedElement.isConnected) focusedElement.focus({ preventScroll: true });
 	}
 
 	/** Overlays can read offsets before Parts exist; the mounted Grid then owns titlebar geometry. */
@@ -539,9 +530,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	/** Re-applies the layout state from the currently selected storage workspace. */
 	restoreWorkspaceState(workbenchState: WorkbenchState = this.stateModel.workbenchState): void {
 		this.stateModel.workbenchState = workbenchState;
-		const maximizeAuxiliaryBar = this.stateModel.shouldMaximizeAuxiliaryBar;
-		this.applyState(this.stateModel.state);
-		this.setAuxiliaryBarMaximized(maximizeAuxiliaryBar);
+		this.applyState(this.stateModel.state, this.stateModel.shouldMaximizeAuxiliaryBar);
 		this.saveState();
 	}
 
@@ -664,6 +653,15 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	public hidePart(partId: WorkbenchPartId): void {
+		const covered = this.auxiliaryBarRestoreState;
+		if (covered && (partId === 'sidebar' || partId === 'agentSidebar' || partId === 'panel' || partId === 'chat')) {
+			// The maximized Auxiliary Bar covers these Parts, but a close still updates the retained layout.
+			this.auxiliaryBarRestoreState = {
+				...covered,
+				layout: { ...covered.layout, [partId]: { ...covered.layout[partId], visible: false } },
+			};
+			return;
+		}
 		if (partId === 'auxiliarybar') this.setAuxiliaryBarMaximized(false);
 		const chatHadFocus = partId === 'chat' && this.hasFocus('chat');
 		if (partId === 'chat') {
@@ -708,34 +706,26 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.stateModel.save(this.state);
 	}
 
-	private applyState(state: WorkbenchLayoutState): void {
-		this.setAuxiliaryBarMaximized(false);
-		this.setEditorHiddenByChat(false);
-		if (this.isPanelMaximized()) {
-			this.toggleMaximizedPanel();
-		}
+	private applyState(state: WorkbenchLayoutState, auxiliaryBarMaximized = false): void {
+		const previousPosition = this.panelPosition;
+		const wasAuxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
+		const editorHiddenByChat = this.views.has('chat') && state.chat.visible && state.chat.editorHidden;
+		this.panelPosition = state.panel.position;
+		this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
 		this.panelRestoredWidth = state.panel.width;
 		this.panelRestoredHeight = state.panel.height;
-		if (this.panelPosition !== state.panel.position) {
-			this.panelPosition = state.panel.position;
-			this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
-			this.rebuildGrid(state);
-			this.panelPositionEmitter.fire(positionToString(this.panelPosition));
+		this.panelSizeBeforeMaximize = undefined;
+		this.restoreChatWithEditor = false;
+		this.auxiliaryBarRestoreState = auxiliaryBarMaximized
+			? { layout: state, editorVisible: !editorHiddenByChat }
+			: undefined;
+		this.setChatEditorRestoreWidth(!auxiliaryBarMaximized && editorHiddenByChat ? state.chat.width : undefined);
+		this.replaceGrid(state, !editorHiddenByChat);
+		if (previousPosition !== this.panelPosition) this.panelPositionEmitter.fire(positionToString(this.panelPosition));
+		if (wasAuxiliaryBarMaximized !== auxiliaryBarMaximized) {
+			this.stateModel.auxiliaryBarWasLastMaximized = auxiliaryBarMaximized;
+			this.auxiliaryBarMaximizedEmitter.fire();
 		}
-		this.setPartSize('sidebar', this.getPartSize('sidebar').with(state.sidebar.width));
-		this.setPartSize('auxiliarybar', this.getPartSize('auxiliarybar').with(state.auxiliarybar.width));
-		this.setPartSize('agentSidebar', this.getPartSize('agentSidebar').with(state.agentSidebar.width));
-		this.setPartSize('chat', this.getPartSize('chat').with(state.chat.width));
-		this.setPartSize(
-			'panel',
-			this.panelDimension(isHorizontal(this.panelPosition) ? state.panel.height : state.panel.width),
-		);
-		this.updatePartsVisibility(['sidebar'], state.sidebar.visible);
-		this.updatePartsVisibility(['auxiliarybar'], state.auxiliarybar.visible);
-		this.updatePartsVisibility(['agentSidebar'], state.agentSidebar.visible);
-		this.updatePartsVisibility(['panel'], state.panel.visible);
-		this.updatePartsVisibility(['chat'], state.chat.visible);
-		this.setEditorHiddenByChat(state.chat.visible && state.chat.editorHidden);
 	}
 
 	private updatePartsVisibility(partIds: readonly WorkbenchPartId[], visible: boolean): void {
@@ -886,13 +876,27 @@ function createWorkbenchGridDescriptor(
 	sideBarLocation: SideBarLocation,
 	editorVisible = true,
 	bannerVisible = false,
+	auxiliaryBarMaximized = false,
 ): SerializedGridDescriptor {
 	const leaf = (
 		partId: WorkbenchPartId,
 		size: number,
 		visible = true,
 		priority: LayoutPriority = LayoutPriority.Normal,
-	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
+	): SerializedGridDescriptor => {
+		// Keep ordinary sizes in the descriptor even when the Auxiliary Bar covers these Parts.
+		if (auxiliaryBarMaximized) {
+			switch (partId) {
+				case 'auxiliarybar': visible = true; break;
+				case 'sidebar':
+				case 'agentSidebar':
+				case 'panel':
+				case 'chat':
+				case 'editor': visible = false; break;
+			}
+		}
+		return { type: 'leaf', data: partId, size, visible, priority };
+	};
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bannerHeight = requiredView(views, 'banner').minimumHeight;
 	const statusbarHeight = requiredView(views, 'statusbar').minimumHeight;

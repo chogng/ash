@@ -2,6 +2,14 @@ use ash_thread_store::ThreadStoreError;
 use std::fmt;
 use std::time::Instant;
 
+/// Actionable failures reported by the host that prepares a Thread's worktree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorktreeSetupFailure {
+    PathTooLong,
+    LfsUnavailable,
+    Locked,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {
     Cancelled(String),
@@ -29,6 +37,10 @@ pub enum CoreError {
     PolicyCircuitBreaker(String),
     ReviewContextChanged,
     WorkspaceCheckpointConflict,
+    WorktreeSetupFailed {
+        reason: WorktreeSetupFailure,
+        diagnostic: String,
+    },
     ToolRepetition(String),
     CommandConflict,
     ThreadStore(ThreadStoreError),
@@ -73,6 +85,7 @@ impl fmt::Display for CoreError {
             Self::WorkspaceCheckpointConflict => {
                 formatter.write_str("workspace changed after its history checkpoint")
             }
+            Self::WorktreeSetupFailed { diagnostic, .. } => formatter.write_str(diagnostic),
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),
             Self::ThreadStore(error) => error.fmt(formatter),

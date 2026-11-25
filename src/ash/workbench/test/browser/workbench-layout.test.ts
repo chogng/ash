@@ -1657,15 +1657,34 @@ test('Workbench layout re-applies the active workspace state after storage switc
 	});
 	harness.layout.layout(new Dimension(1_000, 700));
 	harness.layout.hidePart('auxiliarybar');
+	harness.layout.hidePart('panel');
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
 
 	storage.switchWorkspace('workspace-b');
 	harness.layout.restoreWorkspaceState();
 	assert.equal(harness.layout.isPartVisible('auxiliarybar'), true);
+	harness.layout.showPart('panel');
+	harness.layout.setPanelPosition(Position.RIGHT);
+	harness.layout.setAuxiliaryBarMaximized(true);
+	await storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 
+	const panelVisibility: boolean[] = [];
+	using watchVisibility = harness.layout.onDidChangePartVisibility(({ partId, visible }) => {
+		if (partId === 'panel') panelVisibility.push(visible);
+	});
 	storage.switchWorkspace('workspace-a');
 	harness.layout.restoreWorkspaceState();
 	assert.equal(harness.layout.isPartVisible('auxiliarybar'), false);
+	assert.equal(harness.layout.isPartVisible('editor'), true);
+	assert.equal(harness.layout.isPartVisible('panel'), false);
+	assert.deepEqual(panelVisibility, []);
+
+	storage.switchWorkspace('workspace-b');
+	harness.layout.restoreWorkspaceState();
+	assert.equal(harness.layout.isAuxiliaryBarMaximized(), true);
+	assert.equal(harness.layout.isPartVisible('editor'), false);
+	assert.equal(harness.layout.getPanelPosition(), Position.RIGHT);
+	assert.deepEqual(panelVisibility, []);
 
 	harness.disposables.dispose();
 	storage.dispose();
@@ -3233,7 +3252,11 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 		},
 		{ active: undefined, last: 'test.panel.second' },
 	);
-	assert.equal(await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel), first);
+	assert.equal(await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel, false, { reveal: false }), first);
+	assert.equal(panel.domNode.hidden, true);
+	assert.equal(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), 'test.panel.first');
+	assert.equal(events.at(-1), 'close:test.panel.second');
+	assert.equal(await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel), first);
 	assert.deepEqual(
 		{
 			events,

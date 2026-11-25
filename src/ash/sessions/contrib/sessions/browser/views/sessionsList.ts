@@ -999,7 +999,7 @@ export class SessionsList extends DomWidget {
 			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications, {
 				projectScope: this.mode,
 				openInNewWindow: this.mode === 'code' ? () => this.commands.executeCommand('sessions.openInNewWindow', selection) : undefined,
-				didPin: sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }),
+				didPin: sessionId => this.revealAfterPin(item, { sessionId }),
 			})], { untitledSessionId: selection.session.untitledSessionId });
 			return;
 		}
@@ -1043,13 +1043,10 @@ export class SessionsList extends DomWidget {
 				}
 				if (action.id === 'sessions.list.togglePin') return {
 					...action, run: async () => {
+						const catalogId = this.catalogRows.get(SessionsListTree.id(item.domNode))?.id;
 						const id = await action.run();
-						if (typeof id === 'string' && !this.isDisposed) {
-							if (this.catalog) {
-								// A pinned Chat conversation keeps its row inside the project.
-								if (item.domNode.isConnected) this.tree.focusRow(item.domNode);
-							} else this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${id}` });
-						}
+						if (catalogId !== undefined) this.revealAfterPin(item, { catalogId });
+						else if (typeof id === 'string') this.revealAfterPin(item, { sessionId: id });
 					}
 				};
 				return action;
@@ -1058,6 +1055,40 @@ export class SessionsList extends DomWidget {
 				if (this.rowMenu.value === menu) this.rowMenu.clear();
 			},
 		});
+	}
+
+	private revealAfterPin(item: SessionListItem, target: { readonly sessionId: string; } | { readonly catalogId: string; }): void {
+		if (this.isDisposed) return;
+		let rowId: string | undefined;
+		if ('catalogId' in target) {
+			// Prefer the canonical shortcut when present, then a selected project row.
+			if (this.catalogRows.get(target.catalogId)?.selected) {
+				rowId = target.catalogId;
+			} else {
+				for (const [id, row] of this.catalogRows) {
+					if (row.id === target.catalogId && row.selected && this.tree.model.has(id)) {
+						rowId = id;
+						break;
+					}
+				}
+			}
+		} else {
+			const active = this.displayedSelection;
+			if (active?.kind === 'session' && active.active.session.sessionId === target.sessionId) {
+				const thread = `chat:${JSON.stringify([target.sessionId, active.active.threadId])}`;
+				rowId = this.tree.model.has(thread) ? thread : `session:${target.sessionId}`;
+			}
+		}
+		const row = rowId && this.tree.model.getElement(rowId);
+		if (row && rowId) {
+			this.tree.expandTo(rowId);
+			this.tree.setSelection([rowId]);
+			// Embedded lists rely on focus to scroll their shared viewport.
+			this.tree.reveal(rowId);
+			this.tree.focusRow(row, this.entry === undefined);
+		} else if (item.domNode.isConnected) {
+			this.tree.focusRow(item.domNode, true);
+		}
 	}
 
 	private collapseKey(key: string): string {
@@ -1191,6 +1222,14 @@ export class SessionsList extends DomWidget {
 		});
 	}
 
+	private get displayedSelection(): SessionsViewSelection | undefined {
+		if (this.catalog || this.customViews.activeCustomView.get()) return undefined;
+		const activeContext = this.entry?.activeContext;
+		if (activeContext ? !this.contextKeys?.getValue(activeContext)
+			: this.mode === 'code' && this.contextKeys?.getValue(CodeConversationPageContext.key) === false) return undefined;
+		return this.viewService.activeSelection;
+	}
+
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
 		const focused = this.list.contains(ownerDocument.activeElement) ? ownerDocument.activeElement as HTMLElement : undefined;
@@ -1223,9 +1262,7 @@ export class SessionsList extends DomWidget {
 		this.catalogRows.clear();
 		this.catalogProjects.clear();
 		this.catalogFileSources.clear();
-		const activeSelection = this.catalog || this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
-			|| !this.entry && this.mode === 'code' && this.contextKeys?.getValue(CodeConversationPageContext.key) === false
-			? undefined : this.viewService.activeSelection;
+		const activeSelection = this.displayedSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
 		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project' | 'file', icon = restingIcon, forkReference = false): SessionListItem => {
@@ -1238,7 +1275,8 @@ export class SessionsList extends DomWidget {
 				const leading = (kind === 'conversation' || kind === 'file')
 					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', forkReference || kind === 'file' ? undefined : setIcon)
 					: undefined;
-				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading));
+				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading,
+					(item, id) => this.revealAfterPin(item, { catalogId: id })));
 			}
 			item.domNode.dataset.item = key;
 			if (item.leadingIcon && !forkReference && !this.catalogRows.has(key)) {
@@ -1491,7 +1529,9 @@ export class SessionsList extends DomWidget {
 			item.target = target;
 			const open = () => this.openRow(options => this.viewService.openSession(target.sessionId, target.threadId, options));
 			const management = alert?.reason === 'input' ? activeChats.find(chat => chat.threadId === alert.threadId)?.management ?? session.management : session.management;
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, open, management);
+			const selected = current !== undefined && (current.threadId === thread.threadId
+				|| this.search.hasQuery && !nested.some(chat => chat.threadId === current.threadId));
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), selected, open, management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			this.updateSessionPreview(item, session, thread, projectName);
@@ -1777,7 +1817,8 @@ class SessionListItem extends AbstractDisposable {
 	}
 
 	constructor(ownerDocument: Document, contextMenus: IContextMenuService, private readonly statusIcons: typeof managementIcons,
-		private readonly kind: 'conversation' | 'draft' | 'project' | 'file', icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon,
+		private readonly kind: 'conversation' | 'draft' | 'project' | 'file', icon: ThemeIcon | undefined, readonly leadingIcon: SessionLeadingIcon | undefined,
+		private readonly didPinCatalogRow: (item: SessionListItem, id: string) => void,
 	) {
 		super();
 		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
@@ -1907,8 +1948,9 @@ class SessionListItem extends AbstractDisposable {
 					icon: entry.pinned ? Lxicon.pinFilled : Lxicon.pin,
 					run: async () => {
 						const row = this.catalogRow;
-						await row?.setPinned?.(!row.pinned);
-						if (this.button.isConnected) this.button.focus({ preventScroll: true });
+						if (!row?.setPinned) return;
+						await row.setPinned(!row.pinned);
+						this.didPinCatalogRow(this, row.id);
 					},
 				});
 			}

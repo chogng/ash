@@ -400,7 +400,8 @@ impl GitClient {
             ["read-tree", "--reset", "-u", tree.as_str()],
         )
         .await?
-        .require_success()?;
+        .require_success()
+        .map_err(GitError::classify_worktree_setup)?;
         Ok(())
     }
 

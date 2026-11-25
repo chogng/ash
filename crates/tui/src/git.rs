@@ -528,7 +528,7 @@ fn git_error_message(error: ash_app_server_client::ClientError, action: GitActio
             GitAction::CreateWorktree | GitAction::DeleteWorktree | GitAction::ListWorktrees | GitAction::ResolveWorktree => "The connected App Server does not support worktree management. Restart it to use the current version.".into(),
             _ => "The connected App Server does not support this branch action. Restart it to use the current version.".into(),
         },
-        ash_app_server_client::ClientError::Server { code: -32061, .. } => match action {
+        ash_app_server_client::ClientError::Server { code: -32061, message } => match action {
             GitAction::List => "Could not read project branches.".into(),
             GitAction::ListWorktrees => "Could not read project worktrees.".into(),
             GitAction::ResolveWorktree => "Could not open worktree. It may have changed or is in use.".into(),
@@ -540,7 +540,12 @@ fn git_error_message(error: ash_app_server_client::ClientError, action: GitActio
                     .into()
             }
             GitAction::DeleteBranch => "Could not delete branch. It may be unmerged or checked out.".into(),
-            GitAction::CreateWorktree => "Could not create worktree. Check its name and existing directories.".into(),
+            GitAction::CreateWorktree => match message.as_str() {
+                "GitWorktreePathTooLong" => "A worktree path is too long. Shorten the workspace path or the affected file or folder name.".into(),
+                "GitWorktreeLfsUnavailable" => "Install Git LFS on the workspace host, add git-lfs to PATH, and retry.".into(),
+                "GitWorktreeLocked" => "A Git lock is blocking worktree setup. Wait for the other Git operation to finish, then retry.".into(),
+                _ => "Could not create worktree. Check its name and existing directories.".into(),
+            },
             GitAction::DeleteWorktree => "Could not delete worktree. It may have changes or be in use.".into(),
         },
         ash_app_server_client::ClientError::Server { code: -32060, .. } => {

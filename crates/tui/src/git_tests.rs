@@ -393,6 +393,45 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
     };
     assert!(!checkout.exists());
     assert_eq!(remaining.actions.len(), 2);
+
+    // A required smudge filter reproduces a missing Git LFS command through the real checkout.
+    std::fs::write(
+        repo.join(".gitattributes"),
+        "tracked.txt filter=ash-fixture-lfs\n",
+    )
+    .unwrap();
+    let missing_lfs = repo
+        .join("missing/git-lfs")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let smudge = format!("\"{missing_lfs}\" smudge");
+    for args in [
+        ["add", ".gitattributes"].as_slice(),
+        ["commit", "-m", "track files with LFS"].as_slice(),
+        ["config", "filter.ash-fixture-lfs.required", "true"].as_slice(),
+        ["config", "filter.ash-fixture-lfs.smudge", &smudge].as_slice(),
+    ] {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{:?}", output.stderr);
+    }
+    let failed = super::execute(
+        &mut client,
+        super::Command::CreateWorktree {
+            name: "needs-lfs".into(),
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        failed,
+        super::Event::WorktreeCreateFailed(message)
+            if message == "Install Git LFS on the workspace host, add git-lfs to PATH, and retry."
+    ));
+    assert_eq!(client.list_sessions().unwrap().sessions, before);
+
     assert_eq!(client.list_sessions().unwrap().sessions, before);
 }
 
@@ -502,6 +541,32 @@ fn git_operation_error_is_explained_without_a_protocol_code() {
         message,
         "Could not switch branch. Check uncommitted changes and worktree use."
     );
+    for (kind, expected) in [
+        (
+            "GitWorktreePathTooLong",
+            "工作树路径过长。请缩短工作区路径或相关文件、文件夹的名称。",
+        ),
+        (
+            "GitWorktreeLfsUnavailable",
+            "请在工作区主机上安装 Git LFS，将 git-lfs 加入 PATH 后重试。",
+        ),
+        (
+            "GitWorktreeLocked",
+            "Git 锁阻止了工作树创建。请等待其他 Git 操作完成后重试。",
+        ),
+    ] {
+        let message = super::git_error_message(
+            ash_app_server_client::ClientError::Server {
+                code: -32061,
+                message: kind.into(),
+            },
+            super::GitAction::CreateWorktree,
+        );
+        assert_eq!(
+            crate::nls::localize(crate::nls::Language::Chinese, &message),
+            expected
+        );
+    }
 }
 
 #[test]

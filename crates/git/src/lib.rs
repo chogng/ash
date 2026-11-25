@@ -29,6 +29,7 @@ pub use client::GitVersion;
 pub use environment::GitEnvironmentSummary;
 pub use error::GitError;
 pub use error::GitResult;
+pub use error::GitWorktreeSetupFailure;
 pub use history::GitBlameLine;
 pub use history::GitCommitChange;
 pub use history::GitCommitDetails;

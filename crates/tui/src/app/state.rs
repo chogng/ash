@@ -2764,7 +2764,8 @@ impl App {
                     );
                 }
                 GitEvent::WorktreeCreateFailed(error) => {
-                    self.panels_mut().set_command_message(error)
+                    let message = crate::nls::localize_owned(self.language(), error);
+                    self.panels_mut().set_command_message(message);
                 }
                 GitEvent::WorktreeDeleted {
                     result: Ok(choices),

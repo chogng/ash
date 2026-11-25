@@ -142,7 +142,8 @@ impl GitClient {
         ];
         self.run_mutation(repository.worktree_root(), arguments)
             .await?
-            .require_success()?;
+            .require_success()
+            .map_err(GitError::classify_worktree_setup)?;
         self.open_repository(&request.checkout_root).await
     }
 
@@ -161,7 +162,8 @@ impl GitClient {
         ];
         self.run_mutation(repository.worktree_root(), arguments)
             .await?
-            .require_success()?;
+            .require_success()
+            .map_err(GitError::classify_worktree_setup)?;
         self.open_repository(&request.checkout_root).await
     }
 
@@ -191,7 +193,8 @@ impl GitClient {
         ];
         self.run_mutation(repository.worktree_root(), arguments)
             .await?
-            .require_success()?;
+            .require_success()
+            .map_err(GitError::classify_worktree_setup)?;
         self.open_repository(&request.checkout_root).await
     }
 

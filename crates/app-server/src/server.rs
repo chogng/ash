@@ -5451,12 +5451,45 @@ fn check_chat_reference_sources<'a>(
     Ok(())
 }
 
+fn worktree_setup_failure(
+    error: &(dyn std::error::Error + 'static),
+) -> Option<core_api::WorktreeSetupFailure> {
+    let reason = std::iter::successors(Some(error), |error| error.source()).find_map(|error| {
+        match error.downcast_ref::<ash_git::GitError>() {
+            Some(ash_git::GitError::WorktreeSetupFailed { reason, .. }) => Some(reason),
+            _ => None,
+        }
+    })?;
+    Some(match reason {
+        ash_git::GitWorktreeSetupFailure::PathTooLong => {
+            core_api::WorktreeSetupFailure::PathTooLong
+        }
+        ash_git::GitWorktreeSetupFailure::LfsUnavailable => {
+            core_api::WorktreeSetupFailure::LfsUnavailable
+        }
+        ash_git::GitWorktreeSetupFailure::Locked => core_api::WorktreeSetupFailure::Locked,
+    })
+}
+
+fn worktree_setup_error_name(reason: core_api::WorktreeSetupFailure) -> AppServerErrorName {
+    match reason {
+        core_api::WorktreeSetupFailure::PathTooLong => AppServerErrorName::GitWorktreePathTooLong,
+        core_api::WorktreeSetupFailure::LfsUnavailable => {
+            AppServerErrorName::GitWorktreeLfsUnavailable
+        }
+        core_api::WorktreeSetupFailure::Locked => AppServerErrorName::GitWorktreeLocked,
+    }
+}
+
 pub(super) fn core_error(error: CoreError) -> RpcError {
     // Keep private diagnostics actionable while the public protocol uses stable error names.
     eprintln!("App Server core operation failed: {error}");
     let mut rpc = match &error {
         CoreError::WorkspaceCheckpointConflict => {
             RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict)
+        }
+        CoreError::WorktreeSetupFailed { reason, .. } => {
+            RpcError::new(-32010, worktree_setup_error_name(*reason))
         }
         CoreError::CommandConflict => RpcError::new(-32004, AppServerErrorName::CommandConflict),
         CoreError::NotFound(_) => RpcError::new(-32011, AppServerErrorName::CoreOperationFailed),

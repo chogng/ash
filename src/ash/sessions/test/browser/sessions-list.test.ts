@@ -38,7 +38,7 @@ import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { Menus } from '../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
@@ -536,6 +536,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	using changes = new Emitter<void>();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const opened: string[] = [];
+	const listModel = new SessionsListModelService(storage);
 	const executed: unknown[][] = [];
 	let menu: IContextMenuDelegate | undefined;
 	const contextMenus = {
@@ -552,18 +553,27 @@ test('SessionsList updates passive status without changing row identity or selec
 	const commands = {
 		executeCommand: async (...args: unknown[]) => {
 			executed.push(args);
-			if (args[0] === 'sessions.list.togglePin') { storage.store('sessions.list.pinned.background', true, StorageScope.PROFILE, StorageTarget.USER); return 'background'; }
+			if (args[0] === 'sessions.list.togglePin') {
+				if (listModel.isSessionPinned(session)) listModel.unpinSession(session);
+				else listModel.pinSession(session);
+				return session.sessionId;
+			}
 		}
 	} as ICommandService;
 	const updatedAt = new Date(Date.now() - 3 * 60_000);
 	let session = {
 		sessionId: 'background', kind: 'code' as const, title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
 		workspace: { authorityId: 'local', root: '/work/fixture' },
-		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const, updatedAt }],
+		chats: [
+			{ threadId: 'root', title: 'Background session', origin: { type: 'root' as const }, status: 'active' as const, updatedAt },
+			{ threadId: 'nested', title: 'Nested thread', origin: { type: 'root' as const }, status: 'active' as const, updatedAt },
+			{ threadId: 'sibling', title: 'Searchable sibling', origin: { type: 'root' as const }, status: 'active' as const, updatedAt },
+		],
 		management: { status: 'working', statusChangedAtUnixMs: 10 },
 	};
 	const sessionService = { pendingArchives: noPendingArchives, get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
-	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
+	let activeSelection: SessionsViewSelection | undefined;
+	const viewService = { onDidChange: changes.event, get activeSelection() { return activeSelection; }, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
 	const summaries = new Map<HTMLElement, HoverContent>();
 	const summaryPlacements = new Map<HTMLElement, Pick<HoverSetupOptions, 'anchor' | 'anchorAlignment' | 'anchorAxisAlignment' | 'anchorPosition'>>();
@@ -579,7 +589,7 @@ test('SessionsList updates passive status without changing row identity or selec
 			});
 		},
 	} as IHoverService;
-	using list = new TestSessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
+	using list = new TestSessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, listModel, new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
@@ -641,6 +651,33 @@ test('SessionsList updates passive status without changing row identity or selec
 	await pin.run();
 	assert.ok(button.closest('[data-parent-section="pinned"]'));
 	assert.equal(dom.window.document.activeElement, button);
+	assert.equal(list.getViewState().top, 37);
+	menu!.onHide?.(false);
+
+	activeSelection = { kind: 'session', active: { session: session as unknown as ISession, threadId: 'nested' } };
+	changes.fire();
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	await menu!.getActions()[0]!.run();
+	menu!.onHide?.(false);
+
+	// The next Pin moves the open Thread into a section the user last left collapsed.
+	storage.store('sessions.list.chat.collapsed.pinned', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	await menu!.getActions()[0]!.run();
+	const nested = list.domNode.querySelector('[data-item^="chat:"] .ash-sessions-list-item');
+	assert.equal(list.domNode.querySelector('[data-section="pinned"] button')?.getAttribute('aria-expanded'), 'true');
+	assert.equal(nested?.getAttribute('aria-current'), 'page');
+	assert.equal(dom.window.document.activeElement, nested);
+	menu!.onHide?.(false);
+
+	// A search result can retain the parent while filtering out the active Thread.
+	list.restoreViewState({ query: 'Searchable sibling', top: 0, focus: 'session:background' });
+	assert.equal(nested?.isConnected, false);
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	await menu!.getActions()[0]!.run();
+	assert.equal(button.getAttribute('aria-current'), 'page');
+	assert.equal(dom.window.document.activeElement, button);
+	assert.deepEqual(opened, []);
 	menu!.onHide?.(false);
 	list.dispose();
 	assert.equal(summaries.size, 0);

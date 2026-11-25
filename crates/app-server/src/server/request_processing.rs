@@ -72,48 +72,21 @@ impl RequestIds {
 impl RequestLane {
     fn for_method(method: Option<ClientMethod>) -> Self {
         match method {
+            // Registered cancellation requests reserve control capacity by protocol convention.
+            Some(method) if method.as_str().ends_with("/cancel") => Self::Control,
             Some(ClientMethod::SessionRuntimeInvoke | ClientMethod::BrowserFaviconRead) => Self::Network,
             Some(method) if super::github_processor::GitHubRequestProcessor::handles(method)
                 || super::issue_operations::IssueRequestProcessor::handles(method) => Self::Network,
             Some(
                 ClientMethod::WireLogStop
-                | ClientMethod::VoiceStartCancel
                 | ClientMethod::VoiceStop
                 | ClientMethod::VoiceInterrupt
                 | ClientMethod::VoiceRejectDelegation
-                | ClientMethod::ToolAppCancel
-                | ClientMethod::ToolResourceCancel
-                | ClientMethod::BrowserFaviconCancel
-                | ClientMethod::GitHubCancel
-                | ClientMethod::SessionRuntimeCancel
-                | ClientMethod::ApprovalEnvironmentCancel
-                | ClientMethod::AssetImportCancel
-                | ClientMethod::DictationModelCancel
-                | ClientMethod::GitCheckIgnoreCancel
-                | ClientMethod::GitCloneCancel
-                | ClientMethod::GitTransportCancel
-                | ClientMethod::TestingCancel
-                | ClientMethod::SyntaxCancel
                 | ClientMethod::PdfCancelRender
                 | ClientMethod::PdfClose
-                | ClientMethod::LanguageCancel
-                | ClientMethod::IssueReporterSearchCancel
-                | ClientMethod::ContentSearchCancel
-                | ClientMethod::FileFuzzyCancel
-                | ClientMethod::InputCompletionsCancel
-                | ClientMethod::FileGlobCancel
-                | ClientMethod::FsCancelElevatedWrite
-                | ClientMethod::ExtensionHostInvokeCancel
-                | ClientMethod::AccountLoginCancel
                 | ClientMethod::AutomationStop
-                | ClientMethod::QueueCancel
                 | ClientMethod::TerminalClose
-                | ClientMethod::DebugAdapterClose
-                | ClientMethod::AttachmentUploadCancel
-                | ClientMethod::DictationCancel
-                | ClientMethod::McpOAuthCancel
-                | ClientMethod::ConnectorOAuthCancel
-                | ClientMethod::ConnectorDeviceOAuthCancel,
+                | ClientMethod::DebugAdapterClose,
             ) => Self::Control,
             Some(
                 ClientMethod::VoiceStart

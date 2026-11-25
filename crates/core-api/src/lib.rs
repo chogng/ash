@@ -58,6 +58,7 @@ pub use diagnostics::InferencePurpose;
 pub use diagnostics::ModelAttemptObserver;
 pub use diagnostics::ModelInvocationReceipt;
 pub use error::CoreError;
+pub use error::WorktreeSetupFailure;
 pub use hooks::AfterToolHookRequest;
 pub use hooks::BeforeToolHookDecision;
 pub use hooks::BeforeToolHookRequest;

@@ -24,6 +24,17 @@ use worktree::ManagedDirTarget;
 #[path = "thread_dir_binding_tests.rs"]
 mod tests;
 
+fn worktree_provision_error(
+    operation: &str,
+    error: &(dyn std::error::Error + 'static),
+) -> CoreError {
+    let diagnostic = format!("{operation}: {error}");
+    match super::worktree_setup_failure(error) {
+        Some(reason) => CoreError::WorktreeSetupFailed { reason, diagnostic },
+        None => CoreError::Journal(diagnostic),
+    }
+}
+
 impl GitTurnChangesRuntime {
     pub(super) fn bind_prepared_directory(
         &self,
@@ -799,7 +810,7 @@ impl GitTurnChangesRuntime {
                     }),
             )
             .map_err(|error| {
-                CoreError::Journal(format!("cannot prepare destination directory: {error}"))
+                worktree_provision_error("cannot prepare destination directory", error.as_ref())
             })?;
         Ok(())
     }
@@ -886,7 +897,9 @@ impl GitTurnChangesRuntime {
                     },
                 }),
             )
-            .map_err(|error| CoreError::Journal(format!("cannot provision Thread dir: {error}")))?;
+            .map_err(|error| {
+                worktree_provision_error("cannot provision Thread dir", error.as_ref())
+            })?;
         if let ThreadOrigin::Message {
             workspace: ash_protocol::WorkspaceCheckpoint::Git { repositories, .. },
             ..

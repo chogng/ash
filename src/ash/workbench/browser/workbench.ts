@@ -1569,12 +1569,7 @@ export class Workbench extends Disposable {
 			const isStartup = isStartupRestoration;
 			isStartupRestoration = false;
 			deferredPaneLocations.clear();
-			// Restore retained containers against ordinary visibility. Revealing a
-			// hidden container during restoration must not discard a maximized startup.
-			const auxiliaryBarMaximized = layout.isAuxiliaryBarMaximized();
-			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
-			let restoreAuxiliaryBarMaximized = false;
 			for (const [location, part] of paneParts) {
 				const partId = panes.getPartId(location);
 				const visible = layout.isPartVisible(partId);
@@ -1589,7 +1584,6 @@ export class Workbench extends Disposable {
 					layout.hidePart(partId);
 					continue;
 				}
-				restoreAuxiliaryBarMaximized ||= auxiliary;
 				if (isStartup && !visible) continue;
 				if (active) continue;
 				// Restore retained content without changing the saved visibility of its region.
@@ -1598,15 +1592,9 @@ export class Workbench extends Disposable {
 					if (location === ViewContainerLocation.Panel) { performance.mark('ash.workbench.panel-restore-start'); }
 					if (location === ViewContainerLocation.AuxiliaryBar) { performance.mark('ash.workbench.auxiliary-restore-start'); }
 				}
-				openings.push(views.openViewContainer(containerId));
-				if (!visible) { views.closeViewContainer(containerId); }
+				openings.push(panes.openPaneComposite(containerId, location, false, { reveal: false }));
 			}
-			try { await Promise.all(openings); }
-			finally {
-				if (auxiliaryBarMaximized && restoreAuxiliaryBarMaximized) {
-					layout.setAuxiliaryBarMaximized(true);
-				}
-			}
+			await Promise.all(openings);
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
 		// The shell can use its bootstrap colors while extension themes load.

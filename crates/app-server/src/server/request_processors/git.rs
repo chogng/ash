@@ -1348,7 +1348,13 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                     symlink_folders: params.symlink_folders,
                 },
             ))
-            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+            .map_err(|error| {
+                eprintln!("App Server worktree creation failed: {error:#}");
+                let name = crate::server::worktree_setup_failure(error.as_ref())
+                    .map(crate::server::worktree_setup_error_name)
+                    .unwrap_or(AppServerErrorName::GitOperationFailed);
+                RpcError::new(-32061, name)
+            })?;
         // List results use canonical paths; match that spelling so the new checkout is selected.
         let path = dunce::canonicalize(path)
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;

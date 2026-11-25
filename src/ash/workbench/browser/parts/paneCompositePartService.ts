@@ -32,7 +32,12 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 		}
 	}
 
-	public async openPaneComposite(id: string | undefined, location: ViewContainerLocation, focus = false): Promise<PaneComposite | undefined> {
+	public async openPaneComposite(
+		id: string | undefined,
+		location: ViewContainerLocation,
+		focus = false,
+		{ reveal = true } = {},
+	): Promise<PaneComposite | undefined> {
 		const part = this.parts.get(location);
 		if (!part) return undefined;
 		const containerId = id ?? part.getCompositeIdToRestore();
@@ -59,7 +64,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 			part.addComposite(composite);
 		}
 		part.showComposite(container.id, focus);
-		this.layout.showPart(this.getPartId(location));
+		if (reveal) this.layout.showPart(this.getPartId(location));
 		return composite;
 	}
 

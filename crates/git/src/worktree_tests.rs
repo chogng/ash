@@ -5,6 +5,7 @@ use super::parse_worktrees;
 use crate::GitClient;
 use crate::GitError;
 use crate::GitNamedWorktreeRequest;
+use crate::GitWorktreeSetupFailure;
 use crate::test_support::TestRepository;
 
 #[tokio::test(flavor = "current_thread")]
@@ -72,7 +73,32 @@ async fn creates_a_linked_worktree_on_a_new_named_branch() {
     let checkout = repository.path("named-worktree");
     let request =
         GitNamedWorktreeRequest::new(checkout.clone(), head.clone(), "ash/topic".into()).unwrap();
-    git.create_named_worktree(&opened, &request).await.unwrap();
+    repository.write(".git/refs/heads/ash/topic.lock", "");
+    assert!(matches!(
+        git.create_named_worktree(&opened, &request).await,
+        Err(GitError::WorktreeSetupFailed {
+            reason: GitWorktreeSetupFailure::Locked,
+            ..
+        })
+    ));
+    std::fs::remove_file(repository.path(".git/refs/heads/ash/topic.lock")).unwrap();
+    let linked = git.create_named_worktree(&opened, &request).await.unwrap();
+    let tree = git.resolve_tree(&opened, &head).await.unwrap();
+    let index_lock = linked.git_dir().join("index.lock");
+    std::fs::write(&index_lock, "").unwrap();
+    assert!(matches!(
+        git.install_worktree_tree(&linked, &tree).await,
+        Err(GitError::WorktreeSetupFailed {
+            reason: GitWorktreeSetupFailure::Locked,
+            ..
+        })
+    ));
+    std::fs::remove_file(index_lock).unwrap();
+    git.install_worktree_tree(&linked, &tree).await.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("tracked.txt")).unwrap(),
+        "base\n"
+    );
 
     assert_eq!(repository.git(&["branch", "--show-current"]), "main");
     assert_eq!(
