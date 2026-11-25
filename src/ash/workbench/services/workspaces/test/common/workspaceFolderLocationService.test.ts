@@ -16,8 +16,9 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { IWorkspaceFolderLocationService, type IFolderLocation, type IFolderLocationChangeEvent } from '../../../../../platform/workspace/common/folderLocations.js';
 import { IWorkspaceContextService, workspaceFromIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkspaceContextApi, WorkspaceEditRequest } from '../../../../../platform/workspace/common/workspaceIpc.js';
-import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { SwitchFolderLocationAction } from '../../../../browser/actions/workspaceActions.js';
+import { IDebugService, type IDebugSession } from '../../../../contrib/debug/common/debug.js';
 import { CommandService } from '../../../commands/common/commandService.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IHostService } from '../../../host/browser/host.js';
@@ -76,6 +77,18 @@ test('Desktop folder location command switches from the primary location and bac
 	};
 	services.registerInstance(ILocalGitService, git as ILocalGitService);
 	services.registerInstance(IFileDialogService, {} as IFileDialogService);
+	const confirmations: IConfirmationDialogOptions[] = [];
+	services.registerInstance(IDialogService, {
+		confirm: async (options: IConfirmationDialogOptions) => {
+			confirmations.push(options);
+			return { confirmed: true };
+		},
+	} as IDialogService);
+	let debugStopped = false;
+	services.registerInstance(IDebugService, {
+		sessions: [{ id: 'debug' } as IDebugSession],
+		stopAll: async () => { debugStopped = true; },
+	} as unknown as IDebugService);
 	services.registerInstance(IHostService, {} as IHostService);
 	let dirty = true;
 	services.registerInstance(IWorkingCopyService, {
@@ -96,6 +109,7 @@ test('Desktop folder location command switches from the primary location and bac
 		editWorkspace: async request => {
 			submitted.push(request);
 			assert.equal(request.operation, 'folderLocation');
+			if (request.reason === 'user') assert.equal(debugStopped, true);
 			context.updateWorkspace({
 				...original,
 				folders: [{ ...original.folders[0]!, uri: URI.parse(request.target) }],
@@ -131,6 +145,13 @@ test('Desktop folder location command switches from the primary location and bac
 	assert.equal(submitted.length, 2);
 	assert.equal(locations.isAtAlternateLocation(context.getWorkspace().folders[0]!), false);
 	assert.equal(changes[1]?.reason, 'programmatic');
+	assert.deepEqual(confirmations, [{
+		title: '切换文件夹位置',
+		message: '要将文件夹位置切换到“review”吗？',
+		detail: '切换会停止此窗口中正在运行的任务和调试会话。',
+		primaryButton: '停止并切换',
+		destructive: true,
+	}]);
 });
 
 test('Desktop folder location command preserves a focused URI across provider updates', async () => {

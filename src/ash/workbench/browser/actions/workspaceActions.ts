@@ -21,7 +21,9 @@ import { ADD_ROOT_FOLDER_COMMAND_ID, PICK_WORKSPACE_FOLDER_COMMAND_ID, SET_ROOT_
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IWorkspaceEditingService } from '../../services/workspaces/common/workspaceEditing.js';
 import { EnterMultiRootWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../common/contextkeys.js';
-import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IDebugService } from '../../contrib/debug/common/debug.js';
+import { ITaskService } from '../../contrib/tasks/common/taskService.js';
 import { localize } from '../../../nls.js';
 import { status } from '../../../base/browser/ui/aria/aria.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
@@ -42,10 +44,14 @@ export class SwitchFolderLocationAction extends Action2 {
 		if (accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key)) return;
 		const context = accessor.get(IWorkspaceContextService);
 		const locations = accessor.get(IWorkspaceFolderLocationService);
-		const folder = context.getWorkspace().folders[0];
+		const workspace = context.getWorkspace();
+		const folder = workspace.folders[0];
 		if (!folder || !locations.canSetLocation(folder)) return;
 		const editing = accessor.get(IWorkspaceEditingService);
 		const quickInput = accessor.get(IQuickInputService);
+		const dialogs = accessor.get(IDialogService);
+		const tasks = accessor.getOptional(ITaskService);
+		const debug = accessor.getOptional(IDebugService);
 		using picker = quickInput.createQuickPick<IQuickPickItem & IFolderLocation>();
 		using request = new MutableDisposable<CancellationTokenSource>();
 		using disposables = new DisposableStore();
@@ -114,7 +120,28 @@ export class SwitchFolderLocationAction extends Action2 {
 		void refresh();
 		try {
 			const selection = await selected.p;
-			if (selection) await editing.setFolderLocation(selection.uri, { folder: folder.uri, reason: 'user' });
+			if (!selection || workspace !== context.getWorkspace() || extUriBiasedIgnorePathCase.isEqual(selection.uri, folder.uri)) return;
+			if (tasks?.activeRuns.length || debug?.sessions.length) {
+				const { confirmed } = await dialogs.confirm({
+					title,
+					message: localize('workspace.folderLocation.confirmSwitch', 'Switch the folder location to “{0}”?', selection.label),
+					detail: localize('workspace.folderLocation.stopsRunningWork', 'Switching stops running tasks and debug sessions in this window.'),
+					primaryButton: localize('workspace.folderLocation.stopAndSwitch', 'Stop and Switch'),
+					destructive: true,
+				});
+				if (!confirmed || workspace !== context.getWorkspace()) return;
+				editing.validateFolders([selection.uri]);
+				// Stop work while the current runtime can still service shutdown requests.
+				if (debug?.sessions.length) await debug.stopAll();
+				if (tasks) {
+					for (const run of tasks.activeRuns) {
+						if (workspace !== context.getWorkspace()) return;
+						if (run.status === 'running') await tasks.terminate(run);
+					}
+				}
+				if (workspace !== context.getWorkspace()) return;
+			}
+			await editing.setFolderLocation(selection.uri, { folder: folder.uri, reason: 'user' });
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
 		}

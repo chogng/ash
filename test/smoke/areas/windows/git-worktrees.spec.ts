@@ -11,6 +11,50 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
+test('Switch Folder Location confirms before stopping a running task', { tag: '@electron-app-server' }, async ({ application, testWorkspace, workbench }) => {
+	const cwd = await realpath(testWorkspace.directory);
+	const checkout = join(cwd, '.git', 'batch44-review');
+	await run('git', ['worktree', 'add', '-b', 'batch44-review', checkout], { cwd });
+	await writeFile(join(checkout, 'review-only.txt'), 'Review checkout');
+	await mkdir(join(cwd, '.vscode'), { recursive: true });
+	await writeFile(join(cwd, 'watch.cjs'), "require('node:fs').writeFileSync('watch.pid', String(process.pid)); setInterval(() => {}, 1000);");
+	await writeFile(join(cwd, '.vscode', 'tasks.json'), JSON.stringify({
+		version: '2.0.0',
+		tasks: [{ label: 'Watch project', type: 'process', command: process.execPath, args: ['watch.cjs'] }],
+	}));
+	const switchLocation = async (label: string): Promise<void> => {
+		await workbench.quickaccess.runCommand('workbench.action.switchFolderLocation');
+		await workbench.quickaccess.select(label);
+	};
+	const reviewFile = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'review-only.txt', exact: true });
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Watch project');
+	const pidPath = join(cwd, 'watch.pid');
+	await expect.poll(() => readFile(pidPath, 'utf8').catch(() => '')).toMatch(/^\d+$/u);
+	const pid = Number(await readFile(pidPath, 'utf8'));
+	const taskIsRunning = (): boolean => {
+		try { process.kill(pid, 0); return true; }
+		catch (error) {
+			if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+			throw error;
+		}
+	};
+
+	const title = 'Switch Folder Location';
+	const canceled = await workbench.dialogs.confirm(application, title, 'Cancel', () => switchLocation('batch44-review'), 5_000);
+	expect(canceled.message).toBe('Switch the folder location to “batch44-review”?');
+	expect(canceled.detail).toBe('Switching stops running tasks and debug sessions in this window.');
+	await expect(directoryPermissionPrompt(workbench.page)).toBeHidden();
+	await expect(reviewFile).toBeHidden();
+	expect(taskIsRunning()).toBe(true);
+
+	await workbench.dialogs.confirm(application, title, 'Stop and Switch', () => switchLocation('batch44-review'));
+	const permission = directoryPermissionPrompt(workbench.page);
+	await expect(permission).toBeVisible();
+	await expect.poll(taskIsRunning).toBe(false);
+	await permission.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+	await expect(reviewFile).toBeVisible();
+});
 
 test('Changes title worktree menu creates a detached checkout and protects local changes before deletion', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
