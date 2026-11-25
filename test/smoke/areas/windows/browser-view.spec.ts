@@ -1437,6 +1437,42 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	});
 }
 
+test('desktop browser restores the tab icon after going back from a failed navigation', { tag: '@electron-ui' }, async ({ workbench }) => {
+	const favicon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
+	let firstVisit = true;
+	const server = createServer((request, response) => {
+		if (request.url === '/failed') { request.socket.destroy(); return; }
+		response.setHeader('Content-Type', 'text/html');
+		// A fresh response on Back must not mask a missing retained icon.
+		const icon = request.url === '/' && firstVisit ? `<link rel="icon" href="${favicon}">` : '';
+		if (request.url === '/') firstVisit = false;
+		response.end(`<title>Favicon recovery</title>${icon}`);
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	try {
+		const endpoint = server.address();
+		if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing favicon fixture endpoint'); }
+		const url = `http://127.0.0.1:${endpoint.port}/`;
+		const failedUrl = `http://localhost:${endpoint.port}/failed`;
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
+		const editor = page.locator('.ash-browser-editor');
+		const address = editor.getByRole('textbox', { name: 'Browser address', exact: true });
+		const tabIcon = page.getByRole('tab', { name: 'Favicon recovery', exact: true }).locator('img');
+		await address.fill(url); await address.press('Enter');
+		await expect(tabIcon).toHaveAttribute('src', favicon);
+		await address.fill(failedUrl); await address.press('Enter');
+		await expect(editor.getByRole('status')).toContainText('Unable to load page:');
+		await expect(page.getByRole('tab').locator(`img[src="${favicon}"]`)).toHaveCount(0);
+		await editor.getByRole('button', { name: 'Back', exact: true }).click();
+		await expect(address).toHaveValue(url);
+		await expect(tabIcon).toHaveAttribute('src', favicon);
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
 test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	let finishSlowLoad: (() => void) | undefined;
 	const server = createServer((request, response) => {

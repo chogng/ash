@@ -285,7 +285,8 @@ export class BrowserView extends Disposable {
 	private readonly history: IBrowserSessionHistory;
 	private readonly readPublicFavicon: BrowserViewOptions['readPublicFavicon'];
 	private historyItem: IBrowserHistoryItemHandle | undefined;
-	private favicon: string | undefined;
+	private documentFavicon: string | undefined;
+	private faviconNavigationState: 'pending' | 'failed' | 'committed' = 'pending';
 	private faviconRevision = 0;
 	private explicitNavigation = true;
 	private readonly preloadFrames = new Map<WebFrameMain, string>();
@@ -889,7 +890,7 @@ export class BrowserView extends Disposable {
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
 			if (mainFrame && !inPlace) {
 				this.faviconRevision++;
-				this.favicon = undefined;
+				if (this.faviconNavigationState !== 'failed') this.faviconNavigationState = 'pending';
 				this.cancelPasswordChoice();
 				if (this.passwordSave) {
 					this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordSave.id });
@@ -916,9 +917,12 @@ export class BrowserView extends Disposable {
 			_event: ElectronEvent,
 			url: string,
 		) => {
+			const nextUrl = normalizeBrowserViewUrl(url);
 			this.faviconRevision++;
-			this.favicon = undefined;
-			this.url = normalizeBrowserViewUrl(url);
+			// Chromium can return to the previous document without announcing its favicon again.
+			if (this.faviconNavigationState !== 'failed' || this.url !== nextUrl) this.documentFavicon = undefined;
+			this.faviconNavigationState = 'committed';
+			this.url = nextUrl;
 			this.recordVisit();
 			this.emitState();
 		});
@@ -950,6 +954,8 @@ export class BrowserView extends Disposable {
 				isMainFrame: boolean,
 			) => {
 				if (!isMainFrame) return;
+				this.faviconRevision++;
+				this.faviconNavigationState = 'failed';
 				this.errorDescription = errorDescription;
 				this.emit({
 					type: 'loadFailed',
@@ -1022,7 +1028,12 @@ export class BrowserView extends Disposable {
 		this.historyItem = this.history.add(this.url, this.webContents.getTitle(), this.favicon, explicit);
 	}
 
+	private get favicon(): string | undefined {
+		return this.faviconNavigationState === 'committed' ? this.documentFavicon : undefined;
+	}
+
 	private async updateFavicon(candidates: readonly string[]): Promise<void> {
+		if (this.faviconNavigationState !== 'committed') return;
 		const revision = ++this.faviconRevision;
 		const pageOrigin = URL.parse(this.url)?.origin;
 		// Live tab icons do not depend on whether the session persists browsing history.
@@ -1042,7 +1053,7 @@ export class BrowserView extends Disposable {
 			}
 			if (this.signal.aborted || revision !== this.faviconRevision) return;
 			if (image) {
-				this.favicon = image;
+				this.documentFavicon = image;
 				this.historyItem?.update({ favicon: image });
 				this.emitState();
 				return;
