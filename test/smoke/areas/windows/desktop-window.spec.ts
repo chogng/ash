@@ -198,6 +198,42 @@ test('desktop Recents removes shared history without deleting projects and stays
 	expect(await history('getRecentlyOpened')).toEqual({ workspaces: [] });
 });
 
+test('Welcome keeps its illustration while refreshing the editor window count', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.openWelcome');
+	const welcome = page.getByRole('region', { name: 'Welcome', exact: true });
+	const graphic = welcome.locator('.ash-agents-window-graphic');
+	await expect(graphic.locator('figure > svg')).toHaveCount(2);
+	const renderings = await graphic.evaluateHandle(element => {
+		const illustrated: boolean[] = [];
+		const observer = new MutationObserver(changes => {
+			for (const { addedNodes } of changes) {
+				for (const node of addedNodes) {
+					if (node instanceof HTMLElement && node.matches('.ash-agents-window-graphic')) {
+						illustrated.push(node.querySelector('svg') !== null);
+					}
+				}
+			}
+		});
+		observer.observe(element.parentElement!, { childList: true });
+		return { illustrated, observer };
+	});
+	try {
+		const opened = application.waitForEvent('window');
+		await graphic.getByRole('button', { name: 'Open new editor window', exact: true }).click();
+		await new Workbench(await opened).waitForReady();
+		await page.getByRole('tab', { name: 'Agent Sessions Welcome', exact: true }).click();
+		await expect(welcome).toBeHidden();
+		await page.getByRole('tab', { name: 'Welcome', exact: true }).click();
+		await expect(graphic).toHaveClass(/many-windows-to-one/);
+		expect(await renderings.evaluate(state => state.illustrated)).toEqual([true]);
+	} finally {
+		await renderings.evaluate(state => state.observer.disconnect());
+		await renderings.dispose();
+	}
+});
+
 persistedZoomTest('desktop window commands update and persist zoom', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;

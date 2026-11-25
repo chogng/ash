@@ -1,5 +1,5 @@
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { resolveAgentsWindowGraphicDesign } from '../../chat/browser/agentSessions/agentsWindowGraphic.js';
+import { resolveAgentsWindowGraphicDesign, type AgentsWindowGraphicDesign } from '../../chat/browser/agentSessions/agentsWindowGraphic.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWorkspacesService, recentWorkspaceUri } from '../../../../platform/workspaces/common/workspaces.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -33,6 +33,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	private focusedContext: IContextKey<boolean> | undefined;
 	private recentGeneration = 0;
 	private graphicGeneration = 0;
+	private automaticGraphic: AgentsWindowGraphicDesign | undefined;
 
 	constructor(
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
@@ -119,19 +120,23 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		this.content.setAgentsWindowAction(action);
 		const variant = this.configuration.getValue<AgentsWindowGraphicVariant>(agentsWindowGraphicConfiguration.key);
 		if (!action || variant !== AgentsWindowGraphicVariant.Auto) {
+			this.automaticGraphic = undefined;
 			this.content.setAgentsWindowGraphic(resolveAgentsWindowGraphicDesign(variant, undefined));
 			return;
 		}
-		this.content.setAgentsWindowGraphic(undefined);
+		// Keep the current automatic graphic on screen while the native window list refreshes.
+		this.content.setAgentsWindowGraphic(this.automaticGraphic);
 		// The native registry is authoritative. Managed Agents and auxiliary windows are not editors.
 		void this.host.getWindows({ includeAuxiliaryWindows: false }).then(windows => {
 			if (!this.isDisposed && generation === this.graphicGeneration) {
-				this.content?.setAgentsWindowGraphic(resolveAgentsWindowGraphicDesign(variant, windows.filter(window => window.kind === 'editor').length > 1));
+				this.automaticGraphic = resolveAgentsWindowGraphicDesign(variant, windows.filter(window => window.kind === 'editor').length > 1);
+				this.content?.setAgentsWindowGraphic(this.automaticGraphic);
 			}
 		}, error => {
 			if (!this.isDisposed && generation === this.graphicGeneration) {
 				console.error('Failed to enumerate editor windows', error);
-				this.content?.setAgentsWindowGraphic(AgentsWindowGraphicVariant.WindowComparison);
+				this.automaticGraphic ??= AgentsWindowGraphicVariant.WindowComparison;
+				this.content?.setAgentsWindowGraphic(this.automaticGraphic);
 			}
 		});
 	}
