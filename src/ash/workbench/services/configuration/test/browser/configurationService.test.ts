@@ -4,7 +4,9 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../../../base/common/resources.js';
 import { TestConfigurationFiles, TestConfigurationService, TestWorkspaceService } from '../common/testServices.js';
+import { ConfigurationRegistry, ConfigurationScope } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { AbstractPolicyService } from '../../../../../platform/policy/common/policy.js';
 
 test('Workspace initialization reads user settings once for migration and parsing', async () => {
 	let reads = 0;
@@ -103,19 +105,54 @@ test('provider settings retain JSONC, layered directory values and external chan
 		}
 	});
 	await configuration.initialize(files);
-	assert.deepEqual(configuration.getValue('rust-analyzer', { resource: first }), {
+	const firstSettings = configuration.getValue('rust-analyzer', { resource: first });
+	assert.deepEqual(firstSettings, {
 		cargo: { extraEnv: { USER_LIB: '/user/lib', WORKSPACE_LIB: '/workspace/lib' }, allTargets: false, buildScripts: { enable: false } },
 	});
 	assert.deepEqual(configuration.getValue('rust-analyzer', { resource: second }), {
 		cargo: { extraEnv: { USER_LIB: '/user/lib' }, allTargets: false },
 	});
+	assert.equal(configuration.getValue('rust-analyzer', { resource: URI.joinPath(first, 'src', 'lib.rs') }), firstSettings);
 	assert.deepEqual(configuration.getValue<{ 'rust-analyzer': unknown; }>()['rust-analyzer'], {
 		cargo: { extraEnv: { USER_LIB: '/user/lib' }, allTargets: false },
 	});
 	let changed = false;
 	using listener = configuration.onDidChangeConfiguration(event => { changed ||= event.affectsConfiguration('rust-analyzer', { resource: first }); });
 	await files.writeFile({ resource: settings, content: '{}' }, { create: false, overwrite: true });
-	await configuration.reloadConfiguration();
+	await configuration.reloadConfiguration(configuration.getWorkspace().folders[0]!);
 	assert.equal(changed, true);
 	assert.deepEqual(configuration.getValue('rust-analyzer', { resource: first }), configuration.getValue('rust-analyzer', { resource: second }));
+});
+
+test('Language-scoped configuration reuses reads and follows user and policy changes', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'test.tabSize', defaultValue: 4, parse: value => value as number, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, policy: { name: 'ManagedTabSize' } });
+	class Policies extends AbstractPolicyService {
+		set(tabSize: number | undefined): void { this.accept(tabSize === undefined ? {} : { ManagedTabSize: tabSize }); }
+		protected async refresh(): Promise<void> { }
+	}
+	using policies = new Policies();
+	policies.set(8);
+	using configuration = new TestConfigurationService({ registry, source: '{ "test.tabSize": 2, "[typescript]": { "test.tabSize": 6 } }' });
+	await configuration.initialize(configuration.fileService, policies);
+	const typescript = { overrideIdentifier: 'typescript', resource: URI.file('/project/a.ts') };
+	const javascript = { overrideIdentifier: 'javascript', resource: URI.file('/project/b.js') };
+	const previous = configuration.getValue('test', typescript);
+	assert.deepEqual(previous, { tabSize: 8 });
+	assert.equal(configuration.getValue('test', { ...typescript, resource: URI.file('/project/c.ts') }), previous);
+	assert.equal(configuration.inspect('test.tabSize', typescript).policyValue, 8);
+	assert.equal(configuration.getValue('test', javascript), configuration.getValue('test'));
+
+	const seen: unknown[] = [];
+	using listener = configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('test.tabSize', typescript)) seen.push(configuration.getValue('test', typescript));
+	});
+	policies.set(undefined);
+	assert.deepEqual(configuration.getValue('test', typescript), { tabSize: 6 });
+	assert.deepEqual(configuration.getValue('test', javascript), { tabSize: 2 });
+	await configuration.write('{ "test.tabSize": 3, "[typescript]": { "test.tabSize": 7 } }');
+	assert.deepEqual(configuration.getValue('test', typescript), { tabSize: 7 });
+	assert.deepEqual(configuration.getValue('test', javascript), { tabSize: 3 });
+	assert.deepEqual(previous, { tabSize: 8 });
+	assert.deepEqual(seen, [{ tabSize: 6 }, { tabSize: 7 }]);
 });

@@ -53,7 +53,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private defaultConfiguration = ConfigurationModel.createEmptyModel(configurationModelLog);
 	private userConfiguration = this.defaultConfiguration;
 	private effectiveConfiguration = this.defaultConfiguration;
-	private consolidated: { base: ConfigurationModel; workspace: ConfigurationModel; policy: ConfigurationModel; model: ConfigurationModel; } | undefined;
+	private consolidated: { base: ConfigurationModel; workspace: ConfigurationModel; policy: ConfigurationModel; read: ReturnType<typeof scopedConfigurationReader>; } | undefined;
 	private workspaceConfiguration = this.defaultConfiguration;
 	private policyConfiguration = this.defaultConfiguration;
 	private readonly folderConfigurations = new Map<string, { root: URI; resource: FolderConfiguration; model: ConfigurationModel; }>();
@@ -397,16 +397,15 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	}
 
 	protected resolveSection(section: string, overrides?: IConfigurationOverrides): unknown {
-		if (overrides === undefined) {
-			const base = this.effectiveConfiguration, workspace = this.workspaceConfiguration, policy = this.policyConfiguration;
-			// Layers are immutable snapshots. Reuse their combined read model until
-			// an owner replaces a layer, including reads made inside change events.
-			if (!this.consolidated || this.consolidated.base !== base || this.consolidated.workspace !== workspace || this.consolidated.policy !== policy) {
-				this.consolidated = { base, workspace, policy, model: base.merge(workspace, policy) };
-			}
-			return this.consolidated.model.getValue(section);
+		const base = this.effectiveConfiguration, workspace = this.workspaceConfiguration, policy = this.policyConfiguration;
+		// Layers are immutable snapshots. Compare their identities so that synchronous
+		// readers inside change events also see the new configuration.
+		if (!this.consolidated || this.consolidated.base !== base || this.consolidated.workspace !== workspace || this.consolidated.policy !== policy) {
+			this.consolidated = { base, workspace, policy, read: scopedConfigurationReader(base.merge(workspace), policy) };
 		}
-		return resolveConfiguration(this.state(), section, overrides);
+		const resource = overrides?.resource;
+		const folder = resource ? matchingFolder(this.folderConfigurations.values(), resource) : undefined;
+		return this.consolidated.read(folder?.model, overrides?.overrideIdentifier).getValue(section);
 	}
 
 	private async writeUserSetting(transform: (source: string) => string): Promise<void> {
@@ -561,7 +560,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	}
 
 	private folderModel(resource: URI | null | undefined): ConfigurationModel {
-		return matchingFolder(this.state(), resource)?.model ?? ConfigurationModel.createEmptyModel(configurationModelLog);
+		return matchingFolder(this.folderConfigurations.values(), resource)?.model ?? ConfigurationModel.createEmptyModel(configurationModelLog);
 	}
 
 	private validateTargetScope(setting: IRegisteredConfiguration, target: ConfigurationTarget): void {
@@ -652,8 +651,50 @@ interface ConfigurationState {
 	readonly folders: readonly { root: URI; model: ConfigurationModel; }[];
 }
 
-function matchingFolder(state: ConfigurationState, resource: URI | null | undefined) {
-	return resource ? state.folders.filter(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.root)).sort((a, b) => b.root.path.length - a.root.path.length)[0] : undefined;
+function matchingFolder(folders: Iterable<ConfigurationState['folders'][number]>, resource: URI | null | undefined) {
+	if (!resource) return undefined;
+	let match: ConfigurationState['folders'][number] | undefined;
+	for (const folder of folders) {
+		if ((!match || folder.root.path.length > match.root.path.length) && extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.root)) match = folder;
+	}
+	return match;
+}
+
+function scopedConfigurationReader(workspace: ConfigurationModel, policy: ConfigurationModel) {
+	const hasPolicy = policy.keys.length !== 0;
+	const applyPolicy = (model: ConfigurationModel) => hasPolicy ? model.merge(policy) : model;
+	function forScope(model: ConfigurationModel) {
+		let unoverridden: ConfigurationModel | undefined;
+		const languages = new Map<string, ConfigurationModel>();
+		return (identifier?: string | null): ConfigurationModel => {
+			if (identifier) {
+				const cached = languages.get(identifier);
+				if (cached) return cached;
+				const overridden = model.override(identifier);
+				// Only keep identifiers that have an override in this scope.
+				if (overridden !== model) {
+					const effective = applyPolicy(overridden);
+					languages.set(identifier, effective);
+					return effective;
+				}
+			}
+			return unoverridden ??= applyPolicy(model);
+		};
+	}
+
+	const workspaceRead = forScope(workspace);
+	// All files in a folder share its configuration snapshot. Replaced snapshots
+	// can be collected even while the workspace and policy layers stay current.
+	const folderReads = new WeakMap<ConfigurationModel, ReturnType<typeof forScope>>();
+	return (folder?: ConfigurationModel, identifier?: string | null): ConfigurationModel => {
+		if (!folder) return workspaceRead(identifier);
+		let read = folderReads.get(folder);
+		if (!read) {
+			read = forScope(workspace.merge(folder));
+			folderReads.set(folder, read);
+		}
+		return read(identifier);
+	};
 }
 
 function resolveConfiguration(state: ConfigurationState, section: string, overrides?: IConfigurationOverrides): unknown {
@@ -663,7 +704,7 @@ function resolveConfiguration(state: ConfigurationState, section: string, overri
 
 function configurationForResource(state: ConfigurationState, resource: URI | null | undefined): ConfigurationModel {
 	let model = state.base.merge(state.workspace);
-	const folder = matchingFolder(state, resource);
+	const folder = matchingFolder(state.folders, resource);
 	if (folder) model = model.merge(folder.model);
 	return model;
 }
