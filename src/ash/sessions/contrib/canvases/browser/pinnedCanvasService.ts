@@ -1,7 +1,7 @@
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { Event } from '../../../../base/common/event.js';
-import { disposableTimeout, raceCancellationError } from '../../../../base/common/async.js';
+import { disposableTimeout, promiseWithResolvers, raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -17,6 +17,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
+import type { CanvasDefinitionSnapshot } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { getCanvasReferenceKey, type ICanvas, type ICanvasReference } from '../../../../workbench/common/canvasReference.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -246,12 +247,23 @@ export class PinnedCanvasService extends Disposable implements IPinnedCanvasServ
 			const open = async () => {
 				if (!current()) return;
 				const provider = this.collection.createContext(pin.identity).definitionProvider;
-				const definitions = await raceCancellationError(Promise.resolve(provider?.listCanvases()), cancellation.token);
+				let definitions: CanvasDefinitionSnapshot;
+				if (provider) {
+					do {
+						// An unsettled registry is not authoritative. Listen before listing so a
+						// change during discovery can wake the retry under the same deadline.
+						const changed = promiseWithResolvers<void>();
+						using subscription = Event.once(provider.onDidChangeDefinitions)(changed.resolve);
+						definitions = await raceCancellationError(provider.listCanvases(), cancellation.token);
+						if (!current()) return;
+						if (definitions === undefined) await raceCancellationError(changed.promise, cancellation.token);
+					} while (definitions === undefined && current());
+				}
 				if (!current()) return;
 				const definition = definitions?.find(definition => definition.extensionId === pin.identity.extensionId
 					&& definition.canvasId === pin.identity.canvasId);
-				if (!definition) throw new Error(localize('pinnedCanvas.unavailable', 'This Canvas is unavailable.'));
-				await raceCancellationError(provider!.openCanvas(definition, pin.identity.instanceId), cancellation.token);
+				if (!provider || !definition) throw new Error(localize('pinnedCanvas.unavailable', 'This Canvas is unavailable.'));
+				await raceCancellationError(provider.openCanvas(definition, pin.identity.instanceId), cancellation.token);
 				if (!current()) return;
 				await raceCancellationError(new Promise<void>(resolve => {
 					resources.add(autorun(reader => { if (pin.canvas.read(reader)) resolve(); }));

@@ -19,6 +19,7 @@ import type { INotificationService } from '../../../../../platform/notification/
 import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import type { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
+import type { CanvasDefinitionSnapshot, ICanvasDefinition } from '../../../../../workbench/contrib/canvases/common/canvas.js';
 import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/common/canvasReference.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
@@ -28,6 +29,11 @@ import { AbstractCustomView } from '../../../../services/customView/browser/cust
 import { CustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { PinnedCanvasService } from '../../browser/pinnedCanvasService.js';
 import { MAX_PINNED_CANVASES, PINNED_CANVAS_PAGE_ID, PinnedCanvasState } from '../../browser/pinnedCanvases.js';
+
+const fixtureDefinition: ICanvasDefinition = {
+	extensionId: 'fixture', canvasId: 'board', displayName: 'Board', description: '',
+	extensionSource: 'plugin', requiresInput: false,
+};
 
 class Page extends AbstractCustomView {
 	readonly title = constObservable('Canvas');
@@ -142,18 +148,59 @@ suite('Pinned Canvas ownership', () => {
 		assert.equal(pin.reconnecting.get(), false);
 	});
 
+	test('a restored pin waits through definition changes until its provider finishes registering', async () => {
+		using original = fixture();
+		original.pins.pin(original.reference(0));
+		using f = fixture(original.storage.get('sessions.pinnedCanvases', StorageScope.PROFILE), null);
+		f.sessions.push({ sessionId: 'session', kind: 'code', status: 'active', chats: [] } as unknown as ISession);
+		f.catalog.fire();
+		const waiting = new DeferredPromise<void>();
+		let listings = 0;
+		f.definitionProvider.listCanvases = async () => {
+			listings++;
+			if (listings === 1) {
+				f.definitionsChanged.fire();
+				return undefined;
+			}
+			if (listings === 2) {
+				waiting.complete();
+				return undefined;
+			}
+			return [fixtureDefinition];
+		};
+		f.definitionProvider.openCanvas = async (_definition, instanceId) => {
+			f.opened.push(instanceId);
+			f.membership.set([original.membership.get()![0]!]);
+		};
+
+		const pin = f.pins.entries.get()[0]!;
+		const showing = f.pins.show(pin);
+		await Promise.race([waiting.p, showing]);
+		assert.equal(listings, 2);
+		assert.equal(pin.state.get(), PinnedCanvasState.Pending);
+		assert.equal(pin.reconnecting.get(), true);
+		assert.deepEqual([f.opened, f.errors], [[], []]);
+
+		f.definitionsChanged.fire();
+		await showing;
+		assert.deepEqual(f.opened, ['instance-0']);
+		assert.equal(pin.state.get(), PinnedCanvasState.Live);
+		assert.equal(pin.reconnecting.get(), false);
+		assert.deepEqual(f.errors, []);
+	});
+
 	test('unpinning abandons discovery before it can reopen a Canvas', async () => {
 		using f = fixture();
 		f.pins.pin(f.reference(0));
 		const pin = f.pins.entries.get()[0]!;
 		const started = new DeferredPromise<void>();
-		const definitions = new DeferredPromise<{ extensionId: string; canvasId: string; }[]>();
+		const definitions = new DeferredPromise<readonly ICanvasDefinition[]>();
 		f.definitionProvider.listCanvases = () => { started.complete(); return definitions.p; };
 		const reconnecting = f.pins.reconnect(pin);
 		await started.p;
 		f.pins.unpin(pin);
 		await reconnecting;
-		definitions.complete([{ extensionId: 'fixture', canvasId: 'board' }]);
+		definitions.complete([fixtureDefinition]);
 		await definitions.p;
 		assert.deepEqual([f.opened, f.errors], [[], []]);
 	});
@@ -223,7 +270,7 @@ suite('Pinned Canvas ownership', () => {
 			f.definitionProvider.listCanvases = async () => [];
 			await f.pins.reconnect(pin);
 			assert.equal(String(f.errors[0]), 'Error: 此 Canvas 不可用。');
-			f.definitionProvider.listCanvases = async () => [{ extensionId: 'fixture', canvasId: 'board' }];
+			f.definitionProvider.listCanvases = async () => [fixtureDefinition];
 			await f.pins.reconnect(pin);
 			assert.deepEqual(f.opened, ['instance-0']);
 		} finally { resetNlsResolver(); }
@@ -296,8 +343,10 @@ function fixture(saved?: string, initial: readonly ICanvas[] | null = Array.from
 	const membership = observableValue<readonly ICanvas[] | undefined>('test', initial ?? undefined);
 	const closed: string[] = [], opened: string[] = [], warnings: string[] = [], errors: string[] = [];
 	const owner: ICanvasOwner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/session'), chat: URI.parse('ash-thread:/thread') };
+	const definitionsChanged = lifetime.add(new Emitter<void>());
 	const definitionProvider = {
-		listCanvases: async () => [{ extensionId: 'fixture', canvasId: 'board' }],
+		onDidChangeDefinitions: definitionsChanged.event,
+		listCanvases: async (): Promise<CanvasDefinitionSnapshot> => [fixtureDefinition],
 		openCanvas: async (_definition: unknown, instanceId: string) => { opened.push(instanceId); },
 	};
 	let provider = { connectionStatus: connection };
@@ -313,7 +362,7 @@ function fixture(saved?: string, initial: readonly ICanvas[] | null = Array.from
 		storage, { warn: (message: string) => warnings.push(message), error: (message: string) => errors.push(message) } as unknown as INotificationService));
 	lifetime.add(views.registerCustomView({ id: PINNED_CANVAS_PAGE_ID, ctor: new SyncDescriptor(Page), acceptsState: id => pins.entries.get().some(pin => pin.id === id) }, { restore: false }));
 	return Object.assign(lifetime, {
-		pins, storage, views, membership, sessions, catalog, connection, definitionProvider, closed, opened, warnings, errors,
+		pins, storage, views, membership, sessions, catalog, connection, definitionProvider, definitionsChanged, closed, opened, warnings, errors,
 		replaceProvider: () => { provider = { connectionStatus: connection }; catalog.fire(); },
 		reference: (index: number): ICanvasReference => ({ ...owner, canvas: URI.parse('agent-host-canvas:/target-' + index) }),
 		setEnabled: (value: boolean) => { enabled = value; configurationChanges.fire({}); },
