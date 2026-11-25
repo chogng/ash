@@ -17,6 +17,63 @@ test.beforeEach(async ({ workbench }) => {
 	await workbench.waitForReady();
 });
 
+test('Command Palette opens the merge editor only for the active conflicted file', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const page = workbench.page;
+	const settings = await readUserSettings(page);
+	await writeUserSettings(page, JSON.stringify({ ...JSON.parse(settings.content), 'git.mergeEditor': false }), settings.revision);
+	await page.reload();
+	await workbench.waitForReady();
+	const commandId = 'workbench.scm.action.openMergeEditor';
+	const command = workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(commandId, { exact: true }) });
+	const group = workbench.editors.groupAt(0);
+	const openPalette = async () => workbench.quickaccess.open(`>${commandId}`);
+
+	await workbench.git.open();
+	const conflict = page.getByRole('button', { name: 'Open main.ts for Merge Changes' });
+	await conflict.click();
+	await expect(group.content).toContainText('<<<<<<<');
+	await expect(group.content.locator('.ash-merge-inputs')).toBeHidden();
+	await openPalette();
+	await expect(command).toHaveText(/Git: Resolve in Merge Editor/u);
+	await workbench.quickaccess.input.press('Enter');
+	await expect(group.content.getByRole('heading', { name: 'Current', exact: true })).toBeVisible();
+	await expect(group.content.getByRole('heading', { name: 'Incoming', exact: true })).toBeVisible();
+	await openPalette();
+	await expect(command).toHaveCount(0);
+	await workbench.quickaccess.close();
+
+	await group.content.getByRole('button', { name: 'Accept Incoming', exact: true }).click();
+	await group.content.getByRole('button', { name: 'Complete Merge', exact: true }).click();
+	await expect(group.content.locator('.ash-scm-merge-status')).toHaveText('File conflict resolved and staged.');
+	await expect.poll(async () => (await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 2;\n');
+	await workbench.git.open();
+	await expect(conflict).toHaveCount(0);
+	await page.getByRole('button', { name: 'Open main.ts for Staged Changes' }).hover();
+	await page.getByRole('button', { name: 'Open File: main.ts', exact: true }).click();
+	await expect(group.content.locator('.ash-merge-inputs')).toBeHidden();
+	await openPalette();
+	await expect(command).toHaveCount(0);
+});
+
+test('Command Palette localizes the merge editor command in Chinese', { tag: ['@electron-app-server'] }, async ({ workbench, restartWorkbench, restartMessage }) => {
+	const settings = await readUserSettings(workbench.page);
+	await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'git.mergeEditor': false }), settings.revision);
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	await expect.poll(restartMessage).toBe('Restart Ash to use 简体中文?');
+	({ workbench } = await restartWorkbench());
+	await workbench.git.open();
+	await workbench.page.getByRole('button', { name: '打开 合并更改 的main.ts', exact: true }).click();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.content).toContainText('<<<<<<<');
+	await workbench.quickaccess.open('>workbench.scm.action.openMergeEditor');
+	await expect(workbench.quickaccess.items).toContainText('Git: 在合并编辑器中解决');
+	await workbench.quickaccess.input.press('Enter');
+	await expect(group.content.locator('.ash-merge-inputs')).toBeVisible();
+});
+
 test('SCM opens a three-way merge editor and stages the saved manual resolution', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();

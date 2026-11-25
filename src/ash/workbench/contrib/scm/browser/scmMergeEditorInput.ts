@@ -13,9 +13,11 @@ export interface ScmMergeEditorInput extends IResourceEditorInput {
 	readonly resultResource: URI;
 }
 
-export function createScmMergeEditorInput(repositoryId: string, path: string, resource: URI, resultResource: URI): ScmMergeEditorInput {
+export function createScmMergeEditorInput(repositoryId: string, path: string, resultResource: URI, resource?: string): ScmMergeEditorInput {
 	return {
-		resource,
+		// Build the Git editor identity from the repository and logical path. Both
+		// entry points then share a tab, even for names containing URI delimiters.
+		resource: resource === undefined || resource.startsWith('git-merge:') ? URI.from({ scheme: 'git-merge', path: `/${repositoryId}/${path}` }) : URI.parse(resource),
 		contentType,
 		repositoryId,
 		path,
@@ -44,14 +46,15 @@ EditorInputSerializers.registerStatic({
 	},
 	deserialize: value => {
 		const record = requireRecord(value, 'SCM merge input');
+		const input = createScmMergeEditorInput(
+			requireString(record.repositoryId, 'SCM merge repository'),
+			requireString(record.path, 'SCM merge path'),
+			URI.parse(requireString(record.resultResource, 'SCM merge result resource')),
+			requireString(record.resource, 'SCM merge resource'),
+		);
 		return {
-			resource: URI.parse(requireString(record.resource, 'SCM merge resource')),
-			contentType,
-			repositoryId: requireString(record.repositoryId, 'SCM merge repository'),
-			path: requireString(record.path, 'SCM merge path'),
-			resultResource: URI.parse(requireString(record.resultResource, 'SCM merge result resource')),
+			...input,
 			label: requireString(record.label, 'SCM merge label'),
-			showBreadcrumbs: false,
 		};
 	},
 });

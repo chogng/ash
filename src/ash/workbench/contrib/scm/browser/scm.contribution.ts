@@ -26,6 +26,7 @@ import type { EditorPanePartOptions } from '../../../browser/parts/editor/textRe
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { createBrowserEditorPart } from '../../codeEditor/browser/browserEditorPart.js';
 import { matchScmMergeEditor, SCM_MERGE_EDITOR_ID } from './scmMergeEditorInput.js';
+import { ScmMergeEditorContext } from './scmMergeEditorActions.js';
 import { ScmMergeEditorPane, ScmMergeFocusedContext } from './scmMergeEditorPane.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -313,6 +314,7 @@ AccessibleViewRegistry.register({
 });
 
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
+registerWorkbenchContribution('workbench.contrib.scmMergeEditorContext', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmMergeEditorContext));
 
 registerAction2(class SCMHistoryRefreshAction extends Action2 {
 	constructor() {

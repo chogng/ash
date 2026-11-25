@@ -65,6 +65,7 @@
     "multiDiff.failed": "操作失败。",
     "scm.mergeConflictChanged": "冲突已变化。请重新打开合并编辑器检查新版本。",
     "mergeEditor.title": "解决合并冲突",
+    "mergeEditor.open": "在合并编辑器中解决",
     "mergeEditor.completeMerge": "完成合并",
     "mergeEditor.result": "结果",
     "mergeEditor.base": "共同祖先",

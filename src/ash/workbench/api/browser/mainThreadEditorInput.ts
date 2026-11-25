@@ -33,7 +33,7 @@ export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInpu
 		return createDiffEditorInput(parseExtensionEditorInput(input.original), parseExtensionEditorInput(input.modified), text(input.label));
 	}
 	if (input.kind === 'merge') {
-		return createScmMergeEditorInput(text(input.repositoryId), text(input.path), URI.parse(text(input.resource)), URI.parse(text(input.resultResource)));
+		return createScmMergeEditorInput(text(input.repositoryId), text(input.path), URI.parse(text(input.resultResource)), text(input.resource));
 	}
 	if (input.kind === 'multiDiff') {
 		if (!Array.isArray(input.items) || input.items.length > 100000) {
