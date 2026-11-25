@@ -445,4 +445,38 @@ suite('viewpaneLayout browser component', () => {
 		}
 		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
 	});
+
+	test('Timeline refreshes an empty source without restarting or removing another source', async function () {
+		const { page } = browserTests;
+
+		await page.goto('/viewpaneLayout.html?view=timeline&secondTimelineSource');
+		const view = page.locator('[data-view-id="fixture.timeline"]');
+		const tree = view.getByRole('tree');
+		await expect(tree.getByRole('treeitem').first()).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.secondSourceRequests())).toBe(1);
+		await page.evaluate(() => {
+			const timeline = window.viewpaneLayoutIntegration.timeline;
+			timeline.setMode('empty');
+			timeline.invalidate('/fixture/file.txt');
+		});
+		await expect(tree).toBeHidden();
+		await expect(view.getByRole('status')).toHaveText('Loading timeline…');
+		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.secondSourceRequests())).toBe(1);
+		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
+		const otherEntry = tree.getByRole('treeitem', { name: 'Other source entry Other History', exact: true });
+		await expect(otherEntry).toBeVisible();
+		await expect(tree).toHaveAttribute('aria-busy', 'false');
+		const retainedEntry = await otherEntry.elementHandle();
+
+		await page.evaluate(() => {
+			const timeline = window.viewpaneLayoutIntegration.timeline;
+			timeline.setMode('hold');
+			timeline.invalidate('/fixture/file.txt');
+		});
+		await expect(tree).toHaveAttribute('aria-busy', 'true');
+		expect(await otherEntry.evaluate((element, previous) => element === previous, retainedEntry)).toBe(true);
+		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.secondSourceRequests())).toBe(1);
+		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
+		await expect(tree).toHaveAttribute('aria-busy', 'false');
+	});
 });

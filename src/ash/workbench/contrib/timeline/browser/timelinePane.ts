@@ -130,8 +130,12 @@ export class TimelinePane extends ViewPane {
 			if (!extUri.isEqual(uri, this.uri)) this.refresh();
 		}));
 		this._register(timeline.onDidChangeProviders(() => { this.updateActions(); this.refresh(); }));
-		this._register(timeline.onDidChangeTimeline(event => {
-			if (!event.uri || extUri.isEqual(event.uri, this.uri)) this.refresh();
+		this._register(timeline.onDidChangeTimeline(({ id, uri }) => {
+			if (!this.uri || this.excludedSources.has(id) || (uri && !extUri.isEqual(uri, this.uri))) return;
+			this.timelines.delete(id);
+			this.failedSources.delete(id);
+			this.pending.deleteAndDispose(id);
+			void this.load(id, false);
 		}));
 		this._register(timeline.onDidChangeUri(uri => { this.uri = uri; this.pinned = true; this.updateActions(); this.refresh(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {

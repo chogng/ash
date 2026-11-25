@@ -194,7 +194,9 @@ const replScope = resources.add(replServices.createChild(new ServiceCollection(
 const timelineRequests: { cursor: number; uri: string; }[] = [];
 const heldTimelineRequests: DeferredPromise<void>[] = [];
 const timelineChanges = resources.add(new Emitter<TimelineChangeEvent>());
-let timelineMode: 'normal' | 'hold' | 'fail' | 'stall' = 'normal';
+type TimelineMode = 'normal' | 'hold' | 'fail' | 'stall' | 'empty';
+let timelineMode: TimelineMode = 'normal';
+let secondTimelineRequests = 0;
 let timelineService: TimelineService | undefined;
 function createTimelinePane(): TimelinePane {
 	void configuration.updateValue('timeline.pageSize', params.has('shortPages') ? 1 : 8);
@@ -219,7 +221,7 @@ function createTimelinePane(): TimelinePane {
 			const mode = timelineMode;
 			timelineMode = 'normal';
 			timelineRequests.push({ cursor: offset, uri: uri.path });
-			if (params.has('emptyTimeline')) return undefined;
+			if (mode === 'empty' || params.has('emptyTimeline')) return undefined;
 			if (mode === 'hold') {
 				const pending = new DeferredPromise<void>();
 				heldTimelineRequests.push(pending);
@@ -238,6 +240,18 @@ function createTimelinePane(): TimelinePane {
 			};
 		},
 	}));
+	if (params.has('secondTimelineSource')) {
+		resources.add(timelineService.registerTimelineProvider({
+			...Disposable.None, id: 'other', label: 'Other History', scheme: 'file',
+			async provideTimeline() {
+				secondTimelineRequests++;
+				const pending = new DeferredPromise<void>();
+				heldTimelineRequests.push(pending);
+				await pending.p;
+				return { source: 'other', items: [{ handle: '0', source: 'other', label: 'Other source entry', timestamp: 1 }] };
+			},
+		}));
+	}
 	resources.add(toDisposable(() => {
 		for (const pending of heldTimelineRequests.splice(0)) pending.complete();
 	}));
@@ -299,6 +313,7 @@ window.viewpaneLayoutIntegration = {
 	commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose(),
 	timeline: {
 		requests: timelineRequests,
+		secondSourceRequests: () => secondTimelineRequests,
 		setMode: mode => { timelineMode = mode; },
 		release: () => { for (const pending of heldTimelineRequests.splice(0)) pending.complete(); },
 		setFile: path => timelineService!.setUri(URI.file(path)),
@@ -319,7 +334,8 @@ declare global {
 			dispose(): void;
 			readonly timeline: {
 				readonly requests: readonly { cursor: number; uri: string; }[];
-				setMode(mode: 'normal' | 'hold' | 'fail' | 'stall'): void;
+				secondSourceRequests(): number;
+				setMode(mode: TimelineMode): void;
 				release(): void;
 				setFile(path: string): void;
 				invalidate(path: string): void;
