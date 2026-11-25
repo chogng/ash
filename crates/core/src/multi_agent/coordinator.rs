@@ -1379,54 +1379,16 @@ fn build_context_seed_with_materialized(
         digest: ContextSeedDigest::new(format!("sha256:{}", "0".repeat(64)))
             .expect("static context seed digest placeholder is valid"),
     };
-    seed.digest = context_seed_digest(&seed)?;
+    seed.digest = ash_history::context_seed_digest(&seed).map_err(context_seed_encoding_error)?;
     Ok(seed)
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ContextSeedMaterial<'a> {
-    delegation_id: &'a DelegationId,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    agent_id: &'a Option<ash_protocol::AgentId>,
-    parent_thread_id: &'a ThreadId,
-    parent_turn_id: &'a TurnId,
-    parent_sequence: u64,
-    task: &'a DelegatedTask,
-    role: &'a Option<AgentRoleSnapshot>,
-    inheritance: &'a AgentContextMode,
-    #[serde(skip_serializing_if = "<[AgentMaterializedContext]>::is_empty")]
-    materialized_context: &'a [AgentMaterializedContext],
-    policy_ceiling: &'a DelegatedPolicyCeiling,
-    capability_scope: &'a AgentCapabilityScope,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    base_instructions: &'a Option<ash_protocol::TurnInstructions>,
-}
-
-fn context_seed_digest(seed: &AgentContextSeed) -> Result<ContextSeedDigest, CoreError> {
-    let material = ContextSeedMaterial {
-        delegation_id: &seed.delegation_id,
-        agent_id: &seed.agent_id,
-        parent_thread_id: &seed.parent_thread_id,
-        parent_turn_id: &seed.parent_turn_id,
-        parent_sequence: seed.parent_sequence,
-        task: &seed.task,
-        role: &seed.agent.role,
-        inheritance: &seed.inheritance,
-        materialized_context: &seed.materialized_context,
-        policy_ceiling: &seed.policy_ceiling,
-        capability_scope: &seed.agent.capability_scope,
-        base_instructions: &seed.agent.base_instructions,
-    };
-    let bytes = serde_json::to_vec(&material).map_err(|error| {
-        CoreError::Journal(format!("cannot encode Agent context seed: {error}"))
-    })?;
-    ContextSeedDigest::new(format!("sha256:{:x}", Sha256::digest(bytes)))
-        .map_err(|error| CoreError::Journal(error.to_string()))
+fn context_seed_encoding_error(error: serde_json::Error) -> CoreError {
+    CoreError::Journal(format!("cannot encode Agent context seed: {error}"))
 }
 
 pub(crate) fn validate_context_seed_digest(seed: &AgentContextSeed) -> Result<(), CoreError> {
-    if context_seed_digest(seed)? != seed.digest {
+    if ash_history::context_seed_digest(seed).map_err(context_seed_encoding_error)? != seed.digest {
         return Err(CoreError::Context(
             "Agent context seed digest does not match its immutable material".into(),
         ));

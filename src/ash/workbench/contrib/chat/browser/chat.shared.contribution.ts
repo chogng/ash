@@ -118,7 +118,7 @@ import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContrib
 import { registerPromptActions } from './promptSyntax/promptFileActions.js';
 import { registerSkillActions } from './promptSyntax/skillActions.js';
 import { registerRunPromptActions } from './promptSyntax/runPromptAction.js';
-import { registerAgentActions } from './promptSyntax/chatModeActions.js';
+import { registerAgentActions } from './promptSyntax/agentPromptActions.js';
 import { registerNewPromptFileActions } from './promptSyntax/newPromptFileActions.js';
 import { ChatSetupContribution } from './chatSetup/chatSetupContributions.js';
 import { ChatEntitlementService, IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';

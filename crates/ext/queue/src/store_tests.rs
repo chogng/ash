@@ -465,11 +465,11 @@ fn editing_pauses_delivery_and_reordering_is_revision_checked() {
 }
 
 #[test]
-fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() {
+fn queue_reopen_preserves_task_command_and_model_choices() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
-    let mut request = input("mode-choice");
-    request.mode = protocol::TaskExecution::Swarm;
+    let mut request = input("command-choice");
+    request.task_command = Some(protocol::TaskExecution::Swarm);
     request.model = Some(protocol::ModelRef::new(
         protocol::ProviderId::new("test").unwrap(),
         protocol::ModelId::new("model").unwrap(),
@@ -482,11 +482,53 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
         Some(accepted.clone())
     );
     assert_eq!(reopened.enqueue(&request).unwrap(), accepted);
-    request.mode = protocol::TaskExecution::Agent;
+    request.task_command = None;
     assert!(matches!(
         reopened.enqueue(&request),
         Err(QueueError::Conflict)
     ));
+}
+
+#[test]
+fn mode_migration_preserves_queue_rows_and_pauses_retired_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let store = QueueStore::open(&path).unwrap();
+    let legacy = store.enqueue(&input("legacy-plan")).unwrap();
+    let mut explicit_input = input("explicit-swarm");
+    explicit_input.task_command = Some(protocol::TaskExecution::Swarm);
+    let explicit = store.enqueue(&explicit_input).unwrap();
+    let default = store.enqueue(&input("default-agent")).unwrap();
+    let prior_revision = store.revision().unwrap();
+    drop(store);
+    let database = Connection::open(&path).unwrap();
+    database.execute_batch(
+        "UPDATE queue_metadata SET version=4 WHERE id=1;
+         UPDATE queued_messages SET request=json_set(request,'$.mode','plan'), status='delivering', lease_until=100 WHERE id='legacy-plan';
+         UPDATE queued_messages SET request=json_set(request,'$.mode','agent') WHERE id IN ('explicit-swarm','default-agent');",
+    ).unwrap();
+    drop(database);
+
+    for _ in 0..2 {
+        let store = QueueStore::open(&path).unwrap();
+        let list = store
+            .list(&legacy.request.session_id, &legacy.request.thread_id)
+            .unwrap();
+        assert_eq!(list.len(), 3);
+        let paused = store.get(&legacy.request.command_id).unwrap().unwrap();
+        assert_eq!(paused.request, legacy.request);
+        assert_eq!(paused.status, QueueStatus::Paused);
+        assert_eq!(paused.revision, prior_revision + 1);
+        assert_eq!(
+            store.get(&explicit.request.command_id).unwrap(),
+            Some(explicit.clone())
+        );
+        assert_eq!(
+            store.get(&default.request.command_id).unwrap(),
+            Some(default.clone())
+        );
+        assert_eq!(store.revision().unwrap(), prior_revision + 1);
+    }
 }
 
 #[test]

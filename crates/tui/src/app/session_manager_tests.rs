@@ -1277,7 +1277,6 @@ fn archive_freezes_question_answers_and_queue_actions_without_blocking_exit() {
                 .active_mut()
                 .queue
                 .push(QueuedChatInput::from_submission(ChatSubmission {
-                    mode: Default::default(),
                     command_id: ash_protocol::CommandId::new("queued").unwrap(),
                     display_text: "queued message".into(),
                     input: vec![ChatInputItem::Text("queued message".into())],

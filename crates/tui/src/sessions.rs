@@ -71,7 +71,6 @@ pub(crate) enum Command {
     },
     Fork {
         prompt: String,
-        mode: ash_protocol::TaskExecution,
     },
     Preview {
         generation: u64,

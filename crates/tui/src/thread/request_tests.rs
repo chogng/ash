@@ -76,7 +76,6 @@ fn workspace_mentions_materialize_through_the_app_server_before_submission() {
         let input = super::materialize_submission(
             &mut client,
             ChatSubmission {
-                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new("submission").unwrap(),
                 display_text: name.into(),
                 input: vec![ChatInputItem::WorkspaceResource {
@@ -133,7 +132,6 @@ fn submit_prompt_uses_message_text_for_the_task_command() {
                 7,
             ),
             ChatSubmission {
-                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new("submission").unwrap(),
                 display_text: text.into(),
                 input: vec![ChatInputItem::Text(text.into())],
@@ -180,7 +178,6 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
         ),
         TurnId::new("turn-1").unwrap(),
         ChatSubmission {
-            mode: Default::default(),
             command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "change direction".into(),
             input: vec![ChatInputItem::Text("change direction".into())],
@@ -233,7 +230,6 @@ fn audio_steering_preserves_the_uploaded_attachment_reference() {
         ),
         TurnId::new("turn").unwrap(),
         ChatSubmission {
-            mode: Default::default(),
             command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "[Audio]".into(),
             input: vec![ChatInputItem::AudioAttachment(attachment.clone())],
@@ -279,7 +275,6 @@ fn compact_submission_uses_the_typed_operation_and_retention_prompt() {
                 7,
             ),
             ChatSubmission {
-                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new("compact-command").unwrap(),
                 display_text: text.into(),
                 input: vec![ChatInputItem::Text(text.into())],
@@ -349,7 +344,6 @@ fn ide_context_is_fresh_per_submission_and_pins_the_window_without_changing_user
                 7,
             ),
             ChatSubmission {
-                mode: Default::default(),
                 command_id: ash_protocol::CommandId::new(format!("submit-{index}")).unwrap(),
                 display_text: "explain this".into(),
                 input: vec![ChatInputItem::Text("explain this".into())],

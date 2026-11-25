@@ -36,7 +36,6 @@ use ratatui::layout::Rect;
 
 #[test]
 fn composer_footer_keeps_input_focus_without_a_mode_picker() {
-    use ash_protocol::TaskExecution;
     use ratatui::layout::Position;
     for (width, language) in [
         (80, crate::nls::Language::English),
@@ -46,7 +45,6 @@ fn composer_footer_keeps_input_focus_without_a_mode_picker() {
         let mut settings = crate::config::TerminalSettings::default();
         settings.set_language(language);
         app.update(crate::config::Event::SettingsReceived(settings));
-        app.set_task_execution(TaskExecution::Swarm);
         let area = Rect::new(0, 0, width, 20);
         let input = crate::app::fullscreen::layout(&app, area).input;
         let position = Position::new(input.right() - 2, input.bottom() - 1);
@@ -55,7 +53,6 @@ fn composer_footer_keeps_input_focus_without_a_mode_picker() {
             Some(PointerTarget::Composer(ChatComposerPointerTarget::Input))
         );
         update_pointer_hover(&mut app, area, position.x, position.y);
-        assert_eq!(app.task_execution(), TaskExecution::Swarm);
         assert!(app.command_panel().is_none());
         activate_pointer_item(&mut app, area, position.x, position.y);
         assert!(app.command_panel().is_none());

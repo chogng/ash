@@ -59,7 +59,6 @@ pub(crate) enum CommandRequest {
     },
     Fork {
         prompt: String,
-        mode: ash_protocol::TaskExecution,
         approval_mode: ApprovalMode,
     },
     Preview {
@@ -176,20 +175,13 @@ impl CommandRequest {
             }
             Self::Fork {
                 prompt,
-                mode,
                 approval_mode,
             } => SessionCompletion::Forked {
                 command: fork_command(&prompt),
                 result: current
                     .ok_or_else(|| "No active session".to_owned())
                     .and_then(|current| {
-                        fork_session(
-                            &mut client,
-                            &current.conversation,
-                            &prompt,
-                            mode,
-                            approval_mode,
-                        )
+                        fork_session(&mut client, &current.conversation, &prompt, approval_mode)
                     }),
             },
             Self::Preview { generation, params } => SessionCompletion::Preview {
@@ -277,9 +269,8 @@ pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> 
             submission,
             approval_mode,
         },
-        Command::Fork { prompt, mode } => CommandRequest::Fork {
+        Command::Fork { prompt } => CommandRequest::Fork {
             prompt,
-            mode,
             approval_mode,
         },
         Command::Preview { generation, params } => CommandRequest::Preview { generation, params },
@@ -418,7 +409,6 @@ fn fork_session(
     client: &mut AppServerRequestHandle,
     source: &ActiveConversation,
     prompt: &str,
-    mode: ash_protocol::TaskExecution,
     approval_mode: ApprovalMode,
 ) -> Result<ForkCompletion, String> {
     use ash_app_server_protocol::protocol::session::SessionRequest;
@@ -450,7 +440,6 @@ fn fork_session(
                 client,
                 ThreadRequestScope::new(&session_id, &result.thread_id, thread.sequence),
                 ChatSubmission {
-                    mode,
                     command_id: crate::client::new_command_id("input"),
                     display_text: prompt.into(),
                     input: vec![crate::thread::composer::ChatInputItem::Text(prompt.into())],

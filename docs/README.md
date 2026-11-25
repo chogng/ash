@@ -26,7 +26,7 @@
 
 - **界面与宿主：** [Desktop 架构](desktop-architecture.md)、[前后端连接](frontend-app-server-boundary.md)、[Sessions 布局与 Changes](sessions.md)、[工作台与文档](workbench.md)、[编辑器架构](editor-architecture.md)、[远程开发](remote-development.md)。
 - **后端与执行：** [Rust 架构](rust-architecture.md)、[Agent 运行时](agent-runtime.md)、[Core](core.md)、[上下文管理](core-context.md)、[多 Agent](core-multi-agent.md)、[进程执行](exec.md)。
-- **Agent 与提示词：** [Agent 定义](agents.md)、[Agent 模式](../crates/task-command-templates/README.md)、[Agent Team](../crates/teams/README.md)、[共享提示词](../crates/prompts/README.md)。
+- **Agent 与提示词：** [Agent 定义](agents.md)、[Agent 任务命令](../crates/task-command-templates/README.md)、[Agent Team](../crates/teams/README.md)、[共享提示词](../crates/prompts/README.md)。
 - **协议与接口：** [领域身份](domain-model.md)、[协议](protocol.md)、[App Server API](app-server-api.md)、[客户端](app-server-client.md)、[工具契约](agent-tools-spec.md)、[工具系统](tools/tools.md)、[完整工具目录](tools/tool-catalog.md)。
 - **模型调用：** [模型 API](model-api.md)、[模型调用客户端](model-client.md)、[Provider](model-provider.md)、[模型与供应商声明](../crates/model-provider-info/docs/model-provider-info.md)、[模型目录](models-manager.md)。
 - **配置：** [配置](config.md)、[模型接入](model-provider.md)、[登录](login.md)、[Agent 定制](agent-customizations.md)。

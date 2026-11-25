@@ -374,6 +374,7 @@ pub struct TurnSnapshot {
     pub context_usage: Option<ModelContextUsage>,
     /// Derived from committed loop decisions, so resuming cannot reset the continuation limit.
     pub nonterminal_continuations: u32,
+    pub(crate) execution_restart_required: bool,
 }
 
 impl TurnSnapshot {
@@ -504,7 +505,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     CoreError::Journal("Thread creation timestamp exceeds u64".into())
                 })?;
                 let mut event_digests = BTreeMap::new();
-                event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
+                event_digests.insert(envelope.sequence, event_digest(envelope)?);
                 Ok(ThreadSnapshot {
                     recorded_at_floor: envelope.recorded_at,
                     voice_transcripts: Vec::new(),
@@ -1558,6 +1559,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     usage: ModelUsageSummary::default(),
                     context_usage: None,
                     nonterminal_continuations: 0,
+                    execution_restart_required: envelope.execution_restart_required(),
                 },
             )?;
             let matching_start = match &receipt.command {
@@ -1671,6 +1673,10 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 }
                 turn.skill_loads.push(load.clone());
             }
+        }
+        ThreadEvent::RetiredTurnEvent { turn_id, .. } => {
+            require_no_command(envelope)?;
+            find_turn_mut(&mut snapshot, turn_id)?.execution_restart_required = true;
         }
         ThreadEvent::TurnStarted { turn_id, .. } => {
             require_no_command(envelope)?;
@@ -2564,7 +2570,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
     }
     snapshot
         .event_digests
-        .insert(envelope.sequence, event_digest(&envelope.event)?);
+        .insert(envelope.sequence, event_digest(envelope)?);
     snapshot.recorded_at_floor = snapshot.recorded_at_floor.max(envelope.recorded_at);
     snapshot.sequence = envelope.sequence;
     Ok(snapshot)
@@ -3029,6 +3035,7 @@ fn import_history(
             usage: ModelUsageSummary::default(),
             context_usage: None,
             nonterminal_continuations: 0,
+            execution_restart_required: false,
         })
         .collect();
     snapshot.items = turns
@@ -3141,6 +3148,7 @@ fn append_imported_turn(
         usage: ModelUsageSummary::default(),
         context_usage: None,
         nonterminal_continuations: 0,
+        execution_restart_required: false,
     });
     items.extend(turn.items.iter().cloned());
     Ok(())
@@ -3265,8 +3273,8 @@ fn validate_context_checkpoint(
     Ok(())
 }
 
-fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
-    let mut value = serde_json::to_value(event).map_err(|error| {
+fn event_digest(event: &StoredEvent) -> Result<String, CoreError> {
+    let mut value = event.event_value_for_digest().map_err(|error| {
         CoreError::Journal(format!("failed to serialize Thread event: {error}"))
     })?;
     canonicalize_json(&mut value);

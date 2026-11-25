@@ -104,7 +104,7 @@ fn page_layout(app: &App, terminal_area: Rect, screen_area: Rect) -> Layout {
         app,
         terminal_area,
         Presentation {
-            chrome: chat_input::ChatInputChrome::Mode(app.task_execution()),
+            chrome: chat_input::ChatInputChrome::Fullscreen,
             margin: 2,
             placeholder: Some("Build anything"),
             content: if app.fullscreen.home_visible() || app.session_manager_view().is_some() {

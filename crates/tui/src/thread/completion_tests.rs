@@ -130,7 +130,6 @@ fn command_state(active_turn: Option<TurnId>, activity: CommandActivity) -> Comm
 
 fn submission() -> ChatSubmission {
     ChatSubmission {
-        mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
         display_text: "change direction".into(),
         input: vec![ChatInputItem::Text("change direction".into())],

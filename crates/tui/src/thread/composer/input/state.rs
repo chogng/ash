@@ -114,7 +114,6 @@ pub(crate) enum ChatInputItem {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatSubmission {
-    pub(crate) mode: ash_protocol::TaskExecution,
     // Created before the local row is shown; materialization and RPC retries keep this identity.
     pub(crate) command_id: ash_protocol::CommandId,
     pub(crate) display_text: String,
@@ -130,7 +129,6 @@ pub(crate) struct QueuedChatInput {
 impl QueuedChatInput {
     pub(crate) fn from_submission(submission: ChatSubmission) -> Self {
         let mut input = ChatInput::with_catalog(ChatInputCatalog::default());
-        input.set_mode(submission.mode);
         let mut skills = submission
             .input
             .iter()
@@ -218,7 +216,6 @@ impl QueuedChatInput {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatInputDraft {
-    mode: Option<ash_protocol::TaskExecution>,
     textarea: TextArea,
     vim: VimState,
     slash_command_element: Option<TextElementId>,
@@ -242,8 +239,6 @@ enum DictationDraft {
 /// Owns the editable draft, Slash/Mention/Skill completion, and typed submission assembly.
 #[derive(Debug)]
 pub(crate) struct ChatInput {
-    // None initializes once from Thread history; user selections survive later refreshes.
-    mode: Option<ash_protocol::TaskExecution>,
     generation: u64,
     pub(super) textarea: TextArea,
     pub(super) completion: CompletionState,
@@ -269,7 +264,6 @@ impl ChatInput {
 
     pub(crate) fn with_catalog(catalog: ChatInputCatalog) -> Self {
         Self {
-            mode: None,
             generation: 0,
             textarea: TextArea::new(),
             completion: CompletionState::new(catalog),
@@ -546,14 +540,6 @@ impl ChatInput {
         self.input_mode == ChatInputMode::Standard || self.vim.accepts_submission_key()
     }
 
-    pub(crate) fn mode(&self) -> ash_protocol::TaskExecution {
-        self.mode.unwrap_or_default()
-    }
-
-    pub(crate) fn set_mode(&mut self, mode: ash_protocol::TaskExecution) {
-        self.mode = Some(mode);
-    }
-
     pub(crate) fn prompt(&self) -> &'static str {
         match self.input_mode {
             ChatInputMode::Standard => "> ",
@@ -689,7 +675,6 @@ impl ChatInput {
             textarea.unmark_element(*element);
         }
         ChatInputDraft {
-            mode: self.mode,
             textarea,
             vim: self.vim.clone(),
             slash_command_element: self.slash_command_element,
@@ -702,7 +687,6 @@ impl ChatInput {
 
     pub(crate) fn restore_recovery_draft(&mut self, draft: ChatInputDraft) {
         self.clear();
-        self.mode = draft.mode;
         self.textarea = draft.textarea;
         self.vim = draft.vim;
         self.slash_command_element = draft.slash_command_element;
@@ -767,7 +751,6 @@ impl ChatInput {
         );
 
         (!input.is_empty()).then_some(ChatSubmission {
-            mode: self.mode(),
             command_id: crate::client::new_command_id("input"),
             display_text,
             input,
@@ -779,7 +762,6 @@ impl ChatInput {
             self.textarea.unmark_element(element);
         }
         ChatInputDraft {
-            mode: self.mode,
             textarea: std::mem::replace(&mut self.textarea, TextArea::new()),
             vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),

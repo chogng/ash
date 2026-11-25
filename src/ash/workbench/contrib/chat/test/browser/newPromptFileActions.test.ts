@@ -26,7 +26,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { registerAgentActions } from '../../browser/promptSyntax/chatModeActions.js';
+import { registerAgentActions } from '../../browser/promptSyntax/agentPromptActions.js';
 import { NEW_AGENT_COMMAND_ID, NEW_INSTRUCTIONS_COMMAND_ID, registerNewPromptFileActions } from '../../browser/promptSyntax/newPromptFileActions.js';
 import { PromptFileParser } from '../../common/promptSyntax/promptFileParser.js';
 import { PromptValidator } from '../../common/promptSyntax/languageProviders/promptValidator.js';

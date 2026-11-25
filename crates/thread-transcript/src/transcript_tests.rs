@@ -1037,7 +1037,7 @@ fn hook_completion_replaces_its_running_transcript_entry_and_replays_stably() {
     );
     let mut thread = empty_thread();
     thread.sequence = 2;
-    thread.turns.push(serde_json::from_value(serde_json::json!({"turnId":"turn-1", "status":"completed", "mode":"agent", "kind":"coding", "toolMode":"direct", "approvalMode":"manual", "usage":ModelUsageSummary::default(), "items":[]})).unwrap());
+    thread.turns.push(serde_json::from_value(serde_json::json!({"turnId":"turn-1", "status":"completed", "kind":"coding", "toolMode":"direct", "approvalMode":"manual", "usage":ModelUsageSummary::default(), "items":[]})).unwrap());
     thread.hook_runs.push(run);
     assert_eq!(
         ThreadTranscriptSnapshot::from_thread(&thread).entries,

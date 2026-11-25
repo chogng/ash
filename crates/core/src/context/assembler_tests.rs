@@ -716,6 +716,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             nonterminal_continuations: 0,
+            execution_restart_required: false,
         }],
         items,
         hook_runs: Vec::new(),

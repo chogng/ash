@@ -74,7 +74,7 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 | 等待批准或回答   | 对应面板处理输入；仍可明确中断          |
 | 取消中           | 抑制重复中断                            |
 
-模式选择见 [TUI 按键和显示](LAYOUT.md#任务模式选择与显示)。
+任务命令见 [TUI 按键和显示](LAYOUT.md#任务命令)。
 
 `/permission` 选择下一轮的权限策略，也支持 `manual`、`auto`、`bypassPermissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
 

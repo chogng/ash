@@ -38,6 +38,85 @@ struct Fixture {
 }
 
 #[test]
+fn retired_mode_workflow_records_recover_and_replay_original_receipts() {
+    use serde_json::json;
+
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("state.sqlite3");
+    drop(Store::open(&database).unwrap());
+    let session = protocol::SessionId::new("legacy-session").unwrap();
+    let root = ThreadId::new("legacy-root").unwrap();
+    let input = vec![UserInput::Text {
+        text: "/team Investigate".into(),
+    }];
+    let request = serde_json::to_string(&(&input, "agent", "direct", "manual")).unwrap();
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    connection
+        .execute(
+            "UPDATE ash_schema_migrations SET version=1 WHERE component='workflows'",
+            [],
+        )
+        .unwrap();
+    for (id, finished, turn, sequence) in [
+        ("pending", 0, None, None),
+        ("completed", 2, Some("completed-turn"), Some(7)),
+    ] {
+        let plan = json!({
+            "turn": turn, "response_sequence": sequence,
+            "transition": { "work": {
+                "id": "legacy-work", "mode": "team", "task": "Investigate",
+                "anchor_sequence": 1, "stage": "team", "status": "active",
+                "accepted": {}, "attempts": []
+            }, "launch": null, "cancel": [] },
+            "agent": null,
+            "submission": { "command_id": id, "sequence": 1, "policy": "legacy-policy",
+                "command": { "type": "startTurn", "kind": "coding", "mode": "agent",
+                    "instructions": { "owner": "test", "id": "base", "revision": "1", "body": "Base",
+                        "modeInstructions": { "owner": "test", "id": "agent", "revision": "1", "body": "Retired" }
+                    }, "input": input, "toolMode": "direct", "approvalMode": "manual"
+                }
+            }
+        });
+        connection.execute(
+            "INSERT INTO agent_workflow_commands (session, root, command, request, plan, finished) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![session.as_str(), root.as_str(), id, request, plan.to_string(), finished],
+        ).unwrap();
+    }
+    drop(connection);
+    for _ in 0..2 {
+        let store = Store::open(&database).unwrap();
+        let pending = store.pending().unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].0, root);
+        assert_eq!(pending[0].1.submission.request().input, input);
+        assert!(
+            pending[0]
+                .1
+                .submission
+                .request()
+                .instructions
+                .task_instructions()
+                .is_none()
+        );
+        let receipt = store
+            .replay_completed(
+                &session,
+                &root,
+                &CommandId::new("completed").unwrap(),
+                &input,
+                None,
+                protocol::ToolMode::Direct,
+                protocol::ApprovalMode::Manual,
+                false,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(receipt.turn_id.as_str(), "completed-turn");
+        assert_eq!(receipt.sequence, 7);
+    }
+}
+
+#[test]
 fn prepared_artifact_workflow_retains_its_authority_across_restart() {
     for revoke in [false, true] {
         let directory = tempfile::tempdir().unwrap();

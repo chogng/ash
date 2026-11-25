@@ -43,7 +43,7 @@ impl From<ApprovalMode> for TurnApprovalModes {
 #[derive(Debug, Default)]
 pub(crate) struct ThreadState {
     active_turn: Option<TurnId>,
-    current_mode: Option<ash_protocol::TaskExecution>,
+    current_execution: Option<ash_protocol::TaskExecution>,
     approval_modes: TurnApprovalModes,
     transcript: TranscriptModel,
     stream: StreamDisplay,
@@ -78,7 +78,7 @@ impl ThreadState {
     pub(crate) fn clear_active_turn(&mut self) {
         self.finish_stream();
         self.active_turn = None;
-        self.current_mode = None;
+        self.current_execution = None;
     }
 
     pub(crate) fn sync_active_turn(&mut self, turns: &[Turn]) -> Vec<ActiveTurnUpdate> {
@@ -98,7 +98,7 @@ impl ThreadState {
                 updates.push(evaluate_active_turn(&mut self.active_turn, turns));
             }
         }
-        self.current_mode = self.active_turn.as_ref().and_then(|id| {
+        self.current_execution = self.active_turn.as_ref().and_then(|id| {
             turns
                 .iter()
                 .find(|turn| &turn.turn_id == id)
@@ -107,8 +107,8 @@ impl ThreadState {
         updates
     }
 
-    pub(crate) fn current_mode(&self) -> Option<ash_protocol::TaskExecution> {
-        self.current_mode
+    pub(crate) fn current_execution(&self) -> Option<ash_protocol::TaskExecution> {
+        self.current_execution
     }
 
     pub(crate) fn approval_modes(&self) -> TurnApprovalModes {

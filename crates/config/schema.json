@@ -2177,7 +2177,7 @@
       }
     },
     "schemaVersion": {
-      "const": 12,
+      "const": 13,
       "type": "integer"
     },
     "skills": {

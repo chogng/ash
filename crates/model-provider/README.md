@@ -66,7 +66,7 @@ App Server 在接受每轮执行时，用同一目录快照计算预算并绑定
 
 桌面 Chat 按连接和型号保存 Ultra 开关。当前连接必须支持 `xhigh`。OpenAI 开启时用 `xhigh` 覆盖请求档位，Anthropic 将 `xhigh` 用作默认值并优先使用显式档位。模型目录发布开关状态和生效档位。Chat 滑块在覆盖开始时移到对应档位，选择其他档位会关闭 Ultra 并应用新值，直接关闭开关会恢复原档位。
 
-Ultra 调整模型请求，由当前模式指导任务委托。[Swarm 的执行边界](../task-command-templates/README.md#swarm-的执行边界)
+Ultra 调整模型请求，由当前任务命令指导委托。[Swarm 的执行边界](../task-command-templates/README.md#swarm-的执行边界)
 
 ## 内部接口地图
 

@@ -22,6 +22,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0002_approval_modes.sql"),
     include_str!("../migrations/0003_reference_read_scope.sql"),
     include_str!("../migrations/0004_scoped_invalidations.sql"),
+    include_str!("../migrations/0005_retired_agent_mode.sql"),
 ];
 
 const INVALIDATION_HISTORY: i64 = 2048;

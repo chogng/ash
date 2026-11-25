@@ -12,6 +12,7 @@ doctest = false
 agent = { workspace = true }
 agent-roles = { workspace = true }
 ash-core = { workspace = true }
+ash-history = { workspace = true }
 core-api = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 task-command-templates = { package = "ash-task-command-templates", path = "../../task-command-templates" }

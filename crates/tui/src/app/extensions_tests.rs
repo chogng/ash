@@ -188,7 +188,6 @@ fn extension_packages_slash_commands_open_panels_without_creating_a_conversation
         ),
     ] {
         let invocation = SlashCommandInvocation {
-            mode: Default::default(),
             command: command.definition(),
             origin: ash_slash_commands::SlashCommandOrigin::Local,
             display_arguments: argument.into(),

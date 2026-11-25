@@ -253,22 +253,18 @@ fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
                 crate::nls::Language::Chinese => "使用 /effort <档位>",
                 _ => "Use /effort <level>",
             };
-            for selected in [TaskExecution::Plan, TaskExecution::Swarm] {
-                app.set_task_execution(selected);
-                for value in [
-                    "swarm",
-                    "swarm on",
-                    "swarm off",
-                    "multitask",
-                    "ultra",
-                    "ultracode",
-                    "max on",
-                ] {
-                    assert_eq!(command(&mut app, &format!("/effort {value}")), None);
-                    assert_eq!(app.top_tip().text(None), Some(usage));
-                    assert_eq!(app.task_execution(), selected);
-                    assert_eq!(app.status_line().model_label(), "test-model (high)");
-                }
+            for value in [
+                "swarm",
+                "swarm on",
+                "swarm off",
+                "multitask",
+                "ultra",
+                "ultracode",
+                "max on",
+            ] {
+                assert_eq!(command(&mut app, &format!("/effort {value}")), None);
+                assert_eq!(app.top_tip().text(None), Some(usage));
+                assert_eq!(app.status_line().model_label(), "test-model (high)");
             }
         }
     }
@@ -302,7 +298,6 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         key(&mut app, KeyCode::Home, KeyModifiers::NONE);
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         assert_eq!(app.approval_mode(), ApprovalMode::Auto);
-        assert_eq!(app.task_execution(), TaskExecution::Agent);
         for (id, mode) in [
             ("manual", ApprovalMode::Manual),
             ("auto", ApprovalMode::Auto),
@@ -310,7 +305,6 @@ fn permission_menu_uses_shared_copy_and_the_same_ids_in_both_screens() {
         ] {
             command(&mut app, &format!("/permission {id}"));
             assert_eq!(app.approval_mode(), mode);
-            assert_eq!(app.task_execution(), TaskExecution::Agent);
         }
     }
 }
@@ -635,10 +629,9 @@ fn effort_data() -> crate::models::ModelPickerData {
 }
 
 #[test]
-fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
+fn fullscreen_effort_cancel_preserves_draft_across_screen_switches() {
     let data = effort_data();
     let mut app = App::new();
-    app.set_task_execution(TaskExecution::Plan);
     app.update(ThreadEvent::ProductNotice(
         "Conversation remains visible".into(),
     ));
@@ -648,13 +641,11 @@ fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
     ));
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
-    assert_eq!(app.task_execution(), TaskExecution::Plan);
     crate::tui_assert_snapshot!(app = &app; "effort_selector_staged", render_effort(&app));
     switch(&mut app, ScreenMode::Inline);
     crate::tui_assert_snapshot!(app = &app; "effort_selector_transferred", render_effort(&app));
     switch(&mut app, ScreenMode::Fullscreen);
     assert_eq!(key(&mut app, KeyCode::Esc, KeyModifiers::NONE), None);
-    assert_eq!(app.task_execution(), TaskExecution::Plan);
     assert_eq!(app.input(), "keep this draft\nand this line");
     assert!(app.chat_input_focused());
     assert!(app.command_panel().is_none());
@@ -665,21 +656,18 @@ fn fullscreen_effort_cancel_preserves_draft_and_mode_across_screen_switches() {
 fn fullscreen_effort_confirm_applies_only_the_selected_effort() {
     let data = effort_data();
     let mut app = App::new();
-    app.set_task_execution(TaskExecution::Swarm);
     app.open_command_panel(super::command_panel::CommandPanel::Effort(
         data.effort_selector().unwrap(),
     ));
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Right, KeyModifiers::NONE);
     key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
-    assert_eq!(app.task_execution(), TaskExecution::Swarm);
     assert_eq!(
         key(&mut app, KeyCode::Enter, KeyModifiers::NONE),
         Some(AppCommand::Models(crate::models::Command::SetEffort {
             effort: ash_protocol::ReasoningEffort::Max
         }))
     );
-    assert_eq!(app.task_execution(), TaskExecution::Swarm);
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());
     crate::tui_assert_snapshot!(app = &app; "effort_selector_confirm_restores_composer", render_effort(&app));
@@ -751,9 +739,7 @@ fn slash_task_commands_forward_without_a_mode_selection() {
             else {
                 panic!("task command should submit directly: {input}");
             };
-            assert_eq!(submission.mode, TaskExecution::Agent);
             assert_eq!(submission.display_text, input);
-            assert_eq!(app.task_execution(), TaskExecution::Agent);
         }
     }
 }
@@ -772,7 +758,6 @@ fn task_command_queues_while_another_turn_is_running() {
     else {
         panic!("the command needs a separate queued request");
     };
-    assert_eq!(submission.mode, TaskExecution::Agent);
     assert_eq!(submission.display_text, input);
     assert_eq!(app.queue_view().items[0].text, input);
 }

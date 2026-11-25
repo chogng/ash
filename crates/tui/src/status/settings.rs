@@ -130,10 +130,6 @@ impl StatusLineSettings {
                 let id = value.as_str().ok_or_else(|| {
                     "invalid [tui].statusLine: every item name must be a string".to_owned()
                 })?;
-                // Older profiles showed the approach for the next task here.
-                if id == "mode" {
-                    continue;
-                }
                 let item = StatusLineItem::from_id(id)
                     .ok_or_else(|| format!("invalid [tui].statusLine item `{id}`"))?;
                 if items.contains(&item) {

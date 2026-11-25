@@ -350,7 +350,6 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
 
     for _ in 0..2 {
         let invocation = SlashCommandInvocation {
-            mode: Default::default(),
             command: built_in_catalog_command(TuiSlashCommandAction::Model),
             origin: SlashCommandOrigin::Local,
             display_arguments: String::new(),
@@ -372,7 +371,6 @@ fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
     }
 
     let invocation = SlashCommandInvocation {
-        mode: Default::default(),
         command: built_in_catalog_command(TuiSlashCommandAction::Model),
         origin: SlashCommandOrigin::Local,
         display_arguments: String::new(),

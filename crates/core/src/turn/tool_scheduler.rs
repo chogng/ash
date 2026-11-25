@@ -1031,7 +1031,7 @@ fn constrain_analysis_review(
                 )
             }))
     {
-        return Err(CoreError::Policy("Plan and Ask permit investigation only; switch modes before changing files or external state".into()));
+        return Err(CoreError::Policy("Plan and Ask are read-only. Submit a separate request to change files or external state.".into()));
     }
     Ok(request)
 }

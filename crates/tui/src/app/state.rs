@@ -556,8 +556,8 @@ impl App {
                 if self.chat_panel.is_steering()
                     && self
                         .thread
-                        .current_mode()
-                        .is_some_and(|mode| mode != submission.mode)
+                        .current_execution()
+                        .is_some_and(|execution| !execution.is_default())
                 {
                     let queue = &mut self.thread_presentations.active_mut().queue;
                     let id = queue.push(crate::thread::composer::QueuedChatInput::from_submission(
@@ -677,7 +677,6 @@ impl App {
         match outcome {
             CommandPanelOutcome::ExtensionTab(tab) => Some(
                 ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
-                    mode: self.task_execution(),
                     command: tab.command().definition(),
                     origin: ash_slash_commands::SlashCommandOrigin::Local,
                     display_arguments: String::new(),
@@ -2448,15 +2447,6 @@ impl App {
         Some(ThreadCommand::RefreshQueue.into())
     }
 
-    pub(crate) fn task_execution(&self) -> ash_protocol::TaskExecution {
-        self.input_state().mode()
-    }
-
-    #[cfg(test)]
-    pub(super) fn set_task_execution(&mut self, mode: ash_protocol::TaskExecution) {
-        self.input_state_mut().set_mode(mode);
-    }
-
     pub(super) fn report_composer_option_error(&mut self, error: String) {
         // Editing next-turn options cannot change the lifecycle of an accepted Turn.
         let error = crate::nls::localize_owned(self.language(), error);
@@ -3842,7 +3832,6 @@ impl App {
                     self.close_transient_surfaces();
                     let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
                     let submission = crate::thread::composer::ChatSubmission {
-                        mode: self.task_execution(),
                         command_id: crate::client::new_command_id("input"),
                         display_text: text.clone(),
                         input: vec![crate::thread::composer::ChatInputItem::Text(text)],
@@ -3911,7 +3900,6 @@ impl App {
                     SessionCommand::SideChat {
                         source_turn_id: self.active_turn().cloned(),
                         submission: crate::thread::composer::ChatSubmission {
-                            mode: invocation.mode,
                             command_id: crate::client::new_command_id("side-question"),
                             display_text: invocation.display_arguments,
                             input: invocation.arguments,
@@ -3930,13 +3918,7 @@ impl App {
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Fork)) => {
                 match invocation.text_arguments() {
-                    Ok(prompt) => Some(
-                        SessionCommand::Fork {
-                            prompt,
-                            mode: invocation.mode,
-                        }
-                        .into(),
-                    ),
+                    Ok(prompt) => Some(SessionCommand::Fork { prompt }.into()),
                     Err(error) => {
                         self.thread.update(ThreadPresentationEvent::CommandFailed {
                             command: invocation.display_text(),
@@ -4027,9 +4009,8 @@ impl App {
                     invocation.command.name.as_str(),
                     "init" | "team" | "develop"
                 );
-                let mut submission = invocation.into_forwarded_submission();
+                let submission = invocation.into_forwarded_submission();
                 if task_command || workflow_command {
-                    submission.mode = ash_protocol::TaskExecution::Agent;
                     return self.handle_chat_composer_outcome(
                         if self.chat_panel.turn_pending() && !self.starts_new_session() {
                             ChatComposerOutcome::Queued(
@@ -4046,8 +4027,8 @@ impl App {
                 if self.chat_panel.is_steering()
                     && self
                         .thread
-                        .current_mode()
-                        .is_some_and(|mode| mode != submission.mode)
+                        .current_execution()
+                        .is_some_and(|execution| !execution.is_default())
                 {
                     let queue = &mut self.thread_presentations.active_mut().queue;
                     let id = queue.push(crate::thread::composer::QueuedChatInput::from_submission(

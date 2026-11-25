@@ -223,7 +223,6 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             completed.transcript,
         ));
         apply_active_turn_snapshot(&mut app, &completed.thread.turns);
-        assert_eq!(app.task_execution(), TaskExecution::Agent);
     }
 
     drop(client);
@@ -243,7 +242,6 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             .iter()
             .any(|message| message.text() == swarm_prompt)
     );
-    assert_eq!(app.task_execution(), TaskExecution::Agent);
 }
 
 fn app_for_conversation(

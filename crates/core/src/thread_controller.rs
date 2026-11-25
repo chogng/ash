@@ -3448,7 +3448,7 @@ impl ThreadController {
         })
     }
 
-    /// Replays committed updates after a durable Thread sequence for reconnecting consumers.
+    /// Replays consumer-visible committed updates after a durable Thread sequence.
     pub fn thread_updates_after(
         &self,
         thread_id: &ThreadId,
@@ -3474,6 +3474,9 @@ impl ThreadController {
                     return Err(CoreError::Journal("Thread replay is not contiguous".into()));
                 }
                 cursor = event.sequence;
+                if matches!(event.event, ThreadEvent::RetiredTurnEvent { .. }) {
+                    continue;
+                }
                 updates.push(ThreadUpdateEnvelope {
                     session_id: binding.session_id.clone(),
                     thread_id: thread_id.clone(),
@@ -3531,6 +3534,9 @@ impl ThreadController {
             });
         }
         for turn in snapshot.turns.clone() {
+            if !is_interruptible_turn(turn.status) {
+                continue;
+            }
             if turn.status == crate::TurnStatus::Cancelling {
                 // A durable cancellation wins over resumable Tool work from the previous process.
                 recovery_events.push(ThreadEvent::TurnInterrupted {
@@ -3540,16 +3546,13 @@ impl ThreadController {
                 });
                 continue;
             }
-            if !matches!(
-                turn.status,
-                crate::TurnStatus::Completed
-                    | crate::TurnStatus::Failed
-                    | crate::TurnStatus::Interrupted
-            ) && crate::tool_repetition::project_tool_failures(&snapshot.items, &turn.turn_id)?
-                .active()
-                .is_some_and(|streak| {
-                    streak.count >= crate::tool_repetition::TOOL_REPETITION_FAILURE_THRESHOLD
-                })
+            // Recovery cannot resume work under an execution policy that no longer exists.
+            if !turn.execution_restart_required
+                && crate::tool_repetition::project_tool_failures(&snapshot.items, &turn.turn_id)?
+                    .active()
+                    .is_some_and(|streak| {
+                        streak.count >= crate::tool_repetition::TOOL_REPETITION_FAILURE_THRESHOLD
+                    })
             {
                 recovery_events.push(ThreadEvent::TurnFailed {
                     thread_id: thread_id.clone(),
@@ -3558,25 +3561,33 @@ impl ThreadController {
                 });
                 continue;
             }
-            if !matches!(
-                turn.status,
-                crate::TurnStatus::Completed
-                    | crate::TurnStatus::Failed
-                    | crate::TurnStatus::Interrupted
-                    | crate::TurnStatus::WaitingForApproval
-                    | crate::TurnStatus::WaitingForUserInput
-                    | crate::TurnStatus::WaitingForCapability
-            ) && !snapshot.has_resumable_tool_continuation(&turn.turn_id)
+            if turn.execution_restart_required
+                || (!matches!(
+                    turn.status,
+                    crate::TurnStatus::WaitingForApproval
+                        | crate::TurnStatus::WaitingForUserInput
+                        | crate::TurnStatus::WaitingForCapability
+                ) && !snapshot.has_resumable_tool_continuation(&turn.turn_id))
             {
-                recovery_events.push(ThreadEvent::TurnCancelling {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn.turn_id.clone(),
-                });
-                recovery_events.push(ThreadEvent::TurnInterrupted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn.turn_id,
-                    error: None,
-                });
+                if let Some(interaction) = turn.pending_interaction {
+                    recovery_events.push(ThreadEvent::InteractionCancelled {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn.turn_id.clone(),
+                        request_id: interaction.request_id,
+                        reason: InteractionCancelReason::TurnInterrupted,
+                    });
+                }
+                recovery_events.extend([
+                    ThreadEvent::TurnCancelling {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn.turn_id.clone(),
+                    },
+                    ThreadEvent::TurnInterrupted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn.turn_id,
+                        error: None,
+                    },
+                ]);
             }
         }
         if !recovery_events.is_empty() {
@@ -3827,6 +3838,7 @@ impl ThreadController {
                     .map_or(Timestamp(0), |snapshot| snapshot.recorded_at_floor),
             );
             let envelope = StoredEvent {
+                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: if matches!(
                     &event,

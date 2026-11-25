@@ -677,7 +677,7 @@ fn validate_parallel_request(request: &str) -> Result<(), CoreError> {
 
 type Migration = fn(&Transaction<'_>) -> Result<(), CoreError>;
 
-const MIGRATIONS: &[Migration] = &[adopt_v1];
+const MIGRATIONS: &[Migration] = &[adopt_v1, discard_retired_agent_mode];
 
 fn migrate(database: &mut Connection) -> Result<(), CoreError> {
     let transaction = database
@@ -729,6 +729,82 @@ fn adopt_v1(transaction: &Transaction<'_>) -> Result<(), CoreError> {
     transaction
         .execute_batch(include_str!("../migrations/legacy/finish_adoption.sql"))
         .map_err(journal)
+}
+
+fn discard_retired_agent_mode(transaction: &Transaction<'_>) -> Result<(), CoreError> {
+    let mut query = transaction
+        .prepare("SELECT rowid, request, plan FROM agent_workflow_commands")
+        .map_err(journal)?;
+    let rows = query
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(journal)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(journal)?;
+    for (rowid, request, plan) in rows {
+        use serde_json::Value;
+
+        let mut projection: Value = serde_json::from_str(&plan).map_err(journal)?;
+        let changed_turn = projection
+            .pointer_mut("/submission/command")
+            .is_some_and(ash_history::discard_retired_turn_fields);
+        let changed_agent = projection
+            .get_mut("agent")
+            .is_some_and(ash_history::discard_retired_agent_fields);
+        let mut key: Value = serde_json::from_str(&request).map_err(journal)?;
+        let key_changed = key
+            .as_array_mut()
+            .and_then(|args| args.get_mut(1))
+            .is_some_and(|execution| {
+                if execution.as_str() == Some("agent") || (changed_turn && execution.is_string()) {
+                    *execution = projection
+                        .pointer("/submission/command/instructions/taskCommand")
+                        .cloned()
+                        .unwrap_or(Value::Null);
+                    return true;
+                }
+                false
+            });
+        if changed_turn || changed_agent || key_changed {
+            let decoded: Plan = serde_json::from_value(projection).map_err(journal)?;
+            let request = if key_changed {
+                let args = key.as_array().expect("a changed request key is an array");
+                if !matches!(args.len(), 4 | 5) {
+                    return Err(journal("invalid workflow request key"));
+                }
+                let input: Vec<protocol::UserInput> =
+                    serde_json::from_value(args[0].clone()).map_err(journal)?;
+                let task_command = serde_json::from_value(args[1].clone()).map_err(journal)?;
+                let tool_mode = serde_json::from_value(args[2].clone()).map_err(journal)?;
+                let approval_mode = serde_json::from_value(args[3].clone()).map_err(journal)?;
+                command_request_key(
+                    &input,
+                    task_command,
+                    tool_mode,
+                    approval_mode,
+                    args.len() == 5,
+                )?
+            } else {
+                request
+            };
+            transaction
+                .execute(
+                    "UPDATE agent_workflow_commands SET request=?2, plan=?3 WHERE rowid=?1",
+                    params![
+                        rowid,
+                        request,
+                        serde_json::to_string(&decoded).map_err(journal)?
+                    ],
+                )
+                .map_err(journal)?;
+        }
+    }
+    Ok(())
 }
 
 /// Preserve prototype records while adding stable run identity and creation order. Rowid is used

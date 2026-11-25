@@ -190,11 +190,11 @@ export class ChatModelsViewModel extends Disposable {
 					switch (capability) {
 						case 'vision': return model.inputModalities?.includes('image') === true;
 						case 'tools': case 'toolcalling': return model.capabilities?.toolCalling === 'supported';
-						case 'agent': case 'agentmode': return model.capabilities?.agentMode === 'supported';
+						case 'agent': return model.capabilities?.agentMode === 'supported';
 						default: return false;
 					}
 				})) { return false; }
-				const searchable = `${model.displayName} ${model.model.provider}/${model.model.model} ${providerText} ${model.source?.providerId ?? ''} ${model.source?.metadata ?? ''} ${model.capabilities?.toolCalling === 'supported' ? 'tools toolCalling' : ''} ${model.capabilities?.agentMode === 'supported' ? 'agent agentMode' : ''} ${model.inputModalities?.includes('image') ? 'vision' : ''}`.toLocaleLowerCase();
+				const searchable = `${model.displayName} ${model.model.provider}/${model.model.model} ${providerText} ${model.source?.providerId ?? ''} ${model.source?.metadata ?? ''} ${model.capabilities?.toolCalling === 'supported' ? 'tools toolCalling' : ''} ${model.capabilities?.agentMode === 'supported' ? 'agent' : ''} ${model.inputModalities?.includes('image') ? 'vision' : ''}`.toLocaleLowerCase();
 				return terms.every(term => searchable.includes(term)) || !!matches(model.displayName) || !!matches(model.model.model);
 			});
 			const status = this.catalogStatus(provider, groupModels.length);

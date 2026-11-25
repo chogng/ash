@@ -203,7 +203,6 @@ pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SlashCommandInvocation {
-    pub(crate) mode: ash_protocol::TaskExecution,
     pub(crate) command: SlashCommandDefinition,
     pub(crate) origin: SlashCommandOrigin,
     pub(crate) display_arguments: String,
@@ -256,7 +255,6 @@ impl SlashCommandInvocation {
         }
 
         ChatSubmission {
-            mode: self.mode,
             command_id: crate::client::new_command_id("input"),
             display_text,
             input: self.arguments,
@@ -283,7 +281,6 @@ pub(super) fn into_command_invocation(
     }
 
     Ok(SlashCommandInvocation {
-        mode: submission.mode,
         command: parsed.command,
         origin: parsed.origin,
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),

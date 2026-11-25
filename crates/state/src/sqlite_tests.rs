@@ -255,6 +255,7 @@ fn append_created_thread(
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -365,6 +366,7 @@ fn append_recent_activity_with_padding(
                 .into_iter()
                 .enumerate()
                 .map(|(index, event)| StoredEvent {
+                    encoding: Default::default(),
                     thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -648,6 +650,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let thread_event = StoredEvent {
+        encoding: Default::default(),
         thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -834,6 +837,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 1,
             events: vec![StoredEvent {
+                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -869,6 +873,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 2,
             events: vec![StoredEvent {
+                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -1129,6 +1134,7 @@ fn assert_session_catalog_fact_updates(
                 thread_id: thread_id.clone(),
                 expected_sequence: sequence - 1,
                 events: vec![StoredEvent {
+                    encoding: Default::default(),
                     thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -1873,6 +1879,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                encoding: Default::default(),
                 thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -2002,6 +2009,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        encoding: Default::default(),
         thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -2061,6 +2069,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let mut event = StoredEvent {
+        encoding: Default::default(),
         thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -2432,6 +2441,176 @@ fn latest_history_window(limit: u32) -> ash_thread_store::ThreadHistoryWindow {
     ash_thread_store::ThreadHistoryWindow::Latest {
         turn_limit: std::num::NonZeroU32::new(limit).unwrap(),
     }
+}
+
+#[test]
+fn sqlite_opens_schema_38_agent_plan_and_swarm_history_after_upgrade() {
+    use ash_protocol::ContentDigest;
+    use ash_protocol::TaskExecution;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("schema-38.sqlite");
+    let (store, threads, thread_id, expected) = history_window_fixture(&path, 3);
+    let model = expected.turns.last().unwrap().model.clone().unwrap();
+    let waiting =
+        start_catalog_model_turn(&threads, &thread_id, "waiting-legacy-plan", model.clone());
+    threads
+        .request_turn_interaction(
+            &thread_id,
+            &waiting,
+            RequestTurnInteraction {
+                request_id: ash_protocol::RequestId::new("legacy-plan-question").unwrap(),
+                item_id: None,
+                request: ash_protocol::AgentRequest::UserInput {
+                    request: ash_protocol::RequestUserInput {
+                        plan_review: None,
+                        questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
+                            id: "continue".into(),
+                            header: "Continue".into(),
+                            question: "Continue the task?".into(),
+                            options: Vec::new(),
+                            allow_free_form: true,
+                            validation: None,
+                        }],
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+    let original = store.load(&thread_id).unwrap();
+    drop(threads);
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let legacy_instructions = |json: String, turn_index: usize| {
+        let (mode, task) = match turn_index {
+            0 => ("agent", ""),
+            1 => ("plan", r#","taskCommand":"plan""#),
+            2 => ("swarm", r#","taskCommand":"swarm""#),
+            3 => ("plan", ""),
+            _ => unreachable!(),
+        };
+        json.replace(
+            r#""instructions":{"owner":"test","id":"catalog-model","revision":"1","body":"Test catalog model persistence"}"#,
+            &format!(
+                r#""instructions":{{"owner":"test","id":"catalog-model","revision":"1","body":"Test catalog model persistence","modeInstructions":{{"owner":"test","id":"{mode}","revision":"1","body":"Legacy {mode} guidance"}}{task}}}"#
+            ),
+        )
+    };
+    let mut turn_index = 0;
+    let mut legacy_records = Vec::new();
+    for mut record in original {
+        record.schema_version = 38;
+        let mut json = serde_json::to_string(&record).unwrap();
+        if matches!(record.event, ThreadEvent::TurnAccepted { .. }) {
+            json = legacy_instructions(json, turn_index);
+            if turn_index == 3 {
+                json = json.replace(
+                    r#""kind":"coding","instructions":"#,
+                    r#""kind":"coding","mode":"plan","instructions":"#,
+                );
+                assert_eq!(json.matches(r#""mode":"plan""#).count(), 2);
+            }
+            assert_eq!(json.matches(r#""modeInstructions""#).count(), 2);
+            turn_index += 1;
+        }
+        let digest = ContentDigest::sha256(json.as_bytes());
+        connection
+            .execute(
+                "INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)",
+                rusqlite::params![digest.as_str(), json],
+            )
+            .unwrap();
+        connection.execute(
+            "UPDATE thread_events SET schema_version = 38, record_digest = ?1 WHERE thread_id = ?2 AND sequence = ?3",
+            rusqlite::params![digest.as_str(), thread_id.as_str(), i64::try_from(record.sequence).unwrap()],
+        ).unwrap();
+        legacy_records.push(json);
+    }
+    assert_eq!(turn_index, 4);
+    for (index, turn) in expected.turns.iter().enumerate() {
+        let turn_json: String = connection
+            .query_row(
+                "SELECT turn_json FROM thread_history_turns WHERE thread_id = ?1 AND turn_id = ?2",
+                rusqlite::params![thread_id.as_str(), turn.turn_id.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let json = legacy_instructions(turn_json, index);
+        let digest = ContentDigest::sha256(json.as_bytes());
+        connection.execute(
+            "UPDATE thread_history_turns SET turn_json = ?1, turn_digest = ?2 WHERE thread_id = ?3 AND turn_id = ?4",
+            rusqlite::params![json, digest.as_str(), thread_id.as_str(), turn.turn_id.as_str()],
+        ).unwrap();
+    }
+    drop(connection);
+
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let window = latest_history_window(4);
+    assert!(
+        store
+            .read_history_page(&thread_id, &window)
+            .unwrap()
+            .is_none()
+    );
+    let restored = threads
+        .read_thread_history(&thread_id, &window)
+        .unwrap()
+        .thread;
+    for ((turn, old_turn), execution) in restored.turns.iter().zip(&expected.turns).zip([
+        TaskExecution::Agent,
+        TaskExecution::Plan,
+        TaskExecution::Swarm,
+    ]) {
+        assert_eq!(turn.items, old_turn.items);
+        assert_eq!(turn.execution_approach(), execution);
+        assert!(
+            turn.instructions
+                .as_ref()
+                .unwrap()
+                .task_instructions()
+                .is_none()
+        );
+    }
+    assert_eq!(restored.turns.len(), 4);
+    assert_eq!(restored.turns[3].execution_approach(), TaskExecution::Agent);
+    assert_eq!(
+        restored.turns[3].status,
+        ash_protocol::TurnStatus::WaitingForUserInput
+    );
+    assert_eq!(
+        store
+            .read_history_page(&thread_id, &window)
+            .unwrap()
+            .unwrap()
+            .thread,
+        restored
+    );
+
+    for (record, original) in store.load(&thread_id).unwrap().iter().zip(&legacy_records) {
+        assert_eq!(&serde_json::to_string(record).unwrap(), original);
+    }
+    let recovered = threads.recover_thread(&thread_id).unwrap();
+    assert_eq!(
+        recovered.turns[3].status,
+        ash_protocol::TurnStatus::Interrupted
+    );
+    assert!(recovered.turns[3].pending_interaction.is_none());
+    let next = start_catalog_model_turn(&threads, &thread_id, "after-upgrade", model);
+    threads
+        .complete_turn(&thread_id, &next, "After upgrade".into())
+        .unwrap();
+    assert_eq!(
+        store
+            .load(&thread_id)
+            .unwrap()
+            .last()
+            .unwrap()
+            .schema_version,
+        CURRENT_STORED_EVENT_SCHEMA_VERSION
+    );
 }
 
 #[test]

@@ -36,7 +36,7 @@ pub(super) fn draw(
         app,
         &areas.session,
         areas.input,
-        chat_input::ChatInputChrome::Mode(app.task_execution()),
+        chat_input::ChatInputChrome::Fullscreen,
         Some("Build anything"),
         crate::app::chat_view::Pointer {
             hovered: pointer_target(app.fullscreen.pointer.hovered()),

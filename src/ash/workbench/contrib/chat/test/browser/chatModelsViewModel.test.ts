@@ -228,7 +228,8 @@ test('Tools and Agent filters require independent affirmative declarations and s
 	];
 	await view.refresh();
 	for (const filter of ['@capability:tools', '@capability:toolCalling']) { assert.deepEqual(models(filter).map(entry => entry.model.model.model), ['newest']); }
-	for (const filter of ['@capability:agent', '@capability:agentMode']) { assert.deepEqual(models(filter).map(entry => entry.model.model.model), ['older']); }
+	assert.deepEqual(models('@capability:agent').map(entry => entry.model.model.model), ['older']);
+	assert.deepEqual(models('@capability:agentMode'), []);
 	assert.equal(models('@capability:tools @capability:agent').length, 0);
 	using rendered = renderMarkdown(getModelHoverContent(models('newest')[0].model), { ownerDocument: browserEnvironment.window.document });
 	const hover = rendered.element.textContent!.replaceAll('\u00a0', ' ');

@@ -24,7 +24,7 @@ pub(crate) enum ChatInputCursor {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputChrome {
     Standard,
-    Mode(ash_protocol::TaskExecution),
+    Fullscreen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -70,12 +70,9 @@ pub(crate) fn draw(
     chrome: ChatInputChrome,
     context: RenderContext<'_>,
 ) {
-    let prompt_color = match chrome {
-        ChatInputChrome::Standard => context.foreground(),
-        ChatInputChrome::Mode(mode) => context.mode_color(mode),
-    };
+    let prompt_color = context.foreground();
     let border_color = match chrome {
-        ChatInputChrome::Mode(mode) => context.mode_color(mode),
+        ChatInputChrome::Fullscreen => context.foreground(),
         ChatInputChrome::Standard => match focus {
             ChatInputFocus::Blurred => context.border(),
             ChatInputFocus::Focused => context.chat_input_chrome(),

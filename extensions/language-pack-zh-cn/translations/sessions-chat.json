@@ -234,7 +234,7 @@
     "sessions.chat.defaultModel.placeholder": "auto 或 provider/model",
     "sessions.chat.welcome": "今天想做些什么？",
     "sessions.chat.permission.fullWarning": "跳过大部分权限审批？",
-    "sessions.chat.permission.fullDetail": "命令可能无需询问就修改、删除文件或操作外部服务。文件和网络访问范围仍然有效。Plan 和 Ask 仍然用于分析。",
+    "sessions.chat.permission.fullDetail": "命令可能无需询问就修改、删除文件或操作外部服务。文件和网络访问范围仍然有效。/plan 和 /ask 是只读命令。",
     "sessions.chat.permission.reviewModel": "审核模型…",
     "sessions.chat.permission.reviewConnection": "选择审核连接",
     "sessions.chat.permission.reviewDefault": "自动（连接默认值）",

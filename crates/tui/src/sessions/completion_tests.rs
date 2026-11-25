@@ -48,7 +48,6 @@ fn archive_request_preserves_all_selected_sessions() {
 #[test]
 fn manager_request_preserves_submission_and_approval_mode() {
     let submission = ChatSubmission {
-        mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
         display_text: "investigate the failure".into(),
         input: vec![ChatInputItem::Text("investigate the failure".into())],
@@ -112,7 +111,6 @@ fn btw_starts_a_turn_on_a_side_chat_in_the_same_session() {
     let session_id = source.session_id().clone();
     let source_id = source.thread_id().clone();
     let prompt = |text: &str| ChatSubmission {
-        mode: Default::default(),
         command_id: crate::client::new_command_id("test-input"),
         display_text: text.into(),
         input: vec![ChatInputItem::Text(text.into())],

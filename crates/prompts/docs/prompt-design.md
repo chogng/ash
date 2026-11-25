@@ -60,7 +60,7 @@ Agents 安排日程：    core + agents-window + assistant + 当前 任务命令
 | 模型指导   | 为准确模型选择合适的完整基础正文及专用表达 | 产品身份、工具协议、用户授权            |
 | 工具与环境 | 实际可调用操作、执行位置、来源与运行限制   | 模型可以凭文字自行扩充的能力            |
 
-这些边界延续 [Agent 指令组合](agent-instructions.md)、[任务命令](../../task-command-templates/README.md) 和 [Role](../../agent-roles/README.md) 的现有契约。例如，在 Ask 模式下识别到 coding 任务，仍然只能在该模式允许的范围内回答；切到 Code 布局也不会自动获得实施授权。
+这些边界延续 [Agent 指令组合](agent-instructions.md)、[任务命令](../../task-command-templates/README.md) 和 [Role](../../agent-roles/README.md) 的现有契约。例如，输入 `/ask` 时，Agent 按该命令的只读约束回答。实施需要单独发出请求。
 
 ## 共同核心为什么这样写
 

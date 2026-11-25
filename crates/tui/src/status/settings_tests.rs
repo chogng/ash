@@ -36,22 +36,15 @@ fn configured_order_controls_status_line_order() {
 }
 
 #[test]
-fn legacy_mode_status_line_item_is_ignored() {
-    let settings = StatusLineSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
+fn status_line_rejects_retired_items_in_current_settings() {
+    let result = StatusLineSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
         "statusLine".into(),
         json!(["model", "mode"]),
-    )])))
-    .unwrap();
-    let written = settings.write_to_tui(&FrontendConfigDto(BTreeMap::from([(
-        "theme".into(),
-        json!("dark"),
     )])));
-    assert_eq!(written.0["statusLine"], json!(["model"]));
-    assert_eq!(written.0["theme"], json!("dark"));
-    assert_eq!(StatusLineSettings::from_tui(&written).unwrap(), settings);
-    assert_eq!(
-        settings.items().collect::<Vec<_>>(),
-        vec![StatusLineItem::Model]
+    assert!(
+        result
+            .unwrap_err()
+            .contains("invalid [tui].statusLine item `mode`")
     );
 }
 

@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use tokio::sync::watch;
 
-const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 12;
+const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = crate::CONFIG_FILE_SCHEMA_VERSION as u32;
 pub(crate) const OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
 const CONFIG_AUTHORITY_ID: i64 = 1;
 

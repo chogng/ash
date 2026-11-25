@@ -680,7 +680,7 @@ fn concurrent_open_installs_an_empty_workflow_store() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 }
 
 fn open_workflow_store_concurrently(path: &std::path::Path) {

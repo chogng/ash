@@ -240,7 +240,7 @@ Ultra Fast 是服务等级。加速档位、[模型推理档位](../model-provid
 
 `model_messages` 中的 `system_instructions` 必填；`tools`、`task_commands` 和 `multi_agent` 可省略，省略表示没有额外的模型专用指导，保留所属模块的现有规则。声明的正文不得空白，全部文本合计最多 64 KiB。`tools` 按准确工具名声明，只接受 `description`；`task_commands` 使用[内置任务命令 ID](../task-command-templates/README.md#指令模板)；`multi_agent` 只接受 `root`、`subagent`。这些字段不能声明工具参数、开关或授权。
 
-Core 在现有工具说明之后加入模型专用 `description`，保留工具参数、动态角色信息和原绑定。只有本次实际可用的工具会得到这段说明，Code Mode 的 `ALL_TOOLS` 同样使用冻结的模型说明。当前模式选择一段模式指导，Thread 的真实父子关系选择根或子 Agent 指导；额外正文保留宿主的模式限制、Role 与权限。上下文检查与执行使用同一组装路径，并将工具说明计入工具预算。
+Core 在现有工具说明之后加入模型专用 `description`，保留工具参数、动态角色信息和原绑定。只有本次实际可用的工具会得到这段说明，Code Mode 的 `ALL_TOOLS` 同样使用冻结的模型说明。当前任务命令选择对应指导，Thread 的真实父子关系选择根或子 Agent 指导；额外正文保留宿主的任务执行限制、Role 与权限。上下文检查与执行使用同一组装路径，并将工具说明计入工具预算。
 
 `model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将基础、当前任务命令和身份指导与运行时指令组装成 `ModelRequest.instructions`，工具指导进入对应的工具说明；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
 
