@@ -214,12 +214,24 @@
 	gap: var(--ash-spacing-size60);
 }
 
+.ash-sessions-list-preview-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+}
+
 .ash-sessions-list-preview-heading > strong {
 	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
 }
 
 .ash-sessions-list-preview > time {
 	justify-self: end;
+}
+
+.ash-sessions-list-preview > time,
+.ash-sessions-list-preview-heading > time {
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label2);
 	white-space: nowrap;

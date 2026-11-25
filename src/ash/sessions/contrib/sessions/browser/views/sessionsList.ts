@@ -1480,7 +1480,7 @@ export class SessionsList extends DomWidget {
 				}
 				const node = sectionFor(key, project.title, children, 'project', {
 					project: project.localProject, catalogProjectId: project.key, projectAppearance: project.appearance,
-					preview: { kind: 'chatProject', title: project.title, details: project.preview },
+					preview: { kind: 'project', title: project.title, details: project.preview },
 					projectOperations: project.operations && {
 						...project.operations,
 						archive: project.operations.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog')),
@@ -1600,8 +1600,8 @@ export class SessionsList extends DomWidget {
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				item.updateProjectAppearance(project);
 				item.preview.update(this.hoverService, {
-					kind: 'chatProject', title: project.name,
-					details: { description: project.description, conversationCount: project.sessionCount, completeCount: true },
+					kind: 'project', title: project.name,
+					details: { description: project.description, conversationCount: project.sessionCount, updatedAt: project.updatedAtMs },
 				});
 				item.setContextMenu(anchor => this.showLocalProjectMenu(project.name, project, item, anchor));
 				destination.push(item.domNode);
@@ -2160,14 +2160,16 @@ class SessionListSection extends Disposable {
 
 	updateCodeProjectPreview(hoverService: IHoverService | undefined, project: Project): void {
 		this.preview?.update(hoverService, {
-			kind: 'codeProject',
+			kind: 'project',
 			title: project.name,
-			folders: projectFolders(project),
-			formatPath: folder => ({
-				label: this.labels.getUriLabel(folder),
-				basename: this.labels.getUriBasenameLabel(folder),
-			}),
-			conversationCount: project.sessionCount,
+			details: { conversationCount: project.sessionCount, updatedAt: project.updatedAtMs },
+			paths: {
+				folders: projectFolders(project),
+				formatPath: folder => ({
+					label: this.labels.getUriLabel(folder),
+					basename: this.labels.getUriBasenameLabel(folder),
+				}),
+			},
 		});
 	}
 

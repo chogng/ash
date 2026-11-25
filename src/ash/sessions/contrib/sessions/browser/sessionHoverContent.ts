@@ -32,13 +32,14 @@ interface PreviewPathLabel {
 export type SessionListPreviewContent =
 	| (ConversationPreview & { readonly kind: 'chatConversation'; })
 	| (ConversationPreview & { readonly kind: 'codeConversation'; readonly branch?: PreviewSource; })
-	| { readonly kind: 'chatProject'; readonly title: string; readonly details?: SessionsCatalogProject['preview']; }
 	| {
-		readonly kind: 'codeProject';
+		readonly kind: 'project';
 		readonly title: string;
-		readonly folders: readonly URI[];
-		readonly formatPath: (folder: URI) => PreviewPathLabel;
-		readonly conversationCount: number;
+		readonly details?: SessionsCatalogProject['preview'];
+		readonly paths?: {
+			readonly folders: readonly URI[];
+			readonly formatPath: (folder: URI) => PreviewPathLabel;
+		};
 	};
 
 const previewDetailIcons = {
@@ -80,21 +81,22 @@ export function createSessionPreviewHover(document: Document, preview: SessionLi
 				}
 				break;
 			}
-			case 'chatProject': {
-				const details = preview.details;
+			case 'project': {
+				const { details, paths } = preview;
 				if (!details) break;
+				const time = createPreviewTime(document, details.updatedAt);
+				if (time) heading.append(' ', time);
 				if (details.description?.trim()) insertDetail(h(document, 'div', details.description));
-				const count = detail(formatPreviewChatCount(details.conversationCount, details.completeCount), 'count');
+				if (paths) {
+					for (const folder of paths.folders) insertDetail(detail(createPreviewPath(document, paths.formatPath(folder)), 'path'));
+				}
+				const count = detail(formatPreviewChatCount(details.conversationCount), 'count');
 				insertDetail(count);
 				if (details.description === undefined && details.descriptionSource) {
 					insertLoadedDetail(details.descriptionSource, description => h(document, 'div', description), count);
 				}
 				break;
 			}
-			case 'codeProject':
-				for (const folder of preview.folders) insertDetail(detail(createPreviewPath(document, preview.formatPath(folder)), 'path'));
-				insertDetail(detail(formatPreviewChatCount(preview.conversationCount, true), 'count'));
-				break;
 		}
 		return card;
 	};
@@ -117,16 +119,11 @@ function createPreviewPath(document: Document, { label, basename }: PreviewPathL
 	return row;
 }
 
-function formatPreviewChatCount(count: number, complete: boolean): string {
+function formatPreviewChatCount(count: number): string {
 	const formattedCount = new Intl.NumberFormat(getNLSLanguage()).format(count);
-	if (complete) {
-		return count === 1
-			? localize('sessions.hover.conversationCountOne', '{0} chat', formattedCount)
-			: localize('sessions.hover.conversationCount', '{0} chats', formattedCount);
-	}
 	return count === 1
-		? localize('sessions.hover.loadedConversationCountOne', '{0} chat loaded', formattedCount)
-		: localize('sessions.hover.loadedConversationCount', '{0} chats loaded', formattedCount);
+		? localize('sessions.hover.conversationCountOne', '{0} chat', formattedCount)
+		: localize('sessions.hover.conversationCount', '{0} chats', formattedCount);
 }
 
 function createPreviewTime(document: Document, timestamp: number | undefined): HTMLElement | undefined {

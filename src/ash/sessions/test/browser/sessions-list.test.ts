@@ -387,13 +387,13 @@ test('Chat sidebar reuses the session preview and updates it when the catalog ch
 		createdAt: createdAt.getTime(), updatedAt: updatedAt.getTime(), pinned: true,
 		organization: () => undefined, getActions: () => [], open() { },
 	};
-	const catalog = (conversation: SessionsCatalogRow, projectTitle: string): SessionsCatalogSnapshot => ({
+	const catalog = (conversation: SessionsCatalogRow, projectTitle: string, projectUpdatedAt?: number): SessionsCatalogSnapshot => ({
 		sections: [
 			{ key: 'pinned', rows: [conversation], projects: [] },
 			{
 				key: 'projects', rows: [], projects: [{
 					key: 'research', title: projectTitle, rows: [conversation], loading: false,
-					preview: { description: 'Project notes', conversationCount: 8, completeCount: true },
+					preview: { description: 'Project notes', conversationCount: 8, updatedAt: projectUpdatedAt },
 				}]
 			},
 		],
@@ -440,13 +440,16 @@ test('Chat sidebar reuses the session preview and updates it when the catalog ch
 	assert.equal(project.hasAttribute('title'), false);
 	assert.deepEqual([...preview(project).children].map(child => child.textContent), ['Research', 'Project notes', '8 chats']);
 
-	snapshot.set(catalog({ ...row, title: 'Updated conversation', updatedAt: undefined }, 'New project name'), undefined);
+	snapshot.set(catalog({ ...row, title: 'Updated conversation', updatedAt: undefined }, 'New project name', updatedAt.getTime()), undefined);
 	assert.equal(list.domNode.querySelector('[data-item="chat-preview"] .ash-sessions-list-item'), button);
 	const updated = preview();
 	assert.equal(updated.querySelector('strong')?.textContent, 'Updated conversation');
 	assert.equal(updated.querySelector('time')?.dateTime, createdAt.toISOString());
 	assert.equal(updated.querySelector('.ash-sessions-list-preview-project')?.textContent, 'New project name');
-	assert.deepEqual([...preview(project).children].map(child => child.textContent), ['New project name', 'Project notes', '8 chats']);
+	const updatedProject = preview(project);
+	assert.equal(updatedProject.querySelector('.ash-sessions-list-preview-heading > strong')?.textContent, 'New project name');
+	assert.equal(updatedProject.querySelector<HTMLTimeElement>('.ash-sessions-list-preview-heading > time')?.dateTime, updatedAt.toISOString());
+	assert.deepEqual([...updatedProject.children].slice(1).map(child => child.textContent), ['Project notes', '8 chats']);
 });
 
 test('Session preview preserves field order as Code branch and Chat project details arrive', async () => {
@@ -461,15 +464,17 @@ test('Session preview preserves field order as Code branch and Chat project deta
 		branch: { key: 'branch', load: () => branch.p },
 	})(CancellationToken.None);
 	const chatProject = createSessionPreviewHover(document, {
-		kind: 'chatProject', title: 'Research', details: {
-			conversationCount: 2, completeCount: false,
+		kind: 'project', title: 'Research', details: {
+			conversationCount: 2,
 			descriptionSource: { key: 'description', load: () => description.p },
 		},
 	})(CancellationToken.None);
 	const codeProject = createSessionPreviewHover(document, {
-		kind: 'codeProject', title: 'Research', conversationCount: 15,
-		folders: [URI.file('/home/test/work/research')],
-		formatPath: () => ({ label: '~/work/research', basename: 'research' }),
+		kind: 'project', title: 'Research', details: { conversationCount: 15, updatedAt: timestamp },
+		paths: {
+			folders: [URI.file('/home/test/work/research')],
+			formatPath: () => ({ label: '~/work/research', basename: 'research' }),
+		},
 	})(CancellationToken.None);
 	document.body.append(code, chatProject, codeProject);
 
@@ -478,8 +483,10 @@ test('Session preview preserves field order as Code branch and Chat project deta
 	const fields = (card: HTMLElement) => [...card.children].map(child => child instanceof dom.window.HTMLTimeElement ? child.dateTime : child.textContent);
 	assert.deepEqual(fields(code), ['Fix tests', 'Research', 'Branch: work', new Date(timestamp).toISOString()]);
 	assert.ok(code.textContent?.startsWith('Fix tests\nResearch\nBranch: work\n'));
-	assert.deepEqual(fields(chatProject), ['Research', 'Project notes', '2 chats loaded']);
-	assert.deepEqual(fields(codeProject), ['Research', '~/work/research', '15 chats']);
+	assert.deepEqual(fields(chatProject), ['Research', 'Project notes', '2 chats']);
+	assert.equal(codeProject.querySelector('.ash-sessions-list-preview-heading > strong')?.textContent, 'Research');
+	assert.equal(codeProject.querySelector<HTMLTimeElement>('.ash-sessions-list-preview-heading > time')?.dateTime, new Date(timestamp).toISOString());
+	assert.deepEqual(fields(codeProject).slice(1), ['~/work/research', '15 chats']);
 	const path = codeProject.querySelector('.ash-sessions-list-preview-path-text');
 	assert.equal(path?.querySelector('.ash-sessions-list-preview-path-home')?.textContent, '~/');
 	assert.deepEqual([...path!.querySelector('.ash-sessions-list-preview-path-components')!.children].map(part => part.textContent), ['work', '/research']);

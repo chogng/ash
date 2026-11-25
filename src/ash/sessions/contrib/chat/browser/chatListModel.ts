@@ -654,7 +654,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			preview: {
 				description, descriptionSource,
 				conversationCount: localProject?.sessionCount ?? new Set(rows.map(row => row.id)).size,
-				completeCount: !!localProject || history?.state === 'complete',
+				updatedAt: localProject ? localProject.updatedAtMs : project.project?.updatedAt,
 			},
 			localProject,
 			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,

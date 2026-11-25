@@ -52,7 +52,7 @@ export interface SessionsCatalogProject {
 		readonly description?: string;
 		readonly descriptionSource?: { readonly key: string; load(token: CancellationToken): Promise<string | undefined>; };
 		readonly conversationCount: number;
-		readonly completeCount: boolean;
+		readonly updatedAt?: number;
 	};
 	readonly localProject?: ProjectSummary;
 	readonly appearance?: CatalogProjectAppearance;

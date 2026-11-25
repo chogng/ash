@@ -14,10 +14,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 	test('A collapsed ChatGPT project preview reads its description without loading conversation pages', async () => {
 		const { page } = browserTests;
+		const updatedAt = '2026-11-05T12:00:00Z';
+		await page.clock.install({ time: new Date('2026-11-08T12:00:00Z') });
 		await mockChatGPTRequests(page);
 		const id = 'g-p-preview';
 		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
-			json: { items: [{ gizmo: { id, display: { name: 'Preview project' } } }], cursor: null },
+			json: { items: [{ gizmo: { gizmo: { id, display: { name: 'Preview project' }, updated_at: updatedAt } } }], cursor: null },
 		}));
 		await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
 			if (!new URL(route.request().url()).pathname.endsWith(id)) return route.fallback();
@@ -30,16 +32,23 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		});
 		await page.goto('/chatgptNavigation.html?projectPreview&locale=zh-CN');
 		const project = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Preview project', exact: true });
-		const fields = page.getByRole('tooltip').locator('.ash-sessions-list-preview > *');
+		const card = page.getByRole('tooltip').locator('.ash-sessions-list-preview');
+		const heading = card.locator('.ash-sessions-list-preview-heading');
+		const time = heading.locator('time');
+		const details = card.locator(':scope > :not(.ash-sessions-list-preview-heading)');
 		await project.hover();
-		await expect(fields).toHaveText(['Preview project', 'Project notes', '已加载 0 个对话']);
+		await expect(heading.locator('strong')).toHaveText('Preview project');
+		await expect(time).toHaveText('3天前');
+		await expect(time).toHaveAttribute('datetime', new Date(updatedAt).toISOString());
+		await expect(details).toHaveText(['Project notes', '0 个对话']);
 		expect(projectHistoryReads).toBe(0);
 
 		await project.click();
 		await expect(page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Project chat', exact: true })).toBeVisible();
 		await page.mouse.move(700, 100);
 		await project.hover();
-		await expect(fields).toHaveText(['Preview project', 'Project notes', '1 个对话']);
+		await expect(time).toHaveText('3天前');
+		await expect(details).toHaveText(['Project notes', '1 个对话']);
 		expect(projectHistoryReads).toBe(1);
 	});
 
