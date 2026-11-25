@@ -54,7 +54,7 @@ export function registerLayoutActions(
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
 			codeAvailable.set(contextKeys.getValue(SessionsCodeEditorContext.key) === true);
-			panelVisible.set(false);
+			panelVisible.set(layout.isPartVisible('panel'));
 			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
 			const selection = sessions.activeSelection;
 			isNewSession.set(!hasDesktopChatSource.get() && layout.isPartVisible('sessions') && selection?.kind === 'untitled' && !selection.session.forkSource);

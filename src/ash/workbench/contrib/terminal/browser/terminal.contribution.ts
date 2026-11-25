@@ -34,6 +34,7 @@ import { TerminalMainContribution } from './terminalMainContribution.js';
 import { AgentHostOutputChannel } from './agentHostOutputChannel.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { WorkbenchEditorToolsAvailable } from '../../../common/contextkeys.js';
 
 void registerTerminalConfiguration(getFontSnippets);
 
@@ -82,6 +83,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		title: 'Terminal',
 		localizationKey: { bundle: 'ash.views', key: 'terminal' },
 		order: 1,
+		when: WorkbenchEditorToolsAvailable,
 		canToggleVisibility: false,
 		canMoveView: true,
 		ctorDescriptor: new SyncDescriptor(TerminalViewPane),

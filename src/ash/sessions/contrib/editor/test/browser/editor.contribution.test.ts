@@ -1,4 +1,5 @@
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+import '../../../../../workbench/contrib/terminal/common/terminalConfiguration.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -17,9 +18,10 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { CODE_EDITOR_ID } from '../../../../../workbench/browser/parts/editor/textResourceEditor.js';
-import { IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
 import { IChatAttachmentResolveService } from '../../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalCommandId } from '../../../../../workbench/contrib/terminal/common/terminal.js';
 import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { Direction } from '../../../../../base/browser/ui/grid/grid.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
@@ -74,7 +76,7 @@ test('the Command Palette adds the active file to the Sessions draft', async () 
 	assert.equal(entry(), undefined);
 });
 
-test('editor contributions follow layout state, serialize open commands without Add tab UI and release window registrations', async () => {
+test('editor contributions follow layout state, serialize Add Tab commands and release window registrations', async () => {
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using configuration = new InMemoryConfigurationService();
@@ -136,7 +138,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	services.registerInstance(IContextKeyService, contextKeys);
 	const menus = new MenuService(commands, contextKeys);
 	using title = menus.createMenu(MenuId.EditorTitle);
-	using addTab = menus.createMenu(Menus.CodeAddTab);
+	using addTab = menus.createMenu(Menus.SessionsEditorTabsBarAddTab);
+	const addTabLabels = () => addTab.getActions().flatMap(([, actions]) => actions.map(action => action.label));
 	using palette = menus.createMenu(MenuId.CommandPalette);
 	const paletteIds = () => palette.getActions().flatMap(([, actions]) => actions).map(action => action.id).sort();
 	// Shared editor imports may already contribute commands to the same registry.
@@ -192,7 +195,12 @@ test('editor contributions follow layout state, serialize open commands without 
 	assert.ok(!desktopIds().includes('test.desktopEditor.action'));
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Toggle details', true, false], ['Show editor', true, undefined]]);
-	assert.deepEqual(addTab.getActions(), []);
+	assert.deepEqual(addTabLabels(), ['Open Files', 'Open Changes']);
+	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeys);
+	appServerAvailable.set(true);
+	assert.deepEqual(addTabLabels(), ['Open Files', 'Open Changes', 'New Terminal']);
+	assert.equal(addTab.getActions().flatMap(([, actions]) => actions).at(-1)?.id, TerminalCommandId.CreateTerminalEditor);
+	appServerAvailable.reset();
 	assert.deepEqual(paletteIds(), [
 		...existingPaletteIds,
 		NEW_FILE_TAB_COMMAND_ID,
@@ -301,7 +309,9 @@ test('editor contributions follow layout state, serialize open commands without 
 		contextKeys.setContext('sessions.editorToolMaximized', true);
 		assert.equal(headerActions()[0]?.label, '还原工具窗格大小');
 		contextKeys.setContext('sessions.editorToolMaximized', false);
-		assert.deepEqual(addTab.getActions(), []);
+		appServerAvailable.set(true);
+		assert.deepEqual(addTabLabels(), ['打开文件', '打开更改', '新建终端']);
+		appServerAvailable.reset();
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件');
 		assert.equal(changesAction().label, '更改');
 		contextKeys.setContext('sessions.editorTool', 'terminal');
@@ -366,10 +376,9 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 
 	assert.equal(blink?.checked, false);
 	await blink?.run();
-	assert.equal(configuration.getValue('sessions.terminal.cursorBlinking'), true);
-	assert.equal(configuration.getValue('terminal.integrated.cursorBlinking'), false);
+	assert.equal(configuration.getValue('terminal.integrated.cursorBlinking'), true);
 	assert.equal(groupActions('1_terminal').at(-1)?.checked, true);
-	await configuration.updateValue('sessions.terminal.cursorBlinking', false);
+	await configuration.updateValue('terminal.integrated.cursorBlinking', false);
 	assert.equal(groupActions('1_terminal').at(-1)?.checked, false);
 	flat.set(false);
 	assert.deepEqual(groupActions('1_terminal'), []);

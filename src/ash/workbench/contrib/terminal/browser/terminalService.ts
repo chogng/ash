@@ -9,7 +9,7 @@ import { ITerminalProcessService, type IAgentCommandTerminalTarget, type Termina
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { TerminalTransferError, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
+import { TerminalTransferError, ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { AgentCommandPty } from './agentHostPty.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
@@ -21,7 +21,7 @@ import { ISecretStorageService } from '../../../../platform/secrets/common/secre
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { parseTerminalReloadCredentials, parseTerminalReloadState, parseTerminalReviveStateKey, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import { terminalExecutionScope, terminalExecutionScopesEqual } from '../common/remote/terminal.js';
-import { getTerminalUri, parseTerminalUri } from './terminalUri.js';
+import { getInstanceFromResource, getTerminalUri, parseTerminalUri } from './terminalUri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
@@ -35,6 +35,7 @@ import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHos
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import type { ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
@@ -69,10 +70,11 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@ICommandService private readonly commands: ICommandService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
-		@IContextKeyService contextKeyService: IContextKeyService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IPathService private readonly paths: IPathService,
 		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
 		@IWorkspaceTrustRequestService private readonly trustRequests: IWorkspaceTrustRequestService,
+		@ITerminalConfigurationService private readonly terminalConfiguration: ITerminalConfigurationService,
 	) {
 		super();
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -101,6 +103,22 @@ export class TerminalService extends Disposable implements ITerminalService {
 		return this._activeInstance;
 	}
 
+	moveToEditor(instance: ITerminalInstance): Promise<void> {
+		return this.terminalEditors.openEditor(instance);
+	}
+
+	async moveToTerminalView(source: ITerminalInstance | URI): Promise<void> {
+		const instance = URI.isUri(source) ? getInstanceFromResource(this.instances, source) : source;
+		if (!instance || !this.instances.includes(instance)) return;
+		if (instance.target === TerminalLocation.Editor) {
+			await this.terminalEditors.detachInstance(instance);
+			if (!this.instances.includes(instance)) return;
+			instance.target = TerminalLocation.Panel;
+		}
+		this.setActiveInstance(instance);
+		await this.groups.showPanel(true);
+	}
+
 	async revealAgentCommand(target: IAgentCommandTerminalTarget, takeInput: boolean): Promise<void> {
 		const key = JSON.stringify([target.sessionId, target.threadId, target.toolCallId, target.commandSessionId]);
 		let pending = this.commandTerminals.get(key);
@@ -110,6 +128,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 			let pty: AgentCommandPty | undefined;
 			// Attachment reuses the original command grant. The current window's
 			// workspace and shell profile only apply when starting a new process.
+			// The transcript can reveal an attached Agent command outside Code, where there is no panel.
+			const location = this.contextKeyService.getValue(IsSessionsWindowContext.key) ? TerminalLocation.Editor : this.terminalConfiguration.defaultLocation;
 			pending = command.attach().then(() => this.createTerminalCore({
 				dimensions: { rows: 24, cols: 80 },
 				config: {
@@ -117,7 +137,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 					isFeatureTerminal: true,
 					customPtyImplementation: (id, cols, rows) => pty = new AgentCommandPty(id, command, cols, rows),
 				},
-			}, this.getDefaultLocation())).then(instance => {
+			}, location)).then(instance => {
 				if (!pty || !this.instances.includes(instance)) throw new CancellationError();
 				const disposed = this.onDidDisposeInstance(closed => {
 					if (closed !== instance) return;
@@ -168,7 +188,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (!this.connected) {
 			await this.whenConnected;
 		}
-		const location = options.location ?? this.getDefaultLocation();
+		const location = options.location ?? this.terminalConfiguration.defaultLocation;
 		const deferEditorOpen = (options.deferEditorOpen === true || options.placeInEditor !== undefined) && isEditorLocation(location);
 		const preserveFocus = options.preserveFocus ?? (isEditorLocation(location) && typeof location === 'object' && location.preserveFocus);
 		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
@@ -315,9 +335,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 			throw error;
 		}
 	}
-
-	/** The product host chooses initial placement; terminal instances retain their service ownership. */
-	protected getDefaultLocation(): TerminalLocation { return TerminalLocation.Panel; }
 
 	private async restoreTerminals(): Promise<void> {
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);

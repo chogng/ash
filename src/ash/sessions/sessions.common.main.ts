@@ -72,6 +72,7 @@ import '../workbench/contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import { registerBulkEditView } from '../workbench/contrib/bulkEdit/browser/preview/bulkEdit.contribution.js';
 import '../workbench/contrib/trace/browser/trace.contribution.js';
+import '../workbench/contrib/output/browser/output.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/editor/browser/diffEditor.sessions.contribution.js';
@@ -112,7 +113,6 @@ import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contributio
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
 // Connected App tools use the same Task owner and Terminal execution services as Code.
 import '../workbench/contrib/tasks/browser/task.contribution.js';
-import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
 import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
 import { registerMemoryManagement } from '../workbench/contrib/memories/browser/memories.contribution.js';
@@ -149,7 +149,6 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 activateEditorFeatures();
 
 registerTerminalView(SessionsViewRegistry);
-registerOutputView(SessionsViewRegistry);
 registerBulkEditView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));

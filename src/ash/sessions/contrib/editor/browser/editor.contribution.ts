@@ -27,7 +27,8 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { localize, localize2 } from '../../../../nls.js';
 import { EditorHasMultipleToolsContext, EditorToolMaximizedContext, Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
 import { SessionsCategories } from '../../../common/categories.js';
-import { SESSIONS_EDITOR_WORD_WRAP, SESSIONS_TERMINAL_CONFIG_SECTION } from '../../../common/configuration.js';
+import { SESSIONS_EDITOR_WORD_WRAP } from '../../../common/configuration.js';
+import { TERMINAL_CONFIG_SECTION } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
@@ -44,7 +45,7 @@ const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisibl
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
 const filesTool = ContextKeyExpr.equals('sessions.editorTool', 'files');
 const terminalTool = ContextKeyExpr.equals('sessions.editorTool', 'terminal');
-const terminalCursorBlinkingSetting = `${SESSIONS_TERMINAL_CONFIG_SECTION}.cursorBlinking`;
+const terminalCursorBlinkingSetting = `${TERMINAL_CONFIG_SECTION}.cursorBlinking`;
 const terminalCursorBlinkingContext = new RawContextKey<boolean>('sessions.terminalCursorBlinking', false);
 
 registerAction2(class ToggleSessionsEditorWordWrapAction extends Action2 {

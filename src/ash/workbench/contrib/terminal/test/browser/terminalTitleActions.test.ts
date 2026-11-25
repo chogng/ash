@@ -1,4 +1,5 @@
 import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
@@ -469,6 +470,8 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 		instances: [], activeInstance: undefined,
 		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 		createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
+		moveToEditor: async () => { throw new Error('Unexpected editor move'); },
+		moveToTerminalView: async () => { throw new Error('Unexpected panel move'); },
 		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 		...toDisposable(() => { }),
 	});
@@ -565,6 +568,8 @@ suite('Terminal context command lifecycle', () => {
 			...Disposable.None, instances, get activeInstance() { return active; },
 			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 			createTerminal: async () => { throw new Error('Unexpected creation'); },
+			moveToEditor: async instance => { effects.push(['moveToEditor', instance.instanceId]); },
+			moveToTerminalView: async source => { effects.push(['moveToTerminalView', URI.isUri(source) ? source.toString() : source.instanceId]); },
 			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
 			whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
 			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
@@ -579,6 +584,11 @@ suite('Terminal context command lifecycle', () => {
 		assert.equal(active, second);
 		await commands.executeCommand(TerminalCommandId.Relaunch, context);
 		assert.deepEqual(effects, [['clear', 1], ['clear', 1], ['clear', 2], ['relaunch', 1, { cols: 80, rows: 24 }]]);
+		await commands.executeCommand(TerminalCommandId.MoveToEditor, context.toJSON());
+		assert.deepEqual(effects.at(-1), ['moveToEditor', 1]);
+		const resource = URI.parse('vscode-terminal:/test/2');
+		await commands.executeCommand(TerminalCommandId.MoveToTerminalPanel, resource);
+		assert.deepEqual(effects.at(-1), ['moveToTerminalView', resource.toString()]);
 		for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
 			await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
 		}

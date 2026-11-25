@@ -2,6 +2,7 @@ import '../common/terminalConfiguration.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { TerminalLocation, TerminalLocationConfigValue, TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
 import { type ITerminalConfiguration, TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
 import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
 import type { ITerminalConfigurationService } from './terminal.js';
@@ -23,5 +24,10 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 		const fontFamily = settings.fontFamily || this.configuration.getValue<string>('editor.fontFamily') || EDITOR_FONT_DEFAULTS.fontFamily;
 		// A user-selected face may not exist on this host. Keep terminal cells monospaced.
 		return Object.freeze({ ...settings, fontFamily: /(?:^|,)\s*monospace\s*(?:,|$)/i.test(fontFamily) ? fontFamily : `${fontFamily}, monospace` });
+	}
+
+	get defaultLocation(): TerminalLocation {
+		const location = this.configuration.getValue<TerminalLocationConfigValue>(TerminalSettingId.DefaultLocation);
+		return location === TerminalLocationConfigValue.Editor ? TerminalLocation.Editor : TerminalLocation.Panel;
 	}
 }

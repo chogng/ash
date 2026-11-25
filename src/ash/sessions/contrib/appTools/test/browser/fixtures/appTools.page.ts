@@ -1,6 +1,6 @@
 import { TestSessionsList } from '../../../../../test/browser/testSessionsList.js';
 import { ProjectsService } from '../../../../projects/browser/projectsService.js';
-import { TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
+import { TerminalLocationConfigValue, TerminalSettingId } from '../../../../../../platform/terminal/common/terminal.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { createTestPathService } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
@@ -50,7 +50,8 @@ import { ISecretStorageService, BaseSecretStorageService } from '../../../../../
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
-import { ITerminalService } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalConfigurationService, ITerminalService } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalConfigurationService } from '../../../../../../workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { TerminalService } from '../../../../../../workbench/contrib/terminal/browser/terminalService.js';
 import { TestWorkspaceTrustManagementService } from '../../../../../../workbench/test/common/workbenchTestServices.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../../platform/workspace/common/workspaceTrust.js';
@@ -230,6 +231,7 @@ services.registerSingleton(ILabelService, () => services.createInstance(LabelSer
 services.registerInstance(IPathService, createTestPathService({ ...renderer,  appServer: { ...renderer.appServer, operatingSystem: executionOS , isAvailable: true } }, workspace));
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IConfigurationService, configuration);
+services.registerSingleton(ITerminalConfigurationService, () => services.createInstance(TerminalConfigurationService));
 services.registerInstance(ITerminalProcessService, terminalProcesses);
 services.registerSingleton(ICommandService, () => new CommandService(services));
 services.registerSingleton(IConfigurationResolverService, () => services.createInstance(ConfigurationResolverService));
@@ -242,6 +244,7 @@ services.registerInstance(IEditorService, { openEditor: async (...args: unknown[
 services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 const useEditorTerminals = new URL(location.href).searchParams.has('editorTerminals');
 if (useEditorTerminals) {
+	await configuration.updateValue(TerminalSettingId.DefaultLocation, TerminalLocationConfigValue.Editor);
 	services.registerInstance(ITerminalEditorService, {
 		openEditor: async (instance: ITerminalInstance, options?: TerminalEditorLocation) => {
 			terminalViews.push({ id: instance.id, focus: !options?.preserveFocus });
@@ -256,10 +259,7 @@ services.registerInstance(IWorkspaceTrustRequestService, {
 	requestWorkspaceTrust: async () => { throw new Error('App tool fixtures are already trusted'); },
 	requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
 });
-class EditorTerminalService extends TerminalService {
-	protected override getDefaultLocation(): TerminalLocation { return TerminalLocation.Editor; }
-}
-const terminals = resources.add(useEditorTerminals ? services.createInstance(EditorTerminalService) : services.createInstance(TerminalService));
+const terminals = resources.add(services.createInstance(TerminalService));
 services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
 services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);

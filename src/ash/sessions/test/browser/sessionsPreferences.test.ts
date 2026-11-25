@@ -1,3 +1,4 @@
+import '../../../workbench/contrib/terminal/common/terminalConfiguration.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import '../../../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';
@@ -214,6 +215,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 	using configuration = new ConfigurationService();
 	using contextKeys = new ContextKeyService();
+	contextKeys.setContext('isSessionsWindow', true);
 	const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 	const { ILocalTranscriptionService, ILocalTranscriptionModelService } = await import('../../../platform/localTranscription/common/localTranscription.js');
@@ -1093,26 +1095,32 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ jsonEditor: true });
 	assert.deepEqual(preferenceOpens, [{ user: { jsonEditor: true } }]);
 	await openCategoryAction('tab', 'Open Tab settings');
-	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
-	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
-	assert.equal(window.document.querySelector('[data-settings-item-id="terminal.integrated.fontSize"]'), null);
+	const generalSettings = preferences.open({ section: 'general' });
+	const terminalLocation = window.document.querySelector('[data-settings-item-id="terminal.integrated.defaultLocation"]');
+	assert.ok(terminalLocation);
+	const terminalLocationSelect = terminalLocation.querySelector<HTMLButtonElement>('[role="combobox"]');
+	assert.ok(terminalLocationSelect);
+	assert.equal(terminalLocationSelect.disabled, false);
+	assert.equal(terminalLocationSelect.textContent?.trim(), 'Bottom panel');
+	for (const [label, value] of [['Editor tab', 'editor'], ['Bottom panel', 'view']] as const) {
+		terminalLocationSelect.click();
+		const list = window.document.getElementById(terminalLocationSelect.getAttribute('aria-controls')!)!;
+		const option = [...list.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === label);
+		assert.ok(option);
+		option.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(configuration.getValue('terminal.integrated.defaultLocation'), value);
+		assert.equal(terminalLocationSelect.textContent?.trim(), label);
+	}
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
-	await terminalSettings;
-	const terminalProfilePicked = new DeferredPromise<void>();
-	using profileCommand = commandRegistry.register('workbench.action.terminal.selectDefaultProfile', () => {
-		assert.ok(window.document.querySelector('dialog[open]'), 'the profile picker opens from the active Settings dialog');
-		void terminalProfilePicked.complete();
-	});
+	await generalSettings;
+
 	const environmentSettings = preferences.open({ section: 'environment' });
-	const profile = [...window.document.querySelectorAll<HTMLButtonElement>('dialog[open] .ash-sessions-settings-page button')]
-		.find(button => button.textContent === 'Select Default Profile');
-	assert.ok(profile);
-	assert.equal(profile.disabled, true);
-	contextKeys.setContext('appServerAvailable', true);
-	assert.equal(profile.disabled, false);
-	profile.click();
-	await terminalProfilePicked.p;
-	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	const settingsDialog = window.document.querySelector<HTMLDialogElement>('dialog[open]')!;
+	assert.equal(settingsDialog.querySelector('[data-settings-item-id^="sessions.terminal."]'), null);
+	assert.equal(settingsDialog.querySelector('[data-settings-item-id^="terminal.integrated."]'), null);
+	assert.doesNotMatch(settingsDialog.textContent ?? '', /Select Default Profile/u);
+	settingsDialog.close();
 	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
 		{ section: 'editor-opening', target: 'modalGroup' },

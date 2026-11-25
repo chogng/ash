@@ -13,6 +13,7 @@ export interface IEditorGroupMenuIds {
 	readonly headerPrimary?: MenuId;
 	readonly headerLayout?: MenuId;
 	readonly editorActions?: MenuId;
+	readonly tabsBarAddTab?: MenuId;
 }
 
 export interface IEditorGroupViewOptions {

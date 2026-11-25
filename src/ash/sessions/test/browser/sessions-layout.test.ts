@@ -11,6 +11,7 @@ import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workben
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
@@ -1302,23 +1303,34 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	assert.equal(editor.activeGroup.activeInput?.resource.toString(), source);
 });
 
-test('Agent Window has no Panel Part, Grid leaf or saved panel state even after legacy commands', async () => {
+test('Agent Window terminal panel follows Code visibility and ignores legacy panel state', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://retired-panel.test' });
 	const parts = createParts(dom.window.document);
+	parts.set('panel', new TestSessionsPart('panel', dom.window.document.body));
+	using services = new InstantiationService();
+	using contextKeys = new ContextKeyService();
+	const code = SessionsCodeEditorContext.bindTo(contextKeys);
+	services.registerInstance(IContextKeyService, contextKeys);
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'retired-panel', backend: dom.window.localStorage, flushInterval: 0 });
 	storage.store('sessions.layout.panel.visible', true, StorageScope.PROFILE, (await import('../../../platform/storage/common/storage.js')).StorageTarget.MACHINE);
 	try {
-		using layout = createLayout(dom.window.document.body, parts, { storageService: storage });
-		assert.equal(parts.has('panel' as SessionsPartId), false);
-		assert.equal(layout.domNode.querySelector('[data-part="panel"]'), null);
+		using layout = createLayout(dom.window.document.body, parts, { storageService: storage }, services);
 		assert.equal('panel' in layout.state, false);
 		assert.equal(storage.get('sessions.layout.panel.visible', StorageScope.PROFILE), undefined);
 		layout.showPart('panel');
-		layout.setPartAvailable('panel', true);
-		layout.toggleMaximizedPanel();
 		assert.equal(layout.isPartVisible('panel'), false);
 		assert.equal(layout.isPartAvailable('panel'), false);
-		assert.equal(layout.domNode.querySelector('[data-part="panel"]'), null);
+		code.set(true);
+		assert.equal(layout.isPartAvailable('panel'), true);
+		assert.equal(layout.isPartVisible('panel'), false);
+		layout.showPart('panel');
+		assert.equal(layout.isPartVisible('panel'), true);
+		code.set(false);
+		assert.equal(layout.isPartVisible('panel'), false);
+		code.set(true);
+		assert.equal(layout.isPartVisible('panel'), true);
+		layout.hidePart('panel');
+		assert.equal(layout.isPartVisible('panel'), false);
 		await storage.flush();
 		assert.equal(storage.get('sessions.layout.panel.visible', StorageScope.PROFILE), undefined);
 	} finally { for (const part of parts.values()) part.dispose(); dom.window.close(); }

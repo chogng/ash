@@ -12,7 +12,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
 import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
-import { ITerminalEditorService, ITerminalService, type ITerminalInstance } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { Menus } from '../../../browser/menus.js';
@@ -31,8 +31,8 @@ export function registerSessionsTerminalContribution(
 	const disposables = new DisposableStore();
 	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
 	const updateVisibility = (): void => {
-		terminalVisible.set(layout.isPartVisible('editor') && editor.mainWindowGroups.some(group =>
-			editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput));
+		terminalVisible.set(layout.isPartVisible('panel') || (layout.isPartVisible('editor') && editor.mainWindowGroups.some(group =>
+			editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput)));
 	};
 	updateVisibility();
 	disposables.add(layout.onDidChangePartVisibility(updateVisibility));
@@ -168,16 +168,38 @@ export function registerSessionsTerminalContribution(
 				if (!contextKeys.contextMatchesRules(codeVisible) || !layout.isPartAvailable('editor')) {
 					return;
 				}
-				terminalToggle ??= (async () => {
-					const terminals = accessor.get(ITerminalService);
-					const workspace = accessor.get(IWorkspaceContextService);
+				if (terminalToggle) return terminalToggle;
+				if (layout.isPartVisible('panel')) {
+					layout.hidePart('panel');
+					return;
+				}
+				const panelAvailable = layout.isPartAvailable('panel');
+				const defaultInPanel = panelAvailable && accessor.get(ITerminalConfigurationService).defaultLocation === TerminalLocation.Panel;
+				const terminals = accessor.get(ITerminalService);
+				const terminalEditors = accessor.get(ITerminalEditorService);
+				const panelGroups = panelAvailable ? accessor.get(ITerminalGroupService) : undefined;
+				const workspace = accessor.get(IWorkspaceContextService);
+				terminalToggle = (async () => {
 					const scope = workspace.getWorkspace();
 					await terminals.whenConnected;
 					if (disposables.isDisposed || !contextKeys.contextMatchesRules(codeVisible) || workspace.getWorkspace() !== scope) {
 						return;
 					}
-					const terminalEditors = accessor.get(ITerminalEditorService);
 					const groups = editor.getToolGroups(isTerminal);
+					const active = terminals.activeInstance;
+					const matchesScope = (instance: ITerminalInstance): boolean =>
+						(scope.folders.length ? scope.folders.some(folder => folder.id === instance.dirId) : !instance.dirId)
+						&& instance.shellLaunchConfig?.type !== 'Task';
+					const activeInPanel = active?.target === TerminalLocation.Panel && matchesScope(active);
+					if (panelGroups && (activeInPanel || (!groups.length && defaultInPanel))) {
+						const existing = activeInPanel ? active : terminals.instances.find(instance => instance.target === TerminalLocation.Panel && matchesScope(instance));
+						const instance = existing ?? await terminals.createTerminal({ location: TerminalLocation.Panel });
+						if (!disposables.isDisposed && layout.isPartAvailable('panel') && workspace.getWorkspace() === scope) {
+							terminals.setActiveInstance(instance);
+							await panelGroups.showPanel(true);
+						}
+						return;
+					}
 					const destination = groups.find(group => group === editor.activeGroup) ?? groups[0];
 					const selected = destination?.activeInput;
 					const hasLiveTerminal = groups.some(group => group.inputs.some(input => isTerminal(input) && hasShell(input, terminalEditors)));
@@ -185,13 +207,11 @@ export function registerSessionsTerminalContribution(
 						const location = destination ? { viewColumn: destination.id } : undefined;
 						// Restored processes may exist before their editor tabs. Match the
 						// current folder without taking a process already hosted by a tab.
-						const matchesScope = (instance: NonNullable<typeof terminals.activeInstance>): boolean =>
-							(scope.folders.length ? scope.folders.some(folder => folder.id === instance.dirId) : !instance.dirId)
-							&& instance.shellLaunchConfig?.type !== 'Task'
+						const canRestore = (instance: ITerminalInstance): boolean =>
+							matchesScope(instance) && (!panelAvailable || instance.target === TerminalLocation.Editor)
 							&& !editor.groups.some(group => group.inputs.some(input =>
 								input instanceof TerminalEditorInput && instance.resource && input.contains(instance.resource)));
-						const active = terminals.activeInstance;
-						const retained = active && matchesScope(active) ? active : terminals.instances.find(matchesScope);
+						const retained = active && canRestore(active) ? active : terminals.instances.find(canRestore);
 						const saved = isTerminal(selected) ? selected : destination?.inputs.find(isTerminal);
 						if (destination && saved) {
 							if (!await restoreTab(saved, destination, terminals, terminalEditors, workspace, { retained, reveal: () => editor.setGroupVisible(destination.id, true) })) return;

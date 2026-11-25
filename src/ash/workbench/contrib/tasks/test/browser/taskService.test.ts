@@ -420,6 +420,8 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	async relaunchTerminal() { }
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
 	moveTerminal() { }
+	async moveToEditor(): Promise<void> { throw new Error('Task fixtures do not move terminals between hosts'); }
+	async moveToTerminalView(): Promise<void> { throw new Error('Task fixtures do not move terminals between hosts'); }
 	async closeTerminal(instance: ITerminalInstance) { await instance.close(); }
 }
 

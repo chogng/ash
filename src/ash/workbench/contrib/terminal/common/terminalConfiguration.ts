@@ -7,7 +7,7 @@ import { ConfigurationScope, Extensions, type IConfigurationPropertySchema, type
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { terminalContribConfiguration } from '../terminalContribExports.js';
 import { TERMINAL_CONFIG_SECTION } from './terminal.js';
-import { TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalLocationConfigValue, TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 
 const properties: Record<string, IConfigurationPropertySchema> = {};
@@ -104,6 +104,21 @@ for (const name of ['showActiveTerminal', 'showActions'] as const) {
 	};
 }
 registerTerminalPlatformConfiguration();
+properties[TerminalSettingId.DefaultLocation] = {
+	type: 'string', enum: [TerminalLocationConfigValue.Editor, TerminalLocationConfigValue.TerminalView], default: TerminalLocationConfigValue.TerminalView,
+	get description() { return localize('terminal.config.defaultLocation.description', 'Choose where new terminals open.'); },
+	ashSetting: {
+		valueType: 'select',
+		get title() { return localize('terminal.config.defaultLocation.title', 'Terminal default location'); },
+		get description() { return localize('terminal.config.defaultLocation.description', 'Choose where new terminals open.'); },
+		get options() {
+			return [
+				{ value: TerminalLocationConfigValue.TerminalView, label: localize('terminal.config.defaultLocation.view', 'Bottom panel') },
+				{ value: TerminalLocationConfigValue.Editor, label: localize('terminal.config.defaultLocation.editor', 'Editor tab') },
+			];
+		},
+	},
+};
 properties[`${TERMINAL_CONFIG_SECTION}.confirmOnKill`] = {
 	type: 'string', default: 'editor', enum: ['never', 'editor', 'panel', 'always'],
 	get description() { return localize('terminal.config.confirmOnKill', 'Confirm before closing a terminal with child processes: never, in the editor, in the panel, or always.'); },

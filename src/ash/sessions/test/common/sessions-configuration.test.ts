@@ -1,4 +1,5 @@
 import '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
+import '../../../workbench/contrib/terminal/common/terminalConfiguration.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
@@ -27,6 +28,10 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.deepEqual(inputLayout?.options, [{ value: 'compact', label: '单行' }, { value: 'stacked', label: '分层' }]);
 		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '设置');
 		assert.equal(registry.getConfiguration(SESSIONS_DIFF_VIEW_MODE)?.setting?.title, '差异视图');
+		const terminalLocation = registry.getConfiguration('terminal.integrated.defaultLocation')?.setting;
+		assert.ok(terminalLocation?.valueType === 'select');
+		assert.equal(terminalLocation.title, '终端默认位置');
+		assert.deepEqual(terminalLocation.options, [{ value: 'view', label: '底部面板' }, { value: 'editor', label: '编辑器标签页' }]);
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',
 			'sessions.settings.section.development': '开发',
@@ -34,7 +39,6 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 			'sessions.settings.desktopApp': '桌面应用',
 			'sessions.settings.account': '账号',
 			'sessions.settings.appearance': '外观',
-			'sessions.settings.customize': '自定义',
 			'sessions.settings.agents': '智能体',
 			'sessions.settings.models': '模型',
 			'sessions.settings.gitPrs': 'Git 与 PR',
@@ -128,43 +132,42 @@ test('Agents Window editor preferences override inherited settings only in that 
 	assert.equal(sessions.getValue('diffEditor.renderSideBySide'), true);
 });
 
-test('Agent Window terminal settings are independent in the shared profile document', async () => {
+test('Agent Window and the IDE share the terminal default location and other terminal settings', async () => {
 	const { ConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
 	const SessionsConfigurationService = testConfigurationService(ConfigurationService);
 	using files = new TestConfigurationFiles();
 	using sessions = new SessionsConfigurationService({ files });
 	using workbench = new WorkbenchConfigurationService({ files });
+	const location = 'terminal.integrated.defaultLocation';
 	const defaultProfile = 'terminal.integrated.defaultProfile.osx';
 	const fontSize = 'terminal.integrated.fontSize';
-	const changes: string[] = [];
-	using listener = sessions.onDidChangeConfiguration(event => {
-		for (const key of [defaultProfile, fontSize]) {
-			if (event.affectsConfiguration(key)) changes.push(key);
-		}
-	});
+	assert.equal(sessions.getValue(location), 'view');
+	await sessions.updateValue(location, 'editor');
+	await workbench.reloadConfiguration();
+	assert.equal(workbench.getValue(location), 'editor');
 	await workbench.updateValue(defaultProfile, 'IDE profile');
 	await workbench.updateValue(fontSize, 21);
+	const saved = await workbench.read();
+	await workbench.write(JSON.stringify({
+		...JSON.parse(saved.source),
+		'sessions.terminal.fontSize': 17,
+	}), saved.revision);
 	await sessions.reloadConfiguration();
-	assert.equal(sessions.getValue(defaultProfile), null);
-	assert.equal(sessions.inspect(fontSize).userLocalValue, undefined);
-	assert.deepEqual(changes, []);
-	await sessions.updateValue(defaultProfile, 'Agent profile');
-	await sessions.updateValue('sessions.terminal.fontSize', 17);
-	await workbench.reloadConfiguration();
-	assert.equal(workbench.getValue(defaultProfile), 'IDE profile');
-	assert.equal(workbench.getValue(fontSize), 21);
-	assert.equal(sessions.getValue(defaultProfile), 'Agent profile');
-	assert.equal(sessions.getValue<{ fontSize: number; }>('terminal.integrated').fontSize, 17);
-	assert.equal(sessions.inspect(fontSize).userLocalValue, 17);
-	assert.deepEqual(changes, [defaultProfile, fontSize]);
+	assert.equal(sessions.getValue(location), 'editor');
+	assert.equal(sessions.inspect(location).userLocalValue, 'editor');
+	assert.equal(sessions.getValue(defaultProfile), 'IDE profile');
+	assert.equal(sessions.getValue<{ fontSize: number; }>('terminal.integrated').fontSize, 21);
+	assert.equal(sessions.inspect(fontSize).userLocalValue, 21);
 	assert.deepEqual(JSON.parse((await sessions.read()).source), {
+		[location]: 'editor',
 		[defaultProfile]: 'IDE profile',
 		[fontSize]: 21,
-		'sessions.terminal.defaultProfile.osx': 'Agent profile',
 		'sessions.terminal.fontSize': 17,
 	});
+	await workbench.updateValue(location, 'view');
+	await sessions.reloadConfiguration();
+	assert.equal(sessions.getValue(location), 'view');
 });
-
 
 test('Chat input layout defaults to one line, persists in the profile and rejects invalid values', async () => {
 	using files = new TestConfigurationFiles();

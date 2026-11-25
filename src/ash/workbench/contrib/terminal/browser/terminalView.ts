@@ -173,7 +173,7 @@ export class TerminalViewPane extends ViewPane {
 				// Creation can wait for trust or folder selection; keep user decisions outside progress.
 				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
-				this.creating = this.terminalService.createTerminal();
+				this.creating = this.terminalService.createTerminal({ location: TerminalLocation.Panel });
 				try { await this.creating; }
 				finally {
 					this.creating = undefined;

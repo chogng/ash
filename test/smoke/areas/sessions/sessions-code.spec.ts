@@ -229,18 +229,18 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	await expect(secondTab()).toBeVisible();
 });
 
-test('Agent Window never reveals the legacy Output or Terminal Panel', async ({ application, target, workbench }) => {
+test('Output does not reveal the Agent Window terminal panel', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const commands = new QuickAccess(page);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await commands.runCommand('workbench.action.output.show');
-	await expect(page.locator('[data-part="panel"]')).toHaveCount(0);
-	await expect(page.locator('[data-part="panel"] [role="tab"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="panel"]')).toBeHidden();
+	await expect(page.locator('[data-part="panel"]').getByRole('tab', { name: 'Output', exact: true, includeHidden: true })).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await commands.runCommand('workbench.action.output.show');
-	await expect(page.locator('[data-part="panel"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="panel"]')).toBeHidden();
 	page = await workbench.reopenAgentsWindow(application, page);
-	await expect(page.locator('[data-part="panel"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="panel"]')).toBeHidden();
 });
 
 focusTest('Code connects tool commands to the shared editor groups', async ({ application, target, workbench }) => {
@@ -249,11 +249,12 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	const editor = page.locator('[data-part="editor"]');
 	const files = editor.locator('.ash-desktop-auxiliarybar');
 	const commands = new QuickAccess(page);
+	await page.getByRole('button', { name: 'Show Code side panel', exact: true }).click();
 	await expect(editor).toBeVisible();
 	await expect(files).toBeVisible();
 	await commands.runCommand('workbench.action.files.newUntitledFile');
-	const group = editor.locator('.ash-editor-group').filter({ has: page.getByRole('tab', { name: 'Untitled-1', exact: true }) });
-	const content = group.locator(':scope > .ash-editor-group-content');
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	const content = editor.locator('[data-editor-tool="files"] .ash-editor-group:not(.ash-editor-group-locked) > .ash-editor-group-content');
 	await expect(content).toBeVisible();
 	await commands.runCommand('ash.sessions.toggleDetails');
 	await expect(files).toBeHidden();
@@ -269,11 +270,10 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	await expect(page.locator('[data-code-card], .ash-code-editor-card')).toHaveCount(0);
 	if (target.appServerMode === 'required') {
 		await commands.runCommand('ash.sessions.togglePanel');
-		await expect(editor.locator('.ash-terminal-editor')).toBeVisible();
+		await expect(page.locator('[data-part="panel"] .xterm')).toBeVisible();
 		await page.keyboard.press('Control+' + String.fromCharCode(96));
-		await expect(editor.locator('.ash-terminal-editor')).toBeHidden();
 	}
-	await expect(page.locator('[data-part="panel"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="panel"]')).toBeHidden();
 });
 
 test('Code retains group file navigation after closing the last document and reopening', async ({ application, target, workbench }, testInfo) => {

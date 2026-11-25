@@ -41,6 +41,7 @@ export const enum TerminalCommandId {
 	MoveIntoNewWindow = 'workbench.action.terminal.moveIntoNewWindow',
 	MoveToTerminalPanel = 'workbench.action.terminal.moveToTerminalPanel',
 	New = 'workbench.action.terminal.new',
+	CreateTerminalEditor = 'workbench.action.createTerminalEditor',
 	CreateTerminalEditorSameGroup = 'workbench.action.createTerminalEditorSameGroup',
 	NewInNewWindow = 'workbench.action.terminal.newInNewWindow',
 	ConfigureTerminalSettings = 'workbench.action.terminal.openSettings',

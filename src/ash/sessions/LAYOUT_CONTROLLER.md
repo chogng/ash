@@ -69,7 +69,7 @@ SessionInfoRail reads the active Code chat model and workspace/SCM services. It 
 
 ## 4. Panel
 
-Agent Window does not register a Panel view host. It creates neither a PanelPart nor a panel Grid leaf. Saved panel visibility is discarded, and Output channel/view reveal requests cannot enable it. Terminals use Editor Groups. The shared IDE retains its normal Panel host and diagnostic views.
+The desktop Grid hosts the shared Terminal view in a bottom PanelPart. The layout keeps its visibility for the current window and temporarily hides it outside Code. Terminals can also open in Editor Groups. The IDE hosts diagnostic views in its Panel.
 
 The mobile controller retains the base per-session panel-visibility behavior described by `B1`.
 
@@ -96,7 +96,7 @@ Persisted state is validated by its owner before use. Legacy page resources are 
 
 Window navigation geometry and part visibility are restored before the layout controller starts. Applying a Session's tool geometry preserves that navigation and the window's desired tool visibility.
 
-The retired browser working set is attached to the Browser EditorPart before its legacy key is removed. Existing panel terminal instances move into TerminalEditor without creating new processes. The current writer persists editor working sets, Part membership, tool geometry and group geometry.
+The retired browser working set is attached to the Browser EditorPart before its legacy key is removed. Terminal instances restore in their previous locations. The current writer persists editor working sets, Part membership, tool geometry and group geometry.
 
 ## 7. Key invariants
 
@@ -107,7 +107,7 @@ The retired browser working set is attached to the Browser EditorPart before its
 - Conversation focus inside Code does not change its explicit mode.
 - Programmatic working-set operations suppress automatic editor visibility.
 - Side-pane visibility is workbench-level in desktop mode.
-- Legacy panel-view metadata is discarded; no panel view is restored.
+- Legacy panel-view metadata is discarded. Desktop panel visibility starts hidden.
 - Multi-session presentation does not overwrite per-session state.
 - Phone presentation never automates the Auxiliary Bar.
 

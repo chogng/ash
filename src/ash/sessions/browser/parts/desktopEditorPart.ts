@@ -244,6 +244,7 @@ export class DesktopMainEditorPart extends EditorPart {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,
 				editorActions: Menus.SessionsEditorTitle,
+				tabsBarAddTab: Menus.SessionsEditorTabsBarAddTab,
 			}
 		};
 	}

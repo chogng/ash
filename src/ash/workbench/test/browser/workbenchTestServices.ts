@@ -53,7 +53,8 @@ import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../services/dialogs/common/dialogService.js';
 import { InstantiationType } from '../../../platform/instantiation/common/extensions.js';
 import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
-import { ITerminalGroupService, ITerminalEditorService } from '../../contrib/terminal/browser/terminal.js';
+import { ITerminalConfigurationService, ITerminalGroupService, ITerminalEditorService } from '../../contrib/terminal/browser/terminal.js';
+import { TerminalConfigurationService } from '../../contrib/terminal/browser/terminalConfigurationService.js';
 import { TerminalProfileService } from '../../contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../contrib/terminal/browser/terminalProfileResolverService.js';
 import { TerminalGroupService } from '../../contrib/terminal/browser/terminalGroupService.js';
@@ -99,6 +100,7 @@ export function registerTestTerminalCreationServices(services: InstantiationServ
 		textSearch: async () => { throw new Error('Terminal creation fixture does not search file contents'); },
 	});
 	registerTestTerminalLifecycleServices(services);
+	if (!services.has(ITerminalConfigurationService)) services.registerSingleton(ITerminalConfigurationService, () => services.createInstance(TerminalConfigurationService), { instantiation: InstantiationType.Delayed });
 	// Process-only fixtures have no movable Panel; group consumers still receive
 	// the explicit layout contract rather than inferring a position from geometry.
 	if (!services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, {

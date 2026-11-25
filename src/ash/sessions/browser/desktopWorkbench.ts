@@ -23,6 +23,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../platform/sto
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
+import { SessionsCodeEditorContext } from '../../workbench/common/contextkeys.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
@@ -197,6 +198,7 @@ function storedEditorWidth(value: number | undefined, fallback: number): number 
 }
 
 const SESSIONS_LAYOUT_PRIORITY = LayoutPriority.High;
+const TERMINAL_PANEL_INITIAL_HEIGHT = 235;
 
 function createSessionsWorkbenchGridDescriptor(
 	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
@@ -245,7 +247,11 @@ function createSessionsWorkbenchGridDescriptor(
 				orientation: Orientation.VERTICAL,
 				size: primaryWidth,
 				priority: SESSIONS_LAYOUT_PRIORITY,
-				children: [leaf('titlebar', titlebarHeight), content],
+				children: [
+					leaf('titlebar', titlebarHeight),
+					content,
+					...(views.has('panel') ? [leaf('panel', TERMINAL_PANEL_INITIAL_HEIGHT, false)] : []),
+				],
 			},
 			leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		],
@@ -364,6 +370,7 @@ export class DesktopWorkbenchLayout
 		sidebar: boolean;
 		auxiliarybar: boolean;
 		editor: boolean;
+		panel: boolean;
 
 	};
 	private get titlebarHeight(): number {
@@ -428,6 +435,7 @@ export class DesktopWorkbenchLayout
 			sidebar: state.sidebar.visible,
 			auxiliarybar: state.auxiliarybar.visible,
 			editor: state.editor.visible,
+			panel: false,
 		};
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 		if (options.auxiliaryWindows) {
@@ -527,6 +535,12 @@ export class DesktopWorkbenchLayout
 		const state = this.stateModel.state;
 		this.updateContentCorners(state.auxiliarybar.visible);
 		this.rebuildGrid(state, this.initialDimension);
+		const panelAvailabilityKeys = new Set([SessionsCodeEditorContext.key]);
+		this._register(this.contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(panelAvailabilityKeys) && this.desiredVisibility.panel) {
+				this.updateParts(() => this.updatePanelVisibility());
+			}
+		}));
 		this._register(
 			this.view('titlebar').part.onDidChangeConstraints(() => {
 				updateAuxiliaryFrame();
@@ -589,7 +603,7 @@ export class DesktopWorkbenchLayout
 		};
 	}
 
-	// Shared Workbench commands may address an absent region; no Panel state or host exists.
+	// The Agents terminal panel is docked below the content grid.
 	getPanelPosition(): Position { return Position.BOTTOM; }
 	setPanelPosition(_position: Position): void { }
 	readonly onDidChangePanelPosition = Event.None;
@@ -657,6 +671,7 @@ export class DesktopWorkbenchLayout
 				this.setViewVisible(this.view(id), this.desiredViewVisible(id) && !this.unavailableParts.has(id));
 			}
 			if (this.customViewVisible) this.applyCustomViewVisibility();
+			this.updatePanelVisibility();
 		} finally { this.partUpdateDepth--; }
 	}
 
@@ -692,7 +707,8 @@ export class DesktopWorkbenchLayout
 		this.publishPartVisibility();
 		const sidebarLostFocus = this.sidebarSuppressed && focused && this.view('sidebar').part.domNode.contains(focused);
 		const editorLostFocus = !this.isPartVisible('editor') && focused && this.view('editor').frame.contains(focused);
-		if ((sidebarLostFocus || editorLostFocus) && this.isPartVisible('sessions')) {
+		const panelLostFocus = !this.isPartVisible('panel') && focused && this.views.get('panel')?.frame.contains(focused);
+		if ((sidebarLostFocus || editorLostFocus || panelLostFocus) && this.isPartVisible('sessions')) {
 			this.focus();
 		} else if (sidebarLostFocus || (this.compactTools || this.auxiliaryBarDocked) && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
 			const area = this.view('editor').part;
@@ -892,6 +908,7 @@ export class DesktopWorkbenchLayout
 	}
 	isPartAvailable(partId: string): boolean {
 		if (!this.views.has(partId as SessionsPartId)) return false;
+		if (partId === 'panel') return !this.customViewVisible && this.contextKeys.getValue(SessionsCodeEditorContext.key) === true;
 
 		return !this.unavailableParts.has(partId as SessionsPartId);
 	}
@@ -906,6 +923,7 @@ export class DesktopWorkbenchLayout
 			return;
 		}
 		if (partId === 'editor') this.narrowConversation = false;
+		if (partId === 'panel' && !this.isPartAvailable(partId)) return;
 		if (!this.views.has(partId as SessionsPartId)) return;
 
 		this.updatePartVisibility(partId as SessionsPartId, true);
@@ -975,10 +993,14 @@ export class DesktopWorkbenchLayout
 			throw new Error('Required Sessions Part cannot be hidden: ' + partId);
 		this.updateParts(() => {
 			this.desiredVisibility[partId] = visible;
-
-			this.setViewVisible(this.view(partId), this.desiredViewVisible(partId) && !this.unavailableParts.has(partId));
-
+			if (partId === 'panel') this.updatePanelVisibility();
+			else this.setViewVisible(this.view(partId), this.desiredViewVisible(partId) && !this.unavailableParts.has(partId));
 		});
+	}
+
+	private updatePanelVisibility(): void {
+		const panel = this.views.get('panel');
+		if (panel) this.setViewVisible(panel, this.desiredVisibility.panel && this.isPartAvailable('panel'));
 	}
 
 	/** Workspace preferences survive temporary visibility changes from the responsive layout. */
@@ -1018,6 +1040,7 @@ export class DesktopWorkbenchLayout
 					);
 				}
 			}
+			this.updatePanelVisibility();
 		});
 	}
 	private applyCustomViewVisibility(): void {

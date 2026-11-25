@@ -23,6 +23,7 @@ export const enum TerminalSettingPrefix {
 
 export const enum TerminalSettingId {
 	Cwd = 'terminal.integrated.cwd',
+	DefaultLocation = 'terminal.integrated.defaultLocation',
 	CopyOnSelection = 'terminal.integrated.copyOnSelection',
 	RightClickBehavior = 'terminal.integrated.rightClickBehavior',
 	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
@@ -398,6 +399,11 @@ export interface ITerminalChildProcess extends IDisposable {
 
 /** Workbench host for a terminal screen; moving it retains the process. */
 export enum TerminalLocation { Panel = 1, Editor = 2 }
+
+export const enum TerminalLocationConfigValue {
+	TerminalView = 'view',
+	Editor = 'editor',
+}
 
 export interface IRawTerminalInstanceLayoutInfo<T> { terminal: T; relativeSize: number; }
 export interface IRawTerminalTabLayoutInfo<T> { isActive: boolean; activePersistentProcessId: number | undefined; terminals: IRawTerminalInstanceLayoutInfo<T>[]; }

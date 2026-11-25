@@ -175,6 +175,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, lifetime.add(new BaseSecretStorageService()));
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
+	if (!services.has(ITerminalConfigurationService)) services.registerSingleton(ITerminalConfigurationService, () => services.createInstance(TerminalConfigurationService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(ITerminalEditorService)) services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
 	if (!services.has(ITerminalCompletionService)) services.registerInstance(ITerminalCompletionService, lifetime.add(services.createInstance(TerminalCompletionService)));
@@ -490,6 +491,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		};
 		const legacyTerminals: ITerminalService = {
 			importTerminalState: async () => { throw new Error('This fixture does not transfer terminals'); },
+			moveToEditor: async () => { throw new Error('This fixture does not open terminal editors'); },
+			moveToTerminalView: async () => { throw new Error('This fixture has only a terminal view'); },
 			confirmTerminalClose: async () => true,
 			get whenConnected() { return pending; },
 			safeDisposeTerminal: async instance => { await terminals.closeTerminal(instance); },

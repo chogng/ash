@@ -6,12 +6,12 @@ The Agents window uses retained Workbench Parts. Session state and working-set r
 
 ## Code composition
 
-The window composes Sidebar, Conversation and a desktop editor area. Its outer Grid arranges tool cards, each with its own EditorPart. DesktopMainEditorPart owns a contextual DesktopAuxiliaryBarPart beside its Files groups, and Files contributes the Explorer view. Agent Window does not host Workbench Panel views, including Output and the legacy terminal panel. Product pages keep their independent Auxiliary Bar properties.
+The window composes Sidebar, Conversation and a desktop editor area. Its outer Grid arranges tool cards, each with its own EditorPart. DesktopMainEditorPart owns a contextual DesktopAuxiliaryBarPart beside its Files groups, and Files contributes the Explorer view. Code hosts the shared terminal view in a docked bottom Panel. Product pages keep their independent Auxiliary Bar properties.
 
 | Surface                   | Owner                                           | Visibility behavior                                                                                                                 |
 | ------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Document tabs and content | EditorPart / Editor Group                       | Opening a document reveals its group. Closing a tab uses the existing working-copy lifecycle.                                       |
-| Terminal                  | TerminalEditor / terminal service               | Hiding its group retains the process. Closing the terminal tab keeps the terminal service's process semantics.                      |
+| Terminal                  | TerminalEditor / Terminal panel                 | Hiding its group retains the process. Closing the terminal tab keeps the terminal service's process semantics.                      |
 | Files Details             | DesktopMainEditorPart / DesktopAuxiliaryBarPart | One retained Explorer serves the Files Part, independently of its internal splits. Hiding Details retains documents and tree state. |
 | Changes and Browser       | Existing EditorInput / EditorPane               | Tool toggles retain their panes and browser pages. They have independent editor group Grids in the session working set.             |
 | Environment / Context     | SessionInfoRail                                 | Reads the active Code chat and workspace services. Its conversation owns the retained rail.                                         |
@@ -33,7 +33,7 @@ Toolbar selected states derive from the owning editor group, navigation or infor
 | Resize group separators              | Update the editor Grid through pointer or keyboard input.                                                                               |
 | Maximize / restore a group           | Expand within EditorPart and restore the original geometry and hidden groups.                                                           |
 | Switch Chat / Code or a product page | Retain group panes, unsaved documents, terminal processes and browser pages; restore Code geometry on return.                           |
-| Change panel position                | No PanelPart or Grid leaf exists; legacy commands cannot create one.                                                                    |
+| Open a new terminal                  | General sets the initial location for new terminals. The default is the bottom Panel.                                                   |
 | Toggle session information           | Show or hide the conversation's retained information rail.                                                                              |
 | Collapse Environment / Context       | Retain section preference; Context's available percentage remains in its summary.                                                       |
 
@@ -45,7 +45,7 @@ The layout controller captures the outgoing session's editor working set and reu
 
 Workspace selection changes Files content without replacing its Explorer View or group. No workspace displays an accessible empty message. A new draft follows the existing policy of adopting the current composition until it owns a saved working set. Multiple visible conversations continue to use SessionsPart's independent conversation grid.
 
-Legacy Card trees are migration input only. Migration writes the owning editor working set before removing a consumed legacy entry. Unvisited session layouts remain pending migration. Browser models initialize before their old working set is imported into the Browser EditorPart; restored panel terminal instances move into TerminalEditor without creating new processes.
+Legacy Card trees are migration input only. Migration writes the owning editor working set before removing a consumed legacy entry. Unvisited session layouts remain pending migration. Browser models initialize before their old working set is imported into the Browser EditorPart. Terminal instances restore in their previous locations.
 
 ## Validation and implementation
 

@@ -2291,6 +2291,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'terminal.integrated.cursorStyle',
 			'terminal.integrated.cursorStyleInactive',
 			'terminal.integrated.cursorWidth',
+			'terminal.integrated.defaultLocation',
 			'terminal.integrated.fontFamily',
 			'terminal.integrated.fontSize',
 			'terminal.integrated.letterSpacing',
@@ -3622,7 +3623,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
-	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 11);
+	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 12);
+	assert.equal(root.querySelector<HTMLButtonElement>('[data-settings-item-id="terminal.integrated.defaultLocation"] [role="combobox"]')?.disabled, false);
 	await preferences.openSettings({ section: 'search' });
 	assert.equal(root.querySelector('[data-settings-item-id="grep.backend"]'), null);
 	assert.throws(() => configuration.inspect('grep.backend'), /Unknown configuration key/);

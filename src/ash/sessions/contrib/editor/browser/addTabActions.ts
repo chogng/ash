@@ -1,13 +1,16 @@
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
-import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, type ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../../../../nls.js';
+import { AppServerAvailableContext } from '../../../../workbench/common/contextkeys.js';
+import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { SessionsCategories } from '../../../common/categories.js';
+import { Menus } from '../../../browser/menus.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
-/** Opens tool cards through the window's layout queue. */
+/** Contributes editor tab actions to the Code window. */
 export function registerAddTabActions(
 	openFiles: () => Promise<void> | false,
 	openChanges: () => Promise<void> | false,
@@ -28,6 +31,9 @@ export function registerAddTabActions(
 	];
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
+		registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, {
+			command: { id: action.id, title: action.title }, when, group: 'navigation', order,
+		}));
 		registrations.add(MenusRegistry.appendMenuItems(
 			[MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
@@ -40,5 +46,14 @@ export function registerAddTabActions(
 			})),
 		));
 	}
+	registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, {
+		command: {
+			id: TerminalCommandId.CreateTerminalEditor,
+			title: localize2({ bundle: 'ash', key: 'terminal.title.new' }, 'New Terminal'),
+		},
+		when: ContextKeyExpr.and(when, AppServerAvailableContext.isEqualTo(true)),
+		group: 'navigation',
+		order: actions.length,
+	}));
 	return registrations;
 }

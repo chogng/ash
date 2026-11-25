@@ -31,6 +31,7 @@ import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
 import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService, type ITerminalInstance } from './terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
+import { URI } from '../../../../base/common/uri.js';
 import { InstanceContext } from './terminalContextMenu.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EndOfLinePreference } from '../../../../editor/common/model.js';
@@ -243,19 +244,14 @@ export function registerTerminalActions(): void {
 		constructor() { super({ id: TerminalCommandId.MoveToEditor, title: terminalStrings.moveToEditor, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const instance = resolveInstance(accessor, context);
-			if (instance) await accessor.get(ITerminalEditorService).openEditor(instance);
+			if (instance) await accessor.get(ITerminalService).moveToEditor(instance);
 		}
 	});
 	registerEditorToolAction(class MoveTerminalToPanelAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.MoveToTerminalPanel, title: terminalStrings.moveToTerminalPanel, f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			const instance = resolveInstance(accessor, context);
-			if (!instance) return;
-			await accessor.get(ITerminalEditorService).detachInstance(instance);
-			if (!accessor.get(ITerminalService).instances.includes(instance)) return;
-			instance.target = TerminalLocation.Panel;
-			accessor.get(ITerminalService).setActiveInstance(instance);
-			await accessor.get(ITerminalGroupService).showPanel(true);
+			const source = URI.isUri(context) ? context : resolveInstance(accessor, context);
+			if (source) await accessor.get(ITerminalService).moveToTerminalView(source);
 		}
 	});
 	registerEditorToolAction(class FocusTerminalAction extends Action2 {
@@ -324,6 +320,20 @@ export function registerTerminalActions(): void {
 			if (instance.target === TerminalLocation.Editor) await instantiation.invokeFunction(accessor => accessor.get(ITerminalEditorService)).openEditor(instance, { preserveFocus: true });
 			else await groups.showPanel(false);
 			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
+		}
+	});
+	registerEditorToolAction(class CreateTerminalEditorAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.CreateTerminalEditor,
+				title: localize2('workbench.action.terminal.createTerminalEditor', 'Create New Terminal in Editor Area'),
+				f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const instance = await accessor.get(ITerminalService).createTerminal({ location: TerminalLocation.Editor });
+			(await instance.xtermReadyPromise)?.focus();
 		}
 	});
 	registerEditorToolAction(class CreateTerminalEditorSameGroupAction extends Action2 {

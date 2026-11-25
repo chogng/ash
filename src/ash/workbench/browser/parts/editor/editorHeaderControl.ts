@@ -1,5 +1,7 @@
 import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import { h } from '../../../../base/browser/dom.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { SubmenuAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -12,7 +14,9 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import { OutlineModel } from '../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { type IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -86,11 +90,28 @@ export class EditorHeaderControl extends Disposable {
 		if (actions) {
 			const trailing = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-tabs-trailing' });
 			actionRow.append(trailing);
+			const menuOptions = group === undefined ? undefined : { arg: { groupId: group } };
+			if (viewOptions.menuIds?.tabsBarAddTab) {
+				const label = localize({ bundle: 'ash.regions', key: 'addEditorTab' }, 'Add Tab');
+				const menu = this._register(actions.menuService.createMenu(viewOptions.menuIds.tabsBarAddTab, actions.contextKeyService));
+				const toolbar = this._register(new WorkbenchToolBar(trailing, actions.contextMenuProvider, {
+					ariaLabel: label,
+					actionViewItemProvider: (action, options) => action instanceof SubmenuAction
+						? new DropdownMenuActionViewItem(action, action.actions, actions.contextMenuProvider, options)
+						: undefined,
+				}));
+				const updateAddTab = (): void => {
+					const entries = getFlatContextMenuActions(menu.getActions(menuOptions));
+					toolbar.setActions(entries.length ? [new SubmenuAction('workbench.editor.addTab', label, entries, Lxicon.add)] : []);
+				};
+				this._register(menu.onDidChange(updateAddTab));
+				updateAddTab();
+			}
 			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, trailing, MenuId.EditorTabsTrailing, {
 				contextMenuProvider: actions.contextMenuProvider,
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
-				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+				menuOptions,
 			}));
 			this._register(toDisposable(() => trailing.remove()));
 		}

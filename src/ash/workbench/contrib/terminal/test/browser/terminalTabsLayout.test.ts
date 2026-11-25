@@ -179,6 +179,8 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: created.event,
 		onDidDisposeInstance: disposed.event, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
 		createTerminal: async () => { throw new Error('Unexpected creation'); },
+		moveToEditor: async () => { throw new Error('Unexpected editor move'); },
+		moveToTerminalView: async () => { throw new Error('Unexpected panel move'); },
 		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 	};
 	using services = new InstantiationService();

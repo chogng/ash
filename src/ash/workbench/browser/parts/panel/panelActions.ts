@@ -1,10 +1,9 @@
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { PanelMaximizedContext, PanelPositionContext, PanelVisibleContext } from '../../../common/contextkeys.js';
+import { IsAuxiliaryWindowContext, IsSessionsWindowContext, PanelMaximizedContext, PanelPositionContext, PanelVisibleContext, WorkbenchEditorToolsAvailable } from '../../../common/contextkeys.js';
 import { ViewContainerLocation } from '../../../common/views.js';
 import { IWorkbenchLayoutService, Position, positionToString } from '../../../services/layout/browser/layoutService.js';
 import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
@@ -16,6 +15,7 @@ export class TogglePanelAction extends Action2 {
 		super({
 			id: TogglePanelAction.ID,
 			title: TogglePanelAction.LABEL,
+			precondition: WorkbenchEditorToolsAvailable,
 			tooltip: localize2({ bundle: 'ash.actions', key: 'showPanel' }, 'Show Panel'),
 			icon: Lxicon.layoutPanelOff,
 			toggled: {
@@ -27,12 +27,13 @@ export class TogglePanelAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.TitleBar,
-					when: IsAuxiliaryWindowContext.isEqualTo(false),
+					when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(false), ContextKeyExpr.not(IsSessionsWindowContext.key)),
 					group: 'navigation',
 					order: 9,
 				},
 				{
 					id: MenuId.MenubarViewMenu,
+					when: WorkbenchEditorToolsAvailable,
 					group: '2_appearance',
 					order: 11,
 				},
@@ -76,6 +77,7 @@ registerAction2(class FocusPanelAction extends Action2 {
 		super({
 			id: 'workbench.action.focusPanel',
 			title: localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel'),
+			precondition: WorkbenchEditorToolsAvailable,
 			f1: true,
 		});
 	}
@@ -91,6 +93,7 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 		super({
 			id: 'workbench.action.toggleMaximizedPanel',
 			title: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
+			precondition: ContextKeyExpr.not(IsSessionsWindowContext.key),
 			tooltip: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
 			icon: Lxicon.screenFull,
 			toggled: {
@@ -101,6 +104,7 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 			},
 			menu: {
 				id: MenuId.PanelTitle,
+				when: ContextKeyExpr.not(IsSessionsWindowContext.key),
 				group: 'navigation',
 				order: 40,
 			},
@@ -128,7 +132,7 @@ MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
 const panelPositionMenu = MenuId.for('PanelPositionMenu');
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, {
 	submenu: panelPositionMenu, title: localize2('positionPanel', 'Panel Position'),
-	when: ContextKeyExpr.equals('viewContainerLocation', 'panel'), group: '3_layout',
+	when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainerLocation', 'panel'), ContextKeyExpr.not(IsSessionsWindowContext.key)), group: '3_layout',
 });
 for (const [position, suffix, title] of [
 	[Position.LEFT, 'Left', localize2('positionPanelLeft', 'Move Panel Left')],
@@ -140,6 +144,7 @@ for (const [position, suffix, title] of [
 		constructor() {
 			super({
 				id: `workbench.action.positionPanel${suffix}`, title, f1: true,
+				precondition: ContextKeyExpr.not(IsSessionsWindowContext.key),
 				toggled: PanelPositionContext.isEqualTo(positionToString(position)),
 				menu: { id: panelPositionMenu, group: 'position', order: position },
 			});
