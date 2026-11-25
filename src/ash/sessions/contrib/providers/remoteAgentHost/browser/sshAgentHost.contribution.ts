@@ -9,6 +9,7 @@ import { agentHostConnectionAddress, IAgentHostConnectionsService, type IAgentHo
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { RemotesWidget } from './remotesWidget.js';
 import { canonicalRemoteConnectionDefinition, IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
@@ -45,6 +46,7 @@ export class SSHAgentHostContribution extends Disposable {
 		@ILayoutService private readonly layout: ILayoutService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		if (!remoteHosts.isAvailable) { return; }
@@ -108,7 +110,7 @@ export class SSHAgentHostContribution extends Disposable {
 		const reportError = (error: unknown): void => {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 		};
-		const manager = new RemotesWidget(this.layout.activeContainer, () => {
+		const manager = this.instantiation.createInstance(RemotesWidget, this.layout.activeContainer, () => {
 			const connected = this.hosts.connections.flatMap(info => {
 				const target = info.remoteConnection;
 				if (info.isAmbient || !target) return [];

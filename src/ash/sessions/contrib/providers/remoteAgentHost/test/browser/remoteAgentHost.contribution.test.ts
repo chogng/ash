@@ -1,4 +1,6 @@
 import { JSDOM } from 'jsdom';
+import type { IContextMenuDelegate } from '../../../../../../base/browser/contextmenu.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { getWindows } from '../../../../../../base/browser/window.js';
@@ -95,6 +97,14 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	lifetime.add(toDisposable(() => storageWindow.close()));
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: storageWindow as unknown as Window, workspaceId: 'remote-hosts', flushInterval: 0 })));
 	const contexts = lifetime.add(new ContextKeyService());
+	const menus: IContextMenuDelegate[] = [];
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom',
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		showContextMenu(delegate: IContextMenuDelegate): void { menus.push(delegate); },
+		hideContextMenu(): void { },
+	});
 	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
 	services.registerInstance(IQuickInputService, quickInput);
 	const notifications = lifetime.add(new TestNotificationService());
@@ -336,7 +346,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		[Symbol.dispose]: () => lifetime.dispose(),
 		services, commands, contribution, scopeOwner, registry, automations, container, errors, notifications,
 		readCapabilities: (read: typeof readCapabilities) => { readCapabilities = read; },
-		opened, closed, renamed, deleted, reconnected, connect, choose, dialog, closeDialog, sessionDirectoryRequests,
+		opened, closed, renamed, deleted, reconnected, connect, choose, dialog, closeDialog, sessionDirectoryRequests, menus,
 		crash: (name: string) => {
 			const entry = [...hosts.entries()].find(([, value]) => value.connection.name === name);
 			assert.ok(entry);
@@ -502,6 +512,28 @@ test('the remote environments dialog shows connection status and reconnects the 
 	assert.equal(context.registry.getProviders().find(provider => provider.label === 'build-a'), first);
 });
 
+test('the remote row menu only acts on the selected row and retires when it changes', async () => {
+	using context = fixture();
+	await context.connect('build-a');
+	await context.connect('build-b');
+	const command = context.commands.executeCommand(manageHosts);
+	const id = context.crash('build-a');
+	const trigger = context.dialog().querySelector<HTMLButtonElement>('[aria-label="Reconnect: build-a"]');
+	assert.ok(trigger);
+	trigger.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	const menu = context.menus.at(-1);
+	assert.ok(menu);
+	const actions = menu.getActions();
+	assert.deepEqual(actions.map(action => action.label), ['Reconnect', 'Disconnect']);
+	await actions[0]!.run();
+	assert.equal(menu.cancellationToken?.isCancellationRequested, true);
+	await actions[1]!.run();
+	assert.deepEqual(context.reconnected, [id]);
+	assert.deepEqual(context.closed, []);
+	context.closeDialog();
+	await command;
+});
+
 test('an active saved target has only one management row', async () => {
 	using context = fixture();
 	await context.connect('build-a');
@@ -541,6 +573,11 @@ test('the remote environments dialog uses Chinese labels and closes on cancellat
 	try {
 		const command = context.commands.executeCommand(manageHosts);
 		assert.equal(context.dialog().querySelector('h2')?.textContent, '远程环境');
+		await timeout(0);
+		const trigger = context.dialog().querySelector('tbody [data-remote-action]');
+		assert.ok(trigger);
+		trigger.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.equal(context.menus.at(-1)?.getActions()[0]?.label, '连接');
 		context.closeDialog();
 		await command;
 		const interrupted = context.commands.executeCommand(manageHosts);

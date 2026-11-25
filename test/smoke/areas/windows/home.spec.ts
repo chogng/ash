@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
@@ -73,6 +74,40 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}
 	}
+});
+
+emptyWindowTest('Remote Environments opens row actions with mouse and keyboard', { tag: ['@electron-app-server'] }, async ({ workbench, target }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.evaluate(async () => {
+		const { ash } = globalThis as unknown as { ash: ISandboxGlobals; };
+		for (const host of ['build-fixture', 'test-fixture']) {
+			await ash.ipcRenderer.invoke('ash:remote:connection:save', { connection: { name: host, host, workspace: '/srv/project' } });
+		}
+	});
+	await new QuickAccess(page).runCommand('sessions.action.manageAgentHosts');
+	const dialog = page.getByRole('dialog', { name: 'Remote Environments', exact: true });
+	const row = dialog.getByRole('row').filter({ hasText: 'test-fixture' });
+	const otherRow = dialog.getByRole('row').filter({ hasText: 'build-fixture' });
+	const menu = dialog.getByRole('menu');
+	const connect = row.getByRole('button', { name: 'Connect: test-fixture', exact: true });
+
+	await row.getByRole('rowheader').click({ button: 'right' });
+	await expect(menu.getByRole('menuitem', { name: 'Connect', exact: true })).toBeVisible();
+	await expect(row).toHaveClass(/ash-context-menu-target/);
+	await expect(otherRow).not.toHaveClass(/ash-context-menu-target/);
+	await page.keyboard.press('Escape');
+	await expect(menu).toHaveCount(0);
+	await expect(dialog).toBeVisible();
+
+	await connect.focus();
+	for (const shortcut of ['Shift+F10', 'ContextMenu']) {
+		await page.keyboard.press(shortcut);
+		await expect(menu.getByRole('menuitem', { name: 'Connect', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(menu).toHaveCount(0);
+		await expect(connect).toBeFocused();
+	}
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 });
 
 emptyWindowTest('Desktop uses the selected Ash home for UI and backend startup', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
