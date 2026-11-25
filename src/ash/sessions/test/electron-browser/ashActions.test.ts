@@ -6,6 +6,7 @@ import type { ISandboxGlobals } from '../../../base/parts/sandbox/electron-brows
 import { registerAction2 } from '../../../platform/actions/common/actions.js';
 import { buildOpenSessionLinkUri, type OpenSessionLink } from '../../../platform/agentHost/common/openSessionLink.js';
 import { IRemoteAgentHostService, type IRemoteAgentHostConnectionInfo } from '../../../platform/agentHost/common/remoteAgentHostService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { INativeHostApi } from '../../../platform/native/common/nativeHost.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -17,6 +18,7 @@ import { IChatSessionNavigationService, type IPreparedChatConversation } from '.
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../common/agentHostSessionsProvider.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import type { ISession, ISessionWorkspace } from '../../services/sessions/common/session.js';
 import { sessionProviderAuthority } from '../../services/sessions/common/sessionIdentity.js';
@@ -74,6 +76,9 @@ suite('Open IDE connection routing', () => {
 		const windows: unknown[] = [];
 		const hosts: IRemoteAgentHostConnectionInfo[] = [];
 		let prepare = async (_sessionId: string, _threadId: string): Promise<OpenSessionLink> => link;
+		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+		const mode = SessionsWorkspaceModeContext.bindTo(services.get(IContextKeyService));
+		mode.set('code');
 		services.registerInstance(ISessionsService, {
 			get activeSelection() { return state.selection; },
 			get navigationRevision() { return state.revision; },
@@ -85,8 +90,28 @@ suite('Open IDE connection routing', () => {
 		services.registerInstance(IChatSessionNavigationService, {
 			prepareConversation: async (sessionId, threadId) => ({ link: await prepare(sessionId, threadId), directory: state.directory }),
 		} as IChatSessionNavigationService);
-		return { state, notifications, windows, hosts, prepareWith: (operation: typeof prepare) => { prepare = operation; } };
+		return { state, mode, notifications, windows, hosts, prepareWith: (operation: typeof prepare) => { prepare = operation; } };
 	}
+
+	test('keeps the conversation handoff in Code when run directly or when the mode changes during preparation', async () => {
+		using services = new InstantiationService();
+		const f = fixture(services, sshHost);
+		using commands = new CommandService(services);
+		let preparations = 0;
+		f.prepareWith(async () => {
+			preparations++;
+			f.mode.set('chat');
+			return link;
+		});
+		f.mode.set('chat');
+		await commands.executeCommand(command);
+		assert.equal(preparations, 0);
+		f.mode.set('code');
+		await commands.executeCommand(command);
+		assert.equal(preparations, 1);
+		assert.deepEqual(requests, []);
+		assert.deepEqual(f.windows, []);
+	});
 
 	test('returns the first ambient SSH conversation to its host and selected Thread directory', async () => {
 		using services = new InstantiationService();

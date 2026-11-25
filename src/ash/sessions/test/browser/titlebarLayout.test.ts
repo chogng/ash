@@ -62,6 +62,53 @@ suite('Sessions native titlebar layout', () => {
 		expect(glyph.y + glyph.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
 	}
 
+	test('Code keeps the side panel toggle at the trailing edge when its header opens and closes', async () => {
+		const { page } = browser;
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/sessions.html?multiHost&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const mode = page.locator('.ash-window-mode-control');
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const panel = titlebar.getByRole('toolbar', { name: 'Code 侧面板', exact: true });
+		const show = panel.getByRole('button', { name: '显示 Code 侧面板', exact: true });
+		const hide = panel.getByRole('button', { name: '隐藏 Code 侧面板', exact: true });
+		const editor = page.locator('[data-part="editor"]');
+		const headers = titlebar.locator('.ash-sessions-titlebar-editor-headers');
+		await expect(panel).toBeHidden();
+		await mode.getByRole('button', { name: '代码', exact: true }).click();
+		await expect(editor).toBeHidden();
+		await expectCenteredTitlebarIcon(show);
+		const closedBounds = (await show.boundingBox())!;
+
+		await show.press('Enter');
+		await expect(hide).toHaveAttribute('aria-pressed', 'true');
+		await expect(editor).toBeVisible();
+		const files = headers.locator('[data-editor-tool="files"] > .ash-editor-group-header');
+		const closeFiles = files.locator('[data-action-id="ash.sessions.hideTool"] button');
+		await expect(closeFiles).toBeInViewport({ ratio: 1 });
+		const originalWidth = (await editor.boundingBox())!.width;
+		for (const width of [1440, 1060]) {
+			await page.setViewportSize({ width, height: 900 });
+			await expect.poll(async () => {
+				const [row, body, toggle, windowBar] = await Promise.all([
+					headers.boundingBox(), editor.boundingBox(), hide.boundingBox(), titlebar.boundingBox(),
+				]);
+				return [Math.round(row!.x - body!.x), Math.round(row!.x + row!.width - toggle!.x), Math.round(windowBar!.x + windowBar!.width - toggle!.x - toggle!.width)];
+			}).toEqual([0, 0, 4]);
+		}
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await expect(panel).toHaveCSS('-webkit-app-region', 'no-drag');
+		await expect(hide).toBeInViewport({ ratio: 1 });
+		await expect.poll(() => hide.boundingBox()).toEqual(closedBounds);
+		await hide.press('Enter');
+		await expect(editor).toBeHidden();
+		await expect(headers).toBeHidden();
+		await expect(show).toBeVisible();
+		await show.press('Enter');
+		await expect(files).toBeVisible();
+		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);
+	});
+
 	test('Code tools move into More Actions when narrow and return when widened', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost');

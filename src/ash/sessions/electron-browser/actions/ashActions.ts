@@ -1,7 +1,4 @@
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../nls.js';
-import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { Action2 } from '../../../platform/actions/common/actions.js';
 import { AMBIENT_AGENT_HOST_AUTHORITY } from '../../../platform/agentHost/common/agentHostConnectionsService.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
@@ -14,8 +11,7 @@ import { OPEN_IDE_SESSION_CHANNEL } from '../../../platform/window/common/window
 import { INativeHostService } from '../../../workbench/common/services.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
-import { Menus } from '../../browser/menus.js';
-import { OpenInAshTitleBarWidget } from '../../browser/widget/openInAshWidget.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, sshAgentHostProviderId } from '../../common/agentHostSessionsProvider.js';
@@ -47,18 +43,15 @@ export class OpenSessionInAshAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSessionInAshAction.ID,
-			title: localize2({ bundle: 'ash', key: 'sessions.menu.openIde' }, 'Open IDE'),
-			icon: Lxicon.ashMark,
-			menu: {
-				id: Menus.TitleBarRightLayout,
-				when: SessionsWorkspaceModeContext.isEqualTo('code'),
-				group: 'navigation',
-				order: 7,
-			},
+			title: localize2({ bundle: 'ash', key: 'sessions.menu.openConversationInIde' }, 'Open Conversation in IDE'),
+			f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
 		});
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const context = accessor.get(IContextKeyService);
+		if (context.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const sessions = accessor.get(ISessionsService);
 		const selection = sessions.activeSelection;
 		const revision = sessions.navigationRevision;
@@ -71,7 +64,7 @@ export class OpenSessionInAshAction extends Action2 {
 		// The owner validates backend coordinates and returns the current Thread
 		// directory in the same read, including freshly restored SSH worktrees.
 		const prepared = active && await navigation.prepareConversation!(active.session.sessionId, active.threadId);
-		if (sessions.navigationRevision !== revision) return;
+		if (sessions.navigationRevision !== revision || context.getValue(SessionsWorkspaceModeContext.key) !== 'code') return;
 		const link = prepared?.link;
 		const draftWorkspace = selection?.kind === 'untitled' ? selection.session.workspace : undefined;
 		const workspace = prepared
@@ -111,15 +104,5 @@ export class OpenSessionInAshAction extends Action2 {
 		} else {
 			await host.openWindow({ forceReuseWindow: true });
 		}
-	}
-}
-
-export class OpenInAshWidgetContribution extends Disposable {
-	static readonly ID = 'sessions.contrib.openInAshWidget';
-
-	constructor(@IActionViewItemService presentations: IActionViewItemService) {
-		super();
-		this._register(presentations.register(Menus.TitleBarRightLayout, OpenSessionInAshAction.ID, (action, options) =>
-			new OpenInAshTitleBarWidget(action, options)));
 	}
 }

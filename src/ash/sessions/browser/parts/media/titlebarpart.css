@@ -53,9 +53,25 @@
 	padding: 0 var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
 }
 
-.ash-sessions-titlebar.has-tool-headers > .ash-workbench-part-content {
+.ash-sessions-titlebar.has-tool-headers
+	> .ash-workbench-part-content:not(
+		:has(> .ash-sessions-titlebar-side-pane:not([hidden]))
+	) {
 	/* Docked editor headers supply their own edge padding. */
 	padding-right: 0;
+}
+
+.ash-sessions-titlebar-side-pane {
+	flex: none;
+	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-titlebar-editor-headers:has(
+		+ .ash-sessions-titlebar-side-pane:not([hidden])
+	)
+	> .ash-sessions-tool-header-slot:last-child {
+	/* Keep the preceding tool boundaries aligned while reserving the trailing button. */
+	flex-shrink: 1;
 }
 
 .ash-sessions-titlebar-left {

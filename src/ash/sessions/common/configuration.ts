@@ -178,7 +178,7 @@ export const SessionsConfiguration = Object.freeze({
 	}),
 	layoutStyle: configurationRegistry.registerConfiguration<SessionsLayoutStyle>({
 		key: 'sessions.layoutStyle',
-		defaultValue: 'modern',
+		defaultValue: 'flat',
 		parse(value: unknown): SessionsLayoutStyle {
 			if (value === 'modern' || value === 'flat') return value;
 			throw new TypeError(`Unknown Sessions layout style: ${String(value)}`);

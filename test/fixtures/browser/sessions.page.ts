@@ -9,6 +9,7 @@ import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { EditorParts } from '../../../src/ash/sessions/browser/parts/editorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../src/ash/sessions/browser/workbench.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
@@ -52,9 +53,12 @@ if (new URL(location.href).searchParams.has('emptyEditorArea')) {
 		install: ({ container }) => {
 			const layout = container.get(ILayoutService) as IAgentWorkbenchLayoutService;
 			const editor = container.get(IEditorPart);
+			if (!(editor instanceof EditorParts)) throw new Error('The fixture requires the Sessions editor area');
 			return showEmptyEditorArea = (conversationVisible?: boolean) => {
 				if (conversationVisible !== undefined) layout.setPartAvailable('sessions', conversationVisible);
 				for (const group of editor.groups) editor.setGroupVisible(group.id, false);
+				// Keep the synthetic pane visible while its editor group headers are empty.
+				editor.area.syncVisible([], undefined, false, true);
 				layout.showPart('editor');
 			};
 		},

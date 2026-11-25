@@ -23,7 +23,6 @@ import { AppServerTextDocumentHost } from '../../workbench/services/textfile/bro
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { OpenAgentsWindowSystemWideKeybindingTip } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
-import { OpenInAshWidgetContribution } from './actions/ashActions.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -366,7 +365,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					SessionsWindowNotifier.ID,
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingTip.ID,
-					OpenInAshWidgetContribution.ID,
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',

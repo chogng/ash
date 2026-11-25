@@ -5,6 +5,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../../workbench/browser/workbenchServiceContributions.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { EditorParts } from '../../../browser/parts/editorParts.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { createArkdownDocsInput } from '../../../contrib/docs/browser/docsEditorInput.js';
 import { artifactCanvasModes } from '../../../contrib/artifact/common/artifactWorkspace.js';
@@ -20,11 +21,15 @@ registerWorkbenchServiceContribution({
 	dependencies: [IFileService, IUserDataProfileService, IWorkspaceContextService, IEditorPart],
 	install: ({ container, blockRestorationUntil }) => {
 		const editors = container.get(IEditorPart);
-		const ready = prepareArtifactFixtures(container.get(IFileService), container.get(IUserDataProfileService).currentProfile.location,
+		if (!(editors instanceof EditorParts)) throw new Error('Artifact examples require the Sessions editor parts');
+		const files = container.get(IFileService);
+		const ready = prepareArtifactFixtures(files, container.get(IUserDataProfileService).currentProfile.location,
 			container.get(IWorkspaceContextService).getWorkspace().id).then(async resource => {
-			// Retained Docs use the ordinary editor catalog. Open the file before the host restores its selected page.
-			if (!editors.groups.some(group => group.editors.some(editor => editor.input.resource.toString() === resource.toString()))) {
-				await editors.openEditor(createArkdownDocsInput({ resource }), { pinned: true, inactive: true, preserveFocus: true });
+			try { await files.stat(resource); } catch (error) { if (error instanceof FileNotFoundError) return; throw error; }
+			// The hidden product-page group exposes the sample to Artifacts without adding a Code document.
+			const pageGroup = editors.groups.find(group => group.id === editors.pageGroupId)!;
+			if (!pageGroup.inputs.some(input => input.resource.toString() === resource.toString())) {
+				await editors.openEditor(createArkdownDocsInput({ resource }), { pinned: true, inactive: true, preserveFocus: true }, { groupId: pageGroup.id });
 			}
 		});
 		blockRestorationUntil(ready);

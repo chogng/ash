@@ -22,6 +22,7 @@ import { DesktopExistingSessionStrategy } from './desktop/desktopExistingSession
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
 import { ISessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
+import { DOCS_ARKDOWN_EDITOR_ID } from '../../docs/common/docs.js';
 
 /** The entry owner supplies policy; the controller never owns another product selection. */
 export interface IDesktopLayoutContext {
@@ -202,7 +203,17 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty', key = saved === 'empty' ? 'empty' : saved.id): Promise<void> {
 		const editor = this.editor as EditorParts;
-		if (saved !== 'empty') saved = editor.migrateWorkingSet(saved);
+		if (saved !== 'empty') {
+			// Older builds included the preloaded Chat Docs tab in Code's working set.
+			const groups = saved.groups.map(group => {
+				const editors = group.editors.filter(({ input, paneId }) => paneId !== DOCS_ARKDOWN_EDITOR_ID
+					&& !(input.typeId === 'workbench.editorInput.resource' && isRecord(input.value) && input.value.editorId === DOCS_ARKDOWN_EDITOR_ID));
+				if (editors.length === group.editors.length) return group;
+				const active = group.editors[group.activeEditorIndex];
+				return { ...group, editors, activeEditorIndex: editors.length ? Math.max(0, active ? editors.indexOf(active) : -1) : -1 };
+			});
+			saved = editor.migrateWorkingSet({ ...saved, groups });
+		}
 		const previous = editor.mainWindowGroups.map(group => group.id);
 		let incoming = this.liveGroups.get(key)?.filter(id => previous.includes(id));
 		const reused = !!incoming?.length;

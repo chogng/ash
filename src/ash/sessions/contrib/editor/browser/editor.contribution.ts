@@ -37,6 +37,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
+const sidePaneVisibleContext = new RawContextKey<boolean>('sessions.sidePaneVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
@@ -95,6 +96,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		}));
 		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
+		const sidePaneVisible = sidePaneVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
 		const changesVisible = changesVisibleContext.bindTo(contextKeys);
@@ -103,6 +105,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
+				sidePaneVisible.set(context.isDocumentContent && layout.isPartVisible('editor'));
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
 					(!(editor as EditorParts).filesDetailsVisible || (editor as EditorParts).filesPart.isEditorVisible));
 				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as EditorParts).filesDetailsVisible);
@@ -113,7 +116,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, changesVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, sidePaneVisible, detailsVisible, fileEditorsVisible, changesVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -300,7 +303,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const toggleSidePane = {
 			id: 'ash.sessions.toggleSidePane',
 			title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleSidePane' }, 'Toggle Code side panel'),
-			toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)),
+			toggled: sidePaneVisibleContext.isEqualTo(true),
 		};
 		const toggleDetails = {
 			id: 'ash.sessions.toggleDetails',
@@ -318,6 +321,23 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		};
 		this._register(
 			MenusRegistry.appendMenuItems([
+				{
+					id: Menus.TitleBarSidePane,
+					item: {
+						command: {
+							...toggleSidePane,
+							title: localize2({ bundle: 'ash', key: 'sessions.layout.showSidePane' }, 'Show Code side panel'),
+							icon: Lxicon.layoutSidebarRightOffSession,
+							toggled: {
+								condition: sidePaneVisibleContext.isEqualTo(true),
+								title: localize2({ bundle: 'ash', key: 'sessions.layout.hideSidePane' }, 'Hide Code side panel'),
+								icon: Lxicon.layoutSidebarRightSession,
+							},
+						},
+						when: codeWhen,
+						group: 'navigation',
+					},
+				},
 				{
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {

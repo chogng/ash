@@ -622,17 +622,15 @@ test('Sessions layout styles share edge-to-edge Part geometry and have an indepe
 	const sessions = parts.get('sessions') as TestSessionsPart;
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.equal(container.dataset.layoutStyle, 'modern');
-		assert.equal(container.classList.contains('modern-ui'), true);
-		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
 		assert.equal(container.dataset.layoutStyle, 'flat');
 		assert.deepEqual(sessions.layouts.at(-1), layout.getPartSize('sessions'));
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
 		assert.equal(layout.isPartVisible('auxiliarybar'), true);
-		await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
-		assert.equal(container.dataset.layoutStyle, 'flat');
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
+		await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
+		assert.equal(container.dataset.layoutStyle, 'modern');
+		assert.equal(container.classList.contains('modern-ui'), true);
 		layout.hidePart('auxiliarybar');
 		assert.deepEqual(sessions.layouts.at(-1), layout.getPartSize('sessions'));
 		assert.equal(sessions.layouts.at(-1)?.height, 800 - WorkbenchWindowBarHeight);
@@ -1216,6 +1214,7 @@ function registerAuxiliaryViewServices(services: import('../../../platform/insta
 
 test('session working sets reuse live groups and preserve hidden entry geometry without crossing session scope', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
+	const { DOCS_ARKDOWN_EDITOR_ID } = await import('../../contrib/docs/common/docs.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
 	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
@@ -1285,6 +1284,22 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	assert.notEqual(editor.activeGroup, first, "opening a resource must not activate another session's cached group");
 	assert.notEqual(editor.activeGroup, second, 'Files uses its own group beside the retained Browser');
 	assert.equal(created, 3);
+
+	const workingSetInput = (resource: string, editorId?: string) => ({
+		typeId: 'workbench.editorInput.resource', value: { resource, editorId },
+	});
+	const source = 'file:///fixture/README.md';
+	await controller.restore({
+		id: 'legacy-docs', activeGroupIndex: 0, groups: [{
+			id: 1, size: 600, activeEditorIndex: 1, editors: [
+				{ input: workingSetInput('file:///fixture/studio-launch.md', DOCS_ARKDOWN_EDITOR_ID), preview: false },
+				{ input: workingSetInput(source), paneId: 'test.cached', preview: false },
+				{ input: workingSetInput('file:///fixture/studio-notes.md'), paneId: DOCS_ARKDOWN_EDITOR_ID, preview: false },
+			],
+		}]
+	}, 'session:legacy-docs');
+	assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.toString()), [source]);
+	assert.equal(editor.activeGroup.activeInput?.resource.toString(), source);
 });
 
 test('Agent Window has no Panel Part, Grid leaf or saved panel state even after legacy commands', async () => {

@@ -20,6 +20,36 @@ const test = base.extend({
 });
 test.use({ viewport: { width: 1600, height: 900 } });
 
+test('The sample Docs editor stays in Chat when Code opens or restores its side pane', { tag: '@artifact-examples' }, async ({ page }) => {
+	const mode = page.locator('.ash-window-mode-control');
+	const code = mode.getByRole('button', { name: 'Code', exact: true });
+	const chat = mode.getByRole('button', { name: 'Chat / Agents', exact: true });
+	const editor = page.locator('[data-part="editor"]');
+	const docs = editor.locator('.ash-docs-workspace:visible');
+	const verifyCode = async () => {
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		const show = page.getByRole('button', { name: 'Show Code side panel', exact: true });
+		if (await show.isVisible()) await show.click();
+		await expect(editor).toBeVisible();
+		await expect(page.getByRole('tab', { name: /studio-launch\.md/u })).toHaveCount(0);
+		await expect(docs).toHaveCount(0);
+	};
+	await code.click();
+	await verifyCode();
+	await page.reload();
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await verifyCode();
+	await chat.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+	const card = page.locator('.ash-artifacts-card.docs');
+	await expect(card).toHaveCount(1);
+	await card.click();
+	await expect(docs.getByRole('heading', { name: 'Studio launch brief', exact: true })).toBeVisible();
+	await expect(docs.getByRole('button', { name: 'Ask Ash', exact: true })).toBeVisible();
+	await code.click();
+	await verifyCode();
+});
+
 test('Fixture artifacts share one catalog and opening or reloading preserves their identities', { tag: '@artifact-examples' }, async ({ page }) => {
 	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
 	await home.click();

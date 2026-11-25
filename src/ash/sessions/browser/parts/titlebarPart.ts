@@ -64,6 +64,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly pageContent: HTMLElement;
 	private readonly sessionContent: HTMLElement;
 	private readonly editorHeaders: HTMLElement;
+	private readonly sidePaneActions: MenuWorkbenchToolBar;
 	private readonly layoutActions: MenuWorkbenchToolBar;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
@@ -212,7 +213,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
 							+ Math.max(horizontalPadding(center), titleMinimum) + horizontalPadding(right)
-							+ accountsWidth + accountsGap + editorHeaderWidth;
+							+ accountsWidth + accountsGap + editorHeaderWidth + (this.sidePaneActions?.element.offsetWidth ?? 0);
 						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
 					},
 				},
@@ -227,11 +228,18 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
+		this.sidePaneActions = this._register(new MenuWorkbenchToolBar(this.contentDomNode, menuService, contextMenus, Menus.TitleBarSidePane, {
+			ariaLabel: localize({ bundle: 'ash', key: 'sessions.layout.sidePane' }, 'Code side panel'),
+			presentation: 'inherit-foreground',
+			highlightToggledItems: true,
+			contextKeyService: contextKeys,
+		}));
+		this.sidePaneActions.element.classList.add('ash-sessions-titlebar-side-pane', 'ash-titlebar-interactive-region');
 		this._register(layoutActions.onDidChangeMenuItems(() => this.updateRightControlsVisibility()));
 		this.updateRightControlsVisibility();
 
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorHeaders, this.sidePaneActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
 	public layoutEditorHeaders(left: number | undefined, page: HTMLElement | undefined, setToolHost: (host: HTMLElement | undefined) => void, browser = false, conversationVisible = true): void {
@@ -255,7 +263,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		// Apply the docked row's padding before sizing the header host.
 		this.domNode.classList.toggle('has-tool-headers', dockTools);
 		const rightInset = availableWidth > 0 ? parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) : 0;
-		const width = Math.max(0, availableWidth - rightInset);
+		const width = Math.max(0, availableWidth - rightInset - this.sidePaneActions.element.offsetWidth);
 		// Return the focused row to its group before hiding the titlebar slot.
 		if (!dockTools) setToolHost(undefined);
 		const oldPage = this.editorHeaders.firstElementChild;
