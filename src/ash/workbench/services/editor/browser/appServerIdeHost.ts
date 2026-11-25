@@ -2,6 +2,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
+import { isHighSurrogate, isLowSurrogate } from '../../../../base/common/strings.js';
 import { URI } from '../../../../base/common/uri.js';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -94,8 +95,13 @@ export class AppServerIdeHost extends Disposable {
 				const project = workspace.name ?? workspace.folders.map(folder => folder.name).join(', ');
 				const active = this.editors.activeEditor;
 				const label = active?.resource.scheme === 'file' ? basename(active.resource) : active?.label;
-				const title = (label ? `${project} · ${label}` : project).replace(/\p{Cc}/gu, ' ').slice(0, 256);
-				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'register', title, roots, windowKey: this.windowKey });
+				const title = (label ? `${project} · ${label}` : project).replace(/\p{Cc}/gu, ' ');
+				let end = 256;
+				// The Rust server cannot decode a JSON string containing a lone surrogate.
+				if (isHighSurrogate(title.charCodeAt(end - 1)) && isLowSurrogate(title.charCodeAt(end))) {
+					end--;
+				}
+				await this.client.request(APP_SERVER_METHODS['ide/request'], { type: 'register', title: title.slice(0, end), roots, windowKey: this.windowKey });
 				this.registered = true;
 			}
 		}).catch(error => { if (!this.lifetime.signal.aborted && this.client.state === 'ready') onUnexpectedError(error); });

@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -126,6 +127,21 @@ test('saving a workspace file clears the window title dirty marker', { tag: ['@b
 	await input.press('ControlOrMeta+S');
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const title = 2;');
 	await expect(page).toHaveTitle(`main.ts — ${workspaceTitle}`);
+});
+
+test('an editor title cut inside an emoji still registers the IDE window', { tag: ['@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const page = workbench.page;
+	const workspaceTitle = await page.title();
+	const titlePrefix = `${basename(testWorkspace.directory)} · `;
+	const name = `${'a'.repeat(255 - titlePrefix.length)}🙂.txt`;
+	await writeFile(join(testWorkspace.directory, name), 'IDE registration test\n');
+	await page.locator('.ash-explorer .ash-tree-row').getByText(name, { exact: true }).dblclick();
+	await expect(page).toHaveTitle(`${name} — ${workspaceTitle}`);
+
+	await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+	await workbench.terminal.runCommand("node -e \"require('fs').writeFileSync('ide-window.txt', process.env.ASH_IDE_WINDOW ?? '')\"");
+	const keyFile = join(testWorkspace.directory, 'ide-window.txt');
+	await expect.poll(() => readFile(keyFile, 'utf8').catch(() => '')).toMatch(/^[0-9a-f]{32}$/iu);
 });
 
 
