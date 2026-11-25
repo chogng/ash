@@ -784,8 +784,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         assert!(client.git(&["status", "--porcelain"]).is_empty());
         // UI publication is coalesced independently of the mutation response. Observe the
         // public snapshot acknowledgement before asserting the settled input and busy state.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        loop {
+        let scm_snapshot = || {
             let snapshot = supervisor.snapshot();
             let scm = snapshot
                 .registrations
@@ -795,19 +794,74 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             let host::RegistrationKind::SourceControl { providers, .. } = &scm.kind else {
                 panic!("SCM registration missing")
             };
-            if providers[0]["input"]["value"] == "" && providers[0]["isBusy"] == false {
+            providers[0].clone()
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let commit_selection = loop {
+            let provider = scm_snapshot();
+            if provider["input"]["value"] == "" && provider["isBusy"] == false {
                 assert_eq!(
-                    providers[0]["inputRevision"], 1,
+                    provider["inputRevision"], 1,
                     "a command acknowledges the client's draft revision"
                 );
+                break provider["selectionRevision"].as_u64().unwrap();
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "commit snapshot did not settle: {provider:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"setInput","providerId":"root","value":"Rust extension commit","inputRevision":1}),
+            ),
+        );
+        // Selection marks a snapshot built after the replay, even when publications coalesce.
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"activate","providerId":"root"}),
+            ),
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let provider = scm_snapshot();
+            if provider["selectionRevision"].as_u64().unwrap() > commit_selection {
+                assert_eq!(
+                    provider["input"]["value"], "",
+                    "a delayed input must not restore the committed draft"
+                );
+                assert_eq!(provider["inputRevision"], 1);
                 break;
             }
             assert!(
                 std::time::Instant::now() < deadline,
-                "commit snapshot did not settle: {providers:?}"
+                "the replay was not published"
             );
             std::thread::sleep(Duration::from_millis(10));
         }
+        let committed_head = client.git(&["rev-parse", "HEAD"]);
+        assert_eq!(
+            execute(
+                &supervisor,
+                &client,
+                invocation(
+                    "ash.scm",
+                    "scm",
+                    json!({"method":"acceptInput","providerId":"root","value":"Rust extension commit","inputRevision":1}),
+                ),
+            ),
+            json!({"result":null,"value":""})
+        );
+        assert_eq!(client.git(&["rev-parse", "HEAD"]), committed_head);
         let parent = client.git(&["rev-parse", "HEAD^"]);
         execute(
             &supervisor,

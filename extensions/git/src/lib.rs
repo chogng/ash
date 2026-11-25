@@ -876,12 +876,22 @@ impl GitRuntime {
                     .unwrap_or_default()
                     .to_owned();
                 if let Some(repository) = state.repositories.get_mut(&id) {
-                    let revision = payload["inputRevision"]
-                        .as_u64()
-                        .unwrap_or(repository.input_revision);
-                    if revision >= repository.input_revision {
-                        repository.draft = value.to_owned();
-                        repository.input_revision = revision;
+                    match payload["inputRevision"].as_u64() {
+                        Some(revision) if revision > repository.input_revision => {
+                            repository.draft = value.to_owned();
+                            repository.input_revision = revision;
+                        }
+                        None => repository.draft = value.to_owned(),
+                        // A commit can clear the draft at the same client revision.
+                        // Only submit an already-seen revision if its text is still current.
+                        Some(revision)
+                            if method == "acceptInput"
+                                && (revision < repository.input_revision
+                                    || value != repository.draft) =>
+                        {
+                            return Ok(json!({"result":null,"value":repository.draft}));
+                        }
+                        Some(_) => {}
                     }
                 }
             }
