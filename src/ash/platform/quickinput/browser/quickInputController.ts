@@ -3,7 +3,7 @@ import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/d
 import { observeResize } from '../../../base/browser/observer.js';
 import { setAriaAttribute, setRole } from '../../../base/browser/ui/aria/aria.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { localize } from '../../../nls.js';
@@ -166,14 +166,12 @@ export class QuickInputController extends Disposable {
 		if (token.isCancellationRequested) {
 			return Promise.resolve(undefined);
 		}
-		let cancellation: IDisposable | undefined;
 		const listeners = new DisposableStore();
 		const input = this.instantiationService.createInstance(InputQuickInput, this.host, options, {
 			onContextKeyChange: candidate => this.callbacks.onContextKeyChange?.(candidate),
 			onShow: candidate => this.show(candidate),
 			onHide: (candidate, reason) => this.hide(candidate, reason),
 			onDispose: candidate => {
-				cancellation?.dispose();
 				listeners.dispose();
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
@@ -188,7 +186,6 @@ export class QuickInputController extends Disposable {
 					return;
 				}
 				settled = true;
-				cancellation?.dispose();
 				input.dispose();
 				resolve(value);
 			};
@@ -197,14 +194,19 @@ export class QuickInputController extends Disposable {
 					return;
 				}
 				settled = true;
-				cancellation?.dispose();
 				input.dispose();
 				reject(error);
 			};
 			input.onDidAccept(value => finish(value), undefined, listeners);
 			input.onDidHide(() => finish(undefined), undefined, listeners);
 			input.onDidError(fail, undefined, listeners);
-			cancellation = token.onCancellationRequested(() => finish(undefined));
+			const cancellation = token.onCancellationRequested(() => finish(undefined));
+			// Cancellation can dispose the prompt before registration returns its listener.
+			if (settled) {
+				cancellation.dispose();
+				return;
+			}
+			listeners.add(cancellation);
 			if (token.isCancellationRequested) {
 				finish(undefined);
 				return;

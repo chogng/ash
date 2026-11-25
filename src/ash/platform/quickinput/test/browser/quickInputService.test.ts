@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { browserEnvironment } from '../../../../editor/test/browser/testEditorDom.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -45,7 +47,9 @@ test('Window Quick Input commands target a modal prompt and release its controll
 	modal.append(edit);
 	root.append(modal);
 	edit.focus();
-	const first = quickInput.input({ title: 'Member name' });
+	const cancellation = resources.add(new Emitter<void>());
+	const token: CancellationToken = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+	const first = quickInput.input({ title: 'Member name' }, token);
 	assert.equal(await outside, undefined);
 	assert.ok(modal.querySelector('.ash-quick-input-host'));
 	const input = modal.querySelector<HTMLInputElement>('input')!;
@@ -54,6 +58,7 @@ test('Window Quick Input commands target a modal prompt and release its controll
 	input.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	await quickInput.accept();
 	assert.equal(await first, 'Casey');
+	assert.equal(cancellation.hasListeners(), false);
 	assert.equal(document.activeElement, edit);
 	const second = quickInput.input({ title: 'Responsibility' });
 	await quickInput.cancel();
@@ -69,4 +74,28 @@ test('Window Quick Input commands target a modal prompt and release its controll
 	assert.equal(modal.querySelector('.ash-quick-input-host'), null);
 	await quickInput.cancel();
 	assert.equal(await last, undefined);
+});
+
+test('Quick Input releases the cancellation listener if cancelled during registration', async () => {
+	using resources = new DisposableStore();
+	const document = browserEnvironment.window.document;
+	const root = document.createElement('main');
+	document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const quickInput = resources.add(new TestQuickInputService({ container: root }));
+	const cancellation = resources.add(new Emitter<void>());
+	let cancelled = false;
+	const token: CancellationToken = {
+		get isCancellationRequested() { return cancelled; },
+		onCancellationRequested(listener) {
+			const subscription = cancellation.event(listener);
+			cancelled = true;
+			cancellation.fire();
+			return subscription;
+		},
+	};
+
+	assert.equal(await quickInput.input({ title: 'Cancelled prompt' }, token), undefined);
+	assert.equal(quickInput.currentQuickInput, undefined);
+	assert.equal(cancellation.hasListeners(), false);
 });
