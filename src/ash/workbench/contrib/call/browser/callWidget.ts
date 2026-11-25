@@ -2,15 +2,20 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ICallService, type CallDocument, type ScreenFrame, type ScreenSource } from '../../../../platform/call/common/callService.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { DocumentTypes, isCollabEditor } from '../../../services/documentEditor/common/documentTypes.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
+import './media/call.css';
 
-export class CallViewPane extends ViewPane {
+export const CallsFocusedContext = new RawContextKey<boolean>('callsFocused', false);
+
+export class CallWidget extends Disposable {
+	readonly element: HTMLElement;
 	private readonly connectionProgress = this._register(new MutableDisposable());
 	private readonly statusDomNode: HTMLDivElement;
 	private readonly actionsDomNode: HTMLDivElement;
@@ -31,10 +36,20 @@ export class CallViewPane extends ViewPane {
 	private readonly buttons = new Map<string, HTMLButtonElement>();
 	private working = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IConfigurationService private readonly configuration: IConfigurationService, @IEditorService private readonly editors: IEditorService) {
-		super(container, options);
+	constructor(
+		container: HTMLElement,
+		private readonly progress: IProgressIndicator | undefined,
+		@ICallService private readonly calls: ICallService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IEditorService private readonly editors: IEditorService,
+	) {
+		super();
 		const document = container.ownerDocument;
-		this.contentElement.classList.add('ash-call');
+		const title = localize('collaboration.calls', 'Calls');
+		this.element = h(document, 'section', { className: 'ash-call', attributes: { 'aria-label': title }, properties: { tabIndex: -1 } });
+		this.element.append(h(document, 'h2', { className: 'call-section-title' }, title));
+		container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
 		this.statusDomNode = h(document, 'div');
 		this.statusDomNode.setAttribute('role', 'status');
 		this.formDomNode = h(document, 'form');
@@ -128,16 +143,16 @@ export class CallViewPane extends ViewPane {
 		this.participantsDomNode.setAttribute('aria-label', localize('call.people', 'People in this call'));
 		this.documentsDomNode = h(document, 'ul');
 		this.documentsDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'call.document.list' }, 'Documents shared in this call'));
-		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.documentsDomNode, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
+		this.element.append(this.statusDomNode, this.formDomNode, actions, this.documentsDomNode, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
 		this._register(calls.onDidChange(() => this.render()));
 		this._register(calls.onDidChangeScreens(() => this.renderScreens()));
 		this.render();
 		this.renderScreens();
 	}
 
-	public override focus(): void {
-		if (!this.formDomNode.hidden) { this.modeDomNode.focus(); }
-		else { this.buttons.get('leave')?.focus(); }
+	public focus(): void {
+		const target = this.formDomNode.hidden ? this.buttons.get('leave')! : this.modeDomNode;
+		(target.disabled ? this.element : target).focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.calls')) {
 			this.statusDomNode.textContent = this.statusDomNode.textContent + ' ' + localize('call.helpHint', 'Use Tab to navigate and Alt+F1 for help.');
 		}
@@ -157,7 +172,7 @@ export class CallViewPane extends ViewPane {
 	}
 
 	private button(label: string, id: string, action: () => Promise<void>): HTMLButtonElement {
-		const button = h(this.contentElement.ownerDocument, 'button');
+		const button = h(this.element.ownerDocument, 'button');
 		button.type = 'button';
 		button.textContent = label;
 		this.buttons.set(id, button);
@@ -192,8 +207,8 @@ export class CallViewPane extends ViewPane {
 		};
 		const state = this.calls.state;
 		const connecting = state?.connection === 'connecting' || state?.connection === 'reconnecting';
-		if (connecting && !this.connectionProgress.value) {
-			const progress = this.getProgressIndicator().show(true, 150);
+		if (connecting && this.progress && !this.connectionProgress.value) {
+			const progress = this.progress.show(true, 150);
 			this.connectionProgress.value = toDisposable(() => progress.done());
 		} else if (!connecting) this.connectionProgress.clear();
 		const active = !!state && !['ended', 'failed'].includes(state.connection);
@@ -230,7 +245,7 @@ export class CallViewPane extends ViewPane {
 		if (!active) { this.invitationDomNode.value = ''; this.invitationDomNode.hidden = true; }
 		const people = active ? state.participants : [];
 		this.participantsDomNode.hidden = !people.length;
-		const document = this.contentElement.ownerDocument;
+		const document = this.element.ownerDocument;
 		this.participantsDomNode.replaceChildren(...people.map((person, index) => {
 			const item = h(document, 'li');
 			item.textContent = person.muted ? localize('call.participantMuted', 'Participant {0} · microphone off', index + 1) : localize('call.participant', 'Participant {0}', index + 1);

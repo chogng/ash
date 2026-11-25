@@ -86,7 +86,7 @@ test('Agents Window can publish and clear its application badge', { tag: ['@elec
 });
 
 emptyWorkspaceTest(
-	'Code sidebar shows its Sessions heading and retains Recents expansion',
+	'Code sidebar shows its merged title and retains Recents expansion',
 	{ tag: ['@electron-ui'] },
 	async ({ target, workbench }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
@@ -96,8 +96,9 @@ emptyWorkspaceTest(
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.type('Sidebar fixture draft');
-		await expect(list.getByRole('heading', { level: 2, name: 'Sessions', exact: true })).toBeVisible();
-		await expect(list.getByRole('button', { name: 'More Sessions Actions', exact: true })).toBeVisible();
+		const title = page.locator('[data-part="sidebar"] .ash-pane-composite-title');
+		await expect(title.locator('.ash-sidebar-title-label')).toHaveText('Code');
+		await expect(title.getByRole('button', { name: 'More Sessions Actions', exact: true })).toBeVisible();
 		await expect(recent).toHaveText('Recents');
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await recent.focus();
@@ -114,7 +115,7 @@ emptyWorkspaceTest(
 emptyWorkspaceTest('Code sidebar task run filter is an independent keyboard toggle', { tag: ['@electron-ui'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	const more = page.getByRole('tree', { name: 'Sessions', exact: true }).getByRole('button', { name: 'More Sessions Actions', exact: true });
+	const more = page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('button', { name: 'More Sessions Actions', exact: true });
 	const openShowMenu = async () => {
 		await more.press('Enter');
 		await page.getByRole('menuitem', { name: 'Show', exact: true }).press('ArrowRight');

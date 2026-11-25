@@ -145,7 +145,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const viewport = sidebar.locator('.ash-sessions-list-items > .ash-scrollbar-viewport');
 		const scrollbar = sidebar.getByRole('scrollbar').and(sidebar.locator('[aria-orientation="vertical"]'));
 		const thumb = scrollbar.locator('.ash-scrollbar-thumb');
-		const toolbar = sidebar.locator('[data-section="projects"] .ash-sessions-list-more');
+		const toolbar = page.locator('[data-part="sidebar"] .ash-pane-composite-title').locator('.ash-sessions-list-more');
 		await expect(toolbar.getByRole('button', { name: locale === 'zh-CN' ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
 		await scrollbar.press('Home');
 		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);

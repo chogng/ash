@@ -12,6 +12,11 @@
 	flex-wrap: wrap;
 	gap: 8px;
 }
+.ash-call .call-section-title {
+	margin: 0;
+	font: inherit;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
 .ash-call label {
 	display: flex;
 	flex-direction: column;

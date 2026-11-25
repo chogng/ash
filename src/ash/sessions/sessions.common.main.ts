@@ -116,7 +116,6 @@ import { registerTerminalView } from '../workbench/contrib/terminal/browser/term
 // Connected App tools use the same Task owner and Terminal execution services as Code.
 import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
-import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
 import { registerMemoryManagement } from '../workbench/contrib/memories/browser/memories.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { ViewContainerLocation } from '../workbench/common/views.js';
@@ -154,5 +153,4 @@ registerTerminalView(SessionsViewRegistry);
 registerBulkEditView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
-registerCallView(SessionsViewRegistry);
 registerMemoryManagement();

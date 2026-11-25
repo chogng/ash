@@ -567,6 +567,7 @@ widget = resources.add(chatViews.createChatView('chatgpt', document.getElementBy
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
+const title = document.getElementById('navigation-title')!;
 resources.add(registerChatWorkspaceNavigation(chatGPTViewSource.accessibility));
 let activePane: ProjectsEditorPane | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return activePane; }, activeGroup: { get activePane() { return activePane; } }, groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart);
@@ -581,6 +582,7 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
+view.setMergedTitleActionsHost(title);
 if (parameters.has('projects')) {
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);
@@ -588,8 +590,9 @@ if (parameters.has('projects')) {
 	activePane = projects;
 }
 resources.add(services.createInstance(ProjectTitleBarContribution));
-const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
+const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight - title.offsetHeight, width: host.clientWidth }));
 resize.observe(host);
+resize.observe(title);
 resources.add(toDisposable(() => resize.disconnect()));
 if (!mixedProjectArchive) chat.initialize();
 if (parameters.has('focus')) { widget.focus(); }

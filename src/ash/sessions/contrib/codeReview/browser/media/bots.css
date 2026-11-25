@@ -16,8 +16,7 @@
 	overflow: auto;
 }
 
-.ash-bots-sidebar > .ash-button,
-.ash-bots-group {
+.ash-bots-sidebar > .ash-button {
 	justify-content: flex-start;
 	min-height: var(--ash-spacing-size320);
 }
@@ -34,60 +33,25 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-bots-sidebar h2 {
-	margin: var(--ash-spacing-size80) var(--ash-spacing-size80)
-		var(--ash-spacing-size40);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label2);
-	font-weight: var(--ash-fontWeight-regular);
+.ash-bots-tree {
+	min-width: 0;
+	flex: none;
 }
 
-.ash-bots-group,
-.ash-bots-threads .ash-button {
-	width: 100%;
-	text-align: start;
-}
-
-.ash-bots-group .ash-button-content {
-	flex: 1;
-}
-
-.ash-bots-chevron {
+.ash-bots-tree-group,
+.ash-bots-tree-thread {
 	display: flex;
-}
-
-.ash-bots-group[aria-expanded="true"] .ash-bots-chevron {
-	transform: rotate(90deg);
-}
-
-.ash-bots-threads {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr);
-	gap: var(--ash-spacing-size20);
-	margin: var(--ash-spacing-size20) 0 var(--ash-spacing-size80)
-		var(--ash-spacing-size240);
-	padding: 0 0 0 var(--ash-spacing-size80);
-	border-inline-start: var(--ash-strokeThickness) solid
-		var(--ash-widget-border);
-	list-style: none;
-}
-
-.ash-bots-threads > li {
 	min-width: 0;
 }
 
-.ash-bots-threads .ash-button {
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+.ash-bots-tree-group {
+	align-items: center;
+	gap: var(--ash-spacing-size80);
 }
 
-.ash-bots-threads .ash-button[aria-current] {
-	background: var(--ash-sessions-selectionBackground);
-	outline: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
+.ash-bots-tree-thread {
+	flex-direction: column;
+	align-items: flex-start;
 }
 
 .ash-bots-sidebar [hidden],
@@ -103,6 +67,7 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
+.ash-bots-tree-label,
 .ash-bots-thread-detail,
 .ash-bots-heading :is(h1, p) {
 	max-width: 100%;

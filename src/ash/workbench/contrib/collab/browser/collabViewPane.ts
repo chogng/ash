@@ -19,15 +19,18 @@ import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { CallsFocusedContext, CallWidget } from '../../call/browser/callWidget.js';
 
-/** One shared channel tree; only search, focus and expansion are local UI state. */
+/** Hosts the channel tree and optional call controls in a single sidebar pane. */
 export class CollabViewPane extends ViewPane {
+	readonly callControls: CallWidget | undefined;
 	private readonly busyProgress = this._register(new MutableDisposable());
 	private readonly tree: WorkbenchObjectTree<Channel>;
 	private readonly search: HTMLInputElement;
@@ -41,6 +44,7 @@ export class CollabViewPane extends ViewPane {
 	private readonly quickPicks = this._register(new DisposableStore());
 	private readonly rowResources = this._register(new DisposableMap<string>());
 	private readonly channelService: IChannelService | undefined;
+	private readonly callService: ICallService | undefined;
 	private get channels(): readonly Channel[] | undefined { return this.channelService?.space?.channels; }
 	private get role(): ChannelRole | undefined { const space = this.channelService?.space; return space?.members.find(member => member.id === space.memberId)?.role; }
 	private get writable(): boolean { return !!this.channelService && !this.channelService.busy && !this.channelService.error && (this.role === 'owner' || this.role === 'editor'); }
@@ -58,11 +62,18 @@ export class CollabViewPane extends ViewPane {
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, { ...options, headerActionsVisibility: 'whenExpanded' });
 		this.channelService = instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService));
+		this.callService = instantiation.invokeFunction(accessor => accessor.getOptional(ICallService));
 		const document = container.ownerDocument;
-		this.contentElement.classList.add('ash-collaboration');
+		this.contentElement.classList.add('ash-collab-content');
+		const channels = h(document, 'section', {
+			className: 'ash-collaboration',
+			attributes: { 'aria-label': localize('collaboration.channels', 'Channels') },
+		});
+		this.contentElement.append(channels);
 		this.search = h(document, 'input');
 		this.search.type = 'search';
 		this.search.className = 'collaboration-search';
@@ -74,12 +85,12 @@ export class CollabViewPane extends ViewPane {
 		this.message = h(document, 'div');
 		this.message.className = 'collaboration-empty';
 		this.message.setAttribute('role', 'status');
-		this.contentElement.append(this.search, this.connectionNote, this.message);
-		this.connectButton = this._register(new Button(this.contentElement, { ...defaultButtonStyles, presentation: 'secondary', label: localize('collaboration.connect', 'Connect Channels') }));
+		channels.append(this.search, this.connectionNote, this.message);
+		this.connectButton = this._register(new Button(channels, { ...defaultButtonStyles, presentation: 'secondary', label: localize('collaboration.connect', 'Connect Channels') }));
 		this.connectButton.domNode.classList.add('collaboration-connect-button');
 		this.connectButton.label = localize('collaboration.connect', 'Connect Channels');
 		this._register(this.connectButton.onDidClick(() => { void this.connect(); }));
-		this.tree = this._register(new WorkbenchObjectTree<Channel>(this.contentElement, {
+		this.tree = this._register(new WorkbenchObjectTree<Channel>(channels, {
 			configurationService: configuration,
 			modelOptions: { identityProvider: { getId: channel => channel.id } },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: channel => channel.name },
@@ -109,7 +120,12 @@ export class CollabViewPane extends ViewPane {
 		this.selectionLabel.className = 'collaboration-selection-label';
 		selection.append(this.selectionLabel);
 		this.selectionToolbar = this._register(new WorkbenchToolBar(selection, menus, { ariaLabel: localize('collaboration.channelActions', 'Channel Actions') }));
-		this.contentElement.append(selection);
+		channels.append(selection);
+		if (this.callService) {
+			this.callControls = this._register(instantiation.createInstance(CallWidget, this.contentElement, this.getProgressIndicator()));
+			const callContext = this._register(contextKeys.createScoped(this.callControls.element));
+			CallsFocusedContext.bindTo(callContext).set(true);
+		}
 		this._register(hover.setupDelayedHover(this.selectionLabel, () => ({ content: this.selectionLabel.textContent ?? '' })));
 		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, menus, { ariaLabel: localize('collaboration.actions', 'Channels Actions') }));
 		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
@@ -243,7 +259,7 @@ export class CollabViewPane extends ViewPane {
 
 	private resourceActions(id: string): IAction[] {
 		const enabled = !!this.channelService?.space && !this.channelService.error && !this.channelService.busy && !this.resourceBusy;
-		const calls = this.instantiation.invokeFunction(accessor => accessor.getOptional(ICallService));
+		const calls = this.callService;
 		return [
 			{ ...this.action('collaboration.notes', localize('collaboration.notes', 'Open channel notes'), () => this.openResource(id, 'notes')), enabled, icon: Lxicon.fileText },
 			{ ...this.action('collaboration.call', localize('collaboration.call', 'Join or start channel call'), () => this.openResource(id, 'call')), enabled: enabled && !!calls && calls.canStart !== false, tooltip: calls?.canStart === false ? localize('collaboration.desktopCalls', 'Channel calls are available in the desktop app.') : localize('collaboration.call', 'Join or start channel call'), icon: Lxicon.voiceMode },
@@ -259,7 +275,7 @@ export class CollabViewPane extends ViewPane {
 		this.resourceBusy = true; this.resourceError = undefined; this.updateActions();
 		try {
 			if (kind === 'call') {
-				const calls = this.instantiation.invokeFunction(accessor => accessor.getOptional(ICallService));
+				const calls = this.callService;
 				if (!calls || calls.canStart === false) return;
 				if (calls.state && calls.state.connection !== 'ended' && calls.state.connection !== 'failed') {
 					throw new Error(localize('collaboration.leaveCallFirst', 'Leave the current call before joining a channel call.'));

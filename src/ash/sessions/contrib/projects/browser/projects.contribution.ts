@@ -1,4 +1,4 @@
-import { getActiveElement, isHTMLElement } from '../../../../base/browser/dom.js';
+import { getActiveElement } from '../../../../base/browser/dom.js';
 import { localize, localize2 } from '../../../../nls.js';
 import {
 	AccessibleContentProvider,
@@ -100,15 +100,14 @@ registerEditorPane({
 CommandsRegistry.register('sessions.createProject', async accessor => {
 	const commands = accessor.get(ICommandService);
 	const editor = accessor.get(IEditorPart);
-	const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument);
 	if (!(editor.activePane instanceof ProjectsEditorPane) || !editor.activePane.isVisible()) {
 		await commands.executeCommand('sessions.show.projects');
 	}
-	if (editor.activePane instanceof ProjectsEditorPane && editor.activePane.isVisible()) {
-		// Let the dialog return focus to the sidebar trigger after opening the page.
-		if (isHTMLElement(focused) && focused.isConnected) focused.focus();
-		editor.activePane.createProject();
-	}
+	if (!(editor.activePane instanceof ProjectsEditorPane) || !editor.activePane.isVisible()) return;
+	const views = accessor.get(IViewsService);
+	const view = views.isViewVisible(projectsViewId) ? views.getViewWithId(projectsViewId) : undefined;
+	if (view instanceof ProjectsView) view.createProject();
+	else editor.activePane.createProject();
 });
 
 registerAction2(

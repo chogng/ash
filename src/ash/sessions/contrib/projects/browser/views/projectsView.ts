@@ -24,8 +24,9 @@ export class ProjectsView extends ViewPane {
 	private readonly content = this._register(new DisposableStore());
 	private readonly bodyVisible = observableValue(this, false);
 	private readonly showArchived = observableValue(this, false);
-	private readonly title: HTMLHeadingElement;
+	private readonly archivedHeading: HTMLHeadingElement;
 	private readonly body: HTMLElement;
+	private readonly actions: ProjectsActions;
 	private readonly toolbar: ProjectsToolbar;
 	private readonly list: ProjectsList;
 
@@ -44,15 +45,15 @@ export class ProjectsView extends ViewPane {
 		const title = localize('projects.title', 'Projects');
 		const archivedTitle = localize('projects.archived', 'Archived');
 		const root = h(document, 'nav', { className: 'ash-projects-view', attributes: { 'aria-label': title } });
-		const heading = h(document, 'header', { className: 'ash-projects-heading' });
-		this.title = h(document, 'h2', { properties: { tabIndex: -1, hidden: true } }, archivedTitle);
-		const controls = h(document, 'div', { className: 'ash-projects-view-toolbar' });
-		heading.append(this.title, controls);
+		this.archivedHeading = h(document, 'h2', {
+			className: 'ash-projects-archived-heading',
+			properties: { tabIndex: -1, hidden: true },
+		}, archivedTitle);
 		this.body = h(document, 'div', { className: 'ash-projects-view-list', properties: { tabIndex: -1 } });
-		root.append(heading, this.body);
+		root.append(this.archivedHeading, this.body);
 		this.contentElement.append(root);
 
-		const actions = this._register(instantiation.createInstance(ProjectsActions, {
+		const actions = this.actions = this._register(instantiation.createInstance(ProjectsActions, {
 			showDialog: (edit?: ChatProjectEdit) => {
 				const pane = editors.activePane;
 				if (!(pane instanceof ProjectsEditorPane) || !pane.isVisible()) return;
@@ -73,7 +74,8 @@ export class ProjectsView extends ViewPane {
 			focusList: () => this.focus(),
 			isVisible: () => this.isBodyVisible(),
 		}));
-		this.toolbar = this._register(instantiation.createInstance(ProjectsToolbar, controls, actions));
+		this.headerActionsElement.classList.add('ash-projects-title-actions');
+		this.toolbar = this._register(instantiation.createInstance(ProjectsToolbar, this.headerActionsElement, actions));
 		this.list = this._register(instantiation.createInstance(ProjectsList, this.body, actions, () => this.isBodyVisible()));
 		this._register(this.onDidChangeBodyVisibility(visible => {
 			this.bodyVisible.set(visible, undefined);
@@ -94,7 +96,7 @@ export class ProjectsView extends ViewPane {
 			if (!visible) return;
 
 			const archived = this.showArchived.read(reader);
-			this.title.hidden = !archived;
+			this.archivedHeading.hidden = !archived;
 			const focused = this.focusedRow();
 			this.list.reset();
 			this.content.clear();
@@ -132,13 +134,16 @@ export class ProjectsView extends ViewPane {
 		const verbosity = AccessibilityVerbositySettingId.Projects;
 		const hint = accessible.getOpenAriaHint(verbosity);
 		if (hint) root.setAttribute('aria-description', hint);
-		this._register(contextKeys.createScoped(this.element)).createKey('sessionsProjectsSidebarFocused', true);
+		// The merged title actions can receive focus outside the pane's DOM subtree.
+		for (const target of [this.element, this.headerActionsElement]) {
+			this._register(contextKeys.createScoped(target)).createKey('sessionsProjectsSidebarFocused', true);
+		}
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 110, name: `sessionsProjectsSidebar.${type}`, when: ContextKeyExpr.has('sessionsProjectsSidebarFocused'),
 				getProvider: () => {
 					const focused = document.activeElement;
-					if (!isHTMLElement(focused) || !this.element.contains(focused)) return undefined;
+					if (!isHTMLElement(focused) || !this.hasFocus()) return undefined;
 					const row = this.focusedRow();
 					return new AccessibleContentProvider(AccessibleViewProviderId.Projects, { type }, () =>
 						type === AccessibleViewType.View
@@ -155,10 +160,15 @@ export class ProjectsView extends ViewPane {
 		}
 	}
 
+	createProject(): void {
+		this.toolbar.focusCreate();
+		this.actions.createProject();
+	}
+
 	toggleArchivedProjects(): void {
 		const archived = !this.showArchived.get();
 		this.showArchived.set(archived, undefined);
-		if (archived) this.title.focus();
+		if (archived) this.archivedHeading.focus();
 		else this.focus();
 	}
 

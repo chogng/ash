@@ -1,10 +1,24 @@
+.ash-collab-content {
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-collab-content > .ash-call {
+	flex: 0 1 auto;
+	max-block-size: 50%;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+}
+
 .ash-collaboration {
 	display: flex;
+	flex: 1 1 0;
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
 	gap: 8px;
 	padding: 8px 12px;
+	overflow: auto;
 }
 .ash-collaboration .collaboration-search {
 	box-sizing: border-box;

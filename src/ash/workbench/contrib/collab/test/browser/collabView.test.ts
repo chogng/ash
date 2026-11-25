@@ -100,7 +100,7 @@ suite('collaboration browser component', () => {
 		await page.setViewportSize({ width: 260, height: 650 });
 		const label = page.locator('.collaboration-channel-name').filter({ hasText: 'A very long' });
 		await expect(label).toBeVisible();
-		expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		await expect.poll(() => label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 		await search.fill('missing channel');
 		await expect(page.getByText('No matching channels. Try another search.')).toBeVisible();
 		await search.press('Escape');
@@ -159,16 +159,26 @@ suite('collaboration browser component', () => {
 	});
 
 
-	test('channel actions are keyboard accessible and start a call using channel access', async function () {
+	test('channels and calls share one pane and keep their keyboard help', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/collaboration.html');
+		const pane = page.locator('#panes .ash-view-pane');
+		await expect(pane).toHaveCount(1);
+		await expect(pane.locator('.ash-pane-view-header')).toBeHidden();
+		const calls = pane.getByRole('region', { name: 'Calls', exact: true });
+		await expect(calls).toBeVisible();
+		expect(await page.evaluate(() => window.ashCollaboration.openCalls())).toBe(true);
+		await expect(calls.getByLabel('Call', { exact: true })).toBeFocused();
+		expect(await page.evaluate(() => window.ashCollaboration.accessible('help'))).toContain('Your microphone starts off.');
 		await channel(page, 'general').click();
+		expect(await page.evaluate(() => window.ashCollaboration.accessible('help'))).toContain('New Channel');
 		await expect(page.getByRole('button', { name: 'Open channel notes', exact: true })).toBeEnabled();
 		await page.keyboard.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Join or start channel call', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashCollaboration.operations())).toEqual(['invitation']);
-		await expect(page.locator('.ash-call').getByRole('button', { name: 'Leave call', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => window.ashCollaboration.openCalls())).toBe(true);
+		await expect(calls.getByRole('button', { name: 'Leave call', exact: true })).toBeFocused();
 		await page.getByRole('button', { name: 'Join or start channel call', exact: true }).click();
 		await expect(page.locator('.collaboration-connection')).toContainText('Leave the current call');
 		await expect.poll(() => page.evaluate(() => window.ashCollaboration.operations())).toEqual(['invitation']);

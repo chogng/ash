@@ -283,6 +283,8 @@
     "call.display": "显示器",
     "call.window": "窗口",
     "call.helpHint": "按 Tab 导航，按 Alt+F1 查看帮助。",
+    "call.verbosityTitle": "通话辅助功能帮助",
+    "call.verbosityDescription": "通话控件获得焦点时提示如何打开键盘帮助。",
     "call.connecting": "正在连接",
     "call.connected": "已连接",
     "call.reconnecting": "正在重新连接",

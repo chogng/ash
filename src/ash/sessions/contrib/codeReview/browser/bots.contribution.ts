@@ -79,7 +79,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const sidebar = focused?.closest<HTMLElement>('.ash-bots-sidebar');
 			return new AccessibleContentProvider(AccessibleViewProviderId.Bots, { type }, () => {
 				if (type === AccessibleViewType.Help) {
-					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back to return to Code and Search to filter bots and threads. Press Enter or Space on Code Review to expand it, and use Up or Down Arrow to move between bot and thread rows. Activate a thread to show its conversation. Choose Review Changes to review the active Code conversation. Save comments on lines and choose Send to Code Review to create a new thread. Activate a file reference in a message to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. <keybinding:editor.action.accessibleView> reads the current region.');
+					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back to return to Code and Search to filter bots and threads. Use Up or Down Arrow to move through the tree. On Code Review, use Left and Right Arrow to collapse and expand, or press Enter or Space to toggle. Press Enter or Space on a thread to open its conversation. Choose Review Changes to review the active Code conversation. Save comments on lines and choose Send to Code Review to create a new thread. Activate a file reference in a message to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. <keybinding:editor.action.accessibleView> reads the current region.');
 				}
 				return sidebar?.innerText ?? (pane instanceof BotsEditor ? pane.getAccessibleContent(focused) : '');
 			}, () => {

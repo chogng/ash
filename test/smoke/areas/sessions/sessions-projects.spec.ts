@@ -183,13 +183,16 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const activity = page.getByRole('toolbar', { name: /^Navigation\b/ });
 		const mode = page.locator('.ash-window-mode-control');
 		const menus = new Menus(page);
-		const grouping = async (list: ReturnType<typeof page.locator>, selected: string, next: string) => {
-			const trigger = list.getByRole('button', { name: 'More Sessions Actions', exact: true });
-			await trigger.press('Enter');
+		const listActions = page.locator('[data-part="sidebar"] .ash-pane-composite-title')
+			.getByRole('toolbar', { name: 'Sessions List Actions', exact: true });
+		const createProjectAction = listActions.getByRole('button', { name: 'Create project', exact: true });
+		const moreSessionsActions = listActions.getByRole('button', { name: 'More Sessions Actions', exact: true });
+		const grouping = async (selected: string, next: string) => {
+			await moreSessionsActions.press('Enter');
 			await page.getByRole('menuitem', { name: `Group By ${selected}`, exact: true }).press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: selected, exact: true, checked: true })).toBeVisible();
 			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
-			await expect(trigger).toBeFocused();
+			await expect(moreSessionsActions).toBeFocused();
 		};
 		const newMenu = () => menus.inspect(application, () => activity.getByRole('button', { name: 'New', exact: true }).click({ button: 'right' }));
 		const expectConversationMenu = async (mode: 'chat' | 'code', pin = 'Pin') => {
@@ -209,18 +212,16 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(true);
 		const chat = page.locator('.ash-chat-navigation-list');
 		const projects = chat.locator('[data-section="projects"]');
-		const projectActions = projects.getByRole('toolbar', { name: 'Sessions List Actions' });
-		await expect(projectActions.getByRole('button')).toHaveCount(1);
-		await expect(projectActions.getByRole('button', { name: 'More Sessions Actions', exact: true })).toBeVisible();
+		await expect(createProjectAction).toBeVisible();
+		await expect(moreSessionsActions).toBeVisible();
 		const row = chat.getByRole('button', { name: chatSession.title, exact: true });
 		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
 		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
 		await expect(firstProject).toBeVisible();
 		await expect(chat.locator('[data-parent-section="recent"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
 		await expect(chat.getByText('No Project', { exact: true })).toHaveCount(0);
-		await firstProject.hover();
-		await expect(firstProject.locator('.ash-sessions-list-project-chevron')).toHaveCount(0);
-		await firstProject.click();
+		// Opening an unvisited project checks for files before settling as an empty row.
+		await expect(firstProject).toHaveAttribute('aria-expanded', 'false');
 		await firstProject.press('ArrowRight');
 		await expect(firstProject).not.toHaveAttribute('aria-expanded');
 		await expect(chat.getByText('No chats in this project', { exact: true })).toHaveCount(0);
@@ -228,19 +229,23 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(chat.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 		await row.dragTo(firstProject);
 		await expect.poll(() => members(first.projectId)).toEqual([chatSession.sessionId]);
+		const projectRow = chat.locator(`[data-parent-project="project:${first.projectId}"]`)
+			.getByRole('button', { name: chatSession.title, exact: true });
+		await expect(firstProject).toHaveAttribute('aria-expanded', 'true');
+		await firstProject.press('ArrowLeft');
 		await expect(firstProject).toHaveAttribute('aria-expanded', 'false');
-		await firstProject.click();
-		await expect(row).toBeVisible();
-		await row.click({ button: 'right' });
+		await expect(projectRow).toBeHidden();
+		await firstProject.press('ArrowRight');
+		await expect(projectRow).toBeVisible();
+		await projectRow.click({ button: 'right' });
 		await expectConversationMenu('chat');
 		await page.keyboard.press('Escape');
-		await row.press('Shift+F10');
+		await projectRow.press('Shift+F10');
 		await expectConversationMenu('chat');
 		await page.keyboard.press('Escape');
-		await expect(row).toBeFocused();
-		await row.press('Shift+F10');
+		await expect(projectRow).toBeFocused();
+		await projectRow.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
-		const projectRow = chat.locator(`[data-parent-project="project:${first.projectId}"]`).getByRole('button', { name: chatSession.title, exact: true });
 		await expect(chat.locator('[data-parent-section="pinned"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
 		await projectRow.press('Shift+F10');
 		await expectConversationMenu('chat', 'Unpin');
@@ -255,9 +260,9 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect.poll(() => members(first.projectId)).toEqual([]);
 		await expect(firstProject).not.toHaveAttribute('aria-expanded');
 		await expect(secondProject).toHaveAttribute('aria-expanded', 'false');
-		await grouping(chat, 'Projects', 'Flat List');
+		await grouping('Projects', 'Flat List');
 		await expect(projects).toHaveCount(0);
-		await expect(chat.locator('[data-section="recent"]').getByRole('toolbar')).toBeVisible();
+		await expect(createProjectAction).toBeVisible();
 		await expect(chat.locator('[data-parent-section="recent"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
 		await expect(row).toHaveCount(1);
 
@@ -273,13 +278,13 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const codeRow = code.locator(`[data-row-order-id="${session.sessionId}"]`);
 		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
 		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
-		await grouping(code, 'Projects', 'Flat List');
+		await grouping('Projects', 'Flat List');
 		await expect(code.locator('[data-section="projects"]')).toHaveCount(0);
 		await expect(codeRow).toHaveAttribute('data-parent-section', 'recent');
-		await grouping(code, 'Flat List', 'Projects');
+		await grouping('Flat List', 'Projects');
 		await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await expect(projects).toHaveCount(0);
-		await grouping(chat, 'Flat List', 'Projects');
+		await grouping('Flat List', 'Projects');
 		await expect(secondProject).toHaveAttribute('aria-expanded', 'false');
 		await codeMode.click();
 		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
@@ -516,7 +521,7 @@ test.describe('Code folder projects in Simplified Chinese', () => {
 			await previous.click();
 			const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat:visible');
 			await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
-			const projectToolbar = page.locator('.ash-sessions-list[data-mode="code"] .ash-sessions-list-section-with-actions');
+			const projectToolbar = page.locator('[data-part="sidebar"] .ash-pane-composite-title');
 			const newProject = projectToolbar.getByRole('button', { name: '创建项目', exact: true });
 			const dialog = page.getByRole('dialog', { name: '创建项目', exact: true });
 			const submit = dialog.getByRole('button', { name: '创建', exact: true });
@@ -683,7 +688,7 @@ test.describe('Projects sorting persistence', () => {
 		};
 		await openProjects();
 		for (const name of ['Alpha', 'Zebra']) {
-			await page.locator('.ash-projects-view').getByRole('button', { name: '创建项目', exact: true }).first().click();
+			await page.getByRole('toolbar', { name: '项目操作', exact: true }).getByRole('button', { name: '创建项目', exact: true }).click();
 			const dialog = page.getByRole('dialog', { name: '创建项目' });
 			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
 			await dialog.getByRole('button', { name: '创建', exact: true }).click();
@@ -723,7 +728,7 @@ test(
 	async ({ application, target, workbench }, testInfo) => {
 		let page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-		await page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first().click();
+		await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Create project', exact: true }).click();
 		const dialog = page.getByRole('dialog', { name: 'Create a project' });
 		await dialog
 			.getByRole('textbox', { name: 'What are you working on?', exact: true })
@@ -786,7 +791,7 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Library', exact: true })).toHaveCount(0);
 	await expect(projects.getByRole('button', { name: 'Import', exact: true })).toHaveCount(0);
-	await page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first().click();
+	await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Create project', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
 	await expect(dialog.getByRole('textbox', { name: 'What are you working on?' })).toBeFocused();
 	await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
@@ -795,7 +800,7 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await page.keyboard.press('Escape');
 	await page.getByRole('button', { name: 'Discard', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
-	await expect(page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first()).toBeFocused();
+	await expect(page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Create project', exact: true })).toBeFocused();
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 	await expect(help.getByRole('textbox')).toHaveValue(/Use Tab to reach the project actions toolbar/);
@@ -815,7 +820,7 @@ test('Sessions Projects protects an unsaved form from keyboard page switching', 
 	const nextPage = navigation.getByRole('button', { name: 'New', exact: true });
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	const projects = page.locator('.ash-projects');
-	const create = page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first();
+	const create = page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Create project', exact: true });
 	await create.click();
 	const form = page.getByRole('dialog', { name: 'Create a project' });
 	const name = form.getByRole('textbox', { name: 'What are you working on?' });
@@ -859,7 +864,7 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	await expect(projects.getByText('No project selected', { exact: true })).toBeVisible();
 	await expect(page.locator('.ash-projects-breadcrumb')).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath('projects-empty.png') });
-	await page.locator('.ash-projects-view').getByRole('button', { name: 'Create project', exact: true }).first().click();
+	await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Create project', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
 	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Research workspace');
 	await new Editor(dialog).waitForEditorFocus();
@@ -880,10 +885,10 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	await expect(page.locator('.ash-projects-view').getByRole('button', { name: 'Research workspace', exact: true })).toBeFocused();
 	await expect(page.locator('.ash-projects-view .ash-projects-card-caption')).toHaveText('Just now');
 	await page.screenshot({ path: testInfo.outputPath('projects-relative-time.png') });
-	await page.locator('.ash-projects-view').getByRole('button', { name: 'Search projects', exact: true }).click();
-	await page.locator('.ash-projects-view').getByRole('searchbox').fill('no matching project');
+	await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Search projects', exact: true }).click();
+	await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('searchbox').fill('no matching project');
 	await expect(page.locator('.ash-projects-view').getByText('No matching projects', { exact: true })).toBeVisible();
-	await page.locator('.ash-projects-view').getByRole('button', { name: 'Close project search', exact: true }).click();
+	await page.getByRole('toolbar', { name: 'Project actions', exact: true }).getByRole('button', { name: 'Close project search', exact: true }).click();
 	await page.locator('.ash-projects-view').getByRole('button', { name: 'Research workspace', exact: true }).click();
 	const editInstructions = projects.getByRole('button', { name: 'Edit instructions', exact: true });
 	await editInstructions.press('Enter');
@@ -1073,6 +1078,7 @@ test('Sessions Projects sidebar navigation and creation are localized in Chinese
 	await expect(chatSidebar).toBeVisible();
 	await activity.click();
 	const sidebar = page.locator('[data-part="sidebar"]').getByRole('navigation', { name: '项目', exact: true });
+	const toolbar = page.getByRole('toolbar', { name: '项目操作', exact: true });
 	const editor = page.locator('[data-part="editor"] .ash-projects');
 	const rows = sidebar.locator('button.ash-projects-card');
 	const first = rows.first();
@@ -1101,15 +1107,15 @@ test('Sessions Projects sidebar navigation and creation are localized in Chinese
 	await expect(second).not.toHaveAttribute('aria-current', 'true');
 	const selected = (await first.getAttribute('aria-label'))!;
 	await expect(editor).toHaveAccessibleName(selected);
-	await sidebar.getByRole('button', { name: '搜索项目', exact: true }).click();
-	const search = sidebar.getByRole('searchbox');
+	await toolbar.getByRole('button', { name: '搜索项目', exact: true }).click();
+	const search = toolbar.getByRole('searchbox');
 	await search.fill('不存在的项目');
 	await expect(rows).toHaveCount(0);
 	await expect(sidebar.getByRole('status')).toHaveText('没有匹配的项目');
 	await expect(editor).toHaveAccessibleName(selected);
 	await search.press('Escape');
 	await expect(rows).toHaveCount(2);
-	await expect(sidebar.getByRole('button', { name: '项目排序', exact: true })).toBeVisible();
+	await expect(toolbar.getByRole('button', { name: '项目排序', exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('projects-sidebar-chinese.png') });
 	const modes = page.locator('.ash-window-mode-control');
 	await modes.getByRole('button', { name: '代码', exact: true }).click();
@@ -1126,7 +1132,7 @@ test('Sessions Projects sidebar navigation and creation are localized in Chinese
 	await expect(rows).toHaveCount(2);
 	await activity.click();
 	await expect(editor.getByRole('heading', { name: '未选择项目', exact: true })).toBeVisible();
-	await sidebar.getByRole('button', { name: '创建项目', exact: true }).first().click();
+	await toolbar.getByRole('button', { name: '创建项目', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: '创建项目' });
 	await expect(dialog.getByRole('textbox', { name: '你正在做什么？' })).toBeFocused();
 	await expect(dialog.getByRole('textbox', { name: '指令' })).toBeVisible();

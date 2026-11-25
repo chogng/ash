@@ -71,11 +71,11 @@ Activity Bar icon
      -> Workbench layout: apply shared host visibility
 ```
 
-The sidebar activation unit is a `ViewContainer`, which may contain several `ViewPane` instances. Central editors continue to use `IEditorService`. A feature supplies its container IDs and central content to `ISessionsEntryService`, which opens registered containers through `IViewsService` and preserves the existing hosts. The shared layout service does not know Artifacts workspaces or project selection; generic container activation must not acquire product behavior.
+A Sessions sidebar destination opens one `ViewContainer` with one `ViewPane`. The sidebar merges the view's title and actions into the container title row. Destinations such as Collab compose their content regions within that pane. A feature supplies its container IDs and central content to `ISessionsEntryService`, which opens the containers through `IViewsService` and central editors through `IEditorService`. Shared container activation stays feature-neutral. Features own Artifacts workspaces and project selection.
 
 Activity Bar owns its icons, activation commands and selected-state display. It does not own editor inputs, documents, Part geometry or another selection store. The layout service publishes the feature's contributed context key after opening its entry. Ordinary View focus or Project selection changes do not select another window entry.
 
-Entry switching reuses the existing Parts, container instances and editor lifecycle. Their existing owners preserve document edits, feature state, editor working sets and the active conversation. Multiple Views in one container and multiple feature editors do not require more window Parts. The layout service retains only the active host descriptor and layout preferences.
+Entry switching reuses the existing Parts, container instances and editor lifecycle. Their existing owners preserve document edits, feature state, editor working sets and the active conversation. The layout service retains only the active host descriptor and layout preferences.
 
 ### Implementation decisions
 

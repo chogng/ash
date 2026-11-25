@@ -4,6 +4,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -12,19 +13,24 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { CHANNELS_VIEW_ID, COLLAB_CONTAINER_ID } from '../common/collab.js';
 import { CollabViewPane } from './collabViewPane.js';
+import { registerCallActions } from '../../call/browser/call.contribution.js';
+import { CallsFocusedContext } from '../../call/browser/callWidget.js';
 
 
-/** Each product entry registers the same views in its own registry. */
+/** Each product entry registers the same Collab pane in its own registry. */
 export function registerCollabViews(registry: WorkbenchViewRegistry = ViewsRegistry, open?: (accessor: ServicesAccessor) => Promise<unknown>): void {
+	const title = 'Collab';
+	const localizationKey = { bundle: 'ash', key: 'collaboration.title' };
 	registry.registerStaticViewContainer({
-		id: COLLAB_CONTAINER_ID, title: 'Collab', localizationKey: { bundle: 'ash', key: 'collaboration.title' },
+		id: COLLAB_CONTAINER_ID, title, localizationKey,
 		location: ViewContainerLocation.Sidebar, icon: Lxicon.collab, order: 5,
-		mergeViewWithContainerWhenSingleView: false,
+		mergeViewWithContainerWhenSingleView: true,
 	});
 	registry.registerStaticViews(COLLAB_CONTAINER_ID, [{
-		id: CHANNELS_VIEW_ID, title: 'Channels', localizationKey: { bundle: 'ash', key: 'collaboration.channels' },
+		id: CHANNELS_VIEW_ID, title, localizationKey,
 		order: 0, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(CollabViewPane),
 	}]);
+	registerCallActions();
 	registerAction2(class OpenCollab extends Action2 {
 		constructor() { super({ id: 'ash.collaboration.open', title: localize2('collaboration.open', 'Open Collab'), f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -50,7 +56,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
-		type, priority: 100, name: `collaboration${type}`, when: FocusedViewContext.isEqualTo(CHANNELS_VIEW_ID),
+		type, priority: 100, name: `collaboration${type}`,
+		when: ContextKeyExpr.and(FocusedViewContext.isEqualTo(CHANNELS_VIEW_ID), ContextKeyExpr.not(CallsFocusedContext.key)),
 		getProvider: accessor => {
 			const view = accessor.get(IViewsService).getViewWithId(CHANNELS_VIEW_ID);
 			if (!(view instanceof CollabViewPane)) return undefined;

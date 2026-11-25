@@ -376,6 +376,78 @@ test('Needs Attention reuses title bar alerts in the single sidebar tree', async
 	assert.equal(new SessionsListModelService(storage).showAttentionGroup, false);
 });
 
+test('Conversation branches expand independently and keep their state through search and refresh', () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'catalog-forks', flushInterval: 0 });
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using locale = toDisposable(resetNlsResolver);
+	const row = (id: string, title: string, source?: SessionsCatalogRow): SessionsCatalogRow => ({
+		id, title, selected: false, defaultIcon: Lxicon.chatSession,
+		forkSource: source && { id: source.id, title: source.title },
+		organization: () => undefined, getActions: () => [], open() { },
+	});
+	const first = row('first', 'First root');
+	const firstChild = row('first-child', 'First branch', first);
+	const nested = row('nested', 'Nested branch', firstChild);
+	const second = row('second', 'Second root');
+	const secondChild = row('second-child', 'Second branch', second);
+	const snapshot = observableValue<SessionsCatalogSnapshot>('testCatalogForks', {
+		sections: [{ key: 'recent', rows: [first, second], projects: [] }], forkEntries: [firstChild, nested, secondChild], loading: false,
+	});
+	const management = { pendingArchives: noPendingArchives, sessions: [], untitledSessions: [], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
+	const view = { onDidChange: Event.None } as unknown as ISessionsService;
+	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
+	const makeList = () => new TestSessionsList(dom.window.document.body, 'Sessions', {
+		catalog: { snapshot, loadMore() { } },
+		accessibility: { focusContext: 'testCatalogForks', verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' },
+	}, management, view, github, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications,
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
+	using list = makeList();
+	const item = (list: TestSessionsList, id: string) => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].find(row => row.dataset.item === id);
+	const toggle = (list: TestSessionsList, id: string) => item(list, id)?.querySelector<HTMLButtonElement>('button[aria-label="对话分支"]');
+	const shortcut = (root: SessionsCatalogRow, child: SessionsCatalogRow) => JSON.stringify(['fork', root.id, child.id]);
+	const press = (button: HTMLElement, key: string, ctrlKey = false) => {
+		button.focus();
+		button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, ctrlKey, bubbles: true, cancelable: true }));
+	};
+	const title = item(list, first.id)!.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
+	assert.equal(toggle(list, first.id)?.getAttribute('aria-expanded'), 'false');
+	assert.equal(item(list, shortcut(first, firstChild)), undefined);
+	press(title, 'ArrowRight');
+	toggle(list, second.id)!.click();
+	assert.equal(toggle(list, first.id)?.getAttribute('aria-expanded'), 'true');
+	assert.equal(toggle(list, second.id)?.getAttribute('aria-expanded'), 'true');
+	assert.ok(item(list, shortcut(second, secondChild)));
+	assert.ok(item(list, shortcut(first, nested)));
+	const childTitle = item(list, shortcut(first, firstChild))!.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
+	press(title, 'ArrowRight');
+	assert.equal(dom.window.document.activeElement, childTitle);
+	press(childTitle, 'ArrowLeft');
+	assert.equal(toggle(list, shortcut(first, firstChild))?.getAttribute('aria-expanded'), 'false');
+	assert.equal(item(list, shortcut(first, nested)), undefined);
+	press(childTitle, 'ArrowLeft');
+	assert.equal(dom.window.document.activeElement, title);
+
+	snapshot.set({ ...snapshot.get(), sections: [{ key: 'recent', rows: [{ ...first, setPinned() { } }, second], projects: [] }] }, undefined);
+	assert.equal(toggle(list, first.id)?.getAttribute('aria-expanded'), 'true');
+	press(title, 'f', true);
+	const search = list.domNode.querySelector<HTMLInputElement>('.ash-sessions-list-search')!;
+	search.value = 'Second root';
+	search.dispatchEvent(new dom.window.Event('input'));
+	assert.equal(item(list, first.id), undefined);
+	assert.ok(item(list, shortcut(second, secondChild)));
+	press(search, 'Escape');
+	assert.equal(dom.window.document.activeElement, title);
+	assert.ok(item(list, shortcut(first, firstChild)));
+	assert.equal(item(list, shortcut(first, nested)), undefined);
+	using restored = makeList();
+	assert.equal(toggle(restored, first.id)?.getAttribute('aria-expanded'), 'true');
+	assert.equal(toggle(restored, second.id)?.getAttribute('aria-expanded'), 'true');
+	assert.equal(toggle(restored, shortcut(first, firstChild))?.getAttribute('aria-expanded'), 'false');
+});
+
 test('SessionsList keeps session buttons and focus while refreshing', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const changes = new Emitter<void>();
@@ -452,7 +524,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	const projects = list.domNode.querySelector('[data-section="projects"]');
 	assert.equal(projects?.querySelector('h3')?.textContent, 'Projects');
 	assert.equal(projects?.querySelector('h3 button'), null);
-	assert.equal(dom.window.document.activeElement, projects?.querySelector('.ash-sessions-list-more button'));
+	assert.equal(dom.window.document.activeElement, list.titleActions.querySelector('button'));
 
 	list.dispose();
 	changes.dispose();

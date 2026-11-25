@@ -6,7 +6,6 @@ import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
 import '../../../../../common/theme.js';
 import '../../../../../../platform/theme/common/sizes/baseSizes.js';
-import { PaneView } from '../../../../../../base/browser/ui/splitview/paneview.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
@@ -14,6 +13,8 @@ import { localize, setNlsMessages } from '../../../../../../nls.js';
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
+import { IMenuService } from '../../../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ICallService, type CallState, type CallDeployment } from '../../../../../../platform/call/common/callService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -35,9 +36,10 @@ import { IThemeService } from '../../../../../../platform/theme/common/themeServ
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../common/contributions.js';
 import { WorkbenchViewRegistry } from '../../../../../common/views.js';
-import { CollabViewPane } from '../../../browser/collabViewPane.js';
-import { CHANNELS_VIEW_ID } from '../../../common/collab.js';
-import { CallViewPane } from '../../../../call/browser/callViewPane.js';
+import { FocusedViewContext } from '../../../../../common/contextkeys.js';
+import { PaneComposite } from '../../../../../browser/panecomposite.js';
+import { ViewDescriptorService } from '../../../../../services/views/browser/viewDescriptorService.js';
+import { CHANNELS_VIEW_ID, COLLAB_CONTAINER_ID } from '../../../common/collab.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
@@ -48,13 +50,12 @@ import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browse
 const parameters = new URLSearchParams(location.search);
 if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseCatalog.bundles); document.documentElement.lang = 'zh-CN'; }
 const { registerCollabViews } = await import('../../../browser/collab.contribution.js');
-const { registerCallView } = await import('../../../../call/browser/call.contribution.js');
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'collaboration', flushInterval: 0 })));
 const root = document.querySelector<HTMLElement>('#app')!;
 setARIAContainer(root);
-document.querySelector('#title')!.textContent = localize('collaboration.title', 'Collab');
+document.querySelector('#title h1')!.textContent = localize('collaboration.title', 'Collab');
 const configuration = resources.add(new InMemoryConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
 const context = resources.add(new ContextKeyService());
@@ -64,9 +65,12 @@ const theme = resources.add(new TestThemeService(({ dark: darkColorTheme, hcDark
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, root));
 const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
+const menuService = new MenuService(commands, context);
+services.registerInstance(IMenuService, menuService);
 const contextView = resources.add(new BrowserContextViewService(root));
 const notifications = resources.add(new TestNotificationService());
-const menus = resources.add(new BrowserContextMenuService(new MenuService(commands, context), context,
+const menus = resources.add(new BrowserContextMenuService(menuService, context,
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, contextView, notifications));
 services.registerInstance(IContextMenuService, menus);
 services.registerInstance(IHoverService, resources.add(new HoverService(configuration, contextView, menus)));
@@ -97,33 +101,52 @@ if (!parameters.has('noCalls')) services.registerInstance(ICallService, {
 	invite: async () => ({ url: 'https://fixture.invalid', credential: 'fixture-secret' }), shareDocument: async () => { }, unshareDocument: async () => { },
 });
 services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
-const registry = new WorkbenchViewRegistry();
+const registry = resources.add(new WorkbenchViewRegistry());
 registerCollabViews(registry);
-registerCallView(registry);
 const contributions = resources.add(WorkbenchContributionsRegistry.createHost(services, undefined, ['workbench.contrib.call']));
 contributions.advance(WorkbenchPhase.BlockStartup);
 const paneHost = document.querySelector<HTMLElement>('#panes')!;
-const panes = resources.add(new PaneView(paneHost));
-const channels = resources.add(services.createInstance(CollabViewPane, paneHost, { id: CHANNELS_VIEW_ID, title: localize('collaboration.channels', 'Channels') }));
-panes.addPane(channels, 540); channels.setVisible(true);
-const call = services.getOptional(ICallService) ? resources.add(services.createInstance(CallViewPane, paneHost, { id: 'ash.call.view', title: localize('collaboration.calls', 'Calls') })) : undefined;
-if (call) { panes.addPane(call, 260); call.setVisible(true); }
+const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry }));
+const container = descriptors.getViewContainerById(COLLAB_CONTAINER_ID)!;
+const composite = resources.add(services.createInstance(PaneComposite, paneHost, {
+	viewContainer: container, model: descriptors.getViewContainerModel(container.id),
+	paneLayout: 'fill', mergeViewWithContainerWhenSingleView: container.mergeViewWithContainerWhenSingleView,
+	onDidFailCreateView: (error: unknown) => { throw error; },
+}));
+const focusedView = FocusedViewContext.bindTo(context);
+resources.add(composite.onDidFocusView(view => focusedView.set(view.id)));
+resources.add(composite.onDidBlurView(() => focusedView.reset()));
+composite.setVisible(true);
+composite.setMergedTitleActionsHost(document.querySelector<HTMLElement>('#title-actions')!);
 services.registerInstance(IViewsService, {
-	getViewWithId: id => id === CHANNELS_VIEW_ID ? channels : call,
-	focusView: async id => { (id === CHANNELS_VIEW_ID ? channels : call)?.focus(); return true; },
+	getViewWithId: id => composite.getView(id) ?? null,
+	isViewVisible: id => composite.getView(id)?.isVisible() ?? false,
+	focusView: async id => composite.focusView(id),
 } as IViewsService);
-const resize = new ResizeObserver(() => panes.layout(paneHost.clientHeight, paneHost.clientWidth));
+const resize = new ResizeObserver(() => composite.layout({ height: paneHost.clientHeight, width: paneHost.clientWidth }));
 resize.observe(paneHost);
 window.addEventListener('pagehide', () => { resize.disconnect(); resources.dispose(); }, { once: true });
 declare global {
 	interface Window {
-		ashCollaboration: { setRole(role: ChannelRole): void; revoke(): void; clipboard(): string; operations(): readonly string[]; notifications(): readonly string[]; accessible(type: 'help' | 'view'): string; verbosity(value: boolean): Promise<void>; };
+		ashCollaboration: { setRole(role: ChannelRole): void; revoke(): void; clipboard(): string; operations(): readonly string[]; notifications(): readonly string[]; accessible(type: 'help' | 'view'): string; verbosity(value: boolean): Promise<void>; openCalls(): Promise<boolean>; };
 	}
 }
 window.ashCollaboration = {
 	setRole: role => channelService.setRole(role), revoke: () => channelService.revoke(), clipboard: () => clipboard,
 	operations: () => operations,
 	notifications: () => notifications.model.getNotifications().map(notification => notification.message),
-	accessible: type => AccessibleViewRegistry.getImplementations().find(provider => provider.name === `collaboration${type}` && provider.type === (type === 'help' ? AccessibleViewType.Help : AccessibleViewType.View))!.getProvider(services)!.provideContent(),
+	accessible: type => {
+		const active = document.activeElement;
+		const viewType = type === 'help' ? AccessibleViewType.Help : AccessibleViewType.View;
+		const implementations = AccessibleViewRegistry.getImplementations()
+			.filter(implementation => implementation.type === viewType && context.contextMatchesRules(implementation.when, active))
+			.sort((left, right) => right.priority - left.priority);
+		for (const implementation of implementations) {
+			using provider = implementation.getProvider(services, active);
+			if (provider) return provider.provideContent();
+		}
+		return '';
+	},
 	verbosity: value => configuration.updateValue('accessibility.verbosity.collaboration', value),
+	openCalls: () => commands.executeCommand<boolean>('ash.call.open'),
 };

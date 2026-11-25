@@ -1507,7 +1507,7 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '最近使用'] : ['Pinned', 'Projects', 'Recents']);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await expect(pinnedB).toBeVisible();
-		await expect(list.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
+		await expect(page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
 		const projectToggle = projects.locator(':scope > h3 button');
 		const projectChevron = projectToggle.locator('.ash-sessions-list-section-icon');
 		await expect(projectChevron).toHaveCSS('width', '18px');
@@ -1554,6 +1554,8 @@ for (const locale of ['en', 'zh-CN'])
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await projectToggle.focus();
+			await projectToggle.press('ArrowLeft');
+			await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
 			await projectToggle.press('ArrowRight');
 			await expect(projectToggle).toBeFocused();
 			expect(

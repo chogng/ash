@@ -3,12 +3,13 @@ import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { ObjectTreeElementCollapseState } from '../../../../base/browser/ui/tree/tree.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { autorun, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
+import { autorun, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { posix } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -17,6 +18,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -38,6 +40,15 @@ export const botsFocusContext = 'sessionsBotsFocused';
 
 const botsTitle = localize('sessions.bots.title', 'Bots');
 const reviewName = localize('sessions.codeReview.title', 'Code Review');
+const reviewGroupId = 'codeReview';
+
+type BotTreeItem =
+	| { readonly kind: 'bot'; readonly id: string; readonly label: string; }
+	| { readonly kind: 'thread'; readonly id: string; readonly label: string; readonly detail: string; readonly target: CodeReviewTarget; };
+
+function reviewThreadNodeId(sessionId: string, threadId: string): string {
+	return JSON.stringify([sessionId, threadId]);
+}
 
 function bindAccessibility(
 	root: HTMLElement, owner: DisposableStore, contexts: IContextKeyService,
@@ -58,8 +69,6 @@ function bindAccessibility(
 export class BotsNavigationView extends ViewPane {
 	private readonly back: Button;
 	private readonly search: InputBox;
-	private readonly rows = this._register(new DisposableStore());
-	private readonly expanded = observableValue(this, true);
 
 	constructor(
 		parent: HTMLElement, options: IViewPaneOptions,
@@ -89,29 +98,63 @@ export class BotsNavigationView extends ViewPane {
 		}));
 		this.search.element.classList.add('ash-bots-search');
 		this.search.element.prepend(appendIcon(Lxicon.search, this.search.element));
-		const group = h(document, 'div', { className: 'ash-bots-list' });
-		const heading = h(document, 'h2', botsTitle);
-		const bot = this._register(new Button(group, {
-			...defaultButtonStyles, label: reviewName, presentation: 'quiet',
+		const group: BotTreeItem = { kind: 'bot', id: reviewGroupId, label: reviewName };
+		const tree = this._register(new WorkbenchObjectTree<BotTreeItem>(root, {
+			configurationService: configuration,
+			ariaLabel: botsTitle,
+			scrolling: 'external',
+			multipleSelectionSupport: false,
+			expandOnlyOnTwistieClick: false,
+			expandOnDoubleClick: false,
+			modelOptions: { identityProvider: { getId: item => item.id } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.label },
+			accessibilityProvider: {
+				getAriaLabel: item => item.kind === 'thread' && item.detail ? `${item.label}, ${item.detail}` : item.label,
+			},
+			getHeight: item => item.kind === 'bot' ? 36 : 40,
+			renderElement: item => {
+				const label = h(document, 'span', { className: 'ash-bots-tree-label' }, item.label);
+				if (item.kind === 'bot') {
+					const avatar = h(document, 'span', { className: 'ash-bots-avatar', attributes: { 'aria-hidden': 'true' } });
+					return h(document, 'span', { className: 'ash-bots-tree-group' }, avatar, label);
+				}
+				const detail = h(document, 'span', { className: 'ash-bots-thread-detail', attributes: { 'aria-hidden': 'true' } }, item.detail);
+				return h(document, 'span', { className: 'ash-bots-tree-thread' }, label, detail);
+			},
 		}));
-		bot.domNode.classList.add('ash-bots-group');
-		bot.domNode.prepend(h(document, 'span', { className: 'ash-bots-avatar', attributes: { 'aria-hidden': 'true' } }));
-		const chevron = h(document, 'span', { className: 'ash-bots-chevron', attributes: { 'aria-hidden': 'true' } });
-		appendIcon(Lxicon.chevronRight, chevron);
-		bot.domNode.append(chevron);
-		const threads = h(document, 'ul', {
-			className: 'ash-bots-threads', attributes: { id: 'ash-bots-review-threads', 'aria-label': reviewName },
-		});
-		bot.domNode.setAttribute('aria-controls', threads.id);
+		tree.domNode.classList.add('ash-bots-tree');
 		const empty = h(document, 'p', { className: 'ash-bots-empty', attributes: { role: 'status' } });
-		group.prepend(heading);
-		group.append(threads, empty);
-		root.append(group);
+		root.append(empty);
 
 		const searchChanged = observableSignalFromEvent(this, this.search.onDidChange);
-		this._register(bot.onDidClick(() => {
-			this.expanded.set(bot.domNode.getAttribute('aria-expanded') !== 'true', undefined);
-			if (this.search.value) this.search.value = '';
+		// Searching reveals matches without replacing the unfiltered tree's collapse state.
+		let collapseBeforeSearch: boolean | undefined;
+		const clearSearchAfterToggle = (collapsed: boolean): void => {
+			if (collapseBeforeSearch === undefined) return;
+			collapseBeforeSearch = collapsed;
+			this.search.value = '';
+		};
+		const syncSelection = (entry: ReturnType<typeof reviews.activeEntry.get>): void => {
+			// Focus can move through the tree before the user opens a conversation.
+			tree.setSelection(entry ? [reviewThreadNodeId(entry.session.sessionId, entry.threadId)] : []);
+		};
+		this._register(tree.onDidChangeCollapseState(({ browserEvent, collapsed }) => {
+			if (browserEvent) clearSearchAfterToggle(collapsed);
+			syncSelection(reviews.activeEntry.get());
+		}));
+		this._register(tree.onDidAccept(({ element, node }) => {
+			if (element.kind === 'thread') reviews.select(element.target);
+			else if (node.collapsible) {
+				const collapsed = !node.collapsed;
+				tree.toggleCollapsed(reviewGroupId);
+				clearSearchAfterToggle(collapsed);
+			}
+		}));
+		this._register(tree.onPointer(({ element, browserEvent }) => {
+			if (browserEvent.button === 0 && element.kind === 'thread') reviews.select(element.target);
+		}));
+		this._register(tree.onDidChangeSelection(({ browserEvent }) => {
+			if (browserEvent) syncSelection(reviews.activeEntry.get());
 		}));
 		this._register(addDisposableListener(this.search.inputElement, 'keydown', event => {
 			if (event.key === 'Escape' && this.search.value) {
@@ -119,58 +162,31 @@ export class BotsNavigationView extends ViewPane {
 				event.stopPropagation();
 			}
 		}));
-		this._register(addDisposableListener(group, 'keydown', event => {
-			if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-			const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button')).filter(button => !button.closest('[hidden]'));
-			const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-			if (index < 0) return;
-			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
-				: Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowUp' ? -1 : 1)));
-			buttons[next]?.focus();
-			event.preventDefault();
-		}));
-
-		let rendered = '';
 		this._register(autorun(reader => {
 			searchChanged.read(reader);
 			const query = this.search.value.trim().toLocaleLowerCase();
 			const matchingBot = reviewName.toLocaleLowerCase().includes(query);
 			const entries = reviews.entries.read(reader).filter(entry => matchingBot
 				|| [entry.label, entry.detail].some(value => value.toLocaleLowerCase().includes(query)));
-			const expanded = this.expanded.read(reader) || !!query;
-			const active = reviews.activeEntry.read(reader)?.threadId;
-			bot.hidden = !matchingBot && !entries.length;
-			bot.domNode.setAttribute('aria-expanded', String(expanded));
-			threads.hidden = !expanded;
-			empty.hidden = entries.length > 0 || !expanded;
-			empty.textContent = query && !matchingBot ? localize('sessions.bots.noMatches', 'No matching bots or threads.')
-				: localize('sessions.bots.noThreads', 'No review threads yet.');
-
-			const key = JSON.stringify(entries.map(entry => [entry.threadId, entry.label, entry.detail]));
-			if (key !== rendered) {
-				rendered = key;
-				const focused = threads.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.thread : undefined;
-				this.rows.clear();
-				threads.replaceChildren();
-				for (const entry of entries) {
-					const item = h(document, 'li');
-					const button = this.rows.add(new Button(item, {
-						...defaultButtonStyles, label: entry.label, title: entry.label, presentation: 'quiet',
-						onClick: () => reviews.select({ sessionId: entry.session.sessionId, threadId: entry.threadId }),
-					}));
-					button.domNode.dataset.thread = entry.threadId;
-					button.domNode.append(h(document, 'span', { className: 'ash-bots-thread-detail' }, entry.detail));
-					threads.append(item);
-				}
-				if (focused) {
-					const retained = Array.from(threads.querySelectorAll('button')).find(button => button.dataset.thread === focused);
-					(retained ?? bot.domNode).focus({ preventScroll: true });
-				}
-			}
-			for (const button of threads.querySelectorAll('button')) {
-				if (button.dataset.thread === active) button.setAttribute('aria-current', 'true');
-				else button.removeAttribute('aria-current');
-			}
+			const currentCollapse = tree.isCollapsed(reviewGroupId) ?? false;
+			if (query) collapseBeforeSearch ??= currentCollapse;
+			const collapsed = !query && (collapseBeforeSearch ?? currentCollapse)
+				? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded;
+			if (!query) collapseBeforeSearch = undefined;
+			const children = entries.map(entry => ({
+				element: {
+					kind: 'thread', id: reviewThreadNodeId(entry.session.sessionId, entry.threadId), label: entry.label, detail: entry.detail,
+					target: { sessionId: entry.session.sessionId, threadId: entry.threadId },
+				} satisfies BotTreeItem,
+			}));
+			const hasGroup = matchingBot || children.length > 0;
+			tree.domNode.hidden = !hasGroup;
+			tree.setChildren(hasGroup ? [{ element: group, collapsed, children }] : []);
+			if (hasGroup && !tree.focus) tree.setFocus(reviewGroupId);
+			syncSelection(reviews.activeEntry.read(reader));
+			empty.hidden = children.length > 0;
+			empty.textContent = hasGroup ? localize('sessions.bots.noThreads', 'No review threads yet.')
+				: localize('sessions.bots.noMatches', 'No matching bots or threads.');
 		}));
 	}
 

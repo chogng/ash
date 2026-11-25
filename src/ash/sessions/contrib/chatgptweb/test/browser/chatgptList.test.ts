@@ -554,7 +554,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`Chat sorts its conversation rows from the empty Projects header (${locale})`, async () => {
+		test(`Chat sorts its conversation rows from the sidebar title (${locale})`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await mockChatGPTRequests(page);
@@ -570,27 +570,17 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${chinese ? 'hcDark' : 'light'}`);
 			const list = page.locator('.ash-chat-navigation-list');
 			const projects = list.locator('[data-section="projects"]');
-			const headerRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
-			const toolbar = projects.getByRole('toolbar');
+			const title = page.locator('#navigation-title');
+			const toolbar = title.getByRole('toolbar');
 			const more = toolbar.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
 			const rows = list.locator('[data-parent-section="recent"] .ash-chat-navigation-item');
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
 			await expect(projects.getByRole('heading')).toHaveText(chinese ? '项目' : 'Projects');
 			await expect(projects.locator('.ash-sessions-list-section-toggle')).toHaveCount(0);
 			await expect(toolbar.getByRole('button')).toHaveCount(2);
-			await expect(toolbar).toHaveCSS('opacity', '0');
-			await projects.getByRole('heading').hover();
-			await expect(toolbar).toHaveCSS('opacity', '1');
-			const background = await headerRow.evaluate(node => getComputedStyle(node).backgroundColor);
-			expect(background).not.toBe('rgba(0, 0, 0, 0)');
-			await more.hover();
-			await expect(headerRow).toHaveCSS('background-color', background);
-			await expect(projects).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await expect(more).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await page.mouse.move(0, 0);
-			await expect(toolbar).toHaveCSS('opacity', '0');
+			await expect(projects.getByRole('toolbar')).toHaveCount(0);
+			await expect(more).toBeVisible();
 			await more.focus();
-			await expect(toolbar).toHaveCSS('opacity', '1');
 			const openSort = async () => {
 				await more.press('Enter');
 				const sort = page.getByRole('menuitem', { name: chinese ? /^排序方式 /u : /^Sort By /u });

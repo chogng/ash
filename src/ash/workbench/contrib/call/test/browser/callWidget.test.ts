@@ -11,7 +11,7 @@ import { DocumentTypes } from '../../../../services/documentEditor/common/docume
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import { CallViewPane } from '../../browser/callViewPane.js';
+import { CallWidget } from '../../browser/callWidget.js';
 
 const shared: CallDocument = { serverUrl: 'https://documents.example', roomId: 'document-1', schemaId: 'stanza-document-v1', contentType: 'application/test-document', title: 'Shared notes' };
 
@@ -54,7 +54,7 @@ function fixture() {
 	const registration = DocumentTypes.registerTypes();
 	registration.replace([{ id: 'test', contentType: shared.contentType, extensions: ['.ashdoc'] }]);
 	const configuration = new TestConfigurationService();
-	const view = new CallViewPane(browser.window.document.body, { id: 'calls', title: 'Calls' }, calls, configuration, editors);
+	const view = new CallWidget(browser.window.document.body, undefined, calls, configuration, editors);
 	return {
 		browser, view, linked, joined, opened, originalCopy,
 		setOwner(owner: boolean) { state = { ...state, canManage: owner }; changed.fire(); },
@@ -69,7 +69,7 @@ function fixture() {
 	};
 }
 
-function button(view: CallViewPane, name: string): HTMLButtonElement {
+function button(view: CallWidget, name: string): HTMLButtonElement {
 	const element = [...view.element.querySelectorAll('button')].find(button => button.textContent === name);
 	assert.ok(element, `Missing button ${name}`);
 	return element;

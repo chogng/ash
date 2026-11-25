@@ -74,7 +74,7 @@ import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { DocumentTypes } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 
-import { CallViewPane } from '../../../src/ash/workbench/contrib/call/browser/callViewPane.js';
+import { CallWidget } from '../../../src/ash/workbench/contrib/call/browser/callWidget.js';
 import '../../../src/ash/workbench/contrib/call/browser/media/call.css';
 import type { ICallService, CallDocument, CallState } from '../../../src/ash/platform/call/common/callService.js';
 import type { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
@@ -420,9 +420,7 @@ if (new URLSearchParams(location.search).has('callDocuments')) {
 	const container = document.createElement('section');
 	container.id = 'call-view';
 	document.body.append(container);
-	const callPane = disposables.add(new CallViewPane(container, { id: 'call-fixture', title: 'Calls' }, calls, services.get(IConfigurationService), editors));
-	callPane.setVisible(true);
-	callPane.layout(400, 0, 900);
+	disposables.add(new CallWidget(container, undefined, calls, services.get(IConfigurationService), editors));
 }
 
 window.ashAcademyIntegration = {

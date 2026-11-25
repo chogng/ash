@@ -394,7 +394,8 @@ suite('Projects toolbar', () => {
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-			const create = page.locator('.ash-projects-view').getByRole('button', { name: locale === 'zh-CN' ? '创建项目' : 'Create project', exact: true });
+			const create = page.getByRole('toolbar', { name: locale === 'zh-CN' ? '项目操作' : 'Project actions', exact: true })
+				.getByRole('button', { name: locale === 'zh-CN' ? '创建项目' : 'Create project', exact: true });
 			await create.press('Enter');
 			const dialog = page.getByRole('dialog');
 			const close = dialog.getByRole('button', { name: locale === 'zh-CN' ? '关闭对话框' : 'Close Dialog', exact: true });
@@ -672,16 +673,17 @@ suite('Projects toolbar', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects-view');
-			const search = projects.getByRole('button', {
+			const toolbar = page.getByRole('toolbar', { name: chinese ? '项目操作' : 'Project actions', exact: true });
+			const search = toolbar.getByRole('button', {
 				name: chinese ? '搜索项目' : 'Search projects',
 				exact: true,
 			});
-			const close = projects.getByRole('button', {
+			const close = toolbar.getByRole('button', {
 				name: chinese ? '关闭项目搜索' : 'Close project search',
 				exact: true,
 			});
-			const input = projects.getByRole('searchbox', { includeHidden: true });
-			const sort = projects.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
+			const input = toolbar.getByRole('searchbox', { includeHidden: true });
+			const sort = toolbar.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
 			const heading = page.locator('.ash-projects');
 			await search.click();
 			await expect(input).toBeFocused();
@@ -859,17 +861,20 @@ suite('Projects toolbar', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects-view');
-			const search = projects.getByRole('button', {
+			const titleRow = page.locator('[data-part="sidebar"] .ash-pane-composite-title');
+			const title = titleRow.getByText(chinese ? '项目' : 'Projects', { exact: true });
+			const toolbar = titleRow.getByRole('toolbar', { name: chinese ? '项目操作' : 'Project actions', exact: true });
+			const search = toolbar.getByRole('button', {
 				name: chinese ? '搜索项目' : 'Search projects',
 				exact: true,
 			});
-			const close = projects.getByRole('button', {
+			const close = toolbar.getByRole('button', {
 				name: chinese ? '关闭项目搜索' : 'Close project search',
 				exact: true,
 			});
-			const input = projects.getByRole('searchbox', { includeHidden: true });
-			const sort = projects.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
-			const create = projects.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
+			const input = toolbar.getByRole('searchbox', { includeHidden: true });
+			const sort = toolbar.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
+			const create = toolbar.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
 			for (const width of [1280, 760]) {
 				await page.setViewportSize({ width, height: 720 });
 				for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
@@ -877,16 +882,20 @@ suite('Projects toolbar', () => {
 					const bodyBefore = (await projects.locator('.ash-projects-view-list').boundingBox())!;
 					const sortBefore = (await sort.boundingBox())!;
 					const createBefore = (await create.boundingBox())!;
+					const titleBounds = (await title.boundingBox())!;
+					const searchBounds = (await search.boundingBox())!;
+					expect(titleBounds.x + titleBounds.width).toBeLessThanOrEqual(searchBounds.x);
+					expect(Math.abs(titleBounds.y + titleBounds.height / 2 - searchBounds.y - searchBounds.height / 2)).toBeLessThan(1);
 					await search.click();
 					await expect(input).toBeFocused();
 					await expect
 						.poll(async () =>
-							projects
+							toolbar
 								.locator('.ash-toolbar-search-action')
 								.evaluate(element => element.getAnimations().length),
 						)
 						.toBe(0);
-					const field = (await projects.locator('.ash-toolbar-search-field').boundingBox())!;
+					const field = (await toolbar.locator('.ash-toolbar-search-field').boundingBox())!;
 					expect(field.width).toBeLessThanOrEqual(260);
 					expect(field.x).toBeGreaterThanOrEqual((await projects.boundingBox())!.x);
 					expect(field.x + field.width).toBeLessThanOrEqual(sortBefore.x);
@@ -921,11 +930,11 @@ suite('Projects toolbar', () => {
 		await page.goto('/sessions.html?search');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-		const projects = page.locator('.ash-projects-view');
-		const search = projects.getByRole('button', { name: 'Search projects', exact: true });
-		const close = projects.getByRole('button', { name: 'Close project search', exact: true });
-		const input = projects.getByRole('searchbox', { includeHidden: true });
-		const slot = projects.locator('.ash-toolbar-search-action');
+		const toolbar = page.getByRole('toolbar', { name: 'Project actions', exact: true });
+		const search = toolbar.getByRole('button', { name: 'Search projects', exact: true });
+		const close = toolbar.getByRole('button', { name: 'Close project search', exact: true });
+		const input = toolbar.getByRole('searchbox', { includeHidden: true });
+		const slot = toolbar.locator('.ash-toolbar-search-action');
 		const collapsedWidth = (await slot.boundingBox())!.width;
 		const sample = async (trigger: typeof search) =>
 			trigger.evaluate(element => {
@@ -954,7 +963,7 @@ suite('Projects toolbar', () => {
 		const closing = await sample(close);
 		expect(closing.width).toBeGreaterThan(collapsedWidth);
 		expect(closing.width).toBeLessThan(260);
-		await expect(projects.locator('.ash-toolbar-search-field')).toHaveAttribute('inert', '');
+		await expect(toolbar.locator('.ash-toolbar-search-field')).toHaveAttribute('inert', '');
 		await expect(search).toBeFocused();
 		await search.click();
 		await slot.evaluate(element =>
@@ -962,7 +971,7 @@ suite('Projects toolbar', () => {
 		);
 		await expect(input).toBeFocused();
 		await expect.poll(async () => (await slot.boundingBox())!.width).toBeGreaterThan(collapsedWidth);
-		await expect(projects.locator('.ash-toolbar-search-field')).not.toHaveAttribute('inert', '');
+		await expect(toolbar.locator('.ash-toolbar-search-field')).not.toHaveAttribute('inert', '');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await input.press('Escape');
 		await expect(input).toBeHidden();

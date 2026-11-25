@@ -255,7 +255,10 @@ export class SessionsList extends DomWidget {
 	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
-	private expandedForkRow: string | undefined;
+	private readonly catalogForks = new Map<HTMLElement, {
+		readonly collapsedByDefault: boolean;
+		readonly load: () => readonly ObjectTreeElement<HTMLElement>[];
+	}>();
 	private readonly catalogMenu = this._register(new MutableDisposable());
 	private readonly inlineRename = this._register(new MutableDisposable<DisposableStore>());
 	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
@@ -282,6 +285,7 @@ export class SessionsList extends DomWidget {
 	private readonly instantiation: IInstantiationService;
 
 	public get element(): HTMLElement { return this.domNode; }
+	public get titleActions(): HTMLElement { return this.listToolbar.element; }
 
 	constructor(container: HTMLElement, title: string, presentation: SessionsListPresentation,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
@@ -368,7 +372,14 @@ export class SessionsList extends DomWidget {
 				if (browserEvent) this.syncTreeSelection();
 			}));
 		}
-		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
+		this._register(this.tree.onDidChangeCollapseState(({ element, node, collapsed }) => {
+			const fork = this.catalogForks.get(element);
+			if (fork) {
+				this.storage.store(this.collapseKey(`fork:${node.id}`), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+				if (!collapsed && !node.children.length) this.tree.setNodeChildren(node.id, fork.load());
+				this.syncTreeSelection();
+				return;
+			}
 			const key = element.dataset.section;
 			if (!collapsed && key && this.catalogProjects.has(key)) this.catalogPaging.schedule();
 			if (key && this.catalogFileSources.has(key)) {
@@ -378,7 +389,23 @@ export class SessionsList extends DomWidget {
 			if (key === undefined || this.search.hasQuery) return;
 			this.storage.store(this.collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}));
-		this.search = this._register(new SessionsListSearch(this.domNode, this.list, () => this.render(), () => {
+		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		const createProjectLabel = localize('sessions.activity.createProject', 'Create project');
+		const create = typeof presentation !== 'string' && 'createChatProject' in presentation ? presentation.createChatProject : code?.createProject;
+		const createProject: IAction | undefined = create ? {
+			id: code ? createCodeProjectAction : 'sessions.list.createChatProject',
+			label: createProjectLabel,
+			tooltip: createProjectLabel,
+			icon: Lxicon.add,
+			enabled: true,
+			run: create,
+		} : undefined;
+		this.listToolbar = createSessionsListToolbar(
+			this.domNode, this._store, this.instantiation, contextMenus, menuContext,
+			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
+		);
+		this.domNode.prepend(this.titleActions);
+		this.search = this._register(new SessionsListSearch(this.domNode, this.list, this.titleActions, () => this.render(), () => {
 			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
 			row?.focus();
 		}));
@@ -394,7 +421,7 @@ export class SessionsList extends DomWidget {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {
 			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button:not(.ash-session-leading-icon button, .ash-sessions-list-more button, .ash-sessions-list-actions button)')]
+			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button:not(.ash-session-leading-icon button, .ash-sessions-list-actions button)')]
 				.filter(button => !button.closest('[hidden]'));
 			const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
 			if (index < 0) return;
@@ -431,24 +458,10 @@ export class SessionsList extends DomWidget {
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
-		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
-		const createProjectLabel = localize('sessions.activity.createProject', 'Create project');
-		const create = typeof presentation !== 'string' && 'createChatProject' in presentation ? presentation.createChatProject : code?.createProject;
-		const createProject: IAction | undefined = create ? {
-			id: code ? createCodeProjectAction : 'sessions.list.createChatProject',
-			label: createProjectLabel,
-			tooltip: createProjectLabel,
-			icon: Lxicon.add,
-			enabled: true,
-			run: create,
-		} : undefined;
-		this.listToolbar = createSessionsListToolbar(
-			h(ownerDocument, 'div'), this._store, this.instantiation, contextMenus, menuContext,
-			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
-		);
 		if (contributed) {
 			const { accessibility, catalog } = contributed;
 			menuContext?.createKey(accessibility.focusContext, true);
+			if (contextKeys) this._register(contextKeys.createScoped(this.titleActions)).createKey(accessibility.focusContext, true);
 			this._register(addDisposableListener(this.domNode, 'focusin', event => {
 				if (!this.domNode.contains(event.relatedTarget as Node) && config.getValue<boolean>(accessibility.verbositySetting)) {
 					status(accessibility.hint());
@@ -572,7 +585,9 @@ export class SessionsList extends DomWidget {
 
 	focus(): void {
 		const firstItem = this.list.querySelector<HTMLButtonElement>('button:not(.ash-session-leading-icon button)');
-		(firstItem ?? this.domNode).focus();
+		if (firstItem) firstItem.focus();
+		else if (this.listToolbar.getItemsLength()) this.listToolbar.focus();
+		else this.domNode.focus();
 	}
 
 	public getViewState(): { readonly top: number; readonly focus: string | undefined; readonly query?: string; } {
@@ -584,6 +599,7 @@ export class SessionsList extends DomWidget {
 	}
 
 	public closePopups(): void {
+		if (this.titleActions.classList.contains('ash-toolbar-menu-visible')) this.contextMenus.hideContextMenu();
 		this.catalogMenu.clear();
 		this.rowMenu.clear();
 		for (const [, item] of this.items) { item.leadingIcon?.closePicker(); }
@@ -1260,6 +1276,7 @@ export class SessionsList extends DomWidget {
 			return rows.map(row => sortKeys.has(row) ? sortable[index++]! : row);
 		};
 		this.catalogRows.clear();
+		this.catalogForks.clear();
 		this.catalogProjects.clear();
 		this.catalogFileSources.clear();
 		const activeSelection = this.displayedSelection;
@@ -1290,7 +1307,7 @@ export class SessionsList extends DomWidget {
 			activeSections.add(key);
 			const projectId = this.mode === 'code' ? options?.project?.id : undefined;
 			const section = this.sections.get(key) ?? this.sections.set(key, this.instantiation.createInstance(SessionListSection, ownerDocument, key, kind, this.mode,
-				(collapsed?: boolean) => this.tree.setSectionCollapsed(key, collapsed), projectId));
+				() => this.tree.setSectionCollapsed(key), projectId));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
@@ -1344,40 +1361,33 @@ export class SessionsList extends DomWidget {
 			if (children) children.push(row);
 			else forkChildren.set(parent, [row]);
 		}
+		const renderCatalogRow = (row: SessionsCatalogRow, rootKey: string, ancestors: readonly string[], threadId?: string): SessionListItem => {
+			const reference = ancestors.length > 0;
+			const key = reference ? JSON.stringify(['fork', rootKey, row.id]) : rootKey;
+			const item = itemFor(key, 'conversation', undefined, reference);
+			const path = [...ancestors, row.id];
+			const children = forkChildren.get(row.id)?.filter(child => !path.includes(child.id));
+			const hasForks = !!children?.length;
+			item.updateCatalogRow(row, threadId, hasForks ? () => this.tree.setRowCollapsed(key) : undefined, reference);
+			if (hasForks) {
+				this.catalogForks.set(item.domNode, {
+					collapsedByDefault: !reference,
+					// Keep canonical rows in their groups and only create branch shortcuts as needed.
+					load: () => sortRows(children.map(child => renderCatalogRow(child, rootKey, path).domNode)).map(child => project(child, item.domNode)),
+				});
+			}
+			if (reference) item.domNode.style.setProperty('--sessions-fork-depth', String(Math.min(ancestors.length, 4)));
+			const value = sort.field === 'name' ? row.title : sort.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+			if (value !== undefined) sortKeys.set(item.domNode, value);
+			return item;
+		};
 		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
 			const key = project ? JSON.stringify([row.id, project]) : row.id;
 			this.catalogRows.set(key, row);
-			const item = itemFor(key, 'conversation');
-			const hasForks = forkChildren.has(row.id);
-			const expanded = hasForks && this.expandedForkRow === key;
-			item.updateCatalogRow(row, alert?.threadId, hasForks ? {
-				expanded,
-				toggle: () => {
-					this.expandedForkRow = this.expandedForkRow === key ? undefined : key;
-					this.render();
-				},
-			} : undefined);
-			if (expanded) {
-				// Keep canonical rows in their groups. The expanded tree contains shortcuts only.
-				const seen = new Set([row.id]);
-				const renderForks = (parent: string, depth: number): readonly HTMLElement[] => sortRows((forkChildren.get(parent) ?? []).flatMap(child => {
-					if (seen.has(child.id)) return [];
-					seen.add(child.id);
-					const childItem = itemFor(JSON.stringify(['fork', key, child.id]), 'conversation', undefined, true);
-					childItem.updateCatalogRow(child, undefined, undefined, true);
-					childItem.domNode.style.setProperty('--sessions-fork-depth', String(Math.min(depth, 4)));
-					childrenByRow.set(childItem.domNode, renderForks(child.id, depth + 1));
-					const value = sort.field === 'name' ? child.title : sort.field === 'created' ? child.createdAt : child.updatedAt ?? child.createdAt;
-					if (value !== undefined) sortKeys.set(childItem.domNode, value);
-					return [childItem.domNode];
-				}));
-				childrenByRow.set(item.domNode, renderForks(row.id, 1));
-			}
+			const item = renderCatalogRow(row, key, [], alert?.threadId);
 			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
 			if (project) item.domNode.dataset.parentProject = `project:${project}`;
-			const value = sort.field === 'name' ? row.title : sort.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
-			if (value !== undefined) sortKeys.set(item.domNode, value);
 			return item.domNode;
 		};
 		const placedAlerts = new Set<string>();
@@ -1636,61 +1646,55 @@ export class SessionsList extends DomWidget {
 		const projectsHeader = flat ? undefined : sectionFor('projects', localize('projects.title', 'Projects'), projects);
 		if (projectsHeader) ordered.push(projectsHeader);
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
-		let recentHeader: HTMLElement | undefined;
 		if (flat || orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
 			const label = !flat && this.mode === 'chat' && !this.catalog ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents');
-			recentHeader = sectionFor('recent', label, orderedRecent);
-			ordered.push(recentHeader);
-		}
-		// Keep the same menu trigger when switching layouts so keyboard focus can
-		// return to it even though the Projects header is absent in the flat list.
-		const toolbar = this.listToolbar.element;
-		const toolbarHeader = projectsHeader ?? recentHeader!;
-		if (toolbar.parentElement !== toolbarHeader) {
-			toolbar.parentElement?.classList.remove('ash-sessions-list-section-with-actions');
-			toolbarHeader.classList.add('ash-sessions-list-section-with-actions');
-			toolbarHeader.append(toolbar);
+			ordered.push(sectionFor('recent', label, orderedRecent));
 		}
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
-		// Keep filtered rows available so closing search can restore the original focus target.
-		if (!this.search.hasQuery) {
-			for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
-			for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
-		}
-		const project = (element: HTMLElement, parent?: ObjectTreeElement<HTMLElement>): ObjectTreeElement<HTMLElement> => {
+		const project = (element: HTMLElement, parent?: HTMLElement): ObjectTreeElement<HTMLElement> => {
 			const key = element.dataset.section;
-			const children: ObjectTreeElement<HTMLElement>[] = [];
 			const rowChildren = childrenByRow.get(element) ?? [];
 			const projectSection = key === 'projects' || (flat && key === 'recent') || element.dataset.projectId !== undefined;
-			const forkToggle = element.querySelector<HTMLButtonElement>('[data-action-id="sessions.list.forkTree"] button');
+			const fork = this.catalogForks.get(element);
 			const files = key === undefined ? undefined : this.catalogFileSources.get(key);
 			const needsFiles = files?.load !== undefined && files.rows === undefined;
-			const collapsible = !!forkToggle || key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key) || needsFiles);
+			const collapsible = !!fork || key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key) || needsFiles);
 			let collapsed: ObjectTreeElementCollapseState | undefined;
-			if (forkToggle) {
-				collapsed = forkToggle.getAttribute('aria-expanded') === 'true' ? ObjectTreeElementCollapseState.Expanded : ObjectTreeElementCollapseState.Collapsed;
+			if (fork) {
+				const id = SessionsListTree.id(element);
+				const previous = this.tree.model.getNode(id);
+				const isCollapsed = previous?.collapsible ? previous.collapsed
+					: this.storage.getBoolean(this.collapseKey(`fork:${id}`), StorageScope.PROFILE, fork.collapsedByDefault);
+				collapsed = isCollapsed ? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded;
+				// A retained tree row can rebuild its toolbar without changing the twistie state.
+				collapseRenderers.get(element)?.renderCollapse(isCollapsed, true);
 			} else if (key !== undefined && collapsible) {
 				const saved = this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, element.dataset.catalogProject === 'true');
 				collapsed = saved && !this.search.hasQuery ? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded;
 			}
-			const branch = { element, children, collapsible, collapsed };
-			const parentProject = parent?.element.dataset.projectId;
-			const projectId = parentProject ?? parent?.element.dataset.parentProjectId;
+			const parentProject = parent?.dataset.projectId;
+			const projectId = parentProject ?? parent?.dataset.parentProjectId;
 			if (projectId) element.dataset.parentProjectId = projectId;
 			else delete element.dataset.parentProjectId;
-			const groupDropTarget = parent?.element.dataset.groupDropTarget;
+			const groupDropTarget = parent?.dataset.groupDropTarget;
 			if (key === undefined) {
 				if (groupDropTarget) element.dataset.groupDropTarget = groupDropTarget;
 				else delete element.dataset.groupDropTarget;
 			}
 			if (parent) {
-				const { section, parentSection } = parent.element.dataset;
+				const { section, parentSection } = parent.dataset;
 				element.dataset.parentSection = (parentProject === undefined ? section : undefined) ?? parentSection ?? '';
 			} else delete element.dataset.parentSection;
-			for (const child of rowChildren) children.push(project(child, branch));
-			return branch;
+			const children = fork && collapsed === ObjectTreeElementCollapseState.Expanded ? fork.load() : rowChildren.map(child => project(child, element));
+			return { element, children, collapsible, collapsed };
 		};
-		this.tree.setChildren(ordered.map(element => project(element)));
+		const branches = ordered.map(element => project(element));
+		// Keep filtered rows available so closing search can restore the original focus target.
+		if (!this.search.hasQuery) {
+			for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
+			for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
+		}
+		this.tree.setChildren(branches);
 		for (const [key, request] of this.catalogFileLoads) {
 			const files = this.catalogFileSources.get(key);
 			if (!files?.load || files.key !== request.source) this.catalogFileLoads.deleteAndDispose(key);
@@ -1723,7 +1727,7 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 	return children.map(child => child.dataset[attribute] ? ordered[next++]! : child);
 }
 
-/** Shared Projects header controls for the conversation catalogs. */
+/** Title actions affect the whole conversation catalog, independent of its grouping. */
 function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, instantiation: IInstantiationService,
 	contextMenus: IContextMenuService, contextKeys: IContextKeyService | undefined,
 	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[],
@@ -1761,13 +1765,6 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 		toolbar.setTrailingActions([createProject]);
 	}
 	toolbar.element.classList.add('ash-sessions-list-more');
-	// Toolbar inputs stay within the header without activating tree rows.
-	disposables.add(addDisposableListener(toolbar.element, 'click', event => event.stopPropagation()));
-	disposables.add(addDisposableListener(toolbar.element, 'keydown', event => {
-		if (['Enter', ' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(event.key)) {
-			event.stopPropagation();
-		}
-	}));
 	return toolbar;
 }
 
@@ -1803,7 +1800,7 @@ class SessionListItem extends AbstractDisposable {
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private catalogRow: SessionsCatalogRow | undefined;
-	private forkTree: { readonly expanded: boolean; readonly toggle: () => void; } | undefined;
+	private toggleForks: (() => void) | undefined;
 	private projectIcon: HTMLSpanElement | undefined;
 
 	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
@@ -1832,6 +1829,11 @@ class SessionListItem extends AbstractDisposable {
 		this.actions.element.classList.add('ash-sessions-list-actions');
 		this.actions.element.hidden = true;
 		this.row.observeActions(this.actions.element);
+		this.row.setCollapseRenderer((collapsed, collapsible) => {
+			if (!this.toggleForks) return;
+			const toggle = this.actions.element.querySelector('[data-action-id="sessions.list.forkTree"] button');
+			if (toggle) setAriaAttribute(toggle, 'expanded', collapsible ? String(!collapsed) : undefined);
+		});
 		this.statusAnnouncement = h(ownerDocument, 'span', {
 			className: 'ash-aria-live',
 			attributes: { 'aria-live': 'polite' },
@@ -1912,11 +1914,11 @@ class SessionListItem extends AbstractDisposable {
 		}
 	}
 
-	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string, forkTree?: SessionListItem['forkTree'], reference = false): void {
+	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string, toggleForks?: () => void, reference = false): void {
 		const previous = this.catalogRow;
-		const hadForkTree = !!this.forkTree;
+		const hadForks = !!this.toggleForks;
 		this.catalogRow = entry;
-		this.forkTree = forkTree;
+		this.toggleForks = toggleForks;
 		this.update(entry.title, entry.selected, () => entry.open(threadId));
 		this.domNode.classList.add('ash-chat-navigation-row');
 		this.button.classList.add('ash-chat-navigation-item');
@@ -1928,20 +1930,16 @@ class SessionListItem extends AbstractDisposable {
 			this.managementDescription = entry.status.label;
 			this.updateDescription();
 		}
-		if (reference) {
-			this.setDisabled(!!entry.disabled, !!entry.actionsDisabled);
-			return;
-		}
-		if (!previous || hadForkTree !== !!forkTree || !!previous.setPinned !== !!entry.setPinned || previous.pinned !== entry.pinned) {
+		if (!previous || hadForks !== !!toggleForks || !!previous.setPinned !== !!entry.setPinned || previous.pinned !== entry.pinned) {
 			const actions: IAction[] = [];
-			if (forkTree) {
+			if (toggleForks) {
 				const label = localize('sessions.list.forkTree', 'Conversation branches');
 				actions.push({
 					id: 'sessions.list.forkTree', label, tooltip: label, enabled: true,
-					icon: Lxicon.gitBranch, run: () => this.forkTree?.toggle(),
+					icon: Lxicon.gitBranch, run: () => this.toggleForks?.(),
 				});
 			}
-			if (entry.setPinned) {
+			if (!reference && entry.setPinned) {
 				const label = entry.pinned ? localize('sessions.chatList.unpin', 'Unpin chat') : localize('sessions.chatList.pin', 'Pin chat');
 				actions.push({
 					id: 'sessions.chatList.pin', label, tooltip: label, enabled: true, checked: !!entry.pinned,
@@ -1954,10 +1952,12 @@ class SessionListItem extends AbstractDisposable {
 					},
 				});
 			}
-			this.actions.setActions([...actions, this.moreAction]);
+			if (!reference) actions.push(this.moreAction);
+			this.actions.setActions(actions);
 		}
-		if (forkTree) {
-			this.actions.element.querySelector('[data-action-id="sessions.list.forkTree"] button')?.setAttribute('aria-expanded', String(forkTree.expanded));
+		if (reference) {
+			this.actions.element.hidden = !toggleForks;
+			this.setDisabled(!!entry.disabled, !!entry.actionsDisabled);
 		}
 	}
 
@@ -2063,7 +2063,7 @@ class SessionListSection extends Disposable {
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
 	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code',
-		toggle: (collapsed?: boolean) => void, projectId: string | undefined,
+		toggle: () => void, projectId: string | undefined,
 		@IContextMenuService contextMenus: IContextMenuService, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
@@ -2126,12 +2126,6 @@ class SessionListSection extends Disposable {
 				const more = this.moreButton;
 				this.contextMenu(more && event.target === more ? more : this.button);
 			}
-		}));
-		this._register(addDisposableListener(this.button, 'keydown', event => {
-			if (!this.button.hasAttribute('aria-expanded') || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
-			event.preventDefault();
-			event.stopPropagation();
-			toggle(event.key === 'ArrowLeft');
 		}));
 	}
 
@@ -2341,7 +2335,7 @@ class SessionListRowRenderer extends Disposable {
 		this.label.observeActions(actions);
 	}
 
-	protected setCollapseRenderer(renderCollapse: (collapsed: boolean) => void): void {
+	setCollapseRenderer(renderCollapse: (collapsed: boolean, collapsible: boolean) => void): void {
 		collapseRenderers.set(this.element, { renderCollapse });
 	}
 }
@@ -2400,30 +2394,19 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 		// Move real focus between the nested row buttons when navigating the hierarchy.
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			const button = event.target;
-			if (!isHTMLElement(button) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-			let target: HTMLElement | undefined;
-			const row = button.closest<HTMLElement>('[data-item]');
-			const forkToggle = row?.querySelector<HTMLButtonElement>('[data-action-id="sessions.list.forkTree"] button');
-			if (row && forkToggle && button.matches('.ash-sessions-list-item') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
-				const expanded = forkToggle.getAttribute('aria-expanded') === 'true';
-				if (!forkToggle.disabled && expanded === (event.key === 'ArrowLeft')) {
-					event.preventDefault();
-					event.stopPropagation();
-					forkToggle.click();
-					return;
-				}
-				if (expanded && event.key === 'ArrowRight') target = this.model.getNode(SessionsListTree.id(row))?.children[0]?.element;
-			}
-			if (event.key === 'ArrowRight' && button.matches('.ash-sessions-list-section-toggle[aria-expanded="true"]')) {
-				const section = button.closest<HTMLElement>('[data-section]')!;
-				target = this.model.getNode(SessionsListTree.id(section))?.children[0]?.element;
-			} else if (event.key === 'ArrowLeft' && row && button.matches('.ash-sessions-list-item')) {
-				target = this.model.getParent(SessionsListTree.id(row))?.element;
-			}
-			if (!target) return;
+			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+			if (!isHTMLElement(button) || !button.matches('.ash-sessions-list-item, .ash-sessions-list-section-toggle')) return;
+			const row = button.closest<HTMLElement>('[data-item], [data-section]');
+			const node = row && this.model.getNode(SessionsListTree.id(row));
+			if (!node) return;
+			const forward = event.key === 'ArrowRight';
+			const toggle = node.collapsible && node.collapsed === forward;
+			const target = forward ? node.children[0]?.element : this.model.getParent(node.id)?.element;
+			if (!toggle && !target) return;
 			event.preventDefault();
 			event.stopPropagation();
-			this.focusRow(target);
+			if (toggle) this.setRowCollapsed(node.id, !forward);
+			else if (target) this.focusRow(target);
 		}, true));
 	}
 
@@ -2432,14 +2415,17 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 	}
 
 	setSectionCollapsed(key: string, collapsed?: boolean): void {
-		const id = `section:${key}`;
+		this.setRowCollapsed(`section:${key}`, collapsed);
+	}
+
+	setRowCollapsed(id: string, collapsed?: boolean): void {
 		const current = this.isCollapsed(id);
 		if (current === undefined || current === collapsed) return;
 		if (collapsed ?? !current) {
 			const active = this.element.ownerDocument.activeElement;
-			const section = this.model.getElement(id);
+			const row = this.model.getElement(id);
 			this.collapse(id);
-			if (active && !active.isConnected && section) this.focusRow(section, true);
+			if (active && !active.isConnected && row) this.focusRow(row, true);
 		} else {
 			this.expand(id);
 		}

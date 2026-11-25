@@ -102,6 +102,7 @@ export class SessionsView extends ViewPane {
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
 		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, presentation);
 		this.list = lists.get();
+		this.headerActionsElement.append(this.list.titleActions);
 		this.contentElement.append(this.list.element);
 		const loading = this._register(new MutableDisposable());
 		const loadingListener = this._register(new MutableDisposable());
@@ -141,6 +142,8 @@ export class SessionsView extends ViewPane {
 		this._register(lists.onDidChange(list => {
 			const previous = this.list!;
 			const state = this.hiddenListState ?? previous.getViewState();
+			previous.closePopups();
+			previous.titleActions.replaceWith(list.titleActions);
 			previous.element.replaceWith(list.element);
 			this.list = list;
 			this.hiddenListState = state;

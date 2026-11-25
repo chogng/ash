@@ -8,19 +8,27 @@ export class SessionsListSearch extends Disposable {
 	private previousFocus: HTMLElement | undefined;
 	private words: readonly string[] = [];
 
-	constructor(private readonly listRoot: HTMLElement, private readonly before: HTMLElement, private readonly update: () => void, private readonly focusResults: () => void) {
+	constructor(
+		private readonly listRoot: HTMLElement,
+		private readonly before: HTMLElement,
+		private readonly titleActions: HTMLElement,
+		private readonly update: () => void,
+		private readonly focusResults: () => void,
+	) {
 		super();
-		this._register(addDisposableListener(listRoot, 'keydown', event => {
-			if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
-				event.preventDefault();
-				event.stopPropagation();
-				this.open();
-			} else if (event.key === 'Escape' && this.input) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.close();
-			}
-		}));
+		for (const target of [listRoot, titleActions]) {
+			this._register(addDisposableListener(target, 'keydown', event => {
+				if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+					event.preventDefault();
+					event.stopPropagation();
+					this.open();
+				} else if (event.key === 'Escape' && this.input) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.close();
+				}
+			}));
+		}
 	}
 
 	get hasQuery(): boolean { return this.words.length > 0; }
@@ -36,7 +44,7 @@ export class SessionsListSearch extends Disposable {
 	open(): void {
 		if (!this.input) {
 			const active = getActiveElement(this.listRoot.ownerDocument);
-			this.previousFocus = isHTMLElement(active) && this.listRoot.contains(active) ? active : undefined;
+			this.previousFocus = isHTMLElement(active) && (this.listRoot.contains(active) || this.titleActions.contains(active)) ? active : undefined;
 		}
 		const input = this.ensureInput();
 		input.focus();

@@ -66,7 +66,6 @@ import './contrib/languageStatus/browser/languageStatus.contribution.js';
 import './contrib/opener/browser/opener.contribution.js';
 import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
-import { registerCallView } from './contrib/call/browser/call.contribution.js';
 import { registerCollabViews } from './contrib/collab/browser/collab.contribution.js';
 import './contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import '../editor/editor.code.all.js';
@@ -90,7 +89,6 @@ import { IAppServerApi } from '../platform/agentHost/common/appServerApi.js';
 import { Disposable } from '../base/common/lifecycle.js';
 
 registerCollabViews();
-registerCallView();
 registerMemoryManagement();
 
 registerWorkbenchContribution(

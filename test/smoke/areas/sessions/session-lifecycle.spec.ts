@@ -10,7 +10,7 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS, type ModelRef } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 
-test('Open IDE opens the selected Code thread in its working folder', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+test('Open Conversation in IDE opens the selected Code thread in its working folder', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
 	if (!('windows' in application)) throw new Error('Open IDE requires Electron');
 	const directory = join(testWorkspace.directory, 'conversation-project');
 	await mkdir(directory);
@@ -36,10 +36,11 @@ test('Open IDE opens the selected Code thread in its working folder', { tag: ['@
 		await agents.locator('.ash-sessions-list').getByRole('treeitem', { name: /^Thread to open in IDE\b/u }).locator('.ash-sessions-list-item').click();
 		const source = agents.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		await expect(source).toHaveAttribute('data-thread-id', threadId);
-		const openIde = agents.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Open IDE', exact: true });
-		const opened = application.waitForEvent('window');
-		await openIde.click();
-		const destination = await opened;
+		const commands = new QuickAccess(agents);
+		const [destination] = await Promise.all([
+			application.waitForEvent('window'),
+			commands.runCommand('agents.openSessionInAsh'),
+		]);
 		const permission = directoryPermissionPrompt(destination);
 		await expect(permission).toContainText(thread.directory.root);
 		await permission.getByRole('button', { name: 'Trust Folder', exact: true }).click();
@@ -53,7 +54,7 @@ test('Open IDE opens the selected Code thread in its working folder', { tag: ['@
 		await expect(source).toHaveAttribute('data-thread-id', threadId);
 		await ide.quickaccess.runCommand('workbench.action.chat.newChat');
 		await expect(chat).not.toHaveAttribute('data-thread-id', threadId);
-		await openIde.click();
+		await commands.runCommand('agents.openSessionInAsh');
 		await expect(chat).toHaveAttribute('data-thread-id', threadId);
 	} finally {
 		await close();
