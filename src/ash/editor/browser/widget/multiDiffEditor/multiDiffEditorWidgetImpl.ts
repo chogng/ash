@@ -2,18 +2,22 @@ import './style.css';
 import './colors.js';
 import { addDisposableListener, getClientArea, getWindow, h, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { type FontInfo } from '../../../common/config/fontInfo.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
+import { ScrollType } from '../../../common/editorCommon.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { FontMeasurements } from '../../config/fontMeasurements.js';
 import type { CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
@@ -525,25 +529,56 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
 		this.project();
 		if (options?.range) {
-			const range = options.range;
-			const generation = this.navigationGeneration;
-			const signal = this.navigationAbortController.signal;
-			// A requested row can be outside the mounted viewport and still resolving.
-			void item.resolve().then(async model => {
-				if (model) await this.waitForReady(model, signal);
-				if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) { return; }
-				// Loading can replace estimated row heights and move the requested file.
-				this.refreshLayout();
-				this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
-				this.project();
-				const editor = this.sections.get(index)?.editor;
-				const side = options.side ?? (item.modifiedUri ? 'modified' : 'original');
-				const control = side === 'modified' ? editor?.modifiedEditor : editor?.originalEditor;
-				control?.revealRange(range);
-				if (options.highlight) { control?.setSelection(range); }
-				if (editor) options.onRevealed?.(editor);
-			}).catch(() => { /* The file header owns reporting its resolution error. */ });
+			void this.revealEditorRange(index, item, options.range, options).catch(onUnexpectedError);
 		}
+	}
+
+	private async revealEditorRange(index: number, item: IDocumentDiffItem, range: Range, options: RevealOptions): Promise<void> {
+		const generation = this.navigationGeneration;
+		const signal = this.navigationAbortController.signal;
+		using retention = item.retain?.();
+		let model: DiffModel;
+		try {
+			const resolved = await raceCancellationError(item.resolve(), signal);
+			if (!resolved) return;
+			model = resolved;
+			await this.waitForReady(model, signal);
+		} catch {
+			// The file header reports resolution errors.
+			return;
+		}
+		if (this.isDisposed || generation !== this.navigationGeneration || this.viewModel.isCollapsed(item.id)) return;
+		// Loading can replace estimated row heights and move the requested file.
+		this.refreshLayout();
+		this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
+		this.project();
+		const editor = this.sections.get(index)?.editor;
+		if (!editor) return;
+		const side = options.side ?? (item.modifiedUri ? 'modified' : 'original');
+		const control = side === 'original' ? editor.originalEditor : editor.modifiedEditor;
+		const target = model[side].validateRange(range);
+		this.syncingEditorScroll = true;
+		try {
+			editor.revealHiddenRange(side, target);
+			if (options.highlight) control.setSelection(target);
+			control.revealRange(target, ScrollType.Immediate);
+		} finally {
+			this.syncingEditorScroll = false;
+		}
+		// Unfolding changes the item's height. Apply the live geometry before moving
+		// the outer viewport, which projects its vertical position back to both sides.
+		const contentHeight = editor.getContentHeight();
+		if (contentHeight > 0) this.measuredHeights.set(item.id, contentHeight);
+		this.refreshLayout();
+		const layout = this.layouts[index]!;
+		const viewportHeight = Math.max(1, this.viewportHeight - MULTI_DIFF_HEADER_HEIGHT);
+		const start = control.getTopForPosition(target.startLineNumber, target.startColumn);
+		const end = control.getTopForPosition(target.endLineNumber, target.endColumn) + control.getOption(EditorOption.lineHeight);
+		const padding = Math.max(0, (viewportHeight - (end - start)) / 2);
+		const offset = Math.min(Math.max(0, start - padding), Math.max(0, layout.bodyHeight - viewportHeight));
+		this.scrollView.setLogicalScrollTop(layout.top + offset);
+		this.project();
+		options.onRevealed?.(editor);
 	}
 
 	private updateWordWrap(): void {

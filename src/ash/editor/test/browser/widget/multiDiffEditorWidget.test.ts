@@ -168,6 +168,55 @@ suite('MultiDiff comparison retention', () => {
 		assert.equal(Math.round(beforeWheel - editor.domNode.scrollTop), 1000);
 	});
 
+	for (const side of ['original', 'modified'] as const) test(`reveals a deep range on the ${side} side in the outer viewport`, async () => {
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		resources.add(services.createInstance(StandaloneLayoutService));
+		const container = h(browserEnvironment.window.document, 'main');
+		browserEnvironment.window.document.body.append(container);
+		resources.add(toDisposable(() => container.remove()));
+		const originalLines = lines('context', 240).split('\n');
+		const modifiedLines = originalLines.slice();
+		modifiedLines[0] = 'changed at the top';
+		modifiedLines[225] = 'changed near the end';
+		const original = resources.add(new TextModel(originalLines.join('\n')));
+		const modified = resources.add(new TextModel(modifiedLines.join('\n')));
+		const comparison = resources.add(new DiffModel({ original, modified, diffProvider: new MultiDiffTestComputationService(), diffOptions }));
+		await waitForReady(comparison);
+		const resource = { original: original.uri, modified: modified.uri };
+		const item = resources.add(new DocumentDiffItem({ id: 'deep', label: 'deep.ts', originalUri: original.uri, modifiedUri: modified.uri }, comparison));
+		const model = resources.add(new MultiDiffEditorModel([item]));
+		const editor = resources.add(services.createInstance(MultiDiffEditorWidget, {
+			container, model, lineHeight: 20,
+			renderSideBySide: true, useInlineViewWhenSpaceIsLimited: false,
+		}));
+		const height = 240;
+		let scrollTop = 0;
+		const content = requiredElement<HTMLElement>(container, '.stanza-multi-diff-editor-content');
+		const scrollHeight = () => parseFloat(content.style.height);
+		Object.defineProperties(editor.domNode, {
+			clientHeight: { get: () => height }, clientWidth: { get: () => 700 }, scrollWidth: { get: () => 700 }, scrollHeight: { get: scrollHeight },
+			scrollTop: { get: () => scrollTop, set: (value: number) => { scrollTop = Math.max(0, Math.min(value, scrollHeight() - height)); } },
+		});
+		editor.layout({ width: 700, height });
+		const range = new Range(180, 2, 182, 4);
+		const highlighted = side === 'modified';
+		const revealed = new DeferredPromise<void>();
+		editor.reveal(resource, {
+			range, side, highlight: highlighted, onRevealed: child => {
+				try {
+					const control = side === 'original' ? child.originalEditor : child.modifiedEditor;
+					assert.ok(editor.domNode.scrollTop > 3000, 'The outer viewport reaches the requested file range');
+					assert.ok(control.getVisibleRanges().some(visible => visible.containsRange(range)), 'The requested lines are visible after unfolding');
+					if (highlighted) assert.ok(range.equalsRange(control.getSelection()));
+					else assert.equal(control.getSelection()?.startLineNumber, 1, 'A reveal alone preserves the cursor');
+					void revealed.complete();
+				} catch (error) { void revealed.error(error); }
+			}
+		});
+		await revealed.p;
+	});
+
 	test('review uses shared models without full editors and preserves selection through virtualization and mode changes', async () => {
 		using resources = new DisposableStore();
 		const services = createCodeEditorServices(resources);

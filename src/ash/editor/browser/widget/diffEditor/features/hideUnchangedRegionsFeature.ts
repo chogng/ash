@@ -9,7 +9,7 @@ import { type IInstantiationService } from '../../../../../platform/instantiatio
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { type HideUnchangedRegionsOptions } from '../../../../common/config/diffEditor.js';
 import { LineRange } from '../../../../common/core/ranges/lineRange.js';
-import { Range } from '../../../../common/core/range.js';
+import { Range, type IRange } from '../../../../common/core/range.js';
 import { type DiffModel } from '../../../../common/diff/diffModel.js';
 import { type LineDiff } from '../../../../common/diff/lineDiff.js';
 import { type LanguageSymbolKind } from '../../../../common/languages.js';
@@ -69,18 +69,7 @@ export class HideUnchangedRegionsFeature extends Disposable {
 				if (this.isUpdatingHiddenAreas) {
 					return;
 				}
-				let changed = false;
-				for (const region of this.regions) {
-					const range = hiddenRange(region[side], region);
-					if (!range) continue;
-					const selected = editor.getSelections()?.some(selection =>
-						selection.startLineNumber < range.endLineNumberExclusive && selection.endLineNumber >= range.startLineNumber);
-					if (selected) {
-						region.revealedAbove = region.original.length;
-						changed = true;
-					}
-				}
-				if (changed) this.render();
+				this.revealRanges(side, editor.getSelections() ?? []);
 			}));
 		}
 		this._register(toDisposable(() => {
@@ -93,6 +82,17 @@ export class HideUnchangedRegionsFeature extends Disposable {
 
 	public get isEnabled(): boolean {
 		return this.options.enabled;
+	}
+
+	public revealRanges(side: 'original' | 'modified', ranges: readonly IRange[]): void {
+		let changed = false;
+		for (const region of this.regions) {
+			const hidden = hiddenRange(region[side], region);
+			if (!hidden || !ranges.some(range => range.startLineNumber < hidden.endLineNumberExclusive && range.endLineNumber >= hidden.startLineNumber)) continue;
+			region.revealedAbove = region.original.length;
+			changed = true;
+		}
+		if (changed) this.render();
 	}
 
 	public setOptions(options: Partial<HideUnchangedRegionsOptions>): void {

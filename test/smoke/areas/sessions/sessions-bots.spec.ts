@@ -4,38 +4,40 @@ import { Editor } from '../../../automation/editor.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
+const reviewLine = 160;
+const reviewedText = 'const reviewedAnswer = 43;';
+const reviewFile = ['const answer = 42;',
+	...Array.from({ length: reviewLine - 2 }, (_, index) => `// Review fixture line ${index + 2}`), reviewedText,
+	...Array.from({ length: 40 }, (_, index) => `// Review fixture line ${reviewLine + index + 1}`), ''].join('\n');
+const reviewPatch = ['*** Begin Patch', '*** Add File: review.ts',
+	...reviewFile.trimEnd().split('\n').map(line => `+${line}`), '*** End Patch'].join('\n');
+
 const test = base.extend<{ reviewModelUrl: string; }>({
 	reviewModelUrl: async ({ }, use) => {
-		let count = 0;
+		let applied = false;
 		const server = createServer(async (request, response) => {
-			if (request.method !== 'POST' || request.url !== '/v1/responses') {
+			if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
 				response.writeHead(404).end();
 				return;
 			}
-			let body = '';
-			for await (const chunk of request) body += chunk;
-			const call = body.includes('Source-only prompt') && !body.includes('function_call_output') && !body.includes('Check the order');
-			const answer = body.includes('Explain the next step') ? 'Follow-up from Code Review'
-				: body.includes('Check the order') ? 'Review reply from Code Review' : 'Source-only answer';
-			const result = {
-				type: 'response.completed',
-				response: {
-					id: 'review-fixture-' + ++count, status: 'completed',
-					output: call ? [{
-						type: 'function_call', id: 'fixture-write', call_id: 'fixture-write', name: 'shell-command',
-						arguments: JSON.stringify({
-							program: process.execPath, working_directory: '.',
-							arguments: ['-e', 'require("node:fs").writeFileSync("review.ts", "const answer = 42;\\n")'],
-						}),
-					}] : [{
-						type: 'message', id: 'answer-' + count, role: 'assistant', phase: 'final_answer',
-						content: [{ type: 'output_text', text: answer }],
-					}],
-					usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
-				},
-			};
-			response.writeHead(200, { 'Content-Type': 'text/event-stream' });
-			response.end(`event: response.completed\ndata: ${JSON.stringify(result)}\n\n`);
+			const chunks: Buffer[] = [];
+			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			const { messages } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { messages: { role: string; content: unknown; }[]; };
+			// The provider can append other user-role messages after the fixture prompt.
+			const hasPrompt = (phrase: string): boolean => messages.some(message => message.role === 'user' && JSON.stringify(message.content).includes(phrase));
+			const applyPatch = !applied && hasPrompt('Source-only prompt');
+			const answer = hasPrompt('Explain the next step') ? 'Follow-up from Code Review'
+				: hasPrompt('Check the order') ? 'Review reply from Code Review' : 'Source-only answer';
+			const delta = applyPatch ? {
+				tool_calls: [{
+					index: 0, id: 'fixture-write', type: 'function', function: { name: 'apply_patch', arguments: JSON.stringify({ patch: reviewPatch }) },
+				}]
+			} : { content: answer };
+			applied ||= applyPatch;
+			const packet = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(packet({ id: 'review-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: null }] })
+				+ packet({ id: 'review-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: applyPatch ? 'tool_calls' : 'stop' }] }) + 'data: [DONE]\n\n');
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		const address = server.address();
@@ -56,7 +58,7 @@ provider = "custom-bots-fixture"
 connection = "custom-bots-fixture"
 baseUrl = ${JSON.stringify(reviewModelUrl)}
 [connections.custom-bots-fixture.custom]
-protocol = "responses"
+protocol = "chatCompletions"
 name = "Code Review fixture"
 contextWindow = 272000
 order = 0
@@ -64,7 +66,8 @@ model = "gpt-6.1-sol"
 `);
 	},
 });
-test.use({ gitRepository: true });
+// Every line in the fixture is added. Keep the desktop scenario focused on range navigation.
+test.use({ gitRepository: true, electronUserSettings: { 'diffEditor.hideUnchangedRegions.enabled': false } });
 
 test('Code Review sends and continues a Bots thread with its saved line comparison', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -77,14 +80,7 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 				permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'],
 			});
 		}
-		const config = await setup.client.request(APP_SERVER_METHODS['config/read'], {});
-		await setup.client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], {
-			commandId: 'bots-fixture-shell', expectedRevision: config.revision,
-			rule: {
-				id: 'bots-fixture-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' },
-				effect: { type: 'allowUnsandboxed' }, justification: 'This test writes one file in its isolated repository.',
-			},
-		});
+		await setup.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'custom-bots-fixture', apiKey: 'isolated-bots-fixture-key' });
 	} finally { await setup.close(); }
 	// The browser connection seeds changes in the same directory runtime that the UI reads.
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
@@ -104,11 +100,17 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 				type: 'startTurn', threadId, expectedSequence: (await read()).thread.sequence,
 				input: [{ type: 'text', text: 'Source-only prompt' }],
 				model: { provider: 'custom-bots-fixture', model: 'gpt-6.1-sol' },
-				approvalMode: 'bypassPermissions', toolMode: 'direct',
+				approvalMode: 'bypassPermissions',
 			},
 		});
 		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');
-		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], source)).changeSets.some(change => change.captureState === 'sealed' && change.statistics.additions > 0)).toBe(true);
+		const results = (await read()).thread.turns.at(-1)!.items.filter(item => item.type === 'toolResult');
+		expect(results).toEqual([expect.objectContaining({ isError: false })]);
+		const changeSets = async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], source)).changeSets;
+		await expect.poll(async () => (await changeSets())[0]?.captureState).toBe('sealed');
+		const capture = (await changeSets())[0]!;
+		const comparison = await client.request(APP_SERVER_METHODS['turnChanges/read'], { ...source, changeSetId: capture.changeSetId });
+		expect(comparison.files.map(file => file.path)).toEqual(['review.ts']);
 		const modeControl = page.locator('.ash-window-mode-control');
 		const code = modeControl.getByRole('button', { name: 'Code', exact: true });
 		await code.click();
@@ -117,10 +119,18 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 		const bots = page.locator('.ash-bots-page');
 		await bots.getByRole('button', { name: 'Review Changes', exact: true }).click();
 		const detail = bots.getByRole('region', { name: 'Comparison', exact: true });
+		const multiDiff = detail.locator('.stanza-multi-diff-editor');
+		const modifiedLines = detail.locator('.stanza-diff-editor-side.modified .view-line');
+		const reviewedLine = modifiedLines.filter({ hasText: reviewedText });
 		await expect(detail).toContainText('const answer = 42;');
 		await expect(modeControl).toBeHidden();
-		await detail.locator('.stanza-diff-editor-side.modified .line-numbers').getByText('1', { exact: true }).hover({ force: true });
-		await detail.getByRole('button', { name: 'Add comment on line 1', exact: true }).click();
+		await expect(reviewedLine).not.toBeInViewport();
+		const lineHeight = await modifiedLines.filter({ hasText: 'const answer = 42;' }).evaluate(element => element.getBoundingClientRect().height);
+		await multiDiff.hover();
+		await page.mouse.wheel(0, (reviewLine - 6) * lineHeight);
+		await expect(reviewedLine).toBeInViewport();
+		await detail.locator('.stanza-diff-editor-side.modified .line-numbers').getByText(String(reviewLine), { exact: true }).hover({ force: true });
+		await detail.getByRole('button', { name: `Add comment on line ${reviewLine}`, exact: true }).click();
 		await detail.getByRole('textbox', { name: 'Comment for the agent' }).fill('Check the order');
 		await detail.getByRole('button', { name: 'Save Draft', exact: true }).click();
 		await detail.getByRole('button', { name: 'Send to Code Review', exact: true }).click();
@@ -132,11 +142,13 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 		await expect(bots.locator('.ash-chat')).toHaveCSS('background-color', pageBackground);
 		await expect(transcript).not.toContainText('Source-only prompt');
 		await expect(bots.getByRole('heading', { name: 'Review review.ts' })).toBeVisible();
-		const reference = transcript.getByRole('button', { name: 'review.ts · Line 1' });
+		const reference = transcript.getByRole('button', { name: `review.ts · Line ${reviewLine}` });
 		await reference.click();
 		await expect(detail).toContainText('Saved comparison');
-		await expect(detail).toContainText('Check the order');
-		await expect(detail).toContainText('const answer = 42;');
+		await expect(reviewedLine).toBeInViewport();
+		await expect.poll(() => multiDiff.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await expect(multiDiff.getByText('Check the order', { exact: true })).toBeInViewport();
+		await testInfo.attach('code-review-deep-line', { body: await detail.screenshot(), contentType: 'image/png' });
 		await detail.getByRole('button', { name: 'Close Comparison' }).press('Escape');
 		await expect(detail).toBeHidden();
 		await expect(reference).toBeFocused();

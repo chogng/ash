@@ -443,6 +443,11 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
 
+	/** Expands folded diff regions before callers measure the target's position. */
+	public revealHiddenRange(side: 'original' | 'modified', range: Range): void {
+		this.modelBinding?.hiddenRegions.revealRanges(side, [range]);
+	}
+
 	public getOriginalEditor(): ICodeEditor {
 		return this.originalEditor;
 	}
