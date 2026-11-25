@@ -3,6 +3,7 @@ import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichCont
 import { ChatContextMenuActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel } from '../promptTimeline/promptTimelineModel.js';
 import type { ChatResponseFileChangesPresentation } from '../chatResponseFileChangesService.js';
+import type { IPromptTimelineActions } from '../promptTimeline/promptTimelineRail.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
 import { getImageGenerationBatches } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
@@ -392,18 +393,18 @@ export class ChatListWidget extends DomWidget {
 		if (options.showPromptTimeline || promptTimelineChanges) {
 			this.promptTimeline = this._register(instantiationService.createInstance(PromptTimelineWidgetContrib,
 				this.element, this.scrollable.scrollableElement, {
-				reveal: (id: string) => {
-					const prompt = this.itemById(id);
-					if (prompt) {
-						this.focus(prompt);
-						this.revealItem(id, undefined, true);
-					}
-				},
-				changes: (id: string) => {
-					const prompt = this.itemById(id);
-					return prompt && promptTimelineChanges?.(prompt);
-				},
-			}, () => this.renderPromptTimeline()));
+					reveal: (id: string) => {
+						const prompt = this.itemById(id);
+						if (prompt) {
+							this.focus(prompt);
+							this.revealItem(id, undefined, true);
+						}
+					},
+					changes: (id, detail) => {
+						const prompt = this.itemById(id);
+						return prompt && promptTimelineChanges?.(prompt, detail);
+					},
+				} satisfies IPromptTimelineActions, () => this.renderPromptTimeline()));
 		}
 
 		// Selected text takes precedence over context menus owned by the underlying link or row.

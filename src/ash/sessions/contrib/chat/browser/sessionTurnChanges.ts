@@ -4,7 +4,7 @@ import { observableFromEvent, type IObservable } from '../../../../base/common/o
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { LocalChatSessionUri } from '../../../../workbench/contrib/chat/common/model/chatUri.js';
 import type { IEditSessionEntryDiff } from '../../../../workbench/contrib/chat/common/editing/chatEditingService.js';
-import type { ChatTurnChanges, ChatTurnChangeSource, ChatTurnFileChange, ChatResponseFileChangesPresentation, IChatResponseFileChangesProvider } from '../../../../workbench/contrib/chat/browser/chatResponseFileChangesService.js';
+import type { ChatPromptChangeDetail, ChatTurnChanges, ChatTurnChangeSource, ChatTurnFileChange, ChatResponseFileChangesPresentation, IChatResponseFileChangesProvider } from '../../../../workbench/contrib/chat/browser/chatResponseFileChangesService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
@@ -33,33 +33,31 @@ export class SessionsChatResponseFileChangesProvider implements IChatResponseFil
 		const generation = this.model.composerGeneration;
 		return observableFromEvent(this, this.model.onDidChange, () => {
 			if (this.model.isDisposed || this.model.composerGeneration !== generation) return [];
-			return this.readChanges(source, false)?.files ?? [];
+			return this.readChanges(source, false)?.readFiles() ?? [];
 		});
 	}
 
-	getChangesForPrompt(request: IChatListItem): ChatTurnChanges | undefined {
-		return request.requestSource && this.getChanges(request.requestSource, false);
+	getChangesForPrompt(request: IChatListItem, detail: ChatPromptChangeDetail): ChatTurnChanges | undefined {
+		return request.requestSource && this.getChanges(request.requestSource, false, detail);
 	}
 
 	getChangesForResponse(source: ChatTurnChangeSource): ChatTurnChanges | undefined {
-		return this.getChanges(source, true);
+		return this.getChanges(source, true, 'files');
 	}
 
-	private getChanges(source: ChatTurnChangeSource, sealedOnly: boolean): ChatTurnChanges | undefined {
+	private getChanges(source: ChatTurnChangeSource, sealedOnly: boolean, detail: ChatPromptChangeDetail): ChatTurnChanges | undefined {
 		const changes = this.readChanges(source, sealedOnly);
 		if (!changes) return undefined;
-		const resource = LocalChatSessionUri.forSession(source.sessionId, source.threadId);
-		const diffs = this.getChangesForRequest(resource, source.turnId)?.get() ?? [];
 		return {
 			...changes.statistics,
 			review: changes.review,
-			fileDiffs: diffs.filter(diff => !sealedOnly || diff.isFinal).map(diff => diff.presentation),
+			fileDiffs: detail === 'files' ? changes.readFiles().map(diff => diff.presentation) : [],
 		};
 	}
 
 	private readChanges(source: ChatTurnChangeSource, sealedOnly: boolean) {
 		const generation = this.model.composerGeneration;
-		if (source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) return undefined;
+		if (this.model.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) return undefined;
 		const captures = this.model.changeSets.filter(summary => summary.turnId === source.turnId
 			&& (sealedOnly ? summary.captureState === 'sealed' : summary.captureState !== 'discarded') && summary.statistics.files > 0);
 		if (!captures.length) return undefined;
@@ -82,7 +80,7 @@ export class SessionsChatResponseFileChangesProvider implements IChatResponseFil
 				deletions: captures.reduce((count, capture) => count + capture.statistics.deletions, 0),
 			},
 			review: () => isCurrent() ? open({ changesetSelection: { kind: 'turn', turnId: source.turnId } }) : undefined,
-			files: captures.flatMap((summary): CapturedFileDiff[] => {
+			readFiles: () => captures.flatMap((summary): CapturedFileDiff[] => {
 				const details = this.model.turnChangeDetails(summary.changeSetId);
 				if (!details || details.summary.revision !== summary.revision) return [];
 				return details.files.map(file => {

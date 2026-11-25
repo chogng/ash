@@ -1,6 +1,6 @@
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { PromptTick } from './promptTimelineModel.js';
-import type { ChatTurnChanges } from '../chatResponseFileChangesService.js';
+import type { ChatPromptChangeDetail, ChatTurnChanges } from '../chatResponseFileChangesService.js';
 
 export interface IPromptTimelineRail extends IDisposable {
 	render(ticks: readonly PromptTick[], height: number): void;
@@ -9,5 +9,5 @@ export interface IPromptTimelineRail extends IDisposable {
 
 export interface IPromptTimelineActions {
 	reveal(id: string): void;
-	changes?(id: string): ChatTurnChanges | undefined;
+	changes?(id: string, detail: ChatPromptChangeDetail): ChatTurnChanges | undefined;
 }

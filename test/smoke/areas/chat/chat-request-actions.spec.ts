@@ -295,7 +295,9 @@ for (const surface of ['IDE', 'Agents Code', 'Ash Chat'] as const) for (const sc
 				const diff = page.locator(agents ? '.ash-sessions-changes-editor:visible .stanza-multi-diff-editor' : '.stanza-multi-diff-editor:visible');
 				if (agents) {
 					const firstReply = replies.filter({ hasText: 'Request action answer 1' });
-					await firstReply.locator('.ash-chat-changed-files > summary').press('Enter');
+					const changedFiles = firstReply.locator('.ash-chat-changed-files > summary');
+					await expect(changedFiles).toBeVisible();
+					await changedFiles.press('Enter');
 					const preview = firstReply.getByRole('button', { name: 'Preview changes for first-turn.txt', exact: true });
 					await preview.press('Enter');
 					const inlineDiff = firstReply.locator('.ash-chat-edit-preview-editor');

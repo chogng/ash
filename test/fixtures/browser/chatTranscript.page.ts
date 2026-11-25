@@ -17,7 +17,7 @@ import { registerTestChatWindowParts } from '../../../src/ash/workbench/contrib/
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
-import type { ChatTurnChangeSource, ChatTurnFileChange } from '../../../src/ash/workbench/contrib/chat/browser/chatResponseFileChangesService.js';
+import type { ChatPromptChangeDetail, ChatTurnChangeSource, ChatTurnFileChange } from '../../../src/ash/workbench/contrib/chat/browser/chatResponseFileChangesService.js';
 import { ChatOutputPartStateCache, IChatOutputPartStateCache } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatOutputPartStateCache.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
@@ -422,14 +422,18 @@ const listOptions = {
 		})),
 	} : undefined,
 	promptTimelineChanges: new URLSearchParams(location.search).has('promptTimeline')
-		? (prompt: IChatListItem) => prompt.id === 'second' ? {
-			files: 1, insertions: 2, deletions: 1,
-			review: () => { root.dataset.reviewedTurn = prompt.id; },
-			fileDiffs: [{
-				id: 'change', path: 'src/example.ts', additions: 2, deletions: 1,
-				review: () => { root.dataset.reviewedPrompt = prompt.id; },
-			}],
-		} : undefined : undefined,
+		? (prompt: IChatListItem, detail: ChatPromptChangeDetail) => {
+			if (detail === 'files') root.dataset.promptFileDetailsRequested = 'true';
+			if (prompt.id !== 'second') return undefined;
+			return {
+				files: 1, insertions: 2, deletions: 1,
+				review: () => { root.dataset.reviewedTurn = prompt.id; },
+				fileDiffs: detail === 'files' ? [{
+					id: 'change', path: 'src/example.ts', additions: 2, deletions: 1,
+					review: () => { root.dataset.reviewedPrompt = prompt.id; },
+				}] : [],
+			};
+		} : undefined,
 	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));

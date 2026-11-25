@@ -126,7 +126,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			}, {
 			// Before first send, the environment card reviews the selected checkout.
 			changes: { refreshConversation: () => model.refreshChanges() },
-			promptTimelineChanges: prompt => turnChanges.getChangesForPrompt(prompt),
+			promptTimelineChanges: (prompt, detail) => turnChanges.getChangesForPrompt(prompt, detail),
 			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
 			messageActionSurface: 'code',

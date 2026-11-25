@@ -32,8 +32,10 @@ export interface ChatTurnChanges extends IChangesStats {
 	review(): void | Promise<void>;
 }
 
+export type ChatPromptChangeDetail = 'summary' | 'files';
+
 /** A conversation host projects its own captures and owns opening their comparisons. */
 export interface ChatResponseFileChangesPresentation {
-	getChangesForPrompt(request: IChatListItem): ChatTurnChanges | undefined;
+	getChangesForPrompt(request: IChatListItem, detail: ChatPromptChangeDetail): ChatTurnChanges | undefined;
 	getChangesForResponse(source: ChatTurnChangeSource): ChatTurnChanges | undefined;
 }

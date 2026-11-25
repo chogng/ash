@@ -16,6 +16,7 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 import { SessionsChatResponseFileChangesProvider } from '../../../chat/browser/sessionTurnChanges.js';
 import type { IChatResponseFileChangesProvider } from '../../../../../workbench/contrib/chat/browser/chatResponseFileChangesService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
+import type { IChatListItem } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ChatWidgetModel } from '../../../../browser/chatWidgetModel.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { SessionChangesService } from '../../browser/sessionChangesService.js';
@@ -147,7 +148,11 @@ suite('Session Changes opening and capture contract', () => {
 		assert.equal(restored.resource.toString(), editor.toString());
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
 		using modelChanged = new Emitter<void>();
-		const model = { sessionId: 'session', threadId: 'thread', composerGeneration: 0, changeSets: [details.summary], turnChangeDetails: () => currentDetails, onDidChange: modelChanged.event };
+		let detailReads = 0;
+		const model = {
+			sessionId: 'session', threadId: 'thread', composerGeneration: 0, changeSets: [details.summary],
+			turnChangeDetails: () => { detailReads++; return currentDetails; }, onDidChange: modelChanged.event,
+		};
 		services.registerInstance(ISessionChangesService, service);
 		services.registerInstance(INotificationService, {
 			error: (error: unknown) => assert.fail(String(error)),
@@ -165,17 +170,22 @@ suite('Session Changes opening and capture contract', () => {
 			original: diff.originalURI.toString(), modified: diff.modifiedURI.toString(), snapshot: diff.modifiedSnapshotURI?.toString(),
 			added: diff.added, removed: diff.removed, deleted: diff.isDeleted, final: diff.isFinal,
 		})), [{ original: change.originalUri.toString(), modified: change.uri.toString(), snapshot: change.modifiedUri.toString(), added: 0, removed: 2, deleted: true, final: true }]);
-		const turn = responseChanges.getChangesForPrompt({
+		const prompt: IChatListItem = {
 			id: 'prompt', type: 'userMessage', text: 'Delete file', transient: false,
 			requestSource: { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'prompt' },
-		});
-		assert.deepEqual({ files: turn?.files, insertions: turn?.insertions, deletions: turn?.deletions }, { files: 1, insertions: 0, deletions: 2 });
-		const file = turn?.fileDiffs[0];
+		};
+		detailReads = 0;
+		const turn = responseChanges.getChangesForPrompt(prompt, 'summary');
+		assert.ok(turn);
+		assert.deepEqual({ files: turn.files, insertions: turn.insertions, deletions: turn.deletions, fileDiffs: turn.fileDiffs }, { files: 1, insertions: 0, deletions: 2, fileDiffs: [] });
+		assert.equal(detailReads, 0);
+		const file = responseChanges.getChangesForPrompt(prompt, 'files')?.fileDiffs[0];
+		assert.equal(detailReads, 1);
 		assert.equal(file?.path, 'deleted.ts');
 		await file?.review();
 		assert.deepEqual((opened[1]?.input as SessionChangesEditorInput).changesetSelection, { kind: 'id', id: 'capture' });
 		assert.deepEqual(opened[1]?.options?.viewState, viewState);
-		await turn?.review();
+		await turn.review();
 		const turnInput = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(opened[2]!.input)))) as SessionChangesEditorInput;
 		assert.deepEqual(turnInput.changesetSelection, { kind: 'turn', turnId: 'turn' });
 		assert.equal(opened[2]?.options?.viewState, undefined);
@@ -203,7 +213,7 @@ suite('Session Changes opening and capture contract', () => {
 		modelChanged.fire();
 		assert.equal(observedFiles, 0);
 		await file?.review();
-		await turn?.review();
+		await turn.review();
 		assert.equal(opened.length, 3);
 
 		await assert.rejects(service.openChangesEditor(URI.parse('ash-session:/session?thread=missing')));

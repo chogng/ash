@@ -127,6 +127,7 @@ suite('Chat transcript navigation', () => {
 		await review.click();
 		await expect(page.locator('main')).toHaveAttribute('data-reviewed-turn', 'second');
 		await expect(panel).toBeHidden();
+		expect(await host.getAttribute('data-prompt-file-details-requested')).toBeNull();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('ruler'));
 		const ruler = page.locator('.ash-prompt-timeline-ruler');
 		await ruler.getByRole('button', { name: 'First request' }).press('Enter');
@@ -134,6 +135,7 @@ suite('Chat transcript navigation', () => {
 		await ruler.getByRole('button', { name: 'First request' }).last().press('Escape');
 		await expect(ruler.getByRole('button', { name: 'First request' })).toHaveAttribute('aria-expanded', 'false');
 		await ruler.getByRole('button', { name: 'Second request', exact: true }).press('Enter');
+		await expect(host).toHaveAttribute('data-prompt-file-details-requested', 'true');
 		await ruler.getByText('已更改的文件（1）').press('Enter');
 		await ruler.getByRole('button', { name: 'src/example.ts' }).press('Enter');
 		await expect(page.locator('main')).toHaveAttribute('data-reviewed-prompt', 'second');
