@@ -1034,6 +1034,11 @@ suite('automations browser component', () => {
 		await expect(details.getByRole('heading', { name: 'Scheduled review', exact: true })).toBeVisible();
 		await expect(details).toContainText('Could not create session');
 		expect(await page.evaluate(() => window.ashAutomations.opened)).toEqual([]);
+		await page.evaluate(() => window.ashAutomations.back());
+		await expect(details).toBeHidden();
+		await page.evaluate(() => window.ashAutomations.forward());
+		await expect(details.getByRole('heading', { name: 'Scheduled review', exact: true })).toBeVisible();
+		await expect(details).toContainText('Could not create session');
 		await page.evaluate(() => window.ashAutomations.finish());
 		await expect.poll(() => page.evaluate(() => window.ashAutomations.notifications())).toEqual([
 			{ message: 'Routine Scheduled review: Could not create session', closed: true },

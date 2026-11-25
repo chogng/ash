@@ -35,7 +35,6 @@ import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js'
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Severity, INotificationService, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
-import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -233,9 +232,6 @@ export class AutomationsCardsWidget extends Disposable {
 			overview.hidden = !!selected;
 			this.details.hidden = !selected;
 			this.renderDetails(selected);
-		}));
-		this._register(CommandsRegistry.register('sessions.automations.openRun', (_accessor, id) => {
-			if (typeof id === 'string' && this.displayRuns.get().some(run => run.id === id)) this.openDetails({ kind: 'run', id });
 		}));
 		this._register(addDisposableListener(this.element, 'focusin', event => {
 			if (!this.element.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.Automations)) status(chat ? localize('scheduled.helpHint', 'Press Alt+F1 for Scheduled keyboard help.') : localize('automations.helpHint', 'Press Alt+F1 for Routines keyboard help.'));
@@ -555,6 +551,14 @@ export class AutomationsCardsWidget extends Disposable {
 		this.attention.hidden = items.length === 0;
 	}
 
+	public showRun(runId: string | undefined): void {
+		if (runId) {
+			this.openDetails({ kind: 'run', id: runId });
+		} else {
+			this.selection.set(undefined, undefined);
+		}
+	}
+
 	private openDetails(selection: AutomationSelection): void {
 		const focused = getActiveElement(this.element.ownerDocument);
 		if (!this.selection.get() && isHTMLElement(focused)) this.returnFocus = focused;
@@ -848,7 +852,10 @@ export class AutomationsCustomView extends AbstractCustomView {
 	override readonly description;
 	private widget: AutomationsCardsWidget | undefined;
 
-	constructor(private readonly sessionKind: 'chat' | 'code', @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(private readonly sessionKind: 'chat' | 'code',
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@ICustomViewService private readonly views: ICustomViewService,
+	) {
 		super();
 		this.title = constObservable(sessionKind === 'chat' ? localize('scheduled.title', 'Scheduled') : localize('automations.title', 'Routines'));
 		this.description = constObservable(sessionKind === 'chat'
@@ -857,8 +864,16 @@ export class AutomationsCustomView extends AbstractCustomView {
 	}
 
 	render(container: HTMLElement): void {
-		this.widget = this._register(this.instantiation.createInstance(AutomationsCardsWidget, container, this.sessionKind));
-		container.append(this.widget.element);
+		const widget = this._register(this.instantiation.createInstance(AutomationsCardsWidget, container, this.sessionKind));
+		this.widget = widget;
+		container.append(widget.element);
+		const viewId = this.sessionKind === 'chat' ? SCHEDULED_CUSTOM_VIEW_ID : AUTOMATIONS_CUSTOM_VIEW_ID;
+		this._register(autorun(reader => {
+			const opening = this.views.activeCustomViewOpen.read(reader);
+			if (opening?.descriptor.id === viewId) {
+				widget.showRun(opening.state);
+			}
+		}));
 	}
 
 	layout(_width: number, _height: number): void { }
@@ -877,7 +892,6 @@ export class AutomationsCustomViewContribution extends Disposable {
 		@IContextKeyService contexts: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
 		@INotificationService notifications: INotificationService,
-		@ICommandService commands: ICommandService,
 	) {
 		super();
 		const registrations = this._register(new MutableDisposable<DisposableStore>());
@@ -943,10 +957,9 @@ export class AutomationsCustomViewContribution extends Disposable {
 							tooltip: '',
 							enabled: true,
 							id: 'sessions.automations.viewResult', label: localize('automations.viewResult', 'View result'),
-							run: async () => {
+							run: () => {
 								if (chat && !scheduledAvailable.get()) return;
-								views.showCustomView(chat ? SCHEDULED_CUSTOM_VIEW_ID : AUTOMATIONS_CUSTOM_VIEW_ID);
-								await commands.executeCommand('sessions.automations.openRun', run.id);
+								views.showCustomView(chat ? SCHEDULED_CUSTOM_VIEW_ID : AUTOMATIONS_CUSTOM_VIEW_ID, { state: run.id });
 							}
 						}]
 					}
