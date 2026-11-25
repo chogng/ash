@@ -2,7 +2,7 @@ import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { addDisposableListener, getWindow, h } from '../../base/browser/dom.js';
 import { Dimension, type IDimension } from '../../base/browser/dom.js';
-import { SerializableGrid, type SerializedGridDescriptor, type Direction } from '../../base/browser/ui/grid/grid.js';
+import { Direction, SerializableGrid, type SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
 import { isAncestorOfActiveElement } from '../../base/browser/focus.js';
 import { Emitter } from '../../base/common/event.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
@@ -637,7 +637,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const panelSize = partId === 'editor' ? this.panelSizeBeforeMaximize : undefined;
 		const chatWidth = partId === 'editor' ? this.chatEditorRestoreWidth : undefined;
 		if (chatWidth !== undefined) this.setChatEditorRestoreWidth(undefined);
-		this.updatePartsVisibility([partId], true);
+		this.setPartVisibility(partId, true);
 		if (chatWidth !== undefined) this.setPartSize('chat', this.getPartSize('chat').with(chatWidth));
 		if (partId === 'editor' && this.restoreChatWithEditor) {
 			this.restoreChatWithEditor = false;
@@ -686,7 +686,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 				return;
 			}
 		}
-		this.updatePartsVisibility([partId], false);
+		this.setPartVisibility(partId, false);
 		if (chatHadFocus && this.isPartVisible('editor')) super.focus();
 	}
 
@@ -704,6 +704,31 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 
 	private saveState(): void {
 		this.stateModel.save(this.state);
+	}
+
+	private setPartVisibility(partId: WorkbenchPartId, visible: boolean): void {
+		const chat = this.views.get('chat');
+		if (!chat || (partId !== 'sidebar' && partId !== 'auxiliarybar' && partId !== 'agentSidebar')
+			|| this.grid.width === 0 || this.grid.height === 0 || this.isPartVisible(partId) === visible
+			|| !this.isPartVisible('chat') || !this.isPartVisible('editor')) {
+			this.updatePartsVisibility([partId], visible);
+			return;
+		}
+
+		const besideChat = () => this.getVisibleNeighborPart('chat', Direction.Left) === partId
+			|| this.getVisibleNeighborPart('chat', Direction.Right) === partId;
+		// Check adjacency while the side bar is visible. The grid gives the change
+		// to the editor first, so transfer it to Chat within its width constraints.
+		const wasBesideChat = !visible && besideChat();
+		const editorWidth = this.getPartSize('editor').width;
+		this.updatePartsVisibility([partId], visible);
+		if (visible ? besideChat() : wasBesideChat) {
+			const editorDelta = this.getPartSize('editor').width - editorWidth;
+			if (editorDelta !== 0) {
+				const width = Math.max(chat.minimumWidth, this.getPartSize('chat').width + editorDelta);
+				this.grid.resizeView(chat, { width });
+			}
+		}
 	}
 
 	private applyState(state: WorkbenchLayoutState, auxiliaryBarMaximized = false): void {

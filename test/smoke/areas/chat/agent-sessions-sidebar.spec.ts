@@ -478,6 +478,36 @@ test('Dragging Sessions switches to a saved stacked layout and can return to sid
 	await expect(page.locator('.ash-chat-body')).not.toHaveClass(/sessions-side-by-side/);
 });
 
+test('Toggling the secondary sidebar beside Chat keeps the editor width', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, workbench }) => {
+	const page = workbench.page;
+	await driver.setWindowSize({ width: 1_800, height: 900 });
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.quickaccess.runCommand(NEW_CHAT_COMMAND_ID);
+	const editor = page.locator('[data-part="editor"]');
+	const chat = page.locator('[data-part="chat"]');
+	const secondarySidebar = page.locator('[data-part="auxiliarybar"]');
+	const toggleSecondarySidebar = () => workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+	if (!await secondarySidebar.isVisible()) await toggleSecondarySidebar();
+	await expect(secondarySidebar).toBeVisible();
+	await expect(chat).toBeVisible();
+	await expect(editor).toBeVisible();
+	const frameWidth = (part: typeof editor) => part.locator('..').evaluate(frame => Math.round(frame.getBoundingClientRect().width));
+	const editorWidth = await frameWidth(editor);
+	const chatWidth = await frameWidth(chat);
+	const sidebarWidth = await frameWidth(secondarySidebar);
+
+	await toggleSecondarySidebar();
+	await expect(secondarySidebar).toBeHidden();
+	await expect.poll(() => frameWidth(editor)).toBe(editorWidth);
+	await expect.poll(() => frameWidth(chat)).toBe(chatWidth + sidebarWidth);
+
+	await toggleSecondarySidebar();
+	await expect(secondarySidebar).toBeVisible();
+	await expect.poll(() => frameWidth(editor)).toBe(editorWidth);
+	await expect.poll(() => frameWidth(chat)).toBe(chatWidth);
+	await expect.poll(() => frameWidth(secondarySidebar)).toBe(sidebarWidth);
+});
+
 test('Chat has a 280px minimum and retains its draft across snapping', { tag: ['@browser-ui', '@electron-ui', '@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench, reloadWorkbench }, testInfo) => {
 	let page = workbench.page;
 	await driver.setWindowSize({ width: 1800, height: 900 });

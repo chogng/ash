@@ -314,6 +314,69 @@ test('The Chat part borrows content and restores the editor when its focused con
 	}
 });
 
+test('Toggling the sidebar next to Chat preserves editor width in either sidebar position', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		for (const [sideBarLocation, panelDefaultLocation, adjacentBar] of [
+			['left', 'bottom', 'auxiliarybar'],
+			['right', 'right', 'auxiliarybar'],
+			['left', 'left', 'agentSidebar'],
+		] as const) {
+			const { layout, disposables } = createLayoutHarness(dom.window.document, {
+				sideBarLocation,
+				panelDefaultLocation,
+				chatAvailable: true,
+				defaultLayout: { parts: { sidebar: true, auxiliarybar: adjacentBar === 'auxiliarybar', agentSidebar: true, chat: true, panel: true } },
+			});
+			using lifetime = disposables;
+			layout.layout(new Dimension(2_000, 900));
+			const width = (partId: WorkbenchPartId) => layout.getPartSize(partId).width;
+			const editorWidth = width('editor');
+			const chatWidth = width('chat');
+			const barWidth = width(adjacentBar);
+			const otherBarWidth = width('agentSidebar');
+
+			layout.hidePart(adjacentBar);
+			assert.equal(width('editor'), editorWidth);
+			assert.equal(width('chat'), chatWidth + barWidth);
+			layout.showPart(adjacentBar);
+			assert.equal(width('editor'), editorWidth);
+			assert.equal(width('chat'), chatWidth);
+			assert.equal(width(adjacentBar), barWidth);
+			assert.equal(width('agentSidebar'), otherBarWidth);
+
+			const primaryWidth = width('sidebar');
+			layout.hidePart('sidebar');
+			assert.equal(width('editor'), editorWidth + primaryWidth);
+			assert.equal(width('chat'), chatWidth);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Showing an adjacent sidebar respects the Chat minimum width', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const { layout, disposables } = createLayoutHarness(dom.window.document, {
+			layoutStyle: 'flat',
+			chatAvailable: true,
+			defaultLayout: { parts: { sidebar: false, auxiliarybar: false, agentSidebar: false, chat: true, panel: false } },
+		});
+		using lifetime = disposables;
+		layout.layout(new Dimension(1_200, 900));
+		layout.setPartSize('chat', layout.getPartSize('chat').with(ChatHostPart.MINIMUM_WIDTH + 50));
+		const editorWidth = layout.getPartSize('editor').width;
+
+		layout.showPart('auxiliarybar');
+
+		assert.equal(layout.getPartSize('chat').width, ChatHostPart.MINIMUM_WIDTH);
+		assert.equal(layout.getPartSize('editor').width, editorWidth + 50 - layout.getPartSize('auxiliarybar').width);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Chat restores its workspace width independently after migrating the auxiliary sidebar layout', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const createStorage = () => new BrowserStorageService({
