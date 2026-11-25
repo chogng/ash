@@ -97,11 +97,21 @@ CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown,
 			if (sessions.state !== 'ready' || !sessions.primaryCatalogReady) return false;
 			// Durable Project membership uses the primary host's raw Session IDs.
 			const members = new Set(current.sessionIds);
-			for (const session of sessions.sessions) {
-				if (!session.backendSessionId && session.status === 'active' && members.has(session.sessionId)) {
-					await sessions.archiveSession(session.sessionId);
+			const active = sessions.sessions.filter(session => !session.backendSessionId && session.status === 'active' && members.has(session.sessionId));
+			const pending = active.values();
+			const failures: unknown[] = [];
+			// Finish all local archives before the project can be marked archived.
+			await Promise.all(Array.from({ length: Math.min(3, active.length) }, async () => {
+				for (const session of pending) {
+					try {
+						await sessions.archiveSession(session.sessionId);
+					} catch (error) {
+						failures.push(error);
+					}
 				}
-			}
+			}));
+			if (failures.length === 1) throw failures[0];
+			if (failures.length) throw new AggregateError(failures);
 		}
 		const external = new Set(current.externalConversationIds);
 		if (external.size) {
