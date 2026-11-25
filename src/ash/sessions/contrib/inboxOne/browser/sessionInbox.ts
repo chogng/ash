@@ -149,7 +149,7 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 		return store;
 	}
 
-	private show(view: InboxView = 'attention'): void {
+	private show(view: InboxView = 'attention', focusId?: string): void {
 		const trigger = this.button;
 		if (!trigger) return;
 		if (this.panel) this.contextViews.hide();
@@ -164,7 +164,8 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 		panel.setAttribute('aria-label', viewTitles[view]);
 		panel.tabIndex = -1;
 		this.view.set(view, undefined);
-		this.render(panel, this.getItems(view), view === 'attention' && this.inbox.isLoading.get());
+		const items = this.getItems(view);
+		const rows = this.render(panel, items, view === 'attention' && this.inbox.isLoading.get());
 		const context = this.contextKeys.createScoped(panel);
 		context.createKey('sessionsInboxFocused', true);
 		const updateWidth = () => {
@@ -209,11 +210,12 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 		})) {
 			trigger.toggleClassName('active', true);
 			button.setAttribute('aria-expanded', 'true');
-			(panel.querySelector('button') ?? panel).focus();
+			const focused = focusId === undefined ? undefined : rows[items.findIndex(item => item.id === focusId)];
+			(focused ?? rows[0] ?? panel).focus();
 		}
 	}
 
-	private render(panel: HTMLElement, items: readonly IInboxNotificationItem[], loading: boolean): void {
+	private render(panel: HTMLElement, items: readonly IInboxNotificationItem[], loading: boolean): HTMLButtonElement[] {
 		this.renderedItems = items;
 		panel.setAttribute('aria-busy', String(loading));
 		const document = panel.ownerDocument;
@@ -240,6 +242,7 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 					: localize({ bundle: 'ash.sessions', key: 'sessions.inbox.noSessions' }, 'No sessions in this view.');
 		panel.replaceChildren(heading, ...(rows.length ? rows : [h(document, 'p', empty)]));
 		if (focused) (rows.find(row => row.dataset.inboxEntry === focused) ?? rows[0] ?? panel).focus();
+		return rows;
 	}
 
 	private getItems(view: InboxView, reader?: IReader): readonly IInboxNotificationItem[] {
@@ -297,14 +300,30 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 		const session = this.inbox.sessionRows.get().find(row => row.id === item.sessionResource?.toString());
 		const actions = item.actions.filter(action => view !== 'dismissed' || action.kind === InboxNotificationActionKind.OpenSession);
 		const markDone = view === 'attention' && session?.actions.find(action => action.kind === InboxNotificationActionKind.MarkDone);
+		const runTriage = (update: () => void): void => {
+			const before = this.getItems(view);
+			const index = before.findIndex(entry => entry.id === item.id);
+			if (index < 0) {
+				return;
+			}
+			update();
+			// A session action can remove multiple notifications from either side of this row.
+			const remaining = new Set(this.getItems('attention').map(entry => entry.id));
+			const survives = (entry: IInboxNotificationItem): boolean => remaining.has(entry.id);
+			const focus = before.slice(index).find(survives) ?? findLast(before.slice(0, index), survives);
+			this.show('attention', focus?.id);
+		};
 		const menuActions: IAction[] = [...actions, ...(markDone ? [markDone] : [])].map(action => ({
 			id: action.id, label: action.label, tooltip: '', enabled: true,
 			run: () => {
-				if (action.kind === InboxNotificationActionKind.OpenSession) return this.open(item, view);
-				if (!this.getItems(view).some(entry => entry.id === item.id)) return;
-				if (action.kind === InboxNotificationActionKind.Dismiss) this.inbox.dismissNotification(item.id, item);
-				else if (session && action.kind === InboxNotificationActionKind.MarkDone) this.inbox.markSessionDone(session);
-				this.show();
+				if (action.kind === InboxNotificationActionKind.OpenSession) {
+					return this.open(item, view);
+				}
+				if (action.kind === InboxNotificationActionKind.Dismiss) {
+					runTriage(() => this.inbox.dismissNotification(item.id, item));
+				} else if (session && action.kind === InboxNotificationActionKind.MarkDone) {
+					runTriage(() => this.inbox.markSessionDone(session));
+				}
 			},
 		}));
 		if (session && (view === 'attention' || view === InboxTab.OnHold)) {
@@ -314,11 +333,7 @@ export class SessionInbox extends Disposable implements ISessionInbox {
 				label: held ? localize({ bundle: 'ash.sessions', key: 'sessions.inbox.resume' }, 'Resume Session')
 					: localize({ bundle: 'ash.sessions', key: 'sessions.inbox.hold' }, 'Put Session on Hold'),
 				tooltip: '', enabled: true,
-				run: () => {
-					if (!this.getItems(view).some(entry => entry.id === item.id)) return;
-					this.inbox.setSessionOnHold(session, !held);
-					this.show();
-				},
+				run: () => runTriage(() => this.inbox.setSessionOnHold(session, !held)),
 			});
 		}
 		this.showMenu(event, row, menuActions);
