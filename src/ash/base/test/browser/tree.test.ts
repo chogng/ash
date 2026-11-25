@@ -209,6 +209,51 @@ suite('ObjectTree partial update lifecycle', () => {
 	});
 });
 
+test('ObjectTree keeps indent guides in sync when layout reveals virtual rows', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using tree = new ObjectTree<string>(dom.window.document.body, {
+			scrolling: 'managed',
+			getHeight: () => 22,
+			indentGuides: 'always',
+			reuseRows: true,
+			modelOptions: { identityProvider: { getId: item => item } },
+			renderElement: item => h(dom.window.document, 'span', undefined, item),
+		});
+		const viewport = tree.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		let viewportHeight = 44;
+		Object.defineProperties(viewport, { clientHeight: { get: () => viewportHeight }, clientWidth: { value: 200 }, scrollHeight: { value: 704 } });
+		const layout = (height: number): void => {
+			viewportHeight = height;
+			tree.layout(height);
+			assert.equal(tree.scrollTop, 0);
+		};
+		const lastGuide = () => tree.element.querySelector('[data-tree-id="child-29"] .ash-tree-indent-guide');
+		tree.setChildren([
+			{ element: 'other' },
+			{ element: 'parent', collapsed: false, children: Array.from({ length: 30 }, (_, index) => ({ element: `child-${index}` })) },
+		]);
+		layout(44);
+		tree.setFocus('other');
+		tree.setSelection(['child-0']);
+		assert.equal(lastGuide(), null);
+
+		layout(550);
+		const guide = lastGuide();
+		assert.ok(guide);
+		assert.equal(guide.classList.contains('active'), true);
+
+		layout(44);
+		assert.equal(lastGuide(), null);
+		tree.setSelection([]);
+		layout(550);
+		assert.equal(lastGuide(), guide);
+		assert.equal(guide.classList.contains('active'), false);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Compact async reads stay bounded and release capacity after failures', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

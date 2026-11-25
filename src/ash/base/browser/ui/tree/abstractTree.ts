@@ -87,6 +87,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private readonly stickyContainer: HTMLDivElement | undefined;
 	private readonly renderedElements = new WeakMap<HTMLDivElement, T>();
 	private readonly rowClassNames = new WeakMap<HTMLDivElement, string>();
+	private readonly activeIndentParentIds = new Set<string>();
 	private sourceItems: readonly TNode[] = [];
 	private findCandidatesProvider: (() => readonly TNode[]) | undefined;
 	private findCandidates: readonly TNode[] | undefined;
@@ -179,7 +180,6 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			this._onDidChangeSelection.fire({ elements: items, browserEvent });
 		}));
 		this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
-		this._register(this.list.onDidScroll(() => this.updateActiveIndentGuides()));
 	}
 
 	public layout(height: number, width?: number): void {
@@ -375,27 +375,34 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private updateActiveIndentGuides(): void {
-		const activeParents = new Set<string>();
+		this.activeIndentParentIds.clear();
 		for (const node of [...this.selection, ...(this.focus ? [this.focus] : [])]) {
 			const parent = node.collapsible && this.isExpanded(node) && node.children.length > 0 ? node : node.parent;
-			if (parent && parent.depth > 0) activeParents.add(parent.id);
+			if (parent && parent.depth > 0) this.activeIndentParentIds.add(parent.id);
 		}
-		for (const guide of this.element.querySelectorAll<HTMLElement>('.ash-tree-indent-guide')) {
-			guide.classList.toggle('active', activeParents.has(guide.dataset.treeParentId!));
-		}
+		this.applyIndentGuideState(this.element.querySelectorAll<HTMLElement>('.ash-tree-indent-guide'));
 	}
 
 	private renderIndentGuides(node: TNode, indent: HTMLSpanElement): void {
 		const ancestors: AbstractTreeNode<T>[] = [];
 		for (let parent = node.parent; parent && parent.depth > 0; parent = parent.parent) ancestors.unshift(parent);
 		// Retained rows can move between parents without changing element identity or depth.
-		if (indent.childElementCount === ancestors.length && ancestors.every((ancestor, index) => (indent.children[index] as HTMLElement).dataset.treeParentId === ancestor.id)) return;
-		indent.replaceChildren(...ancestors.map(ancestor => {
-			const guide = h(indent.ownerDocument, 'span');
-			guide.className = 'ash-tree-indent-guide';
-			guide.dataset.treeParentId = ancestor.id;
-			return guide;
-		}));
+		if (indent.childElementCount !== ancestors.length || !ancestors.every((ancestor, index) => (indent.children[index] as HTMLElement).dataset.treeParentId === ancestor.id)) {
+			indent.replaceChildren(...ancestors.map(ancestor => {
+				const guide = h(indent.ownerDocument, 'span');
+				guide.className = 'ash-tree-indent-guide';
+				guide.dataset.treeParentId = ancestor.id;
+				return guide;
+			}));
+		}
+		// Layout can mount or reattach virtual rows without a focus, selection or scroll event.
+		this.applyIndentGuideState(indent.children as HTMLCollectionOf<HTMLElement>);
+	}
+
+	private applyIndentGuideState(guides: Iterable<HTMLElement>): void {
+		for (const guide of guides) {
+			guide.classList.toggle('active', this.activeIndentParentIds.has(guide.dataset.treeParentId!));
+		}
 	}
 
 	private renderRow(node: TNode, row: HTMLDivElement, index: number): HTMLElement {
