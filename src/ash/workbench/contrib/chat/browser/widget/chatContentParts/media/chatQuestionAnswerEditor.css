@@ -3,6 +3,10 @@
 	overflow-wrap: anywhere;
 }
 
+.ash-chat-question-prompt {
+	white-space: pre-line;
+}
+
 .ash-chat-question-answer input,
 .ash-chat-question-answer textarea,
 .ash-chat-question-answer select {

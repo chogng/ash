@@ -20,7 +20,7 @@ export class ChatQuestionAnswerEditor extends Disposable {
 		const prompt = question.header && question.header !== question.question
 			? localize('chat.interaction.questionPrompt', '{0} — {1}', question.header, question.question)
 			: question.question;
-		const label = h(document, 'label', prompt);
+		const label = h(document, 'label', h(document, 'span', { className: 'ash-chat-question-prompt' }, prompt));
 		this.domNode = h(document, 'div', { className: 'ash-chat-question-answer' }, label);
 		const options = question.options;
 		if (!options?.length) {
@@ -64,7 +64,8 @@ export class ChatQuestionAnswerEditor extends Disposable {
 		select.append(custom);
 		const input = h(document, 'input');
 		input.value = saved?.text ?? '';
-		const customLabel = h(document, 'label', localize('chat.interaction.customAnswer', 'Custom answer for {0}', prompt), input);
+		const customPrompt = h(document, 'span', { className: 'ash-chat-question-prompt' }, localize('chat.interaction.customAnswer', 'Custom answer for {0}', prompt));
+		const customLabel = h(document, 'label', customPrompt, input);
 		this.domNode.append(h(document, 'div', customLabel));
 		const customField = customLabel.parentElement!;
 		const isCustom = () => select.selectedIndex === custom.index;

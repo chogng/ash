@@ -57,7 +57,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
   send({ id, method: 'elicitation/create', params: { mode: 'form', message: 'Complete the synthetic form', requestedSchema: { type: 'object', properties: {
    project: { type: 'string', title: 'Project', description: 'Required project', minLength: 1 },
    count: { type: 'integer', title: 'Count', minimum: 1, maximum: 3 },
-   note: { type: 'string', title: 'Note', description: 'Optional note', minLength: 2 },
+   note: { type: 'string', title: 'Note', description: 'Optional note\\r\\nKeep this optional', minLength: 2 },
    color: { type: 'string', title: 'Color', description: 'Optional color', enum: ['red', 'blue'] },
    enabled: { type: 'boolean', title: 'Enabled', description: 'Optional enabled' }
   }, required: ['project'] } } });
@@ -107,7 +107,19 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				throw error;
 			}
 			await expect(project).toHaveJSProperty('required', true);
-			await expect(form.locator('input[name="note"]')).toHaveJSProperty('required', false);
+			const note = form.getByRole('textbox', { name: 'Note — Complete the synthetic form Optional note Keep this optional', exact: true });
+			await expect(note).toHaveJSProperty('required', false);
+			if (!explicit) {
+				const lineTops = await note.evaluate(input => {
+					const prompt = (input as HTMLInputElement).labels?.[0]?.firstChild;
+					if (!prompt) throw new Error('Missing question prompt');
+					const range = input.ownerDocument.createRange();
+					range.selectNodeContents(prompt);
+					return [...new Set(Array.from(range.getClientRects()).filter(rect => rect.width > 0).map(rect => rect.top))];
+				});
+				expect(lineTops).toHaveLength(3);
+				expect(lineTops[1] - lineTops[0]).toBeGreaterThan(lineTops[2] - lineTops[1]);
+			}
 			await expect(form.locator('select[name="color"]')).toHaveValue('');
 			await expect(form.locator('select[name="enabled"]')).toHaveValue('');
 			expect(await form.evaluate(element => (element as HTMLFormElement).checkValidity())).toBe(false);
@@ -140,7 +152,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				await before!.dispose();
 			}
 			if (explicit) {
-				await form.locator('input[name="note"]').fill('A note');
+				await note.fill('A note');
 				await form.locator('select[name="color"]').selectOption('red');
 				await form.locator('select[name="enabled"]').selectOption('false');
 			}
