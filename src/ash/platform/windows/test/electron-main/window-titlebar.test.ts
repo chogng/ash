@@ -75,6 +75,24 @@ test('window controls use the startup background and contrasting symbols before 
 	}
 });
 
+test('Agents window captions match the taller renderer row', () => {
+	const state = defaultWindowState(WorkbenchState.FOLDER);
+	const webPreferences = { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] };
+	const base = { state, webPreferences, isSessionsWindow: true };
+	assert.deepEqual(resolveBrowserWindowOptions({ ...base, platform: 'darwin' }).trafficLightPosition, { x: 12, y: 15 });
+	assert.equal(resolveBrowserWindowOptions({ ...base, platform: 'darwin', titleBarStyle: 'system' }).trafficLightPosition, undefined);
+	for (const platform of ['win32', 'linux'] as const) {
+		const overlay = resolveBrowserWindowOptions({ ...base, platform }).titleBarOverlay;
+		assert.ok(typeof overlay === 'object');
+		assert.equal(overlay.height, 44);
+		const heights: number[] = [];
+		const controls = new WindowControlsOverlay(({ height }) => heights.push(height), overlay.height);
+		controls.setTheme({ backgroundColor: '#ffffff' });
+		controls.setDimmed(true);
+		assert.deepEqual(heights, [44, 44]);
+	}
+});
+
 test('system context menus follow the window frame on Windows and Linux', () => {
 	assert.deepEqual([
 		resolveContextMenuStyle('inherit', 'custom', 'desktop'),

@@ -538,7 +538,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 				const titlebar = page.locator('[data-part="titlebar"]');
 				const titlebarBounds = (await titlebar.boundingBox())!;
 				expect(titlebarBounds.y).toBe(0);
-				expect(titlebarBounds.height).toBe(process.platform === 'darwin' ? 36 : 35);
+				expect(titlebarBounds.height).toBe(44);
 				for (const id of ['sidebar', 'editor']) {
 					const bounds = (await page.locator(`[data-part="${id}"]`).boundingBox())!;
 					expect(bounds.y).toBe(titlebarBounds.height);

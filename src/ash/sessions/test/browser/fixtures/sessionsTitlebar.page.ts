@@ -65,7 +65,8 @@ for (const [id, title, icon] of [
 }
 const titlebar = resources.add(registerTestTitlebarServices(registerTestComponentServices(services, document)).createInstance(TitlebarPart, root, document.body.dataset.os === 'mac' ? 'actions-only' : 'application-menu'));
 titlebar.domNode.classList.add('ash-electron-titlebar');
-titlebar.domNode.style.cssText = 'height: 36px; flex: 0 0 auto;';
+titlebar.domNode.style.height = `${titlebar.minimumHeight}px`;
+titlebar.domNode.style.flex = '0 0 auto';
 root.style.setProperty('--ash-sessions-sidebar-width', '260px');
 const nativeGeometry = document.createElement('style');
 document.head.append(nativeGeometry);

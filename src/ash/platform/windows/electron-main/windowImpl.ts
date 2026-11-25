@@ -25,6 +25,7 @@ import {
 	WINDOW_MINIMUM_SIZE,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
 	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL,
+	SessionsWindowTitlebarHeight,
 	type IWindowClientSize,
 	type TitleBarStyleConfiguration,
 } from '../../window/common/window.js';
@@ -47,6 +48,7 @@ export interface IWindowConstructorOptions {
 	minHeight: number;
 	frame?: boolean;
 	titleBarStyle?: 'hidden' | 'hiddenInset';
+	trafficLightPosition?: Electron.Point;
 	titleBarOverlay?: boolean | {
 		readonly color: string;
 		readonly symbolColor: string;
@@ -207,15 +209,18 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		this.resources = this._register(resources);
 		const scope = `${options.isSessionsWindow ? 'sessions' : 'workbench'}:${this.openedWorkspace.id}`;
 		let backgroundColor: string;
+		let windowOptions: IWindowConstructorOptions;
 		try {
 			backgroundColor = options.backgroundColor ?? themeMainService.getBackgroundColor(scope);
+			windowOptions = resolveBrowserWindowOptions({
+				state: options.state,
+				webPreferences: options.webPreferences,
+				titleBarStyle: options.titleBarStyle,
+				isSessionsWindow: options.isSessionsWindow,
+				backgroundColor,
+			});
 			this.win = createWindow({
-				...resolveBrowserWindowOptions({
-					state: options.state,
-					webPreferences: options.webPreferences,
-					titleBarStyle: options.titleBarStyle,
-					backgroundColor,
-				}),
+				...windowOptions,
 				show: false,
 				title: options.title,
 				icon: options.icon,
@@ -228,14 +233,10 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		const window = this.win;
 		this.clientArea = this._register(new WindowClientArea(window));
 		this._register(this.clientArea.onDidChange(size => this.send(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, { size })));
+		const overlay = windowOptions.titleBarOverlay;
 		this.controls = new WindowControlsOverlay(colors => {
-			if (
-				(options.titleBarStyle ?? 'custom') === 'custom' &&
-				(process.platform === 'win32' || process.platform === 'linux')
-			) {
-				window.setTitleBarOverlay(colors);
-			}
-		});
+			if (typeof overlay === 'object') window.setTitleBarOverlay(colors);
+		}, typeof overlay === 'object' ? overlay.height : undefined);
 		this.controls.setTheme({
 			backgroundColor,
 			symbolColor: Color.fromHex(backgroundColor).isDarker() ? '#ffffff' : '#000000',
@@ -711,6 +712,7 @@ export interface IResolveBrowserWindowOptions {
 	readonly state: IWindowState;
 	readonly webPreferences: IWindowWebPreferences;
 	readonly titleBarStyle?: TitleBarStyleConfiguration;
+	readonly isSessionsWindow?: boolean;
 	readonly platform?: NodeJS.Platform;
 	readonly backgroundColor?: string;
 }
@@ -720,6 +722,7 @@ export function resolveBrowserWindowOptions({
 	state,
 	webPreferences,
 	titleBarStyle = 'custom',
+	isSessionsWindow = false,
 	platform = process.platform,
 	backgroundColor,
 }: IResolveBrowserWindowOptions): IWindowConstructorOptions {
@@ -735,7 +738,7 @@ export function resolveBrowserWindowOptions({
 		webPreferences,
 	};
 
-	return { ...browserWindowOptions, ...resolveWindowTitleBarOptions(titleBarStyle, platform, backgroundColor) };
+	return { ...browserWindowOptions, ...resolveWindowTitleBarOptions(titleBarStyle, platform, backgroundColor, isSessionsWindow) };
 }
 
 /** Applies saved outer DIP bounds after Windows has selected the window's display. */
@@ -759,8 +762,9 @@ export function resolveWindowTitleBarOptions(
 	titleBarStyle: TitleBarStyleConfiguration,
 	platform: NodeJS.Platform = process.platform,
 	backgroundColor?: string,
-): Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> {
-	const options: Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> = {};
+	isSessionsWindow = false,
+): Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay' | 'trafficLightPosition'> {
+	const options: ReturnType<typeof resolveWindowTitleBarOptions> = {};
 	if (titleBarStyle === 'system') return options;
 
 	if (platform === 'win32' || platform === 'linux') {
@@ -771,11 +775,15 @@ export function resolveWindowTitleBarOptions(
 		options.titleBarOverlay = {
 			color: controlBackground,
 			symbolColor: Color.fromHex(controlBackground).isDarker() ? '#ffffff' : '#000000',
-			height: 35,
+			height: isSessionsWindow ? SessionsWindowTitlebarHeight : 35,
 		};
 	} else if (platform === 'darwin') {
 		options.titleBarStyle = 'hiddenInset';
 		options.titleBarOverlay = true;
+		if (isSessionsWindow) {
+			// Keep the native leading inset and center the traffic lights in the taller row.
+			options.trafficLightPosition = { x: 12, y: (SessionsWindowTitlebarHeight - 14) / 2 };
+		}
 	}
 
 	return options;
@@ -786,7 +794,10 @@ export class WindowControlsOverlay {
 	private theme: INativeWindowTheme | undefined;
 	private dimmed = false;
 
-	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void) { }
+	constructor(
+		private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void,
+		private readonly height = 35,
+	) { }
 
 	setTheme(theme: Partial<INativeWindowTheme>): INativeWindowTheme {
 		this.theme = { backgroundColor: '#000000', symbolColor: '#ffffff', backdropColor: '#00000000', ...this.theme, ...theme };
@@ -808,7 +819,7 @@ export class WindowControlsOverlay {
 			color: this.dimmed ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(backgroundColor))) : backgroundColor,
 			// An opaque high-contrast backdrop must not erase the window buttons.
 			symbolColor: this.dimmed && !backdrop.isOpaque() ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(symbolColor))) : symbolColor,
-			height: 35,
+			height: this.height,
 		});
 	}
 }

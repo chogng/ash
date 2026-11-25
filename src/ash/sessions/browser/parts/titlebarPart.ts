@@ -31,6 +31,7 @@ import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js'
 import { titleBarBackground } from '../../../workbench/common/theme.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../common/chatWorkspace.js';
+import { SessionsWindowTitlebarHeight } from '../../../platform/window/common/window.js';
 
 /** The titlebar surface to the right of the sidebar also backs the window controls. */
 export function getSessionsTitlebarBackground(theme: IColorTheme): string | undefined {
@@ -73,8 +74,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	public get minimumSidebarWidth(): number { return this.sidebarMinimumWidth; }
 
 	public override get minimumHeight(): number {
-		// Align this row with the whole-pixel center of macOS inset window buttons.
-		return environment.runtime === 'electron' && environment.os === 'mac' ? Math.max(super.minimumHeight, 36) : super.minimumHeight;
+		return Math.max(super.minimumHeight, SessionsWindowTitlebarHeight);
 	}
 
 	constructor(

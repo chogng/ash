@@ -59,6 +59,10 @@
 	) {
 	/* Docked editor headers supply their own edge padding. */
 	padding-right: 0;
+
+	.ash-sessions-tool-header-slot:last-child > .ash-editor-group-header {
+		padding-inline-end: var(--ash-spacing-size80);
+	}
 }
 
 .ash-sessions-titlebar-side-pane {

@@ -162,6 +162,8 @@ export type MenuStyleConfiguration = 'custom' | 'system' | 'inherit';
 export type TitleBarStyleConfiguration = 'custom' | 'system';
 export const DEFAULT_MENU_STYLE: MenuStyleConfiguration = isMacintosh ? 'system' : 'inherit';
 export const DEFAULT_TITLE_BAR_STYLE: TitleBarStyleConfiguration = 'custom';
+/** Shared height of the Agents Window titlebar and its native caption area. */
+export const SessionsWindowTitlebarHeight = 44;
 export type RestoreWindowsSetting = 'preserve' | 'all' | 'folders' | 'one' | 'none';
 export const RESTORE_WINDOWS_SETTING = 'window.restoreWindows';
 export const STARTUP_WINDOW_SETTING = 'window.startupWindow';

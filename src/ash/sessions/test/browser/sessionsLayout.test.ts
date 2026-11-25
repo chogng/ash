@@ -1190,7 +1190,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 		const titlebarActionNames = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
 		expect(titlebarActionNames).toEqual(expectedTitlebarActions);
-		await expect(titlebar).toHaveCSS('height', '35px');
+		await expect(titlebar).toHaveCSS('height', '44px');
 		await expect(titlebar).toHaveCSS('border-bottom-width', '0px');
 		await expect(titlebar.locator('.ash-workbench-part-content')).toHaveCSS('padding-left', '8px');
 		const titlebarBounds = await titlebar.boundingBox();
@@ -2004,6 +2004,8 @@ suite('sessions browser component', () => {
 		const conversation = page.locator('[data-part="sessions"]');
 		const editor = page.locator('[data-part="editor"]');
 		const controls = editor.getByRole('group', { name: 'PDF controls', exact: true });
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const closePreview = titlebar.locator('.ash-sessions-titlebar-editor-headers [data-action-id="sessions.closeEditorPart"] button');
 		const tab = page.getByRole('tab', { name: 'report.pdf', exact: true });
 		await project.press('ArrowRight');
 		await expect(file).toBeVisible();
@@ -2015,6 +2017,15 @@ suite('sessions browser component', () => {
 			if (fromProjects) await file.click();
 			else await file.press('Enter');
 			await expect(controls).toBeVisible();
+			await expect(closePreview).toHaveCSS('border-radius', '8px');
+			const titlebarBounds = (await titlebar.boundingBox())!;
+			const closeBounds = (await closePreview.boundingBox())!;
+			expect([closeBounds.width, closeBounds.height]).toEqual([28, 28]);
+			expect([
+				closeBounds.y - titlebarBounds.y,
+				titlebarBounds.y + titlebarBounds.height - closeBounds.y - closeBounds.height,
+				titlebarBounds.x + titlebarBounds.width - closeBounds.x - closeBounds.width,
+			]).toEqual([8, 8, 8]);
 			await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
 			await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 			await expect(conversation).toBeVisible();
