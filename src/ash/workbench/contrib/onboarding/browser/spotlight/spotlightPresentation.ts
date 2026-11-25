@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -13,7 +13,8 @@ export class SpotlightPresentation {
 
 	public async show(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
 		if (steps.length === 0) return 'unavailable';
-		const previousFocus = this.container.ownerDocument.activeElement;
+		const document = this.container.ownerDocument;
+		const previousFocus = document.activeElement;
 		try {
 			for (let index = 0; index < steps.length; index += 1) {
 				if (token.isCancellationRequested) return 'cancelled';
@@ -25,7 +26,11 @@ export class SpotlightPresentation {
 			}
 			return 'completed';
 		} finally {
-			if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+			// Removing a focused callout leaves focus on the body. A non-modal guide can also end while another control has focus.
+			const activeElement = document.activeElement;
+			if ((!activeElement || activeElement === document.body) && isHTMLElement(previousFocus) && previousFocus.isConnected) {
+				previousFocus.focus();
+			}
 		}
 	}
 

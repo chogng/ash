@@ -61,4 +61,24 @@ suite('onboarding browser component', () => {
 		await expect(page.locator('#previous')).toBeFocused();
 		await expect.poll(() => page.evaluate(() => window.ashOnboardingIntegration.result)).toBe('completed');
 	});
+
+	test('cancelling a spotlight preserves focus moved outside its callout', async function () {
+		const { page } = browserTests;
+
+		await page.goto('/onboarding.html');
+		await page.locator('#previous').focus();
+		await page.evaluate(() => window.ashOnboardingIntegration.show('second'));
+		const dialog = page.getByRole('dialog', { name: 'Find the target' });
+		await expect(dialog.getByRole('button', { name: 'Done' })).toBeFocused();
+		const outside = page.getByRole('button', { name: 'First target' });
+		await outside.click();
+		await expect(outside).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeVisible();
+
+		await page.evaluate(() => window.ashOnboardingIntegration.cancel());
+		await expect.poll(() => page.evaluate(() => window.ashOnboardingIntegration.result)).toBe('cancelled');
+		await expect(dialog).toHaveCount(0);
+		await expect(outside).toBeFocused();
+	});
 });
