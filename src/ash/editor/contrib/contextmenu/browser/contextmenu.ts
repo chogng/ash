@@ -70,7 +70,11 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 			return;
 		}
 		if (event.target.type === MouseTargetType.OVERLAY_WIDGET || event.target.type === MouseTargetType.CONTENT_WIDGET) return;
-		if (event.target.type === MouseTargetType.CONTENT_TEXT && event.target.detail.injectedText) return;
+		if (event.target.type === MouseTargetType.CONTENT_TEXT && event.target.detail.injectedText) {
+			// Cancel the native menu so macOS doesn't select the word under the hint.
+			event.event.preventDefault();
+			return;
+		}
 		event.event.preventDefault();
 		event.event.stopPropagation();
 		if (event.target.type === MouseTargetType.SCROLLBAR) {

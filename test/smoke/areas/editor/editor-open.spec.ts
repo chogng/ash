@@ -1323,6 +1323,18 @@ test('Code shows App Server LSP inlay hints in Stanza', async ({ target, workben
 	await hint.hover();
 	await expect(hint).toHaveAttribute('title', 'inferred type');
 
+	const contextMenu = await hint.evaluateHandle(element => {
+		const observed: { event?: Event; } = {};
+		element.addEventListener('contextmenu', event => { observed.event = event; }, { once: true });
+		return observed;
+	});
+	try {
+		await hint.click({ button: 'right' });
+		await expect.poll(() => contextMenu.evaluate(({ event }) => event?.defaultPrevented)).toBe(true);
+	} finally {
+		await contextMenu.dispose();
+	}
+
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.waitForEditorFocus();
 	await workbench.page.keyboard.press('ControlOrMeta+Home');
