@@ -81,6 +81,81 @@ const matches: readonly ContentSearchMatch[] = [
 	},
 ];
 
+for (const visible of [true, false]) {
+	test(`Search reruns after a folder location change ${visible ? 'while visible' : 'on the next reveal'}`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		const globals = installDomGlobals(browser);
+		try {
+			using store = new DisposableStore();
+			const primary = URI.file('/workspace');
+			const alternate = URI.file('/alternate');
+			const destination = visible ? alternate : primary;
+			const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: primary }));
+			const original = workspace.getWorkspace();
+			const moveTo = (uri: URI): void => workspace.updateWorkspace({
+				...original,
+				folders: [{ ...original.folders[0]!, uri }],
+				folderLocation: uri === primary
+					? { primary, reason: 'user' }
+					: { primary, reason: 'user', alternate: { label: 'Alternate', providerId: 'test', builtIn: false } },
+			});
+			const firstSearch = new DeferredPromise<IContentSearchComplete>();
+			const paths: string[] = [];
+			let firstOptions: IContentSearchOptions | undefined;
+			const services = createServices(store, browser, {
+				async search(query, options) {
+					assert.equal(query.text, 'needle');
+					const root = workspace.getWorkspace().folders[0]!.uri;
+					paths.push(root.toString());
+					if (paths.length === 1) {
+						firstOptions = options;
+						options?.onProgress?.([{ ...matches[0]!, path: 'previous.ts' }]);
+						return firstSearch.p;
+					}
+					options?.onProgress?.([{ ...matches[0]!, path: 'current.ts' }]);
+					return { resultCount: 1, limitHit: false, error: undefined };
+				},
+			}, undefined, workspace);
+			const { SearchView } = await import('../../browser/searchView.js');
+			using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+			registerView(services, view);
+			const query = input(view.element, 'Search workspace');
+			query.value = 'needle';
+			moveTo(alternate);
+			moveTo(primary);
+			assert.deepEqual(paths, [], 'An unsubmitted query must wait for Enter');
+			query.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+			assert.ok(view.searchResult.files.some(file => file.resource.path.endsWith('/previous.ts')));
+
+			view.setVisible(visible);
+			moveTo(alternate);
+			assert.equal(firstOptions?.signal?.aborted, true);
+			firstOptions?.onProgress?.([{ ...matches[0]!, path: 'stale.ts' }]);
+			await firstSearch.complete({ resultCount: 1, limitHit: false, error: undefined });
+			if (!visible) {
+				moveTo(primary);
+				assert.deepEqual(paths, [primary.toString()]);
+				assert.equal(view.searchResult.count, 0);
+				view.setVisible(true);
+			}
+			assert.deepEqual(paths, [primary.toString(), destination.toString()]);
+			await waitFor(() => view.element.querySelector('.ash-search-status')?.textContent === '1 results');
+			assert.deepEqual(view.searchResult.files.map(file => file.resource.toString()), [URI.joinPath(destination, 'current.ts').toString()]);
+			assert.equal(query.value, 'needle');
+
+			view.setVisible(false);
+			view.setVisible(true);
+			assert.equal(paths.length, 2, 'Revealing the view again must not repeat the search');
+			workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+			assert.equal(view.searchResult.count, 0);
+			assert.equal(paths.length, 2, 'Opening a different workspace must not repeat the search');
+		} finally {
+			browser.window.close();
+			for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+		}
+	});
+}
+
 test('Search sidebar hides line numbers by default and applies explicit changes without searching again', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const globals = installDomGlobals(browser);

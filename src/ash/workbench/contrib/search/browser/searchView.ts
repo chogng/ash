@@ -19,7 +19,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { WorkbenchObjectTree, type ResourceOpenEvent } from '../../../../platform/list/browser/listService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspaceChangeEvent } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { compressTreeElement, type CompressedTreeNode, type CompressibleTreeElement } from '../../../../base/browser/ui/tree/compressedObjectTreeModel.js';
@@ -36,6 +36,7 @@ import { ISearchHistoryService, type ISearchHistoryValues } from '../common/sear
 import { IReplaceService } from './replace.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { URI } from '../../../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { SearchEditorID } from '../../searchEditor/browser/constants.js';
 import { serializeSearchResultForEditor } from '../../searchEditor/browser/searchEditorSerialization.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
@@ -84,6 +85,7 @@ export class SearchView extends ViewPane {
 	private searchRevision = 0;
 	private searchCompletion: Pick<IContentSearchComplete, 'limitHit' | 'error'> | undefined;
 	private searchCancelled = false;
+	private rerunOnShow = false;
 
 	constructor(
 		container: HTMLElement,
@@ -238,7 +240,13 @@ export class SearchView extends ViewPane {
 		this._register(this.tree.onDidChangeFocus(() => this.updateResultActions()));
 		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
 		this._register(this.tree.onDidChangeCollapseState(() => this.updateResultActions()));
-		this._register(this.onDidChangeBodyVisibility(visible => { if (!visible) { this.resultMenu.clear(); } }));
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			if (!visible) {
+				this.resultMenu.clear();
+			} else if (this.rerunOnShow) {
+				this.triggerQueryChange();
+			}
+		}));
 		this._register(this.tree.onContextMenu(event => {
 			if ('key' in event.browserEvent && event.element) {
 				this.showResultContextMenu(event.element, event.anchor);
@@ -271,7 +279,7 @@ export class SearchView extends ViewPane {
 				event.affectsConfiguration(ContentSearchConfiguration.excludePatterns)
 			) { this.applyConfiguration(); this.updateResultActions(); }
 		}));
-		this._register(workspaceContext.onDidChangeWorkspace(() => this.clearSearchResults(false)));
+		this._register(workspaceContext.onDidChangeWorkspace(event => this.handleWorkspaceChange(event)));
 		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
 			if (event.key === 'F4') {
 				event.preventDefault();
@@ -292,6 +300,20 @@ export class SearchView extends ViewPane {
 
 	override focus(): void {
 		this.queryInput.focus();
+	}
+
+	private handleWorkspaceChange({ previous, workspace }: IWorkspaceChangeEvent): void {
+		const shouldRerun = (this.resultQuery !== undefined || this.rerunOnShow) &&
+			workspace.folderLocation !== undefined && workspace.id === previous.id &&
+			!extUriBiasedIgnorePathCase.isEqual(workspace.folders[0]?.uri, previous.folders[0]?.uri) &&
+			this.queryInput.value !== '';
+		this.clearSearchResults(false);
+		if (!shouldRerun) { return; }
+		if (this.isBodyVisible()) {
+			this.triggerQueryChange();
+		} else {
+			this.rerunOnShow = true;
+		}
 	}
 
 	private setDetailsExpanded(expanded: boolean): void {
@@ -323,6 +345,7 @@ export class SearchView extends ViewPane {
 
 	public triggerQueryChange(options?: { preserveFocus?: boolean; }): void {
 		if (this.isDisposed) { return; }
+		this.rerunOnShow = false;
 		const text = this.searchWidget.searchInput.inputBox.value;
 		if (!text) {
 			this.clearSearchResults(false);
@@ -461,6 +484,7 @@ export class SearchView extends ViewPane {
 
 	public clearSearchResults(clearInput = true): void {
 		if (this.isDisposed) { return; }
+		this.rerunOnShow = false;
 		this.slowSearchTimer.clear();
 		const replaceController = this.replaceController;
 		const searchController = this.searchController;
