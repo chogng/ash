@@ -190,9 +190,22 @@ test('Model hover exposes supplied identity, description and context without fab
 	using rendered = renderMarkdown(hover, { ownerDocument: browserEnvironment.window.document });
 	const text = rendered.element.textContent!.replaceAll('\u00a0', ' ');
 	assert.ok(text.includes('A supplied description.'));
-	assert.ok(text.includes('128,000'));
+	assert.match(text, /Max context: 128,000 tokens/);
 	assert.equal(hover.isTrusted, false);
 	assert.doesNotMatch(hover.value, /credits|cost|tool calling/iu);
+});
+
+test('Model hover distinguishes the declared maximum context from the usable input budget', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	source.read = async () => [{ ...catalog[0], maximumContextWindow: 256_000, usableContextWindow: 96_000 }];
+	await view.refresh();
+	const hover = getModelHoverContent(models('newest')[0].model);
+	using rendered = renderMarkdown(hover, { ownerDocument: browserEnvironment.window.document });
+	const text = rendered.element.textContent!.replaceAll('\u00a0', ' ');
+	assert.match(text, /Max context: 256,000 tokens/);
+	assert.match(text, /Usable context: 96,000 input tokens/);
+	assert.doesNotMatch(text, /128,000/);
 });
 
 

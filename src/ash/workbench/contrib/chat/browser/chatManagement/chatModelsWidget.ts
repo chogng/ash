@@ -48,7 +48,6 @@ export function getModelHoverContent(model: ILanguageModel): MarkdownString {
 	content.appendText(model.displayName);
 	content.appendText(`\n${model.model.provider}/${model.model.model}\n${getManageModelsProviderLabel(model)}`);
 	if (model.description) { content.appendText(`\n\n${model.description}`); }
-	if (model.contextWindow) { content.appendText(`\n${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}`); }
 	content.appendText(`\n\n${modelMetadata(model).join('\n')}`);
 	return content;
 }
@@ -59,6 +58,10 @@ function modelMetadata(model: ILanguageModel): string[] {
 		? localize('models.metadata.supported', 'Supported') : value === 'unsupported'
 			? localize('models.metadata.unsupported', 'Not supported') : localize('models.metadata.unknown', 'Unknown');
 	const lines = [localize('models.metadata.capabilities', 'Tools: {0}; Multi-step Agent workflows: {1}', support(model.capabilities?.toolCalling), support(model.capabilities?.agentMode))];
+	const maximumContext = model.maximumContextWindow ?? model.contextWindow;
+	if (maximumContext) {
+		lines.push(localize('models.metadata.maximumContext', 'Max context: {0} tokens', maximumContext.toLocaleString()));
+	}
 	if (model.usableContextWindow != null) {
 		lines.push(localize('models.metadata.availableInput', 'Usable context: {0} input tokens', model.usableContextWindow.toLocaleString()));
 	}

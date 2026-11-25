@@ -322,6 +322,7 @@
     "models.catalog.contextButtonFor": "{0} 的上下文容量",
     "models.catalog.contextButtonDefault": "当前预算下可用 {0} 个输入 token。切换为默认上下文。",
     "models.catalog.contextButtonExtended": "当前预算下可用 {0} 个输入 token。切换为扩展上下文。",
+    "models.metadata.maximumContext": "最大上下文：{0} 个 token",
     "models.metadata.availableInput": "可用上下文：{0} 个输入 token",
     "models.catalog.configureModel": "配置模型",
     "chat.usage.subscriptionDescription": "查看已连接订阅账户报告的用量和重置时间。",

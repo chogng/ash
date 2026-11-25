@@ -129,6 +129,39 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			await test.info().attach(`models-settings-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		});
+
+		test('Models settings reports the same maximum context in hover and Accessible View when the input budget changes', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+			const page = workbench.page;
+			const chinese = locale === 'zh-CN';
+			await workbench.quickaccess.runCommand('workbench.action.chat.manage');
+			const settings = page.getByRole('dialog', { name: chinese ? 'Ash 设置' : 'Ash Settings', exact: true });
+			const search = settings.getByRole('combobox', { name: chinese ? '搜索模型' : 'Search models', exact: true });
+			await search.fill('openai/gpt-6.1-sol');
+			const context = settings.getByRole('button', { name: chinese ? 'Sol 6.1 的上下文容量' : 'Context size for Sol 6.1', exact: true });
+			const modelSwitch = settings.getByRole('switch', { name: chinese ? '在模型选择器中显示Sol 6.1' : 'Show Sol 6.1 in model picker', exact: true });
+			const maxContext = chinese ? /最大上下文：872,000\s+个\s+token/ : /Max\s+context:\s+872,000\s+tokens/;
+			const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+			const initialMode = await context.getAttribute('aria-pressed');
+			const initialBudget = await context.getAttribute('aria-description');
+			const assertDetails = async (): Promise<void> => {
+				await modelSwitch.focus();
+				await modelSwitch.press(`${modifier}+k`);
+				await modelSwitch.press(`${modifier}+i`);
+				await expect(page.getByRole('tooltip')).toContainText(maxContext);
+				await page.keyboard.press('Escape');
+				await search.focus();
+				await search.press('Alt+F2');
+				const accessible = page.getByRole('dialog', { name: chinese ? '无障碍视图' : 'Accessible View', exact: true });
+				await expect(accessible.getByRole('textbox')).toHaveValue(maxContext);
+				await accessible.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click();
+				await expect(search).toBeFocused();
+			};
+			await assertDetails();
+			await context.press('Space');
+			await expect(context).toHaveAttribute('aria-pressed', initialMode === 'true' ? 'false' : 'true');
+			await expect(context).not.toHaveAttribute('aria-description', initialBudget!);
+			await assertDetails();
+		});
 	});
 }
 
