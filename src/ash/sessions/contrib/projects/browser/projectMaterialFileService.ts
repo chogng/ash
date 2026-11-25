@@ -12,7 +12,7 @@ import type { IEditorIdentifier } from '../../../../workbench/common/editor.js';
 import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
 import { IHistoryService } from '../../../../workbench/services/history/common/history.js';
 import { retireDocumentConversation } from '../../chat/browser/documentConversation.js';
-import { IPdfEditorService } from '../../pdf/browser/pdfEditorService.js';
+import { IPdfWorkingCopyService } from '../../pdf/browser/pdfWorkingCopyService.js';
 import { ProjectMaterialFiles } from './projectMaterialFiles.js';
 
 export const IProjectMaterialFileService = createServiceIdentifier<IProjectMaterialFileService>('projectMaterialFileService');
@@ -28,7 +28,7 @@ export class ProjectMaterialFileService implements IProjectMaterialFileService {
 		@IWorkbenchEnvironmentService private readonly environment: IWorkbenchEnvironmentService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IEditorPart private readonly editors: IEditorPart,
-		@IPdfEditorService private readonly pdfEditors: IPdfEditorService,
+		@IPdfWorkingCopyService private readonly pdfWorkingCopies: IPdfWorkingCopyService,
 		@IHistoryService private readonly history: IHistoryService,
 		@IStorageService private readonly storage: IStorageService,
 	) { }
@@ -45,7 +45,7 @@ export class ProjectMaterialFileService implements IProjectMaterialFileService {
 			if (editors.length) await this.editors.closeAllEditors({ skipConfirmation: true, reason: 'reset' }, editors);
 			this.history.remove(resource);
 			if (extname(resource.path).toLowerCase() === '.pdf') {
-				await this.pdfEditors.discardBackup(resource);
+				await this.pdfWorkingCopies.discardBackup(resource);
 				retireDocumentConversation(this.storage, resource, replacement);
 			}
 		});
@@ -54,7 +54,7 @@ export class ProjectMaterialFileService implements IProjectMaterialFileService {
 	public async prepareTransfer(resource: URI): Promise<void> {
 		const editors = this.editorsFor(resource);
 		if (editors.length && !await this.editors.closeAllEditors({ reason: 'reset' }, editors)) throw new CancellationError();
-		if (!editors.length && extname(resource.path).toLowerCase() === '.pdf' && await this.pdfEditors.backups.resolve(resource)) {
+		if (!editors.length && extname(resource.path).toLowerCase() === '.pdf' && await this.pdfWorkingCopies.backups.resolve(resource)) {
 			throw new Error(localize('projects.fileTransferPendingDraft', 'Open the PDF and resolve its unsaved changes before moving or renaming it.'));
 		}
 	}

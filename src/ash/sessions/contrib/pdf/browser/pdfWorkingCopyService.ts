@@ -10,8 +10,8 @@ import type { IWorkingCopyBackupService } from '../../../../workbench/services/w
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { PdfDocumentModel } from './pdfDocumentModel.js';
 
-export const IPdfEditorService = createServiceIdentifier<IPdfEditorService>('pdfEditorService');
-export interface IPdfEditorService {
+export const IPdfWorkingCopyService = createServiceIdentifier<IPdfWorkingCopyService>('pdfWorkingCopyService');
+export interface IPdfWorkingCopyService {
 	readonly backups: IWorkingCopyBackupService;
 	acquire(input: IResourceEditorInput): { readonly model: PdfDocumentModel; readonly ready: Promise<void>; readonly release: IDisposable; };
 	trackBackups(ownerWindow: Window, onError: (error: unknown) => void): WorkingCopyBackupTracker;
@@ -21,7 +21,7 @@ export interface IPdfEditorService {
 interface Entry { readonly model: PdfDocumentModel; readonly ready: Promise<void>; readonly registration: IDisposable; references: number; }
 
 /** One window owns one editable working copy per canonical resource, with pane-scoped leases. */
-export class PdfEditorService extends Disposable implements IPdfEditorService {
+export class PdfWorkingCopyService extends Disposable implements IPdfWorkingCopyService {
 	private readonly documents = new Map<string, Entry>();
 	// Recovery needs the original PDF bytes, which can exceed the App Server backup record limit.
 	public readonly backups = this._register(new IndexedDbWorkingCopyBackupService('sessions-pdf'));
@@ -57,7 +57,7 @@ export class PdfEditorService extends Disposable implements IPdfEditorService {
 		if (await this.backups.resolve(resource)) await this.backups.delete(resource);
 	}
 
-	public acquire(input: IResourceEditorInput): ReturnType<IPdfEditorService['acquire']> {
+	public acquire(input: IResourceEditorInput): ReturnType<IPdfWorkingCopyService['acquire']> {
 		// An immutable snapshot can name the same resource as a writable file.
 		if (input.initialBytes) {
 			const model = this.instantiation.createInstance(PdfDocumentModel, input);

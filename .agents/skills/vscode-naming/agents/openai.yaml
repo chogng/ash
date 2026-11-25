@@ -1,0 +1,4 @@
+interface:
+  display_name: "VS Code Naming"
+  short_description: "Name Ash UI modules from VS Code ownership"
+  default_prompt: "Use $vscode-naming to review these Ash names against the local VS Code source and its ownership boundaries."

@@ -1,23 +1,13 @@
 .ash-sessions-pdf-navigation-pane {
-	box-sizing: border-box;
-	display: flex;
-	flex: 0 0 clamp(120px, 25%, 176px);
-	flex-direction: column;
-	min-inline-size: 0;
-	max-inline-size: 40%;
-	min-block-size: 0;
-	overflow: hidden;
 	background: var(--ash-editor-widgetBackground);
-	border-inline-end: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
-.ash-sessions-pdf-navigation-pane[hidden],
 .ash-sessions-pdf-navigation-pane > [hidden] {
 	display: none;
 }
 
 .ash-sessions-pdf-navigation-pane > .ash-tab-list {
-	--ash-tabList-itemContentInset: var(--ash-spacing-size80);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size40);
 	flex: none;
 	inline-size: auto;
 	margin: var(--ash-spacing-size40);

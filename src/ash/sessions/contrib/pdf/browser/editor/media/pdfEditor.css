@@ -67,8 +67,7 @@
 }
 
 .ash-sessions-pdf-page-number,
-.ash-sessions-pdf-text-editor textarea,
-.ash-sessions-pdf-annotations textarea {
+.ash-sessions-pdf-text-editor textarea {
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	border: var(--ash-strokeThickness) solid
@@ -78,31 +77,12 @@
 	padding: var(--ash-spacing-size40);
 }
 
-.ash-sessions-pdf-content {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr);
-	overflow: hidden;
-	min-block-size: 0;
-	min-inline-size: 0;
-}
-
-.ash-sessions-pdf-preview.has-annotation-panel .ash-sessions-pdf-content {
-	grid-template-columns: minmax(0, 1fr) minmax(120px, 24%);
-}
-
-.ash-sessions-pdf-pages {
-	display: flex;
-	min-block-size: 0;
-	min-inline-size: 0;
-}
-
 .ash-sessions-pdf-page {
 	background: var(--ash-editor-widgetBackground);
 }
 
 .ash-sessions-pdf-reading-area {
 	position: relative;
-	flex: 1;
 	min-block-size: 0;
 	min-inline-size: 0;
 }
@@ -163,22 +143,10 @@
 	padding: var(--ash-spacing-size120);
 }
 
-.ash-sessions-pdf-annotation-panel {
-	min-block-size: 0;
-	min-inline-size: 0;
-	border-inline-start: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-}
-
-.ash-sessions-pdf-annotation-panel > .ash-scrollable-element {
-	block-size: 100%;
-}
-
 .ash-sessions-pdf-page:focus-visible,
 .ash-sessions-pdf-page-number:focus-visible,
 .ash-sessions-pdf-text-editor textarea:focus-visible,
-.ash-sessions-pdf-erase-target:focus-visible,
-.ash-sessions-pdf-annotations textarea:focus-visible {
+.ash-sessions-pdf-erase-target:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
@@ -256,31 +224,6 @@
 :is(.hc-black, .hc-light) .ash-sessions-pdf-selection {
 	opacity: 1;
 	mix-blend-mode: difference;
-}
-
-.ash-sessions-pdf-annotations {
-	padding: var(--ash-spacing-size80);
-}
-
-.ash-sessions-pdf-annotations textarea {
-	box-sizing: border-box;
-	inline-size: 100%;
-	resize: vertical;
-}
-
-.ash-sessions-pdf-annotation {
-	margin-block: var(--ash-spacing-size120);
-}
-
-.ash-sessions-pdf-annotation p {
-	margin-block: var(--ash-spacing-size40);
-	overflow-wrap: anywhere;
-}
-
-.ash-sessions-pdf-preview.narrow.has-annotation-panel
-	.ash-sessions-pdf-content {
-	grid-template-columns: minmax(0, 1fr);
-	grid-template-rows: minmax(0, 1fr) minmax(0, 25%);
 }
 
 .ash-sessions-pdf-stage.drawing,

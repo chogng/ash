@@ -1,0 +1,10 @@
+.ash-sessions-pdf-content {
+	min-block-size: 0;
+	min-inline-size: 0;
+	overflow: hidden;
+}
+
+.ash-sessions-pdf-content > .ash-split-view {
+	block-size: 100%;
+	inline-size: 100%;
+}

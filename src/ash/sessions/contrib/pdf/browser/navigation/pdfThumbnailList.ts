@@ -1,29 +1,36 @@
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
-import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
-import { List } from '../../../../base/browser/ui/list/listWidget.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
-import { defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import type { PdfDocumentModel } from './pdfDocumentModel.js';
-import type { PdfThumbnail } from './pdfPageView.js';
-import './media/pdfMinimap.css';
+import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
+import { List } from '../../../../../base/browser/ui/list/listWidget.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { localize } from '../../../../../nls.js';
+import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import type { PdfDocumentModel } from '../pdfDocumentModel.js';
+import type { PdfThumbnail } from '../pdfPageView.js';
+import './media/pdfThumbnailList.css';
 
 interface ThumbnailRow {
 	readonly page: number;
 	readonly image: HTMLImageElement;
+	readonly label: HTMLElement;
 	readonly request: AbortController;
 	requested: boolean;
 	thumbnail?: PdfThumbnail;
 	url?: string;
 }
 
+const maximumRowHeight = 184;
+
 /** Projects a single PDF's page navigation into a virtual list with bounded raster loading. */
-export class PdfMinimap extends Disposable {
+export class PdfThumbnailList extends Disposable {
 	private readonly domNode: HTMLElement;
 	private readonly list: List<number>;
 	private readonly rows = new Map<HTMLElement, ThumbnailRow>();
+	private readonly imageSizes = new Map<number, { width: number; height: number; }>();
+	private rowMetrics: { width: number; chromeHeight: number; borderWidth: number; borderHeight: number; } | undefined;
 	private readonly load: AnimationFrameScheduler;
+	private readonly reflow: AnimationFrameScheduler;
 	private loading = false;
 	private paused = false;
 	private reportedFailure = false;
@@ -45,7 +52,7 @@ export class PdfMinimap extends Disposable {
 			loopNavigation: false,
 			focusOnMouseMove: false,
 			getId: page => String(page),
-			getHeight: () => 184,
+			getHeight: page => this.rowHeight(page),
 			accessibilityProvider: { getAriaLabel: page => localize('sessions.pdfPreview.thumbnailPage', 'Page {0}', page) },
 			renderItem: (page, _, row) => this.renderRow(page, row),
 			onDidRemoveRow: row => this.releaseRow(row),
@@ -57,6 +64,8 @@ export class PdfMinimap extends Disposable {
 		this.domNode.setAttribute('role', 'tabpanel');
 		this.domNode.setAttribute('aria-labelledby', panel.tabId);
 		this.load = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.loadNext()));
+		this.reflow = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.reflowRows()));
+		this._register(observeElementSize(this.domNode, () => this.reflow.schedule()));
 		this._register(this.list.onDidRenderRows(() => this.load.schedule()));
 		this._register(this.list.onDidAccept(({ item }) => openPage(item)));
 		// In a single-selection navigation list, moving with the keyboard selects the page.
@@ -78,6 +87,8 @@ export class PdfMinimap extends Disposable {
 		this.domNode.hidden = !visible;
 		if (!visible) {
 			this.reportedFailure = false;
+			this.imageSizes.clear();
+			this.rowMetrics = undefined;
 			if (this.list.items.length) { this.list.items = []; }
 		}
 	}
@@ -113,13 +124,35 @@ export class PdfMinimap extends Disposable {
 	private renderRow(page: number, row: HTMLElement): DocumentFragment {
 		const document = row.ownerDocument;
 		const image = h(document, 'img', { properties: { alt: '', draggable: false }, attributes: { 'aria-hidden': 'true' } });
-		this.rows.set(row, { page, image, request: new AbortController(), requested: false });
+		const label = h(document, 'span', { className: 'ash-sessions-pdf-thumbnail-number' }, String(page));
+		this.rows.set(row, { page, image, label, request: new AbortController(), requested: false });
 		const contents = document.createDocumentFragment();
-		contents.append(
-			image,
-			h(document, 'span', { className: 'ash-sessions-pdf-thumbnail-number' }, String(page)),
-		);
+		contents.append(image, label);
 		return contents;
+	}
+
+	private rowHeight(page: number): number {
+		const size = this.imageSizes.get(page);
+		const metrics = this.rowMetrics;
+		if (!size || !metrics) return maximumRowHeight;
+		const width = Math.min(size.width, Math.max(0, metrics.width - metrics.borderWidth));
+		return Math.min(maximumRowHeight, Math.ceil(width * size.height / size.width + metrics.chromeHeight + metrics.borderHeight));
+	}
+
+	private reflowRows(): void {
+		const sample = this.rows.entries().next().value;
+		if (!sample || !this.domNode.clientWidth) return;
+		const [row, { image, label }] = sample;
+		const window = getWindow(row);
+		const rowStyle = window.getComputedStyle(row);
+		const imageStyle = window.getComputedStyle(image);
+		this.rowMetrics = {
+			width: row.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight),
+			chromeHeight: parseFloat(rowStyle.paddingTop) + parseFloat(rowStyle.paddingBottom) + parseFloat(rowStyle.rowGap) + parseFloat(window.getComputedStyle(label).lineHeight),
+			borderWidth: parseFloat(imageStyle.borderLeftWidth) + parseFloat(imageStyle.borderRightWidth),
+			borderHeight: parseFloat(imageStyle.borderTopWidth) + parseFloat(imageStyle.borderBottomWidth),
+		};
+		this.list.updateElementHeights();
 	}
 
 	private releaseRow(row: HTMLElement): void {
@@ -138,11 +171,16 @@ export class PdfMinimap extends Disposable {
 		this.loading = true;
 		const { signal } = entry.request;
 		try {
-			const { bytes, widthPoints, heightPoints } = await this.render(entry.page, signal);
+			const { bytes, width, height, widthPoints, heightPoints } = await this.render(entry.page, signal);
 			if (signal.aborted) { return; }
 			entry.url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
 			entry.image.src = entry.url;
 			entry.thumbnail = { image: entry.image, widthPoints, heightPoints };
+			const previousSize = this.imageSizes.get(entry.page);
+			if (previousSize?.width !== width || previousSize.height !== height) {
+				this.imageSizes.set(entry.page, { width, height });
+				this.reflow.schedule();
+			}
 		} catch (error) {
 			// Rows remain navigable. Report once per sidebar visit so a failed PDF cannot flood the window.
 			if (!signal.aborted && !this.reportedFailure && !isCancellationError(error)) {

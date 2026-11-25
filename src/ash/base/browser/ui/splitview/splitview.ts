@@ -45,6 +45,8 @@ export interface IView {
 	readonly minimumSize: number;
 	readonly maximumSize: number;
 	readonly priority?: LayoutPriority;
+	/** Keep this view's requested pixel size across layout and visibility changes. */
+	readonly preserveSize?: boolean;
 	/** Whether this pane may render interaction surfaces beyond its own bounds. */
 	readonly paneOverflow?: 'hidden' | 'visible';
 	/** Whether dragging through the minimum size may collapse this view. */
@@ -66,6 +68,7 @@ interface ViewItem {
 	readonly container: HTMLDivElement;
 	size: number;
 	weight: number;
+	preferredSize: number | undefined;
 	visible: boolean;
 	cachedVisibleSize: number | undefined;
 	changeListener: IDisposable | undefined;
@@ -77,9 +80,11 @@ interface SashItem {
 }
 
 interface SashDragState {
+	readonly initialItems: readonly SplitViewResizeItem[];
 	snapshot: readonly SplitViewResizeItem[];
 	baseline: number;
 	altKey: boolean | undefined;
+	resized: boolean;
 }
 
 interface SplitViewResizeItem {
@@ -109,6 +114,7 @@ export class SplitView extends Disposable {
 	private readonly geometryAnimations: Animation[] = [];
 	private readonly _onDidChangeViewSizes = this._register(new Emitter<void>());
 	private readonly _onDidSashChange = this._register(new Emitter<number>());
+	private readonly _onDidSashChangePreferredSize = this._register(new Emitter<number>());
 	private readonly _onDidSashReset = this._register(new Emitter<number>());
 	private size = 0;
 	private orthogonalSize = 0;
@@ -125,6 +131,8 @@ export class SplitView extends Disposable {
 		this._onDidChangeViewSizes.event;
 	/** User pointer or keyboard resizing has completed; reports the boundary index. */
 	readonly onDidSashChange: Event<number> = this._onDidSashChange.event;
+	/** Reports each retained view size changed by a completed sash resize. */
+	readonly onDidSashChangePreferredSize: Event<number> = this._onDidSashChangePreferredSize.event;
 	readonly onDidSashReset: Event<number> = this._onDidSashReset.event;
 
 	constructor(
@@ -249,6 +257,7 @@ export class SplitView extends Disposable {
 				view.maximumSize,
 			) : 0,
 			weight: resolved.size,
+			preferredSize: view.preserveSize ? resolved.size : undefined,
 			visible: resolved.visible,
 			cachedVisibleSize: resolved.visible ? undefined : resolved.size,
 			changeListener: undefined,
@@ -264,6 +273,7 @@ export class SplitView extends Disposable {
 				this.ensureSashes();
 				if (!this.didLayout && preferredSize === undefined) return;
 				if (preferredSize === undefined) {
+					this.restorePreferredSizes();
 					this.fitToSize();
 				} else {
 					this.resizeView(this.indexOf(view), preferredSize);
@@ -272,7 +282,10 @@ export class SplitView extends Disposable {
 				this.render();
 			});
 		}
-		if (this.didLayout) this.fitToSize(typeof sizing === 'number' ? new Set([item]) : undefined, typeof sizing === 'number');
+		if (this.didLayout) {
+			this.restorePreferredSizes();
+			this.fitToSize(typeof sizing === 'number' ? new Set([item]) : undefined, typeof sizing === 'number');
+		}
 		this.rebuildSashes();
 		if (this.didLayout) this.render();
 	}
@@ -282,7 +295,10 @@ export class SplitView extends Disposable {
 		this.items.splice(index, 1);
 		item.changeListener?.dispose();
 		item.container.remove();
-		if (this.didLayout) this.fitToSize();
+		if (this.didLayout) {
+			this.restorePreferredSizes();
+			this.fitToSize();
+		}
 		this.rebuildSashes();
 		if (this.didLayout) this.render();
 		this._onDidChangeViewSizes.fire();
@@ -320,6 +336,7 @@ export class SplitView extends Disposable {
 		this.size = size;
 		this.orthogonalSize = orthogonalSize;
 		this.didLayout = true;
+		this.restorePreferredSizes();
 		this.fitToSize();
 		if (this.didLayout) this.render();
 	}
@@ -331,7 +348,7 @@ export class SplitView extends Disposable {
 	/** Size to use when saving or rearranging the split. */
 	getViewLayoutSize(index: number): number {
 		const item = this.item(index);
-		return this.options.preserveSplitWeights ? item.weight : item.cachedVisibleSize ?? item.size;
+		return item.preferredSize ?? (this.options.preserveSplitWeights ? item.weight : item.cachedVisibleSize ?? item.size);
 	}
 
 	private saveSplitWeights(): void {
@@ -353,14 +370,24 @@ export class SplitView extends Disposable {
 	setViewVisible(index: number, visible: boolean): void {
 		const item = this.item(index);
 		if (item.visible === visible) return;
-		this.setItemVisible(item, visible);
-		if (this.didLayout) this.render();
+		const size = visible ? item.preferredSize ?? item.cachedVisibleSize ?? item.view.minimumSize : 0;
+		item.cachedVisibleSize = visible ? undefined : item.size;
+		item.size = visible ? clamp(size, item.view.minimumSize, item.view.maximumSize) : 0;
+		item.visible = visible;
+		item.container.hidden = !visible;
+		item.view.setVisible?.(visible);
+		if (this.didLayout) {
+			this.restorePreferredSizes();
+			this.fitToSize(visible && item.preferredSize === undefined ? new Set([item]) : undefined);
+			this.render();
+		}
 		this._onDidChangeViewSizes.fire();
 	}
 
 	resizeView(index: number, requestedSize: number): void {
 		assertNonNegativeFinite(requestedSize, 'view size');
 		const item = this.item(index);
+		if (item.preferredSize !== undefined) item.preferredSize = Math.min(requestedSize, item.view.maximumSize);
 		if (!item.visible) {
 			item.weight = requestedSize;
 			item.cachedVisibleSize = clamp(
@@ -370,6 +397,7 @@ export class SplitView extends Disposable {
 			);
 			return;
 		}
+		this.restorePreferredSizes();
 		item.size = clamp(
 			requestedSize,
 			item.view.minimumSize,
@@ -398,6 +426,9 @@ export class SplitView extends Disposable {
 			);
 		}
 		this.fitToSize();
+		for (const item of flexible) {
+			if (item.preferredSize !== undefined) item.preferredSize = item.size;
+		}
 		this.saveSplitWeights();
 		this.render();
 		this._onDidChangeViewSizes.fire();
@@ -419,6 +450,8 @@ export class SplitView extends Disposable {
 		const beforeSize = resetLeadingViewSize(total, before, after, leadingSize);
 		before.size = beforeSize;
 		after.size = total - beforeSize;
+		if (before.preferredSize !== undefined) before.preferredSize = before.size;
+		if (after.preferredSize !== undefined) after.preferredSize = after.size;
 		this.saveSplitWeights();
 		this.render();
 		this._onDidChangeViewSizes.fire();
@@ -453,6 +486,12 @@ export class SplitView extends Disposable {
 				visible.length,
 			visible: true,
 		};
+	}
+
+	private restorePreferredSizes(): void {
+		for (const item of this.items) {
+			if (item.visible && item.preferredSize !== undefined) item.size = item.preferredSize;
+		}
 	}
 
 	private fitToSize(protectedItems: ReadonlySet<ViewItem> = new Set(), preferTrailing = false): void {
@@ -599,7 +638,8 @@ export class SplitView extends Disposable {
 		this.sashes.add(sash.onDidStart(() => {
 			this.element.classList.remove('animated');
 			this.cancelGeometryAnimations();
-			dragState = { snapshot: this.getResizeItems(), baseline: 0, altKey: undefined };
+			const initialItems = this.getResizeItems();
+			dragState = { initialItems, snapshot: initialItems, baseline: 0, altKey: undefined, resized: false };
 		}));
 		this.sashes.add(sash.onDidChange((event) => {
 			if (!dragState) return;
@@ -609,13 +649,16 @@ export class SplitView extends Disposable {
 				dragState.baseline = delta;
 			}
 			if (event.input === 'pointer') dragState.altKey = event.altKey;
+			dragState.resized = true;
 			this.resizeAtBoundary(boundaryIndex, dragState.snapshot, {
 				...event,
 				delta: event.input === 'pointer' ? delta - dragState.baseline : delta,
 			});
 		}));
 		this.sashes.add(sash.onDidEnd(() => {
+			const state = dragState;
 			dragState = undefined;
+			if (state?.resized) this.saveSashPreferredSizes(state.initialItems);
 			this.saveSplitWeights();
 			this._onDidSashChange.fire(boundaryIndex);
 		}));
@@ -662,31 +705,14 @@ export class SplitView extends Disposable {
 		this._onDidSashReset.fire(boundaryIndex);
 	}
 
-	private setItemVisible(
-		item: ViewItem,
-		visible: boolean,
-		visibleSize?: number,
-		fit = true,
-	): void {
-		if (visible) {
-			item.visible = true;
-			item.size = clamp(
-				visibleSize ?? item.cachedVisibleSize ?? item.view.minimumSize,
-				item.view.minimumSize,
-				item.view.maximumSize,
-			);
-			item.cachedVisibleSize = undefined;
-			item.container.hidden = false;
-			item.view.setVisible?.(true);
-			if (fit && this.didLayout) this.fitToSize(new Set([item]));
-			return;
+	private saveSashPreferredSizes(initialItems: readonly SplitViewResizeItem[]): void {
+		const changed: number[] = [];
+		for (const [index, item] of this.items.entries()) {
+			if (!item.visible || item.preferredSize === undefined || item.size === initialItems[index]?.size || item.size === item.preferredSize) continue;
+			item.preferredSize = item.size;
+			changed.push(index);
 		}
-		item.cachedVisibleSize = visibleSize ?? item.size;
-		item.size = 0;
-		item.visible = false;
-		item.container.hidden = true;
-		item.view.setVisible?.(false);
-		if (fit && this.didLayout) this.fitToSize();
+		for (const index of changed) this._onDidSashChangePreferredSize.fire(index);
 	}
 
 	private getResizeItems(): SplitViewResizeItem[] {

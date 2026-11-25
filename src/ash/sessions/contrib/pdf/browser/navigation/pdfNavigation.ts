@@ -1,16 +1,16 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
-import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
-import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { createUuid } from '../../../../base/common/uuid.js';
-import { localize } from '../../../../nls.js';
-import type { PdfOutlineEntry, PdfOutlineTarget } from '../../../../platform/pdf/common/pdfService.js';
-import { defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import type { PdfDocumentModel } from './pdfDocumentModel.js';
-import { PdfMinimap } from './pdfMinimap.js';
-import './media/pdfNavigationPane.css';
+import { h } from '../../../../../base/browser/dom.js';
+import { TabList, type TabListItem } from '../../../../../base/browser/ui/tablist/tabList.js';
+import { ObjectTree } from '../../../../../base/browser/ui/tree/objectTree.js';
+import type { ObjectTreeElement } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { localize } from '../../../../../nls.js';
+import type { PdfOutlineEntry, PdfOutlineTarget } from '../../../../../platform/pdf/common/pdfService.js';
+import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import type { PdfDocumentModel } from '../pdfDocumentModel.js';
+import { PdfThumbnailList } from './pdfThumbnailList.js';
+import type { AuxiliaryBarPart } from '../../../../browser/parts/auxiliaryBarPart.js';
+import './media/pdfNavigation.css';
 
 type NavigationTab = 'thumbnails' | 'outline';
 
@@ -27,9 +27,8 @@ function outlineNodes(entries: readonly PdfOutlineEntry[], prefix = ''): readonl
 }
 
 /** Navigation scoped to one PDF editor, with thumbnails independent of outline availability. */
-export class PdfNavigationPane extends Disposable {
-	readonly domNode: HTMLElement;
-	readonly minimap: PdfMinimap;
+export class PdfNavigation extends Disposable {
+	readonly thumbnails: PdfThumbnailList;
 	private readonly tabs: TabList<NavigationTab>;
 	private readonly tabItems: readonly TabListItem<NavigationTab>[];
 	private readonly outlinePanel: HTMLElement;
@@ -42,29 +41,25 @@ export class PdfNavigationPane extends Disposable {
 	private pageCount = 0;
 
 	constructor(
-		document: Document,
+		private readonly pane: AuxiliaryBarPart,
+		label: string,
 		renderThumbnail: PdfDocumentModel['renderThumbnail'],
 		private readonly readOutline: (signal: AbortSignal) => Promise<readonly PdfOutlineEntry[]>,
 		openPage: (page: number) => void,
 		private readonly openDestination: (target: PdfOutlineTarget) => void,
-		close: () => void,
 		private readonly reportError: (message: string) => void,
 	) {
 		super();
-		const id = `pdf-navigation-${createUuid()}`;
-		const label = localize('sessions.pdfPreview.pageNavigation', 'PDF page navigation');
-		this.domNode = h(document, 'aside', {
-			className: 'ash-sessions-pdf-navigation-pane',
-			properties: { id, hidden: true },
-			attributes: { 'aria-label': label },
-		});
-		this.tabs = this._register(new TabList(this.domNode, {
+		const container = pane.contentElement;
+		const { id, ownerDocument: document } = pane.domNode;
+		this.tabs = this._register(new TabList(container, {
 			ariaLabel: label,
 			presentation: 'navigation',
 			onActivate: tab => this.selectTab(tab),
 		}));
+		this.tabs.setSizing({ mode: 'fixed', minWidth: 0, maxWidth: 96 });
 		const thumbnails = { id: `${id}-thumbnails`, tabId: `${id}-thumbnails-tab` };
-		this.minimap = this._register(new PdfMinimap(this.domNode, thumbnails, renderThumbnail, openPage, reportError));
+		this.thumbnails = this._register(new PdfThumbnailList(container, thumbnails, renderThumbnail, openPage, reportError));
 		this.outlinePanel = h(document, 'div', {
 			className: 'ash-sessions-pdf-outline',
 			attributes: { role: 'tabpanel', 'aria-labelledby': `${id}-outline-tab` },
@@ -74,30 +69,22 @@ export class PdfNavigationPane extends Disposable {
 			{ id: 'thumbnails', value: 'thumbnails', label: localize('sessions.pdfPreview.thumbnailsTab', 'Thumbnails'), tabId: thumbnails.tabId, panelId: thumbnails.id },
 			{ id: 'outline', value: 'outline', label: this.outlineLabel, tabId: `${id}-outline-tab`, panelId: this.outlinePanel.id },
 		];
-		this.domNode.append(this.outlinePanel);
+		container.append(this.outlinePanel);
 		this.tabs.setTabs(this.tabItems, this.activeTab);
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) { return; }
-			event.preventDefault();
-			event.stopPropagation();
-			close();
+		this._register(pane.onDidChangeVisibility(visible => {
+			if (visible) { this.tabs.setTabs(this.tabItems, this.activeTab); }
+			this.updatePanels();
+			if (visible) { void this.loadOutline(); }
+			else { this.page = 0; this.pageCount = 0; }
 		}));
 		this._register(toDisposable(() => this.outlineRequest?.abort()));
 	}
 
-	setVisible(visible: boolean): void {
-		this.domNode.hidden = !visible;
-		if (visible) { this.tabs.setTabs(this.tabItems, this.activeTab); }
-		this.updatePanels();
-		if (visible) { void this.loadOutline(); }
-		else { this.page = 0; this.pageCount = 0; }
-	}
-
 	setPage(page: number, pageCount: number): void {
-		if (this.domNode.hidden) { return; }
+		if (!this.pane.visible) { return; }
 		this.page = page;
 		this.pageCount = pageCount;
-		this.minimap.setPage(page, pageCount);
+		this.thumbnails.setPage(page, pageCount);
 	}
 
 	resetOutline(): void {
@@ -107,7 +94,7 @@ export class PdfNavigationPane extends Disposable {
 		this.outlineTree.clear();
 		this.outlinePanel.tabIndex = 0;
 		this.selectTab('thumbnails');
-		if (!this.domNode.hidden) { void this.loadOutline(); }
+		if (this.pane.visible) { void this.loadOutline(); }
 	}
 
 	private selectTab(tab: NavigationTab): void {
@@ -118,10 +105,10 @@ export class PdfNavigationPane extends Disposable {
 	}
 
 	private updatePanels(): void {
-		this.minimap.setVisible(!this.domNode.hidden && this.activeTab === 'thumbnails');
-		this.outlinePanel.hidden = this.domNode.hidden || this.activeTab !== 'outline';
+		this.thumbnails.setVisible(this.pane.visible && this.activeTab === 'thumbnails');
+		this.outlinePanel.hidden = !this.pane.visible || this.activeTab !== 'outline';
 		this.mountOutline();
-		if (this.page > 0) { this.minimap.setPage(this.page, this.pageCount); }
+		if (this.page > 0) { this.thumbnails.setPage(this.page, this.pageCount); }
 	}
 
 	private mountOutline(): void {
@@ -166,7 +153,7 @@ export class PdfNavigationPane extends Disposable {
 			this.mountOutline();
 		} catch (error) {
 			// The page list stays usable. Reopening the sidebar can retry the request.
-			if (!request.signal.aborted && !this.domNode.hidden && !isCancellationError(error)) {
+			if (!request.signal.aborted && this.pane.visible && !isCancellationError(error)) {
 				this.reportError(localize('sessions.pdfPreview.outlineFailed', 'Could not load the PDF outline: {0}', error instanceof Error ? error.message : String(error)));
 			}
 		} finally {

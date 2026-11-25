@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { SplitView } = await import(
+const { LayoutPriority, SplitView } = await import(
 	'../../browser/ui/splitview/splitview.js'
 );
 
@@ -316,6 +316,44 @@ test('SplitView retains and restores hidden view size', () => {
 
 	split.dispose();
 	dom.window.close();
+});
+
+test('SplitView retains independently requested sizes through viewport constraints and visibility changes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const document = dom.window.document;
+		using split = new SplitView(document.body, { proportionalLayout: false, orientation: Orientation.HORIZONTAL });
+		split.addView(Object.assign(new TestView(document, 50, 320), { preserveSize: true }), 160);
+		split.addView(Object.assign(new TestView(document, 150, Infinity), { priority: LayoutPriority.High }), 0);
+		split.addView(Object.assign(new TestView(document, 50, 480), { preserveSize: true }), { type: 'invisible', cachedVisibleSize: 220 });
+		const sizes = () => [0, 1, 2].map(index => split.getViewSize(index));
+		const choices = () => [0, 2].map(index => split.getViewLayoutSize(index));
+		const changes: Array<[number, number]> = [];
+		using listener = split.onDidSashChangePreferredSize(index => changes.push([index, split.getViewLayoutSize(index)]));
+
+		split.layout(600, 100);
+		split.setViewVisible(2, true);
+		assert.deepEqual(sizes(), [160, 220, 220]);
+		dragSash(dom.window, split.getSash(0)!.element, -30);
+		split.getSash(1)!.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		assert.deepEqual(choices(), [130, 210]);
+		assert.deepEqual(changes, [[0, 130], [2, 210]]);
+
+		split.layout(350, 100);
+		assert.deepEqual(sizes(), [60, 150, 140]);
+		dragSash(dom.window, split.getSash(0)!.element, 0);
+		split.setViewVisible(2, false);
+		assert.deepEqual(sizes(), [130, 220, 0]);
+		assert.deepEqual(choices(), [130, 210]);
+		split.setViewVisible(2, true);
+		split.resizeView(0, 160);
+		assert.deepEqual(choices(), [160, 210]);
+		split.layout(600, 100);
+		assert.deepEqual(sizes(), [160, 230, 210]);
+		assert.deepEqual(changes, [[0, 130], [2, 210]]);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('SplitView snaps a leading view closed and restores it from the edge sash', () => {

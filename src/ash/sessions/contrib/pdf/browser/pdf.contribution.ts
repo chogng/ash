@@ -14,18 +14,18 @@ import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.j
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { PdfDocumentModel } from './pdfDocumentModel.js';
-import { IPdfEditorService, PdfEditorService } from './pdfEditorService.js';
-import './pdfPreviewConfiguration.js';
+import { IPdfWorkingCopyService, PdfWorkingCopyService } from './pdfWorkingCopyService.js';
+import './pdfConfiguration.js';
 
-registerSingleton(IPdfEditorService, PdfEditorService, InstantiationType.Delayed);
+registerSingleton(IPdfWorkingCopyService, PdfWorkingCopyService, InstantiationType.Delayed);
 
 const id = 'sessions.editor.pdfPreview';
 
 registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.BlockRestore, accessor => {
 	const editors = accessor.get(IEditorPart);
 	const copies = accessor.get(IWorkingCopyService);
-	const pdfEditors = accessor.get(IPdfEditorService);
-	const { backups } = pdfEditors;
+	const pdfWorkingCopies = accessor.get(IPdfWorkingCopyService);
+	const { backups } = pdfWorkingCopies;
 	const lifecycle = accessor.get(ILifecycleService);
 	const log = accessor.get(ILogService);
 	const notifications = accessor.get(INotificationService);
@@ -38,7 +38,7 @@ registerWorkbenchContribution('sessions.pdfPreview.backup', WorkbenchPhase.Block
 	const reportBackupFailure = (error: unknown): void => reportFailure(error, 'PDF backup failed',
 		localize('sessions.pdfPreview.backupFailed', 'Could not back up PDF changes.'));
 	const isPdf = (copy: IWorkingCopy): copy is PdfDocumentModel => copy instanceof PdfDocumentModel;
-	const tracker = lifetime.add(pdfEditors.trackBackups(editors.domNode.ownerDocument.defaultView!, reportBackupFailure));
+	const tracker = lifetime.add(pdfWorkingCopies.trackBackups(editors.domNode.ownerDocument.defaultView!, reportBackupFailure));
 	lifetime.add(lifecycle.onWillShutdown(event => event.join(async () => {
 		try { await tracker.shutdown(); }
 		catch (error) {
@@ -86,7 +86,7 @@ registerEditorPane({
 	createInput: input => input.readOnly && !input.initialBytes ? { ...input, readOnly: undefined } : input,
 	async create({ instantiationService }) {
 		if (!instantiationService) throw new Error('PDF Preview requires Workbench instantiation services');
-		const { PdfPreviewEditor } = await import('./pdfPreviewEditor.js');
-		return instantiationService.createInstance(PdfPreviewEditor, id);
+		const { PdfEditor } = await import('./editor/pdfEditor.js');
+		return instantiationService.createInstance(PdfEditor, id);
 	},
 });

@@ -294,6 +294,17 @@ export class List<T> extends Disposable {
 	row(index: number): HTMLElement | undefined { return this.view.row(index); }
 	rerender(index: number): void { this.view.rerender(index); }
 	updateElementHeight(index: number, height: number | undefined): void { this.view.updateElementHeight(index, height); }
+	/** Recomputes heights from the list delegate while keeping the first visible item in view. */
+	updateElementHeights(): void {
+		const top = this.view.scrollTop;
+		const index = this.view.indexAt(top);
+		if (index < 0) return;
+		this.view.updateElementHeights({
+			index,
+			offset: Math.min(top - this.view.getElementTop(index), this.view.getElementHeight(index) - 1),
+			left: this.view.scrollElement.scrollLeft,
+		});
+	}
 	getElementTop(index: number): number { return this.view.getElementTop(index); }
 	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
 	indexAt(position: number): number { return this.view.indexAt(position); }

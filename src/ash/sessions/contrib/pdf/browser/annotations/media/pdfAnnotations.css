@@ -1,0 +1,37 @@
+.ash-sessions-pdf-annotation-panel > .ash-scrollable-element {
+	block-size: 100%;
+}
+
+.ash-sessions-pdf-annotations textarea {
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-sessions-pdf-annotations textarea:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-sessions-pdf-annotations {
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-pdf-annotations textarea {
+	box-sizing: border-box;
+	inline-size: 100%;
+	resize: vertical;
+}
+
+.ash-sessions-pdf-annotation {
+	margin-block: var(--ash-spacing-size120);
+}
+
+.ash-sessions-pdf-annotation p {
+	margin-block: var(--ash-spacing-size40);
+	overflow-wrap: anywhere;
+}

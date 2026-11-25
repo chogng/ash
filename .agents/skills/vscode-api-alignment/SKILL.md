@@ -15,6 +15,8 @@ description: Align Ash TypeScript source files, browser CSS responsibilities, AP
 
 ## 路由
 
+需要判断目录、文件或符号的命名时，使用 [VS Code 职责命名](../vscode-naming/SKILL.md) 核对本地源码。
+
 先按目标文件所在层读取对应 reference；一项任务修改多层时读取所有涉及层，不加载无关层：
 
 | Ash 范围 | 必须读取 |

@@ -169,12 +169,20 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(rail).toBeHidden();
 	expect(thumbnailRequests).toEqual([]);
 
-	await toggle.click();
+	const comments = toolbar.getByRole('button', { name: 'PDF 评论', exact: true });
+	await expect(comments).toHaveAttribute('aria-expanded', 'true');
+	const collapsedBackground = await toggle.evaluate(button => getComputedStyle(button).backgroundColor);
+	const expandedBackground = await comments.evaluate(button => getComputedStyle(button).backgroundColor);
+	expect(expandedBackground).not.toBe(collapsedBackground);
+	await toggle.press('Enter');
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(toggle).toHaveCSS('background-color', expandedBackground);
 	await expect(list).toBeVisible();
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
 	await expect(option(1).locator('img')).toHaveJSProperty('naturalWidth', 192);
 	await expect(option(2).locator('img')).toHaveJSProperty('naturalWidth', 256);
+	const portraitHeight = (await option(1).boundingBox())!.height;
+	await expect.poll(async () => (await option(2).boundingBox())!.height).toBeLessThan(portraitHeight - 40);
 	for (const pageNumber of [1, 2]) {
 		const row = option(pageNumber);
 		const image = row.locator('> img');
@@ -234,6 +242,7 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(rail).toBeHidden();
 	await expect(rail.locator('img')).toHaveCount(0);
 	await expect(toggle).toBeFocused();
+	await expect(toggle).toHaveCSS('background-color', collapsedBackground);
 
 	await page.evaluate(() => window.aspdfTest.setScrollMode('paged'));
 	await expect(reader).toHaveCount(0);
@@ -243,6 +252,80 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await list.press('Home');
 	await expect(viewer.getByRole('status')).toHaveText('第 1 页，共 24 页');
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
+
+	const annotations = viewer.getByRole('complementary', { name: 'PDF 批注', exact: true });
+	const readingArea = viewer.locator('.ash-sessions-pdf-reading-area');
+	await page.evaluate(() => window.aspdfTest.resize(560, 480));
+	const [left, center, right] = await Promise.all([rail.boundingBox(), readingArea.boundingBox(), annotations.boundingBox()]);
+	expect(left!.x + left!.width).toBeCloseTo(center!.x, 0);
+	expect(center!.x + center!.width).toBeCloseTo(right!.x, 0);
+	expect(right!.y).toBeCloseTo(center!.y, 0);
+	expect(right!.height).toBeCloseTo(center!.height, 0);
+
+	const note = annotations.getByRole('textbox', { name: '批注内容', exact: true });
+	await note.fill('未保存的批注');
+	await note.press('Escape');
+	await expect(comments).toBeFocused();
+	await expect(annotations).toBeHidden();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(list).toBeVisible();
+	await expect.poll(async () => (await readingArea.boundingBox())!.width).toBeGreaterThan(center!.width);
+	await comments.press('Enter');
+	await expect(note).toHaveValue('未保存的批注');
+});
+
+test('PDF sidebar dividers resize independently and restore their default widths', async ({ page }) => {
+	await page.goto('/pdfPreview.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.aspdfTest);
+	await page.evaluate(async () => {
+		window.aspdfTest.resize(900, 620);
+		await window.aspdfTest.open(true);
+	});
+	const viewer = page.locator('.ash-sessions-pdf-preview');
+	const left = viewer.getByRole('complementary', { name: 'PDF 页面导航', exact: true });
+	const right = viewer.getByRole('complementary', { name: 'PDF 批注', exact: true });
+	const reader = viewer.locator('.ash-sessions-pdf-reading-area');
+	const navigation = viewer.getByRole('button', { name: 'PDF 页面导航', exact: true });
+	const comments = viewer.getByRole('button', { name: 'PDF 评论', exact: true });
+	const leftDivider = viewer.getByRole('separator', { name: '调整 PDF 页面导航宽度', exact: true });
+	const rightDivider = viewer.getByRole('separator', { name: '调整 PDF 正文和批注宽度', exact: true });
+	await navigation.click();
+	await expect(left).toHaveAttribute('data-part', 'auxiliarybar-left');
+	await expect(right).toHaveAttribute('data-part', 'auxiliarybar-right');
+	await expect(left).toHaveCSS('width', '160px');
+	await expect(right).toHaveCSS('width', '220px');
+	await page.evaluate(() => window.aspdfTest.resize(560, 520));
+	const widthBefore = (await reader.boundingBox())!.width;
+	const leftBounds = (await leftDivider.boundingBox())!;
+	const x = leftBounds.x + leftBounds.width / 2;
+	const y = leftBounds.y + leftBounds.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x - 40, y, { steps: 4 });
+	await page.mouse.up();
+	await expect(left).toHaveCSS('width', '120px');
+	await expect(right).toHaveCSS('width', '220px');
+	await rightDivider.press('ArrowRight');
+	await expect(right).toHaveCSS('width', '210px');
+	await expect(left).toHaveCSS('width', '120px');
+	await expect.poll(async () => (await reader.boundingBox())!.width).toBe(widthBefore + 50);
+
+	await page.evaluate(() => window.aspdfTest.resize(310, 520));
+	await expect.poll(async () => (await reader.boundingBox())!.width).toBeGreaterThanOrEqual(155);
+	await page.evaluate(() => window.aspdfTest.resize(560, 520));
+	await expect(left).toHaveCSS('width', '120px');
+	await expect(right).toHaveCSS('width', '210px');
+
+	await comments.click();
+	await expect(right).toBeHidden();
+	await expect(rightDivider).toHaveAttribute('aria-disabled', 'true');
+	await comments.click();
+	await expect(right).toHaveCSS('width', '210px');
+	await page.evaluate(() => window.aspdfTest.resize(900, 620));
+	await leftDivider.dblclick();
+	await rightDivider.dblclick();
+	await expect(left).toHaveCSS('width', '160px');
+	await expect(right).toHaveCSS('width', '220px');
 });
 
 for (const mode of ['continuous', 'paged']) {

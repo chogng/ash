@@ -2,6 +2,11 @@
 	background: var(--ash-auxiliaryBar-background);
 }
 
+.ash-sessions-auxiliarybar-embedded {
+	overflow: hidden;
+	background: var(--ash-editor-background);
+}
+
 .ash-sessions-tool-title {
 	min-width: 0;
 	padding-inline: var(--ash-spacing-size80);

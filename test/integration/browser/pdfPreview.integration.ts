@@ -40,8 +40,8 @@ import { IWorkingCopyService } from '../../../src/ash/workbench/services/working
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
-import { pdfScrollModeSetting } from '../../../src/ash/sessions/contrib/pdf/browser/pdfPreviewConfiguration.js';
-import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
+import { pdfScrollModeSetting } from '../../../src/ash/sessions/contrib/pdf/browser/pdfConfiguration.js';
+import { IPdfWorkingCopyService, PdfWorkingCopyService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfWorkingCopyService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -49,7 +49,9 @@ import type { IResourceEditorInput } from '../../../src/ash/workbench/common/edi
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
-import '../../../src/ash/sessions/contrib/pdf/browser/pdfPreview.contribution.js';
+import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
+import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
+import '../../../src/ash/sessions/contrib/pdf/browser/pdf.contribution.js';
 import '../../../src/ash/sessions/browser/ui/filterTabs.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 
@@ -80,6 +82,8 @@ class Transport implements AppServerTransport {
 const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chineseCatalog.bundles : {});
 const services = new InstantiationService();
+const viewsRegistry = new WorkbenchViewRegistry({ registerActions: false });
+services.registerSingleton(IViewDescriptorService, () => services.createInstance(ViewDescriptorService, { registry: viewsRegistry }));
 const clipboard = new BrowserClipboardService(navigator.clipboard);
 services.registerInstance(IClipboardService, clipboard);
 const dialogs = new DialogService();
@@ -113,7 +117,7 @@ services.registerInstance(IContextViewService, contextViews);
 const menus = services.createInstance(BrowserContextMenuService);
 services.registerInstance(IContextMenuService, menus);
 services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
-services.registerSingleton(IPdfEditorService, () => services.createInstance(PdfEditorService));
+services.registerSingleton(IPdfWorkingCopyService, () => services.createInstance(PdfWorkingCopyService));
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
 const client = new AppServerProtocolClient(new Transport());
 await client.connect();
@@ -176,7 +180,7 @@ const pdfTest = {
 	},
 	retireToolResponse() { toolResponse?.dispose(); toolResponse = undefined; },
 	async hasBackup(resource: string, contents?: string) {
-		const backup = await services.get(IPdfEditorService).backups.resolve(URI.parse(resource));
+		const backup = await services.get(IPdfWorkingCopyService).backups.resolve(URI.parse(resource));
 		return backup !== undefined && (contents === undefined || backup.content.includes(contents));
 	},
 	async restoreWorkspace() { await contributions.workspaceRestored(); },
@@ -206,7 +210,7 @@ const pdfTest = {
 		(services.get(IThemeService) as TestThemeService).setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[scheme]);
 	},
 	highContrast() { (services.get(IThemeService) as TestThemeService).setColorTheme(highContrastDarkColorTheme); },
-	dispose() { contributions.dispose(); pane?.dispose(); split?.dispose(); toolResponse?.dispose(); responseFiles.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
+	dispose() { contributions.dispose(); pane?.dispose(); split?.dispose(); toolResponse?.dispose(); responseFiles.dispose(); client.dispose(); menus.dispose(); contextViews.dispose(); commands.dispose(); configuration.dispose(); theme.dispose(); notifications.dispose(); services.dispose(); viewsRegistry.dispose(); files.dispose(); memory.dispose(); dialogHandler.dispose(); dialogs.dispose(); clipboard.dispose(); },
 };
 window.aspdfTest = pdfTest;
 declare global {

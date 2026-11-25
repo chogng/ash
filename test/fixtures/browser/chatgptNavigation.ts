@@ -21,7 +21,7 @@ import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../.
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
 import { documentConversationStorageKeys } from '../../../src/ash/sessions/contrib/chat/browser/documentConversation.js';
-import { IPdfEditorService, PdfEditorService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfEditorService.js';
+import { IPdfWorkingCopyService, PdfWorkingCopyService } from '../../../src/ash/sessions/contrib/pdf/browser/pdfWorkingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IProjectService, type Project } from '../../../src/ash/platform/projects/common/projectService.js';
@@ -436,14 +436,14 @@ window.ashChatGPTIntegration = {
 	seedProjectPdfDraft: async name => {
 		const resource = savedMaterials.get(name)!.resource;
 		const key = resource.toString();
-		await services.get(IPdfEditorService).backups.store({ resource, kind: 'structuredDocument', contentType: 'application/pdf', content: 'PDF draft fixture', updatedAt: Date.now() });
+		await services.get(IPdfWorkingCopyService).backups.store({ resource, kind: 'structuredDocument', contentType: 'application/pdf', content: 'PDF draft fixture', updatedAt: Date.now() });
 		storage.store(documentConversationStorageKeys.chatgpt, JSON.stringify({ [key]: {
 			scope: 'account-scope', identity: 'project-pdf', reference: { kind: 'conversation', id: 'project-chat' },
 		} }), StorageScope.PROFILE, StorageTarget.MACHINE);
 		return key;
 	},
 	readProjectPdfDraft: async uri => ({
-		backup: !!await services.get(IPdfEditorService).backups.resolve(URI.parse(uri)),
+		backup: !!await services.get(IPdfWorkingCopyService).backups.resolve(URI.parse(uri)),
 		conversation: Object.hasOwn(JSON.parse(storage.get(documentConversationStorageKeys.chatgpt, StorageScope.PROFILE, '{}')), uri),
 	}),
 	switchAccount: () => {
@@ -581,7 +581,7 @@ resources.add(registerChatWorkspaceNavigation(chatGPTViewSource.accessibility));
 let activePane: ProjectsEditorPane | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return activePane; }, activeGroup: { get activePane() { return activePane; } }, groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart);
 services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
-services.registerSingleton(IPdfEditorService, () => services.createInstance(PdfEditorService));
+services.registerSingleton(IPdfWorkingCopyService, () => services.createInstance(PdfWorkingCopyService));
 services.registerInstance(IHistoryService, { getHistory: () => [], remove() { }, goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } });
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const descriptor = descriptors.getViewContainerById(CHAT_WORKSPACE_NAVIGATION_ID)!;

@@ -1,4 +1,6 @@
 import { h } from '../../../base/browser/dom.js';
+import { Emitter } from '../../../base/common/event.js';
+import { createUuid } from '../../../base/common/uuid.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
@@ -12,9 +14,25 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../../workbenc
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 
+type AuxiliaryBarPartOptions = { readonly id: string; } | { readonly side: 'left' | 'right'; };
+
 /** Hosts retained view composites, either in the window or beside a tool's editor groups. */
 export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly fallbackTitle: HTMLElement;
+	private readonly visibilityChange = this._register(new Emitter<boolean>());
+	readonly onDidChangeVisibility = this.visibilityChange.event;
+
+	get contentElement(): HTMLElement { return this.contentDomNode; }
+	get visible(): boolean { return !this.domNode.hidden; }
+
+	override setVisible(visible: boolean): void {
+		const changed = this.visible !== visible;
+		super.setVisible(visible);
+		if (changed) {
+			this.visibilityChange.fire(visible);
+		}
+	}
+
 	override get minimumWidth(): number {
 		return 270;
 	}
@@ -29,7 +47,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 
 	constructor(
 		container: HTMLElement,
-		options: { readonly id: string; },
+		options: AuxiliaryBarPartOptions,
 		@IViewDescriptorService descriptors: IViewDescriptorService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
@@ -38,27 +56,34 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		@IThemeService themeService: IThemeService,
 		@IContextMenuService contextMenus: IContextMenuService,
 	) {
+		const side = 'side' in options ? options.side : undefined;
+		const id = 'id' in options ? options.id : `auxiliarybar-${options.side}`;
 		super(
 			container,
 			{
-				id: options.id,
-				activeCompositeStorageKey: options.id === 'auxiliarybar' ? undefined : `${options.id}.activeViewContainer`,
+				id,
+				activeCompositeStorageKey: id === 'auxiliarybar' ? undefined : `${id}.activeViewContainer`,
 				location: ViewContainerLocation.AuxiliaryBar,
 				ariaLabel: 'Auxiliary sidebar',
 				ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
 				viewsAriaLabel: 'Auxiliary sidebar views',
 				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
 				compositeBarVisible: false,
-				titleActions: {
+				titleActions: side ? undefined : {
 					contextMenuProvider: contextMenus,
 					menuId: MenuId.AuxiliaryBarTitle,
 				},
 				viewDescriptorService: descriptors,
-				contextKeyService: contextKeys,
-				openComposite: (id, preserveFocus) =>
-					instantiationService.invokeFunction(accessor =>
+				contextKeyService: side ? undefined : contextKeys,
+				openComposite: async (id, preserveFocus) => {
+					if (side) {
+						this.showComposite(id, !preserveFocus);
+						return this.getComposite(id) ?? null;
+					}
+					return instantiationService.invokeFunction(accessor =>
 						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+					);
+				},
 			},
 			themeService,
 			storage,
@@ -69,6 +94,12 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		this.fallbackTitle.className = 'ash-sessions-tool-title';
 		this.domNode.classList.add('ash-sessions-auxiliarybar');
 		this.contentDomNode.classList.add('ash-auxiliarybar-content');
+		if (side) {
+			this.domNode.classList.add('ash-sessions-auxiliarybar-embedded');
+			this.domNode.dataset.side = side;
+			this.domNode.id = `${id}-${createUuid()}`;
+			this.domNode.setAttribute('role', 'complementary');
+		}
 	}
 
 	protected override updateTitleArea(): void {
