@@ -3,6 +3,8 @@ import { expect, test } from '../../../automation/test.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
+test.use({ electronUserSettings: { 'window.menuStyle': 'custom' } });
+
 test('Real reasoning streams keep disclosure and focus through canonical completion', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 	test.setTimeout(180_000);
 	const provider = 'custom-thinking-fixture';
@@ -103,6 +105,26 @@ test('Real reasoning streams keep disclosure and focus through canonical complet
 		expect((await read()).turns.at(-1)!.items.filter(item => item.type === 'reasoning').map(item => item.text)).toEqual([fullText]);
 		await testInfo.attach('reasoning-complete.png', { body: await page.screenshot(), contentType: 'image/png' });
 		await retained?.dispose();
+
+		const selectText = (element: Element): void => {
+			element.ownerDocument.getSelection()!.selectAllChildren(element);
+		};
+		const askInSideChat = page.getByRole('menuitem', { name: 'Ask in Side Chat', exact: true });
+		await summary.evaluate(selectText);
+		await page.keyboard.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+		await expect(askInSideChat).toHaveCount(0);
+		await page.keyboard.press('Escape');
+
+		await summary.focus();
+		await details.locator('strong').evaluate(selectText);
+		await expect(summary).toBeFocused();
+		await page.keyboard.press('Shift+F10');
+		await expect(askInSideChat).toBeVisible();
+		await askInSideChat.press('Enter');
+		const question = page.getByPlaceholder('Enter a question about the selected text');
+		await expect(question).toBeFocused();
+		await question.press('Escape');
 	} finally {
 		stream?.destroy();
 		await connection?.close();

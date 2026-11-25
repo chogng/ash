@@ -846,14 +846,17 @@ suite('Chat message copy ownership', () => {
 		});
 		document.body.append(widget.element);
 		resources.add(toDisposable(() => widget.element.remove()));
-		widget.render([{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false, sideChatTurnId: 'original-turn' }]);
+		widget.render([
+			{ id: 'reasoning', type: 'reasoning', text: '**Reasoning text** to discuss.', transient: false, sideChatTurnId: 'original-turn' },
+			{ id: 'reply', type: 'agentMessage', text: 'Before **selected words** after.', transient: false, sideChatTurnId: 'original-turn' },
+		]);
 		const row = widget.getRowElement('reply')!;
 		const selection = document.getSelection()!;
 		resources.add(toDisposable(() => selection.removeAllRanges()));
 		const copy = (target: HTMLElement) => target.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
 			key: 'c', metaKey: isMacintosh, ctrlKey: !isMacintosh, bubbles: true, cancelable: true,
 		}));
-		const openMenu = () => row.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+		const openMenu = (target: HTMLElement = row) => target.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
 			key: 'F10', shiftKey: true, bubbles: true, cancelable: true,
 		}));
 		assert.equal(openMenu(), true);
@@ -886,6 +889,29 @@ suite('Chat message copy ownership', () => {
 		assert.deepEqual(draft, ['selected words']);
 		widget.setVisible(false);
 		assert.equal(openedMenu.cancellationToken?.isCancellationRequested, true);
+		widget.setVisible(true);
+
+		const details = widget.getRowElement('reasoning')!.querySelector('details')!;
+		details.open = true;
+		details.dispatchEvent(new browserEnvironment.window.Event('toggle'));
+		const summary = details.querySelector('summary')!;
+		summary.focus();
+		assert.equal(document.activeElement, summary);
+		selection.selectAllChildren(details.querySelector('strong')!);
+		assert.equal(openMenu(summary), false);
+		const reasoningMenu = menu as IContextMenuDelegate | undefined;
+		assert.ok(reasoningMenu);
+		const askAboutReasoning = reasoningMenu.getActions().find(action => action.label === 'Ask in Side Chat');
+		assert.ok(askAboutReasoning);
+		await askAboutReasoning.run(reasoningMenu.getActionsContext?.());
+		assert.deepEqual(sideQuestions.at(-1), {
+			target: resource, query: 'How does this work?', selection: { text: 'Reasoning text' }, options: { sourceTurnId: 'original-turn' },
+		});
+
+		selection.selectAllChildren(summary);
+		assert.equal(openMenu(summary), false);
+		const titleMenu = menu as IContextMenuDelegate | undefined;
+		assert.deepEqual(titleMenu?.getActions().map(action => action.label), ['Copy', 'Add to Chat']);
 	});
 
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {

@@ -593,7 +593,17 @@ export class ChatListWidget extends DomWidget {
 		if (!selection || !text?.trim()) return;
 		const mouseEvent = 'clientX' in event ? event : undefined;
 		const ranges = Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index));
-		const overSelection = ranges.some(range => mouseEvent
+		const rowId = this.rowId(ranges[0].startContainer);
+		const row = rowId ? this.renderedItems.get(rowId) : undefined;
+		const turnId = row?.item.sideChatTurnId;
+		const markdown = row?.markdownPart?.domNode;
+		const reasoning = row?.thinkingPart?.domNode;
+		const hasSideChatSelection = !!turnId && !!markdown && (!reasoning || reasoning.open)
+			&& ranges.every(range => markdown.contains(range.commonAncestorContainer))
+			&& !Array.from(markdown.querySelectorAll(clipboardInputSelector)).some(input => ranges.some(range => range.intersectsNode(input)));
+		// Opening a reasoning disclosure leaves focus on its summary, outside the selected Markdown.
+		const fromReasoningSummary = !mouseEvent && hasSideChatSelection && target === reasoning?.querySelector('summary');
+		const overSelection = fromReasoningSummary || ranges.some(range => mouseEvent
 			? Array.from(range.getClientRects()).some(rect => mouseEvent.clientX >= rect.left && mouseEvent.clientX <= rect.right
 				&& mouseEvent.clientY >= rect.top && mouseEvent.clientY <= rect.bottom)
 			: range.intersectsNode(target));
@@ -601,12 +611,7 @@ export class ChatListWidget extends DomWidget {
 
 		// The menu can take focus and the transcript can stream while it is open.
 		const { html } = this.getSelectionHtml(selection);
-		const start = ranges[0]?.startContainer;
-		const startRow = (isElement(start) ? start : start?.parentElement)?.closest<HTMLElement>('[data-item-id]');
-		const itemId = startRow?.dataset.itemId;
-		const turnId = itemId && this.renderedItems.get(itemId)?.item.sideChatTurnId;
-		const sideChat = turnId && startRow && ranges.every(range => startRow.contains(range.startContainer) && startRow.contains(range.endContainer))
-			? this.options.prepareSideChat?.(turnId) : undefined;
+		const sideChat = hasSideChatSelection ? this.options.prepareSideChat?.(turnId) : undefined;
 		const actionContext = new ChatContextMenuActionContext(text, html, this.options.prepareAddSelectionToChat?.(text), sideChat);
 		using menuContext = this.contextKeys.createScoped(this.transcript.ownerDocument.createElement('div'));
 		ChatContextKeys.contextMenuCanAddSelectionToChat.bindTo(menuContext).set(!!actionContext.addToChat);
