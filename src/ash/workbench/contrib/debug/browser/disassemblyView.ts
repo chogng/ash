@@ -306,7 +306,12 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		return `${current}${instruction.address} ${instruction.instructionBytes ?? ''} ${instruction.instruction}${instruction.symbol ? ` — ${instruction.symbol}` : ''}`;
 	}
 	private breakpointFor(instruction: IDisassembledInstruction): IInstructionBreakpoint | undefined {
-		return this.debug.instructionBreakpoints.find(point => point.sessionId === this.debug.session?.id && sameAddress(instruction.address, point.instructionReference, point.offset));
+		const sessionId = this.debug.session?.id;
+		return this.debug.instructionBreakpoints.find(point => point.sessionId === sessionId && (
+			point.resolvedAddress === undefined
+				? sameAddress(instruction.address, point.instructionReference, point.offset)
+				: sameAddress(instruction.address, point.resolvedAddress)
+		));
 	}
 	private toggleInstructionBreakpoint(instruction: IDisassembledInstruction): void {
 		if (!this.canInspect() || this.loading || !this.debug.session!.capabilities.supportsInstructionBreakpoints || instruction.presentationHint === 'invalid') { return; }

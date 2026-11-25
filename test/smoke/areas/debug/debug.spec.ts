@@ -36,6 +36,7 @@ let sequence = 1;
 let line = 2;
 let answer = '42';
 let child = '1';
+let opaqueInstructionBreakpoint = false;
 function send(message) {
   const body = Buffer.from(JSON.stringify({ seq: sequence++, ...message }));
   process.stdout.write('Content-Length: ' + body.length + '\r\n\r\n');
@@ -60,7 +61,11 @@ function accept(request) {
   ] : [{ name: 'child', value: child, variablesReference: 0 }] };
   if (request.command === 'evaluate') body = { result: answer, variablesReference: 0 };
   if (request.command === 'setBreakpoints') body = { breakpoints: args.breakpoints.map(point => ({ line: point.line, verified: true })) };
-  if (['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(request.command)) body = { breakpoints: args.breakpoints.map(() => ({ verified: true })) };
+  if (['setFunctionBreakpoints', 'setDataBreakpoints'].includes(request.command)) body = { breakpoints: args.breakpoints.map(() => ({ verified: true })) };
+  if (request.command === 'setInstructionBreakpoints') {
+    opaqueInstructionBreakpoint = args.breakpoints.some(point => point.instructionReference === 'opaque:entry');
+    body = { breakpoints: args.breakpoints.map(point => point.instructionReference === 'opaque:entry' ? { id: 91, verified: true, instructionReference: '0x1008', offset: -4 } : { verified: true }) };
+  }
   if (request.command === 'dataBreakpointInfo') body = { dataId: 'memory:' + args.name, description: args.name, accessTypes: ['read', 'write', 'readWrite'], canPersist: false };
   if (request.command === 'setVariable') {
     success = /^\d+$/.test(args.value);
@@ -82,6 +87,7 @@ function accept(request) {
     line++;
     event('continued', { threadId: 7, allThreadsContinued: true });
     event('stopped', { reason: 'step', threadId: 7, allThreadsStopped: true });
+    if (opaqueInstructionBreakpoint) event('breakpoint', { reason: 'changed', breakpoint: { id: 91, verified: true, instructionReference: '0x100c' } });
   }
   if (request.command === 'disconnect') {
     event('terminated', {});
@@ -535,6 +541,51 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 		{ variablesReference: 20, name: 'child', value: '2' },
 	]);
 	expect(requests.some(request => request.command === 'disconnect')).toBe(true);
+});
+
+test('Disassembly shows and removes a breakpoint bound to a different address by DAP', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	await expect(sidebar.getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await sidebar.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:2');
+	await pane.getByRole('button', { name: 'Call Stack', exact: true }).hover();
+	await pane.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
+	await pane.getByRole('textbox', { name: 'Instruction address', exact: true }).fill('opaque:entry');
+	const offset = pane.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
+	await offset.fill('8');
+	await offset.press('Enter');
+	const lastInstructionBreakpoints = async () => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n')
+		.map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints: unknown[]; }; })
+		.filter(request => request.command === 'setInstructionBreakpoints').at(-1)?.arguments?.breakpoints;
+	await expect.poll(lastInstructionBreakpoints).toEqual([{ instructionReference: 'opaque:entry', offset: 8 }]);
+
+	await pane.getByRole('button', { name: 'Call Stack', exact: true }).hover();
+	await pane.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	const disassembly = page.locator('.ash-disassembly');
+	const initialMarker = disassembly.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1004', exact: true });
+	await expect(initialMarker).toHaveAttribute('aria-pressed', 'true');
+	await expect(disassembly.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1008', exact: true })).toHaveAttribute('aria-pressed', 'false');
+	await disassembly.getByRole('button', { name: 'Step over instruction', exact: true }).click();
+	const resolved = disassembly.getByRole('button', { name: 'Toggle instruction breakpoint at 0x100c', exact: true });
+	await expect(resolved).toHaveAttribute('aria-pressed', 'true');
+	await expect(initialMarker).toHaveAttribute('aria-pressed', 'false');
+
+	const breakpoint = pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'opaque:entry' });
+	await breakpoint.getByRole('checkbox').uncheck();
+	await expect.poll(lastInstructionBreakpoints).toEqual([]);
+	await expect(resolved).toHaveClass(/\bdisabled-breakpoint\b/u);
+	await resolved.click();
+	await expect(resolved).toHaveAttribute('aria-pressed', 'false');
+	await expect(breakpoint).toHaveCount(0);
+	await expect.poll(lastInstructionBreakpoints).toEqual([]);
+
+	// Adapters can also verify a numeric request without returning a resolved address.
+	await resolved.click();
+	await expect.poll(lastInstructionBreakpoints).toEqual([{ instructionReference: '0x100c', offset: 0 }]);
+	await expect(resolved).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('configured debug inputs cancel before adapter creation and resolve nested selections through to DAP', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {

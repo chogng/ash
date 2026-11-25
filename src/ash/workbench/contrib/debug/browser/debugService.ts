@@ -18,7 +18,7 @@ import { CancellationError, isCancellationError } from '../../../../base/common/
 import { Debugger } from '../common/debugger.js';
 import { localize } from '../../../../nls.js';
 import { ITextFileService } from '../../../services/textfile/common/textfiles.js';
-import type { IBreakpointUpdateData } from '../common/debug.js';
+import type { IBreakpointUpdateData, IDebugBreakpointBindingUpdate } from '../common/debug.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type IDebugThread, type IViewModel, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -919,7 +919,14 @@ export class DebugService extends Disposable implements IDebugService {
 			: point));
 		this.currentFunctionBreakpoints = change(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = change(this.currentDataBreakpoints);
-		this.currentInstructionBreakpoints = change(this.currentInstructionBreakpoints);
+		this.currentInstructionBreakpoints = Object.freeze(this.currentInstructionBreakpoints.map(point => {
+			if (point.id !== id) { return point; }
+			const next = { ...point, ...patch, verified: false, message: undefined };
+			if (next.instructionReference !== point.instructionReference || next.offset !== point.offset) {
+				next.resolvedAddress = undefined;
+			}
+			return Object.freeze(next);
+		}));
 		this.breakpointStateChanged();
 	}
 
@@ -1029,7 +1036,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.persistState();
 	}
 
-	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]): void {
+	private acceptBreakpointUpdates(updates: readonly IDebugBreakpointBindingUpdate[]): void {
 		if (updates.length === 0) return;
 		const byId = new Map(updates.map(update => [update.id, update]));
 		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(breakpoint => {
@@ -1042,7 +1049,12 @@ export class DebugService extends Disposable implements IDebugService {
 		}));
 		this.currentFunctionBreakpoints = accept(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = accept(this.currentDataBreakpoints);
-		this.currentInstructionBreakpoints = accept(this.currentInstructionBreakpoints);
+		this.currentInstructionBreakpoints = Object.freeze(this.currentInstructionBreakpoints.map(point => {
+			const update = byId.get(point.id);
+			if (!update) { return point; }
+			// Disabling a breakpoint removes the adapter binding, while the marker still needs its last address.
+			return Object.freeze({ ...point, verified: update.verified, message: update.message, resolvedAddress: update.resolvedAddress ?? point.resolvedAddress });
+		}));
 		this.breakpointsEmitter.fire(this.allBreakpoints());
 	}
 

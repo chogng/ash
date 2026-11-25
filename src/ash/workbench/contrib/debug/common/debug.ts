@@ -157,11 +157,20 @@ export interface IInstructionBreakpoint extends IBaseBreakpoint {
 	readonly kind: 'instruction';
 	readonly instructionReference: string;
 	readonly offset?: number;
+	/** Last numeric address reported by the adapter for this request. */
+	readonly resolvedAddress?: string;
 	/** Instruction addresses are valid only for the current debuggee. */
 	readonly sessionId: string;
 }
 
 export type DebugBreakpoint = IDebugBreakpoint | IFunctionBreakpoint | IDataBreakpoint | IInstructionBreakpoint;
+
+export interface IDebugBreakpointBindingUpdate {
+	readonly id: string;
+	readonly verified: boolean;
+	readonly message?: string;
+	readonly resolvedAddress?: string;
+}
 
 export interface IFunctionBreakpointOptions {
 	readonly name: string;

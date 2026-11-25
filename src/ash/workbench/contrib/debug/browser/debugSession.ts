@@ -1,5 +1,5 @@
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
-import type { IDebugMemoryRead, IDebugExceptionInfo, IDebugExceptionDetails, IDebugProgressStart, IDebugProgressUpdate } from '../common/debug.js';
+import type { IDebugBreakpointBindingUpdate, IDebugMemoryRead, IDebugExceptionInfo, IDebugExceptionDetails, IDebugProgressStart, IDebugProgressUpdate } from '../common/debug.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { Position } from '../../../../editor/common/core/position.js';
 import { RawDebugSession } from './rawDebugSession.js';
@@ -13,7 +13,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
-import { type DebugExceptionsSnapshot, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugBreakpointUnsupported, type DebugConsoleSnapshot, type DebugSessionSnapshot, type IDebugAdapterProcessService } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import { type DebugBreakpointBinding, type DebugExceptionsSnapshot, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugBreakpointUnsupported, type DebugConsoleSnapshot, type DebugSessionSnapshot, type IDebugAdapterProcessService } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 
 interface DapResponse { readonly seq: number; readonly type: 'response'; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
@@ -43,7 +43,7 @@ export interface DebugSessionStartOptions {
 	readonly workspace?: URI;
 	readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
 	readonly startDebugging?: (argumentsValue: unknown) => Promise<void>;
-	readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]) => void;
+	readonly updateBreakpoints?: (updates: readonly IDebugBreakpointBindingUpdate[]) => void;
 	/** The catalog owner inserts without notifying; verification publishes after the protocol binding exists. */
 	readonly addBreakpoint?: (source: IDebugSource, line: number, column?: number, id?: string) => IDebugBreakpoint | undefined;
 	readonly removeBreakpoint?: (id: string) => void;
@@ -555,7 +555,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (snapshot.version < this.breakpointVersion || this.breakpointSnapshot && snapshot.revision <= this.breakpointSnapshot.revision) return;
 		const previous = this.breakpointSnapshot;
 		this.breakpointSnapshot = snapshot;
-		const updates = [];
+		const updates: IDebugBreakpointBindingUpdate[] = [];
 		for (const binding of snapshot.bindings) {
 			if (this.deferredBreakpointIds?.().has(binding.intent.id)) continue;
 			if (!binding.applicable || binding.pending) continue;
@@ -567,7 +567,16 @@ export class DebugSession extends Disposable implements IDebugSession {
 				this.addBreakpoint?.(source(protocol.source ?? location.source, 'breakpoint source', this.workspace)!, location.line, location.column, binding.intent.id);
 			}
 
-			if (!before || before.pending || before.verified !== binding.verified || before.unsupported !== binding.unsupported || before.message !== binding.message || before.created !== binding.created) updates.push({ id: binding.intent.id, verified: binding.verified, ...(binding.unsupported ? { message: unsupportedBreakpoint(binding.unsupported) } : binding.message === null ? {} : { message: binding.message }) });
+			const resolvedAddress = getBoundInstructionAddress(binding);
+			if (!before || before.pending || before.verified !== binding.verified || before.unsupported !== binding.unsupported
+				|| before.message !== binding.message || before.created !== binding.created || resolvedAddress !== getBoundInstructionAddress(before)) {
+				const message = binding.unsupported ? unsupportedBreakpoint(binding.unsupported) : binding.message ?? undefined;
+				updates.push({
+					id: binding.intent.id, verified: binding.verified,
+					...(message === undefined ? {} : { message }),
+					...(resolvedAddress === undefined ? {} : { resolvedAddress }),
+				});
+			}
 		}
 		if (updates.length) this.updateBreakpoints?.(updates);
 	}
@@ -974,6 +983,20 @@ function sourceResource(workspace: URI | undefined, adapterPath: string): URI | 
 }
 
 
+
+function getBoundInstructionAddress(binding: DebugBreakpointBinding): string | undefined {
+	const protocol = binding.protocol;
+	if (binding.intent.location.kind !== 'instruction' || typeof protocol !== 'object' || protocol === null || !('instructionReference' in protocol)) {
+		return undefined;
+	}
+	const reference = protocol.instructionReference;
+	const offset = 'offset' in protocol ? protocol.offset : 0;
+	if (typeof reference !== 'string' || reference.length > 4096 || !/^(?:0x[0-9a-f]+|\d+)$/iu.test(reference)
+		|| typeof offset !== 'number' || !Number.isSafeInteger(offset)) {
+		return undefined;
+	}
+	return (BigInt(reference) + BigInt(offset)).toString();
+}
 
 function unsupportedBreakpoint(reason: DebugBreakpointUnsupported): string {
 	switch (reason) {
