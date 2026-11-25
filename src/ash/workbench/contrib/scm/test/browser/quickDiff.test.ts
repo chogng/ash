@@ -100,7 +100,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 
 	assert.deepEqual(decorations.map(decoration => [decoration.options.linesDecorationsClassName, decoration.range.getStartPosition().lineNumber]), [
 		['ash-quick-diff-gutter ash-quick-diff-modified', 2],
-		['ash-quick-diff-gutter ash-quick-diff-deleted', 3],
+		['ash-quick-diff-gutter ash-quick-diff-deleted ash-quick-diff-deleted-before-line', 3],
 	]);
 	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
 	assert.equal(editor.getLineDecorations(2)?.length, 1);
@@ -143,7 +143,7 @@ test('Quick Diff places one openable marker above the first surviving line of a 
 	using decorator = new QuickDiffDecorator(editor, reference, configuration);
 	const [marker, ...rest] = model.getAllDecorations();
 	assert.equal(rest.length, 0);
-	assert.match(marker!.options.linesDecorationsClassName!, /ash-quick-diff-before-first-line/u);
+	assert.match(marker!.options.linesDecorationsClassName!, /ash-quick-diff-deleted-before-line/u);
 	assert.deepEqual([marker!.range.startLineNumber, marker!.range.startColumn, marker!.range.endColumn], [1, 1, 1]);
 	assert.equal(reference.object.findChangeAtLine(0)?.originalLineCount, 4_000);
 	assert.equal(rowReads, 0);

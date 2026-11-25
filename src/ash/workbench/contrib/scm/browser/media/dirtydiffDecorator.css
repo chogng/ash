@@ -25,16 +25,16 @@
 .stanza-editor-line-decoration.ash-quick-diff-deleted::before {
 	width: 0;
 	height: 0;
-	top: 50%;
+	top: auto;
+	bottom: 0;
 	border-top: 4px solid transparent;
 	border-bottom: 4px solid transparent;
 	border-left: 5px solid var(--ash-diffEditor-removedLineMarker);
-	transform: translateY(-50%);
 }
 
-.stanza-editor-line-decoration.ash-quick-diff-before-first-line::before {
+.stanza-editor-line-decoration.ash-quick-diff-deleted-before-line::before {
 	top: 0;
-	transform: none;
+	bottom: auto;
 }
 
 @media (forced-colors: active) {

@@ -459,6 +459,42 @@ test.describe('SCM editor groups', () => {
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 2;\n');
 	});
 
+	test('Git Quick Diff marks each deletion boundary once when the editor wraps', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }, testInfo) => {
+		const cwd = testWorkspace.directory;
+		const file = join(cwd, 'deletions.md');
+		const first = 'Words on the first surviving line. '.repeat(8).trimEnd();
+		const second = 'Words after the middle deletion. '.repeat(8).trimEnd();
+		const last = 'Words before the final deletion. '.repeat(8).trimEnd();
+		await writeFile(file, ['Removed at start.', first, 'Removed in middle.', second, last, 'Removed at end.'].join('\n'));
+		await run('git', ['add', '--', 'deletions.md'], { cwd });
+		await run('git', ['commit', '-m', 'Record Quick Diff deletion baseline'], { cwd });
+		await writeFile(file, [first, second, last].join('\n'));
+
+		await workbench.openExplorer();
+		const page = workbench.page;
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: /^deletions\.md(?:,|$)/u }).dblclick();
+		const editor = workbench.editors.groupAt(0).editor;
+		await expect(editor.element).toHaveClass(/word-wrapped/u);
+		const rows = (lineIndex: number) => editor.element.locator(`.view-line[data-logical-line-index="${lineIndex}"]`);
+		for (const lineIndex of [0, 1, 2]) {
+			await expect.poll(() => rows(lineIndex).count()).toBeGreaterThan(1);
+		}
+
+		const markers = editor.element.locator('.ash-quick-diff-deleted');
+		await expect(markers).toHaveCount(3);
+		const offsets = await Promise.all([rows(0).first(), rows(1).first(), rows(2).last()].map(async (row, index) => {
+			const [markerBounds, rowBounds] = await Promise.all([markers.nth(index).boundingBox(), row.boundingBox()]);
+			return Math.abs(markerBounds!.y - rowBounds!.y);
+		}));
+		expect(offsets).toEqual([0, 0, 0]);
+		await testInfo.attach('quick-diff-wrapped-deletions', { body: await editor.element.screenshot(), contentType: 'image/png' });
+
+		await markers.nth(1).click({ position: { x: 1, y: 3 } });
+		const peek = page.locator('.ash-quick-diff-peek');
+		await expect(peek).toBeVisible();
+		await expect(peek.locator('.original .stanza-editor-line-text').filter({ hasText: 'Removed in middle.' })).toBeVisible();
+	});
+
 	test('SCM compares edits inside a moved block and exits through the keyboard in a read-only view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
 		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];

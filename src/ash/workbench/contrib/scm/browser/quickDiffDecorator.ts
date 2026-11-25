@@ -1,6 +1,5 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
-import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -15,7 +14,7 @@ import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModel
 interface QuickDiffDecorationMetadata {
 	readonly kind: LineDiffKind.Added | LineDiffKind.Modified | LineDiffKind.Removed;
 	readonly providerLabels: readonly string[];
-	readonly beforeFirstLine: boolean;
+	readonly beforeLine: boolean;
 }
 
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
@@ -45,7 +44,7 @@ export class QuickDiffDecorator extends Disposable {
 			description: 'dirty-diff-decoration',
 			isWholeLine: metadata.kind !== LineDiffKind.Removed,
 			...(gutter ? {
-				linesDecorationsClassName: `ash-quick-diff-gutter ${classNameForKind(metadata.kind)}${metadata.beforeFirstLine ? ' ash-quick-diff-before-first-line' : ''}`,
+				linesDecorationsClassName: `ash-quick-diff-gutter ${classNameForKind(metadata.kind)}${metadata.beforeLine ? ' ash-quick-diff-deleted-before-line' : ''}`,
 				linesDecorationsTooltip: hoverText(metadata),
 			} : {}),
 			...((setting === 'all' || setting === 'overview') ? {
@@ -69,28 +68,31 @@ export class QuickDiffDecorator extends Disposable {
 			const diff = comparison.model.diff;
 			if (!diff) continue;
 			const label = comparison.original.label;
-			const add = (lineIndex: number, kind: QuickDiffDecorationMetadata['kind'], beforeFirstLine = false) => {
+			const add = (lineIndex: number, kind: QuickDiffDecorationMetadata['kind'], beforeLine = false) => {
 				const current = byLine.get(lineIndex);
 				if (!current || kindPriority(kind) > kindPriority(current.kind)) {
-					byLine.set(lineIndex, { kind, providerLabels: [label], beforeFirstLine });
-				} else if (beforeFirstLine || !current.providerLabels.includes(label)) {
+					byLine.set(lineIndex, { kind, providerLabels: [label], beforeLine });
+				} else if (beforeLine || !current.providerLabels.includes(label)) {
 					byLine.set(lineIndex, {
-						...current, beforeFirstLine: current.beforeFirstLine || beforeFirstLine,
+						...current, beforeLine: current.beforeLine || beforeLine,
 						providerLabels: current.providerLabels.includes(label) ? current.providerLabels : [...current.providerLabels, label],
 					});
 				}
 			};
+			const addDeletion = (nextLineIndex: number) => {
+				add(quickDiffDeletionAnchor(nextLineIndex, lineCount), LineDiffKind.Removed, nextLineIndex < lineCount);
+			};
 			for (const hunk of diff.hunks) {
 				let nextLineIndex = hunk.modifiedStartLineIndex;
 				if (hunk.modifiedLineCount === 0) {
-					add(quickDiffDeletionAnchor(nextLineIndex, lineCount), LineDiffKind.Removed, hunk.rowStart === 0);
+					addDeletion(nextLineIndex);
 					continue;
 				}
 				let inDeletedRun = false;
 				for (let index = hunk.rowStart; index < hunk.rowEnd; index++) {
 					const row = diff.rows.get(index)!;
 					if (row.kind === LineDiffKind.Removed) {
-						if (!inDeletedRun) add(quickDiffDeletionAnchor(nextLineIndex, lineCount), row.kind, index === 0);
+						if (!inDeletedRun) addDeletion(nextLineIndex);
 						inDeletedRun = true;
 					} else if (row.kind === LineDiffKind.Added || row.kind === LineDiffKind.Modified) {
 						add(nextLineIndex++, row.kind);
@@ -101,8 +103,11 @@ export class QuickDiffDecorator extends Disposable {
 		}
 		this.collection.set([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => {
 			const line = lineIndex + 1;
+			// A deletion occupies one visual row, even if its anchor line wraps.
+			const endColumn = metadata.beforeLine ? 1 : this.model.getLineMaxColumn(line);
+			const startColumn = metadata.kind === LineDiffKind.Removed ? endColumn : 1;
 			return {
-				range: Range.fromPositions(new Position(line, 1), new Position(line, metadata.beforeFirstLine ? 1 : this.model.getLineLength(line) + 1)),
+				range: new Range(line, startColumn, line, endColumn),
 				options: { ...this.resolve(metadata), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
 			};
 		}));
