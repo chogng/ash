@@ -1006,12 +1006,14 @@ export class TextModel implements ITextModel {
 	trackRange(
 		range: Range,
 		stickiness: TrackedRangeStickiness,
+		options?: Pick<IModelDecorationOptions, 'collapseOnReplaceEdit'>,
 	): TrackedRange {
 		this.assertNotDisposed();
 		return this.trackedRanges.add(
 			this.offsetAt(range.getStartPosition()),
 			this.offsetAt(range.getEndPosition()),
 			stickiness,
+			options,
 		);
 	}
 
@@ -1096,7 +1098,7 @@ export class TextModel implements ITextModel {
 				replacements.push({
 					id: entry.id,
 					ownerId,
-					trackedRange: this.trackRange(entry.range, entry.options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges),
+					trackedRange: this.trackRange(entry.range, entry.options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges, entry.options),
 					options: entry.options,
 				});
 			}
@@ -1135,7 +1137,7 @@ export class TextModel implements ITextModel {
 				staged.push({
 					id,
 					ownerId,
-					trackedRange: this.trackRange(range, options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges),
+					trackedRange: this.trackRange(range, options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges, options),
 					options,
 				});
 			}
@@ -1275,6 +1277,7 @@ export class TextModel implements ITextModel {
 			if (entry.cachedRange?.versionId !== this._version) {
 				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };
 			}
+			if (entry.options.showIfCollapsed === false && entry.cachedRange.range.isEmpty()) continue;
 			result.push({ id: entry.id, ownerId: entry.ownerId, range: entry.cachedRange.range, options: entry.options });
 		}
 		return result;

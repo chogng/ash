@@ -36,6 +36,40 @@ test('editor color picker uses shared controls and applies one undoable color ed
 	await expect(picker).toBeHidden();
 });
 
+test('editor removes deleted and replaced color swatches before refresh', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	for (const color of ['#f00', '#00f']) {
+		await editor.waitForTypeInEditor(color);
+		await page.keyboard.press('Enter');
+	}
+	await editor.waitForTypeInEditor('#0f0');
+	const swatches = editor.element.locator('.colorpicker-color-decoration');
+	await expect(swatches).toHaveCount(3);
+
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await page.keyboard.press('ArrowUp');
+	await page.keyboard.press('ArrowUp');
+	await page.keyboard.press('Home');
+	await page.keyboard.press('Shift+End');
+	await page.keyboard.press('Delete');
+	await page.clock.runFor(32);
+	await expect(swatches).toHaveCount(2);
+	await expect(swatches.first()).toHaveCSS('background-color', 'rgb(0, 0, 255)');
+
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Home');
+	await page.keyboard.press('Shift+End');
+	await page.keyboard.insertText('ordinary text');
+	await page.clock.runFor(32);
+	await editor.waitForEditorContents(text => text.split('\n').slice(0, 3).map(line => line.trim()).join('\n') === '\nordinary text\n#0f0');
+	await expect(swatches).toHaveCount(1);
+	await expect(swatches).toHaveCSS('background-color', 'rgb(0, 255, 0)');
+});
+
 test('browser editor breadcrumbs start at the opened workspace and navigate its directories', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const folderName = await page.evaluate(async () => {

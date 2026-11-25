@@ -12,6 +12,7 @@ interface TrackedRangeRecord {
 	startOffset: number;
 	endOffset: number;
 	readonly stickiness: TrackedRangeStickiness;
+	readonly collapseOnReplaceEdit: boolean;
 }
 
 enum OffsetAffinity {
@@ -32,6 +33,7 @@ export class TrackedRangeCollection extends Disposable {
 		startOffset: number,
 		endOffset: number,
 		stickiness: TrackedRangeStickiness,
+		options?: { readonly collapseOnReplaceEdit?: boolean; },
 	): TrackedRange {
 		this.assertNotDisposed();
 		if (!isTrackedRangeStickiness(stickiness)) {
@@ -41,6 +43,7 @@ export class TrackedRangeCollection extends Disposable {
 			startOffset,
 			endOffset,
 			stickiness,
+			collapseOnReplaceEdit: options?.collapseOnReplaceEdit ?? false,
 		};
 		const trackedRange = new TrackedRangeHandle(
 			record,
@@ -55,12 +58,7 @@ export class TrackedRangeCollection extends Disposable {
 	): void {
 		if (changes.length === 0) return;
 		for (const record of this.handles.keys()) {
-			const mapped = mapTrackedRange(
-				record.startOffset,
-				record.endOffset,
-				record.stickiness,
-				changes,
-			);
+			const mapped = mapTrackedRange(record, changes);
 			record.startOffset = mapped.startOffset;
 			record.endOffset = mapped.endOffset;
 		}
@@ -105,14 +103,19 @@ class TrackedRangeHandle extends AbstractDisposable implements TrackedRange {
 }
 
 function mapTrackedRange(
-	startOffset: number,
-	endOffset: number,
-	stickiness: TrackedRangeStickiness,
+	{ startOffset, endOffset, stickiness, collapseOnReplaceEdit }: TrackedRangeRecord,
 	changes: readonly IInternalModelContentChange[],
 ): {
 	readonly startOffset: number;
 	readonly endOffset: number;
 } {
+	if (collapseOnReplaceEdit && startOffset !== endOffset) {
+		const replacement = changes.find(change => change.rangeOffset <= startOffset && endOffset <= change.rangeOffset + change.rangeLength);
+		if (replacement) {
+			const offset = mapOffset(replacement.rangeOffset, OffsetAffinity.Before, changes);
+			return { startOffset: offset, endOffset: offset };
+		}
+	}
 	const mappedBefore = mapOffset(
 		startOffset,
 		OffsetAffinity.Before,

@@ -66,7 +66,7 @@ export class ColorDetector extends Disposable {
 	}
 
 	getColorData(position: Position): ColorData | null {
-		const decoration = this.decorations.decorations.find(candidate => candidate.range.containsPosition(position));
+		const decoration = this.decorations.decorations.find(candidate => !candidate.range.isEmpty() && candidate.range.containsPosition(position));
 		return decoration ? colorDataAtCurrentRange(decoration) : null;
 	}
 
@@ -93,6 +93,8 @@ export class ColorDetector extends Disposable {
 					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 					options: {
 						description: 'colorDetector',
+						collapseOnReplaceEdit: true,
+						showIfCollapsed: false,
 						before: {
 							content: '\u00a0',
 							inlineClassName: `${ref.className} colorpicker-color-decoration`,

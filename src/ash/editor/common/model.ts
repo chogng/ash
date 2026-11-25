@@ -98,7 +98,9 @@ export interface IModelDecorationOptions {
 	hoverMessage?: IMarkdownString | IMarkdownString[] | null;
 	lineNumberHoverMessage?: IMarkdownString | IMarkdownString[] | null;
 	isWholeLine?: boolean;
+	/** Injected text is visible on empty ranges unless this is explicitly false. */
 	showIfCollapsed?: boolean;
+	/** Collapse a tracked decoration when one edit replaces its entire range. */
 	collapseOnReplaceEdit?: boolean;
 	zIndex?: number;
 	overviewRuler?: IModelDecorationOverviewRulerOptions | null;

@@ -161,6 +161,26 @@ test('color detector returns the tracked range before its debounced provider ref
 	assert.equal(detector.getColorData(new Position(1, 1)), null);
 });
 
+for (const edit of [{ name: 'deleting', text: '' }, { name: 'replacing', text: 'ordinary text' }]) {
+	test(`${edit.name} a color hides its swatch before the color provider refreshes`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using closeDom = toDisposable(() => dom.window.close());
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		const container = dom.window.document.querySelector<HTMLElement>('main')!;
+		using model = new TextModel('#f00\n#0f0');
+		using editor = createTestCodeEditor({ container, model });
+		editor.layout({ width: 500, height: 160 });
+		const detector = ColorDetector.get(editor)!;
+		await waitFor(() => detector.totalColorCount === 2);
+
+		assert.equal(editor.executeEdits('test', [{ range: new Range(1, 1, 1, 5), text: edit.text }]), true);
+		assert.equal(model.getText(), edit.text + '\n#0f0');
+		assert.deepEqual(model.getInjectedTextDecorations().map(decoration => decoration.range), [new Range(2, 1, 2, 5)]);
+		assert.equal(detector.getColorData(new Position(1, 1)), null);
+		assert.ok(detector.getColorData(new Position(2, 2)));
+	});
+}
+
 for (const change of ['language', 'provider', 'readOnly', 'dispose'] as const) {
 	test(`color picker cancels presentations on ${change} and rejects late results`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
