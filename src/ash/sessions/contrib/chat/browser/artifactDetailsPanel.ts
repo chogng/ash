@@ -26,6 +26,8 @@ export class ArtifactDetailsPanel extends Disposable {
 		title.tabIndex = -1;
 		element.setAttribute('role', 'dialog');
 		element.setAttribute('aria-labelledby', title.id);
+		const body = h(document, 'div', { className: 'ash-session-artifact-details-body' });
+		element.append(title, body);
 		const consent = h(document, 'p');
 		if (binding.actions.length) {
 			consent.textContent = localize('sessions.github.artifactActionConsent', 'Select an action to authorize its described effect');
@@ -33,13 +35,15 @@ export class ArtifactDetailsPanel extends Disposable {
 			consent.setAttribute('role', 'status');
 			consent.textContent = localize('sessions.github.artifactNoActions', 'No merge actions are currently available for this pull request.');
 		}
-		element.append(title, consent);
+		body.append(consent);
 		if (binding.unavailableReason) {
-			element.append(h(document, 'p', { attributes: { role: 'status' } }, binding.unavailableReason));
+			body.append(h(document, 'p', { attributes: { role: 'status' } }, binding.unavailableReason));
 		}
-		if (renderFollowUp) this._register(renderFollowUp(element));
+		if (renderFollowUp) {
+			this._register(renderFollowUp(body));
+		}
 		const actions = h(document, 'div', { className: 'ash-session-artifact-details-actions' });
-		element.append(actions);
+		body.append(actions);
 		this._register(new ArtifactButtons(actions)).update([
 			...binding.actions.map(action => ({
 				id: `choice:${action.id}`,

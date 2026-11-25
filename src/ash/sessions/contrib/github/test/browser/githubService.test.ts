@@ -1018,6 +1018,42 @@ suite('sessionGitHub browser component', () => {
 		});
 	}
 
+	test('PR artifact details keep the heading visible while scrolling to the actions', async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 380, height: 250 });
+		await page.goto('/sessionGitHub.html?artifactDetails');
+		const trigger = page.getByRole('button', { name: 'Pull request actions for team/one #7', exact: true });
+		const panel = page.getByRole('dialog', { name: 'Merge actions for team/one #7' });
+		const title = panel.getByRole('heading', { name: 'Merge actions for team/one #7' });
+		const consent = panel.getByText('Select an action to authorize its described effect');
+		const close = panel.getByRole('button', { name: 'Close artifact details' });
+		await trigger.press('Enter');
+		await expect(title).toBeFocused();
+		await expect(title).toBeInViewport({ ratio: 1 });
+		await expect(close).not.toBeInViewport();
+
+		const autopilot = panel.getByRole('button', { name: 'Autopilot', exact: true });
+		await autopilot.press('Enter');
+		await expect(autopilot).toHaveAttribute('aria-expanded', 'true');
+		await consent.hover();
+		await page.mouse.wheel(0, 500);
+		await expect(close).toBeInViewport({ ratio: 1 });
+		await expect(title).toBeInViewport({ ratio: 1 });
+		await expect(consent).not.toBeInViewport();
+
+		await page.mouse.wheel(0, -500);
+		await expect(close).not.toBeInViewport();
+		await panel.getByRole('button', { name: 'Enable GitHub auto-merge (Squash and merge)', exact: true }).press('Tab');
+		await expect(close).toBeFocused();
+		await expect(close).toBeInViewport({ ratio: 1 });
+		await expect(title).toBeInViewport({ ratio: 1 });
+		await page.keyboard.press('Escape');
+		await expect(panel).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		const requests = await page.evaluate(() => window.ashSessionGitHub.requests);
+		expect(requests.some(request => request.method === 'github/pullRequest/merge')).toBe(false);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`PR follow-up persists its source, stops from the keyboard and opens history in ${locale}`, async function () {
 			const { page } = browserTests;

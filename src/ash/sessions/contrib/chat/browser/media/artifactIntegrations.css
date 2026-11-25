@@ -1,4 +1,4 @@
-.ash-session-artifact-details,
+.ash-session-artifact-details-body,
 .ash-session-artifact-details-actions,
 .ash-session-artifact-details-actions > .ash-session-artifact-button {
 	display: grid;
@@ -6,18 +6,32 @@
 }
 
 .ash-session-artifact-details {
+	display: flex;
+	flex-direction: column;
 	inline-size: min(360px, calc(100vw - 32px));
 	max-block-size: min(480px, 70vh);
-	overflow: auto;
-	padding: var(--ash-spacing-size120);
 }
 
-.ash-session-artifact-details h2,
+.ash-session-artifact-details-body {
+	min-block-size: 0;
+	overflow: auto;
+	padding: 0 var(--ash-spacing-size120) var(--ash-spacing-size120);
+}
+
+.ash-session-artifact-details-body > .ash-sessions-follow-up {
+	max-height: none;
+	overflow: visible;
+}
+
+.ash-session-artifact-details > h2,
 .ash-session-artifact-details p {
 	margin: 0;
 	overflow-wrap: anywhere;
 }
 
-.ash-session-artifact-details h2 {
+.ash-session-artifact-details > h2 {
+	flex: none;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size120)
+		var(--ash-spacing-size80);
 	font-size: inherit;
 }
