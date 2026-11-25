@@ -256,6 +256,8 @@ export class AutomationsCardsWidget extends Disposable {
 			this.query.read(reader);
 			const filter = this.filter.read(reader);
 			const canCreate = automations.availableProviders.read(reader).length > 0;
+			const focused = getActiveElement(document);
+			const hadPlanFocus = isHTMLElement(focused) && plansSection.contains(focused);
 			for (const template of this.templates) template.enabled = canCreate;
 			for (const item of filterButtons) item.button.checked = filter === item.value;
 			const historyMessage = historyState === 'error'
@@ -273,6 +275,13 @@ export class AutomationsCardsWidget extends Disposable {
 			summary.hidden = plans.length === 0 && runs.length === 0;
 			this.updatePlans(plans);
 			noMatches.hidden = plans.length === 0 || [...this.cards.values()].some(card => !card.element.hidden);
+			if (hadPlanFocus && (!focused.isConnected || focused.closest('[hidden]'))) {
+				// A host refresh can remove the focused card from the current filter.
+				const active = getActiveElement(document);
+				if (active === focused || active === document.body) {
+					this.focus();
+				}
+			}
 			sessionVisibilityChanged.read(reader);
 			sessionCatalogChanged.read(reader);
 			this.updateRuns(runs);

@@ -918,6 +918,23 @@ suite('automations browser component', () => {
 		await expect(page.getByText('没有符合筛选条件的例行任务。')).toBeVisible();
 	});
 
+	test('Routine catalogue refresh keeps keyboard focus when a card stops matching the search', async function () {
+		const { page } = browserTests;
+
+		await page.goto('/automations.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const search = page.getByRole('searchbox', { name: 'Search routines' });
+		await search.fill('Scheduled review');
+		const title = page.getByRole('article', { name: 'Scheduled review' }).getByRole('button', { name: 'Scheduled review' });
+		await title.focus();
+		await expect(title).toBeFocused();
+		await page.evaluate(() => window.ashAutomations.rename());
+		await expect(page.getByText('No routines match your filters.')).toBeVisible();
+		await expect(search).toBeFocused();
+		await search.fill('');
+		await expect(page.getByRole('article', { name: 'Updated review' })).toBeVisible();
+	});
+
 	test('Automation templates open editable localized drafts and only save on explicit submission', async function () {
 		const { page } = browserTests;
 
