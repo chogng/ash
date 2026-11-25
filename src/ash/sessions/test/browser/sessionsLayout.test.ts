@@ -476,7 +476,7 @@ suite('sessions browser component', () => {
 					getComputedStyle(element).getPropertyValue('--ash-sessions-titlebar-background').trim());
 				await expect(editorArea).toHaveCSS('background-color', Color.Format.CSS.formatRGB(Color.fromHex(titlebar)));
 			}
-			await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
+			await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Back', exact: true }).click();
 			await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		}
 	});
@@ -1038,11 +1038,23 @@ suite('sessions browser component', () => {
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
 		await page.locator('[data-action-id="sessions.open.bots"] > .ash-sessions-activity-item').click();
-		const sidebar = page.locator('.ash-bots-sidebar');
+		const sidebarPart = page.locator('[data-part="sidebar"]');
+		const sidebar = sidebarPart.locator('.ash-bots-sidebar');
+		const back = sidebarPart.locator('.ash-pane-composite-title-actions').getByRole('button', { name: chinese ? '后退' : 'Back', exact: true });
 		const tree = sidebar.getByRole('tree');
 		const group = tree.getByRole('treeitem', { name: chinese ? '代码审查' : 'Code Review', exact: true });
 		const thread = tree.getByRole('treeitem', { name: /^Follow-up chat/ });
-		const search = sidebar.getByRole('searchbox');
+		const search = sidebar.getByRole('searchbox', { name: chinese ? '搜索机器人和线程' : 'Search Bots and Threads' });
+		const searchIcon = sidebar.locator('.ash-input-box [data-ash-icon-id="search"]');
+		await expect(searchIcon).toBeVisible();
+		await expect(searchIcon).toHaveAttribute('aria-hidden', 'true');
+		await expect(back).toBeFocused();
+		await back.press('Alt+F2');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Follow-up chat/);
+		await page.keyboard.press('Escape');
+		await expect(back).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(search).toBeFocused();
 		await expect(thread).toHaveAttribute('aria-selected', 'true');
 		await group.click();
 		await expect(group).toHaveAttribute('aria-expanded', 'false');
@@ -1074,7 +1086,7 @@ suite('sessions browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(tree).toBeFocused();
 		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
-		await sidebar.screenshot({ path: info.outputPath(`bots-tree-${locale}.png`) });
+		await sidebarPart.screenshot({ path: info.outputPath(`bots-tree-${locale}.png`) });
 	});
 
 	test('Inbox marks a review reply read when its visible Bots conversation receives focus', async () => {
@@ -1100,7 +1112,7 @@ suite('sessions browser component', () => {
 		await conversation.focus();
 		await expect(conversation).toBeFocused();
 		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
-		await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
+		await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Back', exact: true }).click();
 		await inbox.press('Enter');
 		await expect(panel.getByRole('button', { name: 'Task from Host B Needs your input' })).toBeVisible();
 		await expect(panel.getByRole('button', { name: /Follow-up chat/ })).toHaveCount(0);

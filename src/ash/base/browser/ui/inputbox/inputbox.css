@@ -38,6 +38,29 @@
 	padding: 0 8px;
 }
 
+.ash-input-box-with-leading-icon {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-input-box-with-leading-icon > input,
+.ash-input-box-with-leading-icon > .ash-input-box-leading-icon {
+	grid-area: 1 / 1;
+}
+
+.ash-input-box-with-leading-icon > input {
+	align-self: stretch;
+	padding-inline-start: var(--ash-spacing-size320);
+}
+
+.ash-input-box-leading-icon {
+	align-self: center;
+	justify-self: start;
+	margin-inline-start: var(--ash-spacing-size80);
+	color: var(--ash-input-placeholderForeground);
+	pointer-events: none;
+}
+
 .ash-input-box-field input::placeholder,
 .ash-input-box-field textarea::placeholder {
 	color: var(--ash-input-placeholderForeground);

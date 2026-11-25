@@ -16,21 +16,9 @@
 	overflow: auto;
 }
 
-.ash-bots-sidebar > .ash-button {
-	justify-content: flex-start;
-	min-height: var(--ash-spacing-size320);
-}
-
-.ash-bots-sidebar > .ash-bots-search {
-	display: flex;
-	align-items: center;
+.ash-bots-sidebar > .ash-input-box {
 	min-height: var(--ash-spacing-size360);
-	padding-inline-start: var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-bots-search > .ash-icon {
-	color: var(--ash-description-foreground);
 }
 
 .ash-bots-tree {

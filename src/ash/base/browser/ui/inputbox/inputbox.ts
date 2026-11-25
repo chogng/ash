@@ -13,8 +13,10 @@ import {
 } from '../aria/aria.js';
 import { Emitter, type Event } from '../../../common/event.js';
 import { HistoryNavigator, type IHistory } from '../../../common/history.js';
+import type { Icon } from '../../../common/icon.js';
 import { IME } from '../../../common/ime.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { appendIcon } from '../lxicons/lxicon.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
 export interface IInputBoxStyles {
@@ -29,6 +31,8 @@ export interface InputBoxOptions<Flexible extends boolean = false> {
 	readonly flexibleMaxHeight?: number;
 	readonly placeholder?: string;
 	readonly type?: 'text' | 'number' | 'password' | 'search';
+	/** Decorative icon inside a single-line input. */
+	readonly leadingIcon?: Flexible extends true ? never : Icon;
 	/** Filter shares its containing surface and keeps a field boundary only in high contrast. */
 	readonly presentation?: 'default' | 'field' | 'compact' | 'filter';
 	readonly readOnly?: boolean;
@@ -166,6 +170,10 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 			}
 		} else {
 			this.element.append(this.inputElement, this.message);
+			if (options.leadingIcon) {
+				this.element.classList.add('ash-input-box-with-leading-icon');
+				appendIcon(options.leadingIcon, this.element).classList.add('ash-input-box-leading-icon');
+			}
 		}
 		container.append(this.element);
 		this.onKeyDown = this._register(new DomEmitter(this.inputElement, 'keydown')).event;

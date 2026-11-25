@@ -24,7 +24,6 @@ import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
@@ -223,7 +222,6 @@ export class SessionsPreferences extends Disposable {
 		const search = h(ownerDocument, 'div');
 		search.className = 'ash-sessions-settings-search';
 		search.setAttribute('role', 'search');
-		appendIcon(Lxicon.search, search);
 		const navigation = h(ownerDocument, 'nav');
 		navigation.className = 'ash-sessions-settings-navigation';
 		navigation.setAttribute('aria-label', localize('sessions.settings.categories', 'Settings categories'));
@@ -271,6 +269,7 @@ export class SessionsPreferences extends Disposable {
 		const searchInput = resources.add(new InputBox(search, {
 			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
+			leadingIcon: Lxicon.search,
 			presentation: 'field',
 			placeholder: localize('sessions.settings.searchPlaceholder', 'Search'),
 			ariaLabel: localize('sessions.settings.search', 'Search settings'),

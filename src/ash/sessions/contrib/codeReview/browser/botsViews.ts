@@ -2,7 +2,6 @@ import { addDisposableListener, Dimension, getWindow, h, type IDimension } from 
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ObjectTreeElementCollapseState } from '../../../../base/browser/ui/tree/tree.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
@@ -14,8 +13,10 @@ import { posix } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
@@ -24,7 +25,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
+import { ViewPane, ViewPaneShowActions, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import type { ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -67,8 +68,7 @@ function bindAccessibility(
 }
 
 export class BotsNavigationView extends ViewPane {
-	private readonly back: Button;
-	private readonly search: InputBox;
+	private readonly toolbar: WorkbenchToolBar;
 
 	constructor(
 		parent: HTMLElement, options: IViewPaneOptions,
@@ -78,26 +78,35 @@ export class BotsNavigationView extends ViewPane {
 		@IContextKeyService contexts: IContextKeyService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IContextMenuService contextMenus: IContextMenuService,
 	) {
-		super(parent, options);
+		super(parent, { ...options, showActions: ViewPaneShowActions.Always });
 		const root = this.contentElement;
 		const document = root.ownerDocument;
 		root.classList.add('ash-bots-sidebar');
 		root.setAttribute('role', 'region');
 		root.setAttribute('aria-label', botsTitle);
 		bindAccessibility(root, this._store, contexts, accessibleViews, configuration);
-		this.back = this._register(new Button(root, {
-			...defaultButtonStyles, label: localize({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'),
-			icon: Lxicon.arrowLeft, presentation: 'quiet',
-			onClick: () => void commands.executeCommand('sessions.open.code').catch(error => notifications.error(error)),
-		}));
-		const searchLabel = localize('sessions.bots.search', 'Search Bots and Threads');
-		this.search = this._register(new InputBox(root, {
-			inputBoxStyles: defaultInputBoxStyles, ariaLabel: searchLabel, type: 'search', presentation: 'field',
+		// The sidebar projects title actions outside the view body.
+		this._register(contexts.createScoped(this.headerActionsElement)).createKey(botsFocusContext, true);
+		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: botsTitle }));
+		const back = localize({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back');
+		this.toolbar.setActions([{
+			id: 'sessions.open.code',
+			label: back,
+			tooltip: back,
+			icon: Lxicon.arrowLeft,
+			enabled: true,
+			run: () => commands.executeCommand('sessions.open.code').catch(error => notifications.error(error)),
+		}]);
+		const search = this._register(new InputBox(root, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('sessions.bots.search', 'Search Bots and Threads'),
+			type: 'search',
+			presentation: 'field',
+			leadingIcon: Lxicon.search,
 			placeholder: localize('sessions.bots.searchPlaceholder', 'Search'),
 		}));
-		this.search.element.classList.add('ash-bots-search');
-		this.search.element.prepend(appendIcon(Lxicon.search, this.search.element));
 		const group: BotTreeItem = { kind: 'bot', id: reviewGroupId, label: reviewName };
 		const tree = this._register(new WorkbenchObjectTree<BotTreeItem>(root, {
 			configurationService: configuration,
@@ -126,13 +135,13 @@ export class BotsNavigationView extends ViewPane {
 		const empty = h(document, 'p', { className: 'ash-bots-empty', attributes: { role: 'status' } });
 		root.append(empty);
 
-		const searchChanged = observableSignalFromEvent(this, this.search.onDidChange);
+		const searchChanged = observableSignalFromEvent(this, search.onDidChange);
 		// Searching reveals matches without replacing the unfiltered tree's collapse state.
 		let collapseBeforeSearch: boolean | undefined;
 		const clearSearchAfterToggle = (collapsed: boolean): void => {
 			if (collapseBeforeSearch === undefined) return;
 			collapseBeforeSearch = collapsed;
-			this.search.value = '';
+			search.value = '';
 		};
 		const syncSelection = (entry: ReturnType<typeof reviews.activeEntry.get>): void => {
 			// Focus can move through the tree before the user opens a conversation.
@@ -156,15 +165,16 @@ export class BotsNavigationView extends ViewPane {
 		this._register(tree.onDidChangeSelection(({ browserEvent }) => {
 			if (browserEvent) syncSelection(reviews.activeEntry.get());
 		}));
-		this._register(addDisposableListener(this.search.inputElement, 'keydown', event => {
-			if (event.key === 'Escape' && this.search.value) {
-				this.search.value = '';
+		this._register(search.onKeyDown(event => {
+			if (event.key === 'Escape' && !event.isComposing && search.value) {
+				event.preventDefault();
 				event.stopPropagation();
+				search.value = '';
 			}
 		}));
 		this._register(autorun(reader => {
 			searchChanged.read(reader);
-			const query = this.search.value.trim().toLocaleLowerCase();
+			const query = search.value.trim().toLocaleLowerCase();
 			const matchingBot = reviewName.toLocaleLowerCase().includes(query);
 			const entries = reviews.entries.read(reader).filter(entry => matchingBot
 				|| [entry.label, entry.detail].some(value => value.toLocaleLowerCase().includes(query)));
@@ -190,7 +200,9 @@ export class BotsNavigationView extends ViewPane {
 		}));
 	}
 
-	public override focus(): void { this.back.focus(); }
+	public override focus(): void { this.toolbar.focus(); }
+
+	public getAccessibleContent(): string { return this.contentElement.innerText; }
 }
 
 /** The Bots page mounts the existing chat and comparison in independent regions. */

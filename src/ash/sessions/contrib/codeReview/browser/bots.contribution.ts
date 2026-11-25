@@ -15,6 +15,7 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -23,12 +24,13 @@ import { BotsEditor, BotsNavigationView, botsFocusContext, botsNavigationId, bot
 
 const title = localize2('sessions.bots.title', 'Bots');
 const selectedContext = 'sessions.activity.botsSelected';
+const viewId = botsNavigationId + '.view';
 
 SessionsViewRegistry.registerViewContainer({
 	id: botsNavigationId, title: title.value, location: ViewContainerLocation.Sidebar, order: 6,
 });
 SessionsViewRegistry.registerViews(botsNavigationId, [{
-	id: botsNavigationId + '.view', title: title.value, ctorDescriptor: new SyncDescriptor(BotsNavigationView), canToggleVisibility: false,
+	id: viewId, title: title.value, ctorDescriptor: new SyncDescriptor(BotsNavigationView), canToggleVisibility: false,
 }]);
 registerEditorPane({
 	id: BotsEditor.ID, name: title.value,
@@ -76,12 +78,13 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		getProvider: accessor => {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument);
 			const pane = accessor.get(IEditorPart).activePane;
-			const sidebar = focused?.closest<HTMLElement>('.ash-bots-sidebar');
+			const view = accessor.get(IViewsService).getActiveViewWithId<BotsNavigationView>(viewId);
+			const sidebar = view?.hasFocus() ? view : undefined;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Bots, { type }, () => {
 				if (type === AccessibleViewType.Help) {
-					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back to return to Code and Search to filter bots and threads. Use Up or Down Arrow to move through the tree. On Code Review, use Left and Right Arrow to collapse and expand, or press Enter or Space to toggle. Press Enter or Space on a thread to open its conversation. Choose Review Changes to review the active Code conversation. Save comments on lines and choose Send to Code Review to create a new thread. Activate a file reference in a message to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. <keybinding:editor.action.accessibleView> reads the current region.');
+					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back in the sidebar title to return to Code. Use Search to filter bots and threads. Use Up or Down Arrow to move through the tree. On Code Review, use Left and Right Arrow to collapse and expand, or press Enter or Space to toggle. Press Enter or Space on a thread to open its conversation. Choose Review Changes to review the active Code conversation. Save comments on lines and choose Send to Code Review to create a new thread. Activate a file reference in a message to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. <keybinding:editor.action.accessibleView> reads the current region.');
 				}
-				return sidebar?.innerText ?? (pane instanceof BotsEditor ? pane.getAccessibleContent(focused) : '');
+				return sidebar?.getAccessibleContent() ?? (pane instanceof BotsEditor ? pane.getAccessibleContent(focused) : '');
 			}, () => {
 				if (isHTMLElement(focused) && focused.isConnected) focused.focus();
 				else if (pane instanceof BotsEditor) pane.focus();

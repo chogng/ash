@@ -77,7 +77,7 @@ test('Chat and Code scope the command palette and user shortcuts to the active m
 	// Exercise the same user bindings in their owning modes.
 	await page.keyboard.press('Control+Alt+Shift+F8');
 	await expect(page.locator('.ash-bots-page')).toBeVisible();
-	await page.getByRole('region', { name: 'Bots', exact: true }).getByRole('button', { name: 'Back', exact: true }).click();
+	await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Back', exact: true }).click();
 	await chat.click();
 	await page.keyboard.press('Control+Alt+Shift+F9');
 	await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
@@ -90,12 +90,13 @@ test('Bots keeps Code navigation and search separate', async ({ target, workbenc
 	await code.click();
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Bots', exact: true }).click();
-	const sidebar = page.getByRole('region', { name: 'Bots', exact: true }).filter({ has: page.getByRole('button', { name: 'Back', exact: true }) });
-	const back = sidebar.getByRole('button', { name: 'Back', exact: true });
+	const sidebarPart = page.locator('[data-part="sidebar"]');
+	const sidebar = sidebarPart.getByRole('region', { name: 'Bots', exact: true });
+	const back = sidebarPart.getByRole('button', { name: 'Back', exact: true });
 	const search = sidebar.getByRole('searchbox', { name: 'Search Bots and Threads' });
 	const bot = sidebar.getByRole('treeitem', { name: 'Code Review', exact: true });
 	await expect(back).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"] .ash-sidebar-title-label')).toHaveText('Bots');
+	await expect(sidebarPart.locator('.ash-sidebar-title-label')).toHaveText('Bots');
 	await expect(sidebar.getByRole('heading', { name: 'Bots', exact: true })).toHaveCount(0);
 	await expect(page.locator('.ash-bots-page').getByRole('heading', { name: 'Code Review' })).toBeVisible();
 	await expect(navigation).toBeHidden();
