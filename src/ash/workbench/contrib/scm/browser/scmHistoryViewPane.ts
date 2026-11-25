@@ -15,6 +15,7 @@ import { observableValue } from '../../../../base/common/observable.js';
 
 import { equals } from '../../../../base/common/arrays.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { posix } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
@@ -988,7 +989,16 @@ export class SCMHistoryViewPane extends ViewPane {
 			expandOnlyOnTwistieClick: false,
 			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			modelOptions: { identityProvider: { getId: element => element.id } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === 'commit' ? element.model.historyItem.subject : element.kind === 'file' ? element.change.path : element.kind === 'folder' ? element.folder.name : undefined },
+			keyboardNavigationLabelProvider: {
+				getKeyboardNavigationLabel: element => {
+					switch (element.kind) {
+						case 'commit': return element.model.historyItem.subject;
+						case 'file': return [posix.basename(element.change.path), element.change.path];
+						case 'folder': return element.folder.name;
+						default: return [];
+					}
+				},
+			},
 			getHeight: element => element.kind === 'more' ? SWIMLANE_HEIGHT * 2 : SWIMLANE_HEIGHT,
 			reuseRows: true,
 			renderElement: (element, node) => {

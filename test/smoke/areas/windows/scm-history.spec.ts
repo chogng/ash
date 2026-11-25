@@ -1261,6 +1261,35 @@ test('SCM history auto roots follow the remote default branch and publication es
 });
 
 
+test('SCM graph jumps to a nested changed file by filename or repository path', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const cwd = testWorkspace.directory;
+	await mkdir(join(cwd, 'src', 'nested'), { recursive: true });
+	await writeFile(join(cwd, 'src', 'nested', 'details.txt'), 'history\n');
+	await run('git', ['add', '.'], { cwd });
+	await run('git', ['commit', '-m', 'Change nested file'], { cwd });
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	const header = history.getByRole('button', { name: 'Graph', exact: true });
+	await header.click();
+	const tree = history.getByRole('tree');
+	const commit = tree.getByRole('treeitem', { name: /Change nested file/u });
+	await commit.getByText('Change nested file', { exact: true }).click();
+	const file = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-path="src/nested/details.txt"]') });
+	await expect(file).toBeVisible();
+	const fileId = await file.getAttribute('id');
+	expect(fileId).toBeTruthy();
+
+	await tree.press('s');
+	await expect(tree).toHaveAttribute('aria-activedescendant', fileId!);
+	await header.focus();
+	await tree.press('Home');
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await commit.getAttribute('id'))!);
+	await tree.press('d');
+	await expect(tree).toHaveAttribute('aria-activedescendant', fileId!);
+});
+
+
 test('SCM graph title shortcuts resolve the registered view without toolbar context', { tag: ['@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 	if (!('windows' in application)) throw new Error('Requires Electron');
 	const cwd = testWorkspace.directory;
