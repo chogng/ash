@@ -1128,9 +1128,16 @@ test('Sessions permissions show only the selected check at the trailing edge', a
 	workbench,
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
+	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-native-chat-input)').first();
 	const manual = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
+	const observeExpansionOnFocus = (button: Locator): Promise<void> => button.evaluate(trigger => {
+		trigger.removeAttribute('data-expanded-at-focus');
+		trigger.addEventListener('focus', () => {
+			trigger.setAttribute('data-expanded-at-focus', trigger.getAttribute('aria-expanded') ?? '');
+		}, { once: true });
+	});
 	await manual.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
 	const rows = menu.getByRole('menuitemradio');
@@ -1154,17 +1161,22 @@ test('Sessions permissions show only the selected check at the trailing edge', a
 	await page.keyboard.press('1');
 	await expect(manualRow).toHaveAttribute('aria-checked', 'true');
 	await page.keyboard.press('Home');
+	await observeExpansionOnFocus(manual);
 	await page.keyboard.press('Enter');
 	const automatic = composer.getByRole('button', { name: 'Permissions: Auto', exact: true });
 	await expect(automatic).toBeFocused();
+	await expect(automatic).toHaveAttribute('data-expanded-at-focus', 'false');
 	await automatic.press('ArrowDown');
 	await expect(rows.filter({ hasText: 'Auto' }).locator('.ash-action-widget-selection')).toBeVisible();
 	await page.keyboard.press('ArrowDown');
 	await page.keyboard.press('Enter');
 	await expect(manual).toBeFocused();
 	await manual.press('ArrowDown');
+	await expect(manual).toHaveAttribute('aria-expanded', 'true');
+	await observeExpansionOnFocus(manual);
 	await page.keyboard.press('Escape');
 	await expect(manual).toBeFocused();
+	await expect(manual).toHaveAttribute('data-expanded-at-focus', 'false');
 	await expect(menu).toBeHidden();
 	await manual.press('ArrowDown');
 	await page.keyboard.press('End');

@@ -266,9 +266,13 @@ export class ActionWidgetDropdown extends Disposable {
 	}
 
 	public hide(): void {
-		this.clearRequest();
+		const request = this.request;
 		if (this.visible) {
 			this.actionWidgetService.hide();
+		}
+		// A visible menu normally finishes in onHide, which can start a new request.
+		if (this.request === request) {
+			this.clearRequest();
 			this.resetVisibility();
 		}
 	}

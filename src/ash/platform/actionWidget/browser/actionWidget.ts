@@ -110,12 +110,15 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			onHide: reason => {
 				const didCancel = this.cancelOnHide;
 				// ContextView detaches content before this callback, so remember the last focused node.
-				const restore = focused !== null && list.contains(focused) && isHTMLElement(source) && source.isConnected &&
+				const shouldRestoreFocus = focused !== null && list.contains(focused) && isHTMLElement(source) &&
 					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic || reason === ContextViewHideReason.OutsidePointer);
 				if (this.current.value === lifetime) {
 					this.current.clear();
 				}
-				if (restore) {
+				const activeAfterClose = shouldRestoreFocus ? getActiveElement(document) : null;
+				// Let the owner clear the trigger's expanded state before assistive technology reads it on focus.
+				notifyHide(didCancel);
+				if (shouldRestoreFocus && source.isConnected && !this.isVisible && getActiveElement(document) === activeAfterClose) {
 					// The pointer shield consumes the click, so restoring focus here has no native pointer target.
 					const focusOptions: FocusOptions & { focusVisible?: boolean; } = { preventScroll: true };
 					if (reason === ContextViewHideReason.OutsidePointer) {
@@ -123,7 +126,6 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 					}
 					source.focus(focusOptions);
 				}
-				notifyHide(didCancel);
 			},
 		});
 		if (shown) {
