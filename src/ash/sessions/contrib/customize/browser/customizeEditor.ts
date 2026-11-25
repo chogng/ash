@@ -14,6 +14,7 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { derived, observableValue } from '../../../../base/common/observable.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import {
@@ -54,6 +55,7 @@ import {
 	addConnection,
 	describeConnectorState,
 	describeMcpServerState,
+	getMarketplaceMcpServerId,
 	getSkillSummary,
 } from '../../../../workbench/contrib/extensions/browser/extensionsActions.js';
 import {
@@ -65,12 +67,19 @@ import {
 	ExtensionsInput,
 } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
 import './customizeEditor.css';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 
 type Category = 'skills' | 'connectors' | 'plugins';
 type Collection = 'yours' | 'discover';
+type InstalledCategory = Exclude<Category, 'connectors'>;
+type CatalogLocation = { readonly category: Category; readonly collection: Collection; };
+type InstalledSelection = { readonly category: InstalledCategory; readonly id: string; };
+export const CUSTOMIZE_NAVIGATION_CONTAINER = 'sessions.customize.navigation';
+export const CUSTOMIZE_NAVIGATION_VIEW = CUSTOMIZE_NAVIGATION_CONTAINER + '.view';
 interface Card {
 	readonly id: string;
 	readonly name: string;
@@ -94,6 +103,7 @@ export class CustomizeEditorPane extends EditorPane {
 	public readonly id = 'sessions.editor.customize';
 	private root!: HTMLElement;
 	private catalog!: HTMLElement;
+	private catalogHeader!: HTMLElement;
 	private details!: HTMLElement;
 	private detailHost!: HTMLElement;
 	private back!: Button;
@@ -120,8 +130,22 @@ export class CustomizeEditorPane extends EditorPane {
 	private toolbarActions: readonly CatalogMenuAction[] = [];
 	private more!: Button;
 	private retry!: Button;
-	private category: Category = 'skills';
-	private collection: Collection = 'yours';
+	private readonly location = observableValue<CatalogLocation>(this, { category: 'skills', collection: 'yours' });
+	private get category(): Category { return this.location.get().category; }
+	private get collection(): Collection { return this.location.get().collection; }
+	private readonly installedSelection = observableValue<InstalledSelection | undefined>(this, undefined);
+	private readonly installedCatalogs = observableValue<Partial<Record<InstalledCategory, Catalog>>>(this, {});
+	private readonly installedReads = new Map<InstalledCategory, { readonly sessionId: string | undefined; readonly result: Promise<Catalog>; }>();
+	public readonly navigation = derived(reader => {
+		const { category, collection } = this.location.read(reader);
+		const catalogs = this.installedCatalogs.read(reader);
+		return {
+			current: collection === 'discover' ? 'discover' : category,
+			selected: this.installedSelection.read(reader),
+			plugins: catalogs.plugins?.cards ?? [],
+			skills: catalogs.skills?.cards ?? [],
+		};
+	});
 	private sourceId: string | undefined;
 	private descending = false;
 	private cards: readonly Card[] = [];
@@ -132,11 +156,8 @@ export class CustomizeEditorPane extends EditorPane {
 	private shown = false;
 	private opening = false;
 	private readonly cardResources = this._register(new DisposableStore());
-	private readonly refresh = this._register(
-		new RunOnceScheduler(() => {
-			void this.load();
-		}, 200),
-	);
+	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.load(); }, 200));
+	private readonly installedRefresh = this._register(new RunOnceScheduler(() => this.refreshInstalled(), 200));
 	private readonly actions = new AbortController();
 	private skillActions!: CustomizeSkillActions;
 
@@ -158,24 +179,32 @@ export class CustomizeEditorPane extends EditorPane {
 		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessible: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IViewsService private readonly views: IViewsService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) {
 		super('sessions.editor.customize', theme, storage);
-		for (const event of [
-			prompts.onDidChangeSkills,
-			marketplace.onDidChangeSources,
-			extensions.onDidChangeInstalled,
-			plugins.onDidChange,
-			connectors.onDidChange,
-			mcp.onDidChange,
-		]) {
-			this._register(
-				event(() => {
-					if (this.shown) this.refresh.schedule();
-				}),
-			);
+		const refresh = () => { if (this.shown) this.refresh.schedule(); };
+		this._register(prompts.onDidChangeSkills(() => {
+			this.invalidateInstalled('skills');
+			refresh();
+		}));
+		for (const event of [extensions.onDidChangeInstalled, plugins.onDidChange]) {
+			this._register(event(() => {
+				this.invalidateInstalled('plugins');
+				refresh();
+			}));
 		}
+		for (const event of [marketplace.onDidChangeSources, connectors.onDidChange, mcp.onDidChange]) {
+			this._register(event(refresh));
+		}
+		this._register(this.layoutService.onDidChangePartVisibility(({ partId }) => {
+			if (partId === 'sidebar') this.updateNavigationControls();
+		}));
+		this._register(this.views.onDidChangeViewVisibility(({ id }) => {
+			if (id === CUSTOMIZE_NAVIGATION_VIEW) this.updateNavigationControls();
+		}));
 		this._register(
 			toDisposable(() => {
 				this.request?.dispose(true);
@@ -196,16 +225,18 @@ export class CustomizeEditorPane extends EditorPane {
 		this._register(this.contexts.createScoped(this.root)).createKey('sessionsCustomizeFocused', true);
 		this.catalog = h(document, 'div', { className: 'ash-customize-catalog' });
 		this.root.append(this.catalog);
-		this.catalog.append(h(document, 'h1', {}, localize('customize.title', 'Customize')));
+		this.catalogHeader = h(document, 'header', { className: 'ash-customize-header' });
+		this.catalogHeader.append(h(document, 'h1', {}, localize('customize.title', 'Customize')));
+		this.catalog.append(this.catalogHeader);
 		const toolbar = h(document, 'div', { className: 'ash-customize-toolbar' });
-		this.catalog.append(toolbar);
+		this.catalogHeader.append(toolbar);
 		this.tabs = this._register(
 			new TabList(toolbar, {
 				ariaLabel: localize('customize.categories', 'Customization categories'),
 				presentation: 'navigation',
 				onActivate: category => {
 					if (category === this.category) return;
-					this.category = category;
+					this.location.set({ category, collection: this.collection }, undefined);
 					this.sourceId = undefined;
 					this.search.value = '';
 					this.updateControls();
@@ -370,7 +401,7 @@ export class CustomizeEditorPane extends EditorPane {
 		this.panel.append(this.hero);
 		const header = h(document, 'div', { className: 'ash-customize-results-heading' });
 		const title = h(document, 'h2');
-		this.heading = h(document, 'span');
+		this.heading = h(document, 'span', { attributes: { id: 'ash-customize-results-title' } });
 		title.append(this.heading);
 		this.countContainer = h(document, 'span', { className: 'ash-customize-count' });
 		title.append(this.countContainer);
@@ -387,6 +418,7 @@ export class CustomizeEditorPane extends EditorPane {
 				iconOnly: true,
 				onClick: () => {
 					void this.load();
+					this.refreshInstalled();
 				},
 			}),
 		);
@@ -440,21 +472,36 @@ export class CustomizeEditorPane extends EditorPane {
 		signal.throwIfAborted();
 	}
 
-	public openCatalog(category: Category, collection: Collection, query = ''): void {
+	public openCatalog(category: Category, collection: Collection, query = '', focus = true): void {
 		this.showCatalog(false);
-		this.category = category;
-		this.collection = collection;
+		this.location.set({ category, collection }, undefined);
 		this.sourceId = undefined;
 		this.search.value = query;
 		this.updateControls();
 		this.searchActionViewItem.setExpanded(!!query);
 		void this.load();
-		this.focus();
+		if (focus) this.focus();
+	}
+
+	public openSidebarCatalog(target: 'discover' | Category): void {
+		if (target === 'discover') this.openCatalog(this.category, 'discover', '', false);
+		else this.openCatalog(target, 'yours', '', false);
+	}
+
+	public openSidebarResource(category: InstalledCategory, id: string, trigger: HTMLElement): void {
+		const card = this.installedCatalogs.get()[category]?.cards.find(candidate => candidate.id === id);
+		if (!card || !this.shown) return;
+		if (this.category !== category || this.collection !== 'yours') this.openSidebarCatalog(category);
+		this.returnFocus = { element: trigger, action: false };
+		void this.showCardDetails(card).catch(error => {
+			if (!this.isDisposed && this.shown && !isCancellationError(error)) this.setMessage(String(error));
+		});
 	}
 
 	public override clearInput(): void {
 		this.request?.dispose(true);
 		this.refresh.cancel();
+		this.installedRefresh.cancel();
 		this.showCatalog(false);
 	}
 	public override focus(): void {
@@ -470,16 +517,20 @@ export class CustomizeEditorPane extends EditorPane {
 		super.setVisible(visible);
 		this.shown = visible;
 		this.detailEditor?.setVisible(visible);
-		if (visible) void this.load();
+		if (visible) {
+			void this.load();
+			this.refreshInstalled();
+		}
 		else {
 			this.refresh.cancel();
+			this.installedRefresh.cancel();
 			this.request?.dispose(true);
 		}
 	}
 
 	private selectCollection(collection: Collection): void {
 		if (collection === this.collection) return;
-		this.collection = collection;
+		this.location.set({ category: this.category, collection }, undefined);
 		this.updateControls();
 		void this.load();
 	}
@@ -499,8 +550,8 @@ export class CustomizeEditorPane extends EditorPane {
 			})),
 			this.category,
 		);
-		this.panel.setAttribute('aria-labelledby', `ash-customize-${this.category}`);
 		this.collectionControl.setSelection(this.collection);
+		this.updateNavigationControls();
 		this.toolbar.setActions([
 			this.searchAction,
 			...this.toolbarActions.filter(
@@ -534,17 +585,30 @@ export class CustomizeEditorPane extends EditorPane {
 						'Explore plugins that add tools and capabilities to your workspace.',
 					);
 		this.heading.textContent =
-			this.collection === 'yours'
-				? localize(
-					'customize.yourResources',
-					'Your {0}',
-					categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-				)
-				: localize(
-					'customize.discoverResources',
-					'Discover {0}',
-					categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-				);
+			this.collection === 'yours' && this.category === 'connectors'
+				? localize('customize.connections', 'Connections')
+				: this.collection === 'yours'
+					? localize(
+						'customize.yourResources',
+						'Your {0}',
+						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
+					)
+					: localize(
+						'customize.discoverResources',
+						'Discover {0}',
+						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
+					);
+	}
+
+	private updateNavigationControls(): void {
+		if (!this.panel) return;
+		const sidebar = this.layoutService.isPartVisible('sidebar') && this.views.isViewVisible(CUSTOMIZE_NAVIGATION_VIEW);
+		const showTabs = !sidebar || this.collection === 'discover';
+		this.catalogHeader.classList.toggle('compact', !showTabs);
+		this.tabs.element.hidden = !showTabs;
+		this.collectionControl.domNode.hidden = sidebar;
+		this.panel.setAttribute('role', showTabs ? 'tabpanel' : 'region');
+		this.panel.setAttribute('aria-labelledby', showTabs ? `ash-customize-${this.category}` : this.heading.id);
 	}
 
 	private async load(append = false): Promise<void> {
@@ -577,7 +641,7 @@ export class CustomizeEditorPane extends EditorPane {
 			const result =
 				this.collection === 'discover'
 					? await this.readDiscover(request, cursor)
-					: await this.readYours(sessionId);
+					: this.category === 'connectors' ? await this.readConnections() : await this.readInstalled(this.category, sessionId);
 			if (request.token.isCancellationRequested || !this.shown) return;
 			if (sessionId !== this.sessions.getActiveConversation()?.sessionId) {
 				this.refresh.schedule();
@@ -686,7 +750,10 @@ export class CustomizeEditorPane extends EditorPane {
 								'install',
 								details,
 							);
-							if (result && this.shown && !this.isDisposed) await this.load();
+							if (result && this.shown && !this.isDisposed) {
+								this.invalidateInstalled('plugins');
+								await this.load();
+							}
 						}
 						: undefined,
 				open: () => this.openResource(resource),
@@ -701,8 +768,42 @@ export class CustomizeEditorPane extends EditorPane {
 		};
 	}
 
-	private async readYours(sessionId: string | undefined): Promise<Catalog> {
-		if (this.category === 'skills') {
+	private invalidateInstalled(category: InstalledCategory): void {
+		this.installedReads.delete(category);
+		if (this.shown) this.installedRefresh.schedule();
+	}
+
+	private refreshInstalled(): void {
+		if (!this.shown) return;
+		this.installedRefresh.cancel();
+		const sessionId = this.sessions.getActiveConversation()?.sessionId;
+		for (const category of ['plugins', 'skills'] as const) {
+			void this.readInstalled(category, sessionId).catch(() => {
+				// The corresponding catalog reports its read failure and offers Retry.
+			});
+		}
+	}
+
+	/** The sidebar and the installed results use the same pending read and catalog. */
+	private readInstalled(category: InstalledCategory, sessionId: string | undefined): Promise<Catalog> {
+		const scope = category === 'skills' ? sessionId : undefined;
+		const pending = this.installedReads.get(category);
+		if (pending && pending.sessionId === scope) return pending.result;
+		const result = this.loadInstalled(category, scope).then(catalog => {
+			if (!this.isDisposed && this.installedReads.get(category)?.result === result
+				&& (category === 'plugins' || scope === this.sessions.getActiveConversation()?.sessionId)) {
+				this.installedCatalogs.set({ ...this.installedCatalogs.get(), [category]: catalog }, undefined);
+			}
+			return catalog;
+		}).finally(() => {
+			if (this.installedReads.get(category)?.result === result) this.installedReads.delete(category);
+		});
+		this.installedReads.set(category, { sessionId: scope, result });
+		return result;
+	}
+
+	private async loadInstalled(category: InstalledCategory, sessionId: string | undefined): Promise<Catalog> {
+		if (category === 'skills') {
 			const snapshot = await this.prompts.readSkillManagement(sessionId);
 			return {
 				cards: snapshot.catalog.skills.map(skill => ({
@@ -722,7 +823,6 @@ export class CustomizeEditorPane extends EditorPane {
 				note: snapshot.diagnostics.map(diagnostic => diagnostic.message).join('\n'),
 			};
 		}
-		if (this.category === 'connectors') return this.readConnections();
 		const [installed, local] = await Promise.all([this.extensions.listInstalled(), this.plugins.list()]);
 		const registryPlugins = await Promise.all(installed.map(async installation => {
 			if (isAcademyExtension(installation.package.id)) return installation;
@@ -792,6 +892,10 @@ export class CustomizeEditorPane extends EditorPane {
 			this.extensions.listInstalled(),
 		]);
 		const connectors = accounts.status === 'fulfilled' ? accounts.value.connectors : [];
+		const installations = packages.status === 'fulfilled' ? packages.value : [];
+		const packageServers = new Map(installations.flatMap(installation => installation.capabilities
+			.filter(capability => capability.kind === 'mcp')
+			.map(capability => [getMarketplaceMcpServerId(installation.package.id, capability.id), { installation, capability }] as const)));
 		const linked = new Set(
 			connectors.flatMap(connector => [
 				connector.mcpDeclarationId,
@@ -799,42 +903,44 @@ export class CustomizeEditorPane extends EditorPane {
 			]),
 		);
 		const cards = new Map<string, Card>();
-		for (const connector of connectors)
+		for (const connector of connectors) {
+			const owner = packageServers.get(connector.mcpDeclarationId)
+				?? (connector.mcpServerId ? packageServers.get(connector.mcpServerId) : undefined);
 			cards.set(`connector/${connector.id}`, {
 				id: `connector/${connector.id}`,
 				name: connector.displayName,
 				description: connector.description,
-				metadata: describeConnectorState(connector.state, connector.enabled),
+				metadata: [describeConnectorState(connector.state, connector.enabled),
+				owner && localize('customize.connectionFromPlugin', 'From {0}', owner.installation.package.id),
+				].filter(Boolean).join(' · '),
 				open: () =>
 					this.openInput(new ExtensionsCapabilityInput({ kind: 'connector', connectorId: connector.id })),
 			});
-		for (const installation of packages.status === 'fulfilled' ? packages.value : []) {
-			for (const capability of installation.capabilities.filter(capability => capability.kind === 'mcp')) {
-				const id = `marketplace:${installation.package.id}:mcp:${capability.id}`;
-				if (linked.has(id)) continue;
-				cards.set(id, {
-					id,
-					name: capability.id,
-					description: installation.package.id,
-					metadata: installation.package.version,
-					open: () =>
-						this.openInput(
-							new ExtensionsCapabilityInput({
-								kind: 'mcp',
-								serverId: id,
-								installationId: installation.installationId,
-								capabilityId: capability.reference.id,
-							}),
-						),
-				});
-			}
+		}
+		for (const [id, { installation, capability }] of packageServers) {
+			if (linked.has(id)) continue;
+			cards.set(id, {
+				id,
+				name: capability.id,
+				description: localize('customize.connectionFromPlugin', 'From {0}', installation.package.id),
+				metadata: installation.package.version,
+				open: () =>
+					this.openInput(
+						new ExtensionsCapabilityInput({
+							kind: 'mcp',
+							serverId: id,
+							installationId: installation.installationId,
+							capabilityId: capability.reference.id,
+						}),
+					),
+			});
 		}
 		for (const server of configuration.status === 'fulfilled' ? (configuration.value?.servers ?? []) : []) {
-			if (linked.has(server.id)) continue;
+			if (linked.has(server.id) || cards.has(server.id)) continue;
 			cards.set(server.id, {
 				id: server.id,
 				name: server.displayName,
-				description: server.id,
+				description: localize('customize.standaloneMcp', 'Standalone MCP server · {0}', server.id),
 				metadata:
 					server.enablement === 'enabled'
 						? localize('customize.enabled', 'Enabled')
@@ -899,7 +1005,7 @@ export class CustomizeEditorPane extends EditorPane {
 					...defaultButtonStyles,
 					label: card.name,
 					onClick: () => {
-						void this.run(card.open);
+						this.openCard(card);
 					},
 				}),
 			);
@@ -940,7 +1046,8 @@ export class CustomizeEditorPane extends EditorPane {
 							const restoreFocus = document.activeElement === open.domNode;
 							open.enabled = false;
 							try {
-								await (card.install ?? card.open)();
+								if (card.install) await card.install();
+								else await this.showCardDetails(card);
 							} finally {
 								if (open.domNode.isConnected) open.enabled = true;
 								// The review dialog cannot restore focus to the disabled install button.
@@ -1016,11 +1123,12 @@ export class CustomizeEditorPane extends EditorPane {
 	}
 
 	private async openResource(resource: ICustomizationMarketplaceResource): Promise<void> {
+		const location = this.location.get();
 		const [details, installed] = await Promise.all([
 			this.extensions.get(resource.installation.selectionId, resource.version),
 			this.extensions.listInstalled(),
 		]);
-		if (!this.shown || this.isDisposed) return;
+		if (!this.shown || this.isDisposed || location !== this.location.get()) return;
 		const installation = installed.find(
 			item => item.package.id === details.package.id && item.package.version === details.package.version,
 		);
@@ -1054,7 +1162,7 @@ export class CustomizeEditorPane extends EditorPane {
 			openInstalledVersions: (query: string) => this.openCatalog('plugins', 'yours', query),
 			accessibilityHelp: localize(
 				'customize.detailHelp',
-				'Use the Back button above the details to return to your resource list. Your category, search, sorting and scroll position are preserved, and focus returns to the resource card.',
+				'Use the Back button above the details to return to your resource list. Your category, search, sorting and scroll position are preserved, and focus returns to the control that opened the details.',
 			),
 		});
 		// The embedded pane borrows services; this navigation owns its request, input and lifetime.
@@ -1097,6 +1205,7 @@ export class CustomizeEditorPane extends EditorPane {
 		if (!this.detailEditor) return;
 		this.detailResources.clear();
 		this.detailEditor = undefined;
+		this.installedSelection.set(undefined, undefined);
 		this.details.hidden = true;
 		this.catalog.hidden = false;
 		const previous = this.returnFocus;
@@ -1110,10 +1219,21 @@ export class CustomizeEditorPane extends EditorPane {
 				: row?.querySelector<HTMLButtonElement>(
 					previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name',
 				);
-			if (target) target.focus({ preventScroll: true });
+			if (target?.getClientRects().length) target.focus({ preventScroll: true });
 			else this.searchActionViewItem.focus();
 		}
 		this.catalog.scrollTop = this.catalogScrollTop;
+	}
+
+	private openCard(card: Card): void {
+		void this.run(() => this.showCardDetails(card));
+	}
+
+	private showCardDetails(card: Card): Promise<void> {
+		if (this.collection === 'yours' && this.category !== 'connectors') {
+			this.installedSelection.set({ category: this.category, id: card.id }, undefined);
+		}
+		return card.open();
 	}
 
 	private async run(action: () => Promise<unknown>): Promise<void> {
@@ -1234,7 +1354,7 @@ export class CustomizeEditorPane extends EditorPane {
 
 	private showYourSkills(): void {
 		if (!this.shown || this.isDisposed || this.category !== 'skills') return;
-		this.collection = 'yours';
+		this.location.set({ category: this.category, collection: 'yours' }, undefined);
 		this.search.value = '';
 		this.updateControls();
 		void this.load();
@@ -1267,7 +1387,7 @@ export class CustomizeEditorPane extends EditorPane {
 										: this.panel.innerText
 									: localize(
 										'customize.help',
-										'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. In Connectors, open Add and choose Add connection to set up a service account or MCP server. In Plugins, Add offers catalog browsing and installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
+										'Choose Discover, an installed resource or Connections in the Customize sidebar. In Discover, use Left and Right Arrow on the category tabs, then Enter to select. When the sidebar is hidden, use the category tabs and switch between Yours and Discover here. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the control that opened the details. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. In Connectors, open Add and choose Add connection to set up a service account or MCP server. In Plugins, Add offers catalog browsing and installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
 									),
 							() => {
 								if (

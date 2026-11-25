@@ -28,7 +28,7 @@ The Agents Window has no Banner Part or reserved notice row. Restricted Mode and
 
 Compact Chat opens transcript web links in a retained browser editor group beside SessionsPart. Each Chat entry owns and restores its group independently of Code session working sets. Opening or focusing its browser keeps the Chat entry, source, selection and draft. Entry switches hide the group while retaining live pages; closing its last tab hides the editor area and returns focus to Chat. Main remains the owner of browser page state and storage.
 
-Desktop Chat and Code use the same `SessionsPart`, session grid, `SessionView` and `ChatView`. The entry selects the model source. The factory binds that source to the shared `ChatWidget` with the available composer and transcript capabilities. Desktop Chat uses one slot, and the grid preserves the geometry of the Agent session arrangement while Chat is active. ChatGPT's window-scoped service owns selection, messages, drafts, models and in-flight operations, and its Electron adapter keeps credentials, HTTP streaming and verification in Main. Projects, Artifacts and Customize retain the Chat sidebar and its collapsed groups. Opening a conversation from those pages reveals `SessionsPart` and focuses the Chat view. The sidebar can initialize its catalog independently of the Chat view.
+Desktop Chat and Code use the same `SessionsPart`, session grid, `SessionView` and `ChatView`. The entry selects the model source. The factory binds that source to the shared `ChatWidget` with the available composer and transcript capabilities. Desktop Chat uses one slot, and the grid preserves the geometry of the Agent session arrangement while Chat is active. ChatGPT's window-scoped service owns selection, messages, drafts, models and in-flight operations, and its Electron adapter keeps credentials, HTTP streaming and verification in Main. Projects and Artifacts retain the Chat sidebar and its collapsed groups. Opening a conversation from those pages reveals `SessionsPart` and focuses the Chat view. The sidebar can initialize its catalog independently of the Chat view.
 
 Layout variants arrange these shared hosts differently. Desktop-specific editor/detail docking and phone navigation may require separate layout implementations; they do not justify `ProjectsPart`, `ArtifactsPart` or another Part for each page. Conversation-grid ownership remains governed by the Sessions model and its own composition contract, independently of document editing.
 
@@ -44,7 +44,7 @@ Projects presents the shared Project catalog through `IProjectService`. The back
 
 Artifacts retains the workspace conversation sidebar when opening its home, documents or canvas modes. Registered sidebar tool views, including layers, require an explicit view-opening action rather than activation by page navigation. Artifacts reuses EditorPart for the retained creation EditorPane; AuxiliaryBarPart for properties and detail Views; and SessionsPart for full Agent conversations. The [Artifacts Part mapping](contrib/artifact/DESIGN.md#六项画布工作区的-part-分工) owns the six canvas workspaces' content and task-specific display requirements. Single-purpose AI controls belong with the affected content; they do not introduce another conversation host or selection model.
 
-Customize owns the Sessions catalog for plugins, skills and connections, including the optional Academy paper editor. General Docs are built into the Agent Window. IDE editor extension discovery and management open in the standalone IDE with the requested filters. The originating Sessions window stays open.
+Customize opens a dedicated sidebar ViewContainer for discovery, installed plugins and skills, and connections. Its retained editor owns the catalog and details in the main area, including the optional Academy paper editor. Switching back restores the workspace navigation with its collapsed groups. When the sidebar is hidden, the catalog exposes its category and collection controls. General Docs are built into the Agent Window. IDE editor extension discovery and management open in the standalone IDE with the requested filters. The originating Sessions window stays open.
 
 Artifact details use the same desktop composition from left to right: SidebarPart for session navigation, SessionsPart for conversation and EditorPart for the artifact. EditorPart is the primary surface. When an entry contributes a details ViewContainer, DesktopMainEditorPart docks the existing AuxiliaryBarPart on the editor's right edge below its tabs, using the same sash as Files details. The window layout owns the requested visibility and width. The editor owns the dock's effective size and temporarily hides it when the editor and details cannot both fit. Artifacts home retains the sidebar and its entry page. Artifact editors reuse the ordinary Chat view beside the artifact, with the same source, conversation and draft. Opening an artifact from Code or restoring an artifact resolves the ordinary Chat entry without navigating away from the editor. Design's Build with Agent keeps its editor visible and prepares an unsent conversation with the preview HTML attached.
 
@@ -147,15 +147,13 @@ The workbench omits the standard Activity Bar, Status Bar and Banner. Its Sessio
 Contributions register localized titles, icons and commands in `Menus.ActivityBar`.
 `ActivityBar` owns profile-scoped command order and presentation. Selected
 items follow the entry context published by the Sessions entry service. Focusing a conversation inside Code keeps Code selected.
-Account actions remain outside the sortable group, and placement changes retain
-the same actions and order. At the default location, SidebarPart hosts labeled
-navigation above its active view and Accounts below it. Navigation is a disposable
-component rather than a separate window Part; closing or suppressing the sidebar hides its
-navigation and Accounts together without reserving an icon rail. The titlebar
-workspace mode control appears when the sidebar is visible and the current
-entry allows it. The sidebar toggle remains available to restore navigation in
-the current page. ActivityBar retains
-action ownership as its presentation moves between the configured hosts.
+`SidebarPart` places a `MenuWorkbenchToolBar` backed by `Menus.SidebarFooter`.
+Feature owners register custom action views with the window's
+`IActionViewItemService`. The same footer moves to the vertical Activity Bar in
+Left and Right. Accounts uses the title bar's account menu slot in Top. Closing
+or suppressing the sidebar hides its navigation and footer without reserving an
+icon rail. The titlebar workspace mode control follows sidebar and entry
+visibility, and the sidebar toggle restores navigation in the current page.
 
 Both workbenches open, hide and focus view containers through
 `IPaneCompositePartService`. Sidebar and Auxiliary Bar retain their

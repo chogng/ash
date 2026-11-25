@@ -3,8 +3,14 @@ import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
 import { Sash } from '../../../../../base/browser/ui/sash/sash.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IMenuService, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { SidebarPart } from '../../../../browser/parts/sidebar/sidebarPart.js';
 import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
 import { IWorkbenchLayoutService, Position } from '../../../../services/layout/browser/layoutService.js';
@@ -29,6 +35,37 @@ function createFixture(resources: DisposableStore) {
 
 suite('SidebarPart boundary sashes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('the title follows menu visibility when the sidebar has no composite bar', () => {
+		using resources = new DisposableStore();
+		const { container, services, descriptors } = createFixture(resources);
+		const contexts = services.get(IContextKeyService);
+		using scope = contexts.createScoped(container);
+		const commands = resources.add(new CommandService(services));
+		services.registerInstance(IMenuService, new MenuService(commands, contexts));
+		services.registerInstance(IWorkbenchLayoutService, { getSideBarPosition: () => Position.LEFT } as IWorkbenchLayoutService);
+		const contextMenuProvider: IContextMenuService = {
+			contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+			showContextMenu() { }, hideContextMenu() { },
+		};
+		services.registerInstance(IContextMenuService, contextMenuProvider);
+		const menuId = MenuId.for('test.sidebar.title');
+		const sidebar = resources.add(services.createInstance(SidebarPart, container, {
+			viewDescriptorService: descriptors, openComposite: async () => null, compositeBarVisible: false,
+			contextKeyService: scope, titleActions: { contextMenuProvider, menuId },
+		}));
+		const title = sidebar.domNode.querySelector<HTMLElement>('.ash-workbench-part-title')!;
+		assert.equal(title.hidden, true);
+		using action = MenusRegistry.appendMenuItem(menuId, {
+			command: { id: 'test.sidebar.titleAction', title: 'Title action' },
+			when: ContextKeyExpr.has('test.sidebar.showTitleAction'), group: 'navigation',
+		});
+		scope.setContext('test.sidebar.showTitleAction', true);
+		assert.equal(title.hidden, false);
+		assert.ok(title.querySelector('[data-action-id="test.sidebar.titleAction"] button'));
+		action.dispose();
+		assert.equal(title.hidden, true);
+	});
 
 	test('auto hide defaults off and rejects invalid persisted values', async () => {
 		using configuration = new InMemoryConfigurationService();

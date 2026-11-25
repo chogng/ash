@@ -1,3 +1,4 @@
+import { TestSessionsList } from '../../../../../test/browser/testSessionsList.js';
 import { ProjectsService } from '../../../../projects/browser/projectsService.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ISessionContext } from '../../../../../services/sessions/browser/sessionContext.js';
@@ -310,7 +311,7 @@ if (inputStack) {
 }
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
 const listProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
-const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, listProjects, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage), { blockedSessions: constObservable([]), ignore: () => undefined }, { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService, new NullLoggerService(), resources.add(new ProjectsService(listProjects, listStorage))));
+const list = resources.add(new TestSessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, listProjects, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage), { blockedSessions: constObservable([]), ignore: () => undefined }, { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService, new NullLoggerService(), resources.add(new ProjectsService(listProjects, listStorage))));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

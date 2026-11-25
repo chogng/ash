@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from '../../../../platform/actions/test/browser/testMenuToolbarServices.js';
 import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { ButtonWithDropdown } from '../../../browser/ui/button/button.js';
 import { ToolBar } from '../../../browser/ui/toolbar/toolbar.js';
@@ -130,7 +131,8 @@ resources.add(MenusRegistry.appendMenuItem(newMenu, {
 resources.add(MenusRegistry.appendMenuItem(newMenu, {
 	command: { id: 'test.button.default.other', title: 'Other action' }, group: '2_other',
 }));
-resources.add(new MenuWorkbenchToolBar(document.querySelector('#default-toolbar')!, menuService, menus, titleMenu));
+const toolbarServices = resources.add(createTestMenuToolbarServices(menuService, menus, services));
+resources.add(toolbarServices.createInstance(MenuWorkbenchToolBar, document.querySelector('#default-toolbar')!, titleMenu, undefined));
 window.ashButtonIntegration = {
 	theme: id => theme.setColorTheme(themes[id as keyof typeof themes]),
 	disable: () => { button.enabled = false; },

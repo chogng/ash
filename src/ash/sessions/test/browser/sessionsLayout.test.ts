@@ -335,6 +335,7 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 18);
 		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
+		await expect(activityNavigation.getByRole('button', { name: 'Customize', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
 		await expect(activityNavigation.getByRole('button', { name: 'New' })).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'code');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-pressed', 'true');
@@ -759,7 +760,7 @@ suite('sessions browser component', () => {
 			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 			for (const [section, categories] of [
-				['Basics', ['General', 'Account', 'Appearance', 'Customize', 'Voice']],
+				['Basics', ['General', 'Account', 'Appearance', 'Voice']],
 				['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
 			] as const) {
 				const group = navigation.getByRole('group', { name: section });
@@ -768,7 +769,7 @@ suite('sessions browser component', () => {
 				}
 			}
 			await expect(navigation.getByRole('button', { name: 'Tab', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'keyboard-tab');
-			await expect(navigation.getByRole('button', { name: 'Customize' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
+			await expect(navigation.getByRole('button', { name: 'Customize', exact: true })).toHaveCount(0);
 			await expect(navigation.getByRole('button', { name: 'Voice', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
 			await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
 			await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(212, 212, 212)');
@@ -865,7 +866,7 @@ suite('sessions browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(inbox).toBeFocused();
 		await inbox.press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用 Tab 聚焦侧栏底部的收件箱/u);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用 Tab 聚焦收件箱/u);
 		await page.keyboard.press('Escape');
 		await expect(inbox).toBeFocused();
 
@@ -877,7 +878,7 @@ suite('sessions browser component', () => {
 		await expect(inbox).toBeVisible();
 		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
 		await expect(inbox.locator('.ash-sessions-inbox-dot')).toBeVisible();
-		const accounts = page.locator('.ash-sessions-sidebar-accounts button');
+		const accounts = footer.getByRole('button', { name: '账户', exact: true });
 		const accountBounds = (await accounts.boundingBox())!;
 		const inboxBounds = (await inbox.boundingBox())!;
 		expect(accountBounds.x + accountBounds.width).toBeLessThanOrEqual(inboxBounds.x);
@@ -915,6 +916,70 @@ suite('sessions browser component', () => {
 		await expectEvenInsets();
 		await inbox.click();
 		await expect(panel).toBeHidden();
+	});
+
+	test('Inbox and Accounts stay at the bottom of either vertical Activity Bar', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inbox&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const rail = sidebar.locator('.ash-sessions-activity-host.side');
+		const footer = sidebar.getByRole('toolbar', { name: '侧栏操作', exact: true });
+		const inbox = footer.getByRole('button', { name: '收件箱，2 个会话需要关注' });
+		const accounts = sidebar.getByRole('button', { name: '账户', exact: true });
+		const setPosition = (position: 'left' | 'right' | 'default') => page.evaluate(value => {
+			return window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', value);
+		}, position);
+		await accounts.focus();
+		for (const position of ['left', 'right'] as const) {
+			await setPosition(position);
+			await expect(sidebar).toHaveAttribute('data-activity-bar-side', position);
+			await expect(rail.getByRole('button', { name: '账户', exact: true })).toBeFocused();
+			await expect(rail.getByRole('button', { name: '收件箱，2 个会话需要关注' })).toBeVisible();
+			await expect(inbox.locator('.ash-sessions-inbox-dot')).toBeVisible();
+			await expect(footer).toHaveAttribute('aria-orientation', 'vertical');
+			await expect(footer.getByRole('button')).toHaveCount(2);
+			await accounts.press('ArrowUp');
+			await expect(inbox).toBeFocused();
+			await inbox.press('ArrowDown');
+			await expect(accounts).toBeFocused();
+			const inboxBounds = (await inbox.boundingBox())!;
+			const accountsBounds = (await accounts.boundingBox())!;
+			const railBounds = (await rail.boundingBox())!;
+			expect([inboxBounds.width, inboxBounds.height, accountsBounds.width, accountsBounds.height]).toEqual([36, 36, 36, 36]);
+			expect(inboxBounds.x).toBeCloseTo(accountsBounds.x);
+			expect(inboxBounds.y + inboxBounds.height).toBeLessThan(accountsBounds.y);
+			expect(railBounds.y + railBounds.height - accountsBounds.y - accountsBounds.height).toBeCloseTo(8);
+			await page.keyboard.press('Shift+Tab');
+			await expect(inbox).toBeFocused();
+			const inboxPanel = page.getByRole('dialog', { name: '收件箱', exact: true });
+			const accountMenu = page.locator('.ash-sessions-account-menu');
+			for (const [button, popup, bounds] of [[inbox, inboxPanel, inboxBounds], [accounts, accountMenu, accountsBounds]] as const) {
+				await button.press('Enter');
+				await expect(popup).toBeVisible();
+				const popupBounds = (await popup.boundingBox())!;
+				if (position === 'left') expect(popupBounds.x).toBeGreaterThanOrEqual(bounds.x + bounds.width);
+				else expect(popupBounds.x + popupBounds.width).toBeLessThanOrEqual(bounds.x);
+				await page.keyboard.press('Escape');
+				await expect(popup).toBeHidden();
+				await expect(button).toBeFocused();
+				if (button === inbox) await page.keyboard.press('Tab');
+				await expect(accounts).toBeFocused();
+			}
+		}
+		await setPosition('default');
+		await expect(rail).toBeHidden();
+		await expect(footer).toHaveAttribute('aria-orientation', 'horizontal');
+		await expect(accounts).toBeFocused();
+		await expect(accounts).toHaveText('账户');
+		await expect(inbox).toHaveCSS('width', '28px');
+		await accounts.press('Enter');
+		const accountMenu = page.locator('.ash-sessions-account-menu');
+		await expect(accountMenu).toBeVisible();
+		await setPosition('left');
+		await expect(accountMenu).toBeHidden();
+		await expect(rail.getByRole('button', { name: '账户', exact: true })).toHaveAttribute('aria-expanded', 'false');
 	});
 
 	test('Inbox waits for a background PR required check before showing it as ready to merge', async () => {
@@ -1005,7 +1070,11 @@ suite('sessions browser component', () => {
 		const inbox = page.getByRole('button', { name: /^收件箱/u });
 		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
 		const menu = page.getByRole('menu');
+		const sidebar = page.locator('[data-part="sidebar"]');
+		await page.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
+		await expect(sidebar).toBeHidden();
 		await new QuickAccess(page).runCommand('sessions.inboxNotifications.show');
+		await expect(sidebar).toBeVisible();
 		await expect(panel.getByRole('button').first()).toHaveAccessibleName('Task from Host B 等待你的输入');
 		await page.keyboard.press('Escape');
 		await inbox.press('Shift+F10');
@@ -2406,7 +2475,7 @@ suite('sessions browser component', () => {
 		expect(await form.boundingBox()).toEqual(formBounds);
 
 		await page.locator('[data-action-id="sessions.newSession"] button').click();
-		await expect(tip).toContainText('Choose Plan');
+		await expect(tip).toContainText('Start the message with /plan');
 		expect((await tip.boundingBox())!.y + (await tip.boundingBox())!.height).toBeLessThan(formBounds.y);
 		expect(await card.boundingBox()).toEqual(cardBounds);
 		expect(await form.boundingBox()).toEqual(formBounds);
@@ -2603,7 +2672,7 @@ suite('sessions browser component', () => {
 			await expect(title).toHaveCSS('font-weight', '600');
 		}
 		await settings.locator('[data-settings-category-id="account"]').click();
-		await expect(settings.locator('.ash-settings-section > p')).toHaveCSS('font-size', '13px');
+		await expect(settings.locator('.ash-settings-section > p:not([role="status"])')).toHaveCSS('font-size', '13px');
 		await expect(settings.getByRole('searchbox')).toHaveCSS('font-size', '14px');
 		await settings.getByRole('searchbox').fill('@id:sessions.experimental.layoutScope');
 		const layoutScope = settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"]');
@@ -2616,6 +2685,7 @@ suite('sessions browser component', () => {
 		try {
 			await ide.goto('/chatInput.html?inlineCode=1');
 			await expect(ide.locator('.ash-chat-input-editor .stanza-editor')).toHaveCSS('font-size', '13px');
+			await ide.evaluate(() => window.ashChatInputIntegration.setAgent({ name: 'Reviewer', description: 'Reviews changes.', sourceId: 'fixture' }));
 			await expect(ide.locator('.ash-chat-input-agent-action')).toHaveCSS('font-size', '12px');
 		} finally {
 			await ide.close();

@@ -38,7 +38,7 @@ import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServ
 import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { addConnection, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel, getSkillSummary } from './extensionsActions.js';
+import { addConnection, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel, getMarketplaceMcpServerId, getSkillSummary } from './extensionsActions.js';
 import { IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IExtensionManagementService, type ExtensionsOpenOptions, type ExtensionsPackageSummary, type ExtensionsInstalledPackage } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
@@ -772,8 +772,8 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		const connectors = connectorsResult.status === 'fulfilled' ? connectorsResult.value.connectors : [];
 		const linkedServers = new Set(connectors.flatMap(connector => [connector.mcpDeclarationId, ...(connector.mcpServerId ? [connector.mcpServerId] : [])]));
 		// Package identity enriches backend status; installation alone says nothing about connection state.
-		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp' && !linkedServers.has(`marketplace:${installation.package.id}:mcp:${capability.id}`)).map(capability => ({
-			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
+		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp' && !linkedServers.has(getMarketplaceMcpServerId(installation.package.id, capability.id))).map(capability => ({
+			target: { kind: 'mcp' as const, serverId: getMarketplaceMcpServerId(installation.package.id, capability.id), installationId: installation.installationId, capabilityId: capability.reference.id },
 			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval'
 				? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending')
 				: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),

@@ -1,10 +1,11 @@
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import './media/chatTipContent.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
 import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { createActionViewItem } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { MenuWorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
-import { MenuId, IMenuService } from '../../../../../../platform/actions/common/actions.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../../platform/actions/browser/toolbar.js';
+import { MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { DomWidget } from '../../../../../../platform/domWidget/browser/domWidget.js';
@@ -27,7 +28,7 @@ export class ChatTipContentPart extends DomWidget {
 		dismiss: () => void,
 		navigate: ((direction: -1 | 1) => void) | undefined,
 		@IMarkdownRendererService markdownRenderer: IMarkdownRendererService,
-		@IMenuService menus: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
@@ -42,7 +43,7 @@ export class ChatTipContentPart extends DomWidget {
 		const context = this._register(contextKeys.createScoped(actions));
 		multipleChatTips.bindTo(context).set(!!navigate);
 		const actionContext = new ChatTipActionContext(dismiss, navigate, () => this.isDisposed);
-		this.toolbar = this._register(new MenuWorkbenchToolBar(actions, menus, contextMenus, MenuId.ChatTipToolbar, {
+		this.toolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, actions, MenuId.ChatTipToolbar, {
 			ariaLabel: localize('chat.tip.actions', 'Tip actions'),
 			tabNavigation: 'each-action',
 			contextKeyService: context,
@@ -50,7 +51,7 @@ export class ChatTipContentPart extends DomWidget {
 			actionViewItemProvider: (action, options) => createActionViewItem(action, contextMenus, {
 				...options, iconOnly: true, buttonPresentation: 'quiet',
 			}),
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		const showContextMenu = (event: MouseEvent | KeyboardEvent): void => {
 			event.preventDefault();
 			event.stopPropagation();

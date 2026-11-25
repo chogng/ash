@@ -99,7 +99,8 @@ export class ModalEditorPart extends Disposable {
 		}
 		const closeLabel = localize('workbench.closeEditor', 'Close');
 		if (actions) {
-			this.closeToolbar = this._register(new MenuWorkbenchToolBar(headerDomNode, actions.menuService, actions.contextMenuProvider, MenuId.ModalEditorTitle, {
+			this.closeToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, headerDomNode, MenuId.ModalEditorTitle, {
+				contextMenuProvider: actions.contextMenuProvider,
 				ariaLabel: closeLabel,
 				contextKeyService: actions.contextKeyService,
 			}));

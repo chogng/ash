@@ -12,7 +12,7 @@ import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } fr
 import { terminalProfileIcon } from './terminalIcon.js';
 import { type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../platform/actions/browser/toolbar.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { MenuItemAction } from '../../../../platform/actions/common/actions.js';
@@ -375,10 +375,8 @@ export class TerminalTitleActions extends Disposable {
 			this.hasActiveInstanceContext.reset();
 			this.creatingContext.reset();
 		}));
-		this.toolbar = this._register(new MenuWorkbenchToolBar(
+		this.toolbar = this._register(instantiation.createInstance(MenuWorkbenchToolBar,
 			container,
-			menuService,
-			contextMenuService,
 			MenuId.TerminalTitle,
 			{
 				ariaLabel: localize('terminal.title.actions', 'Terminal actions'),
@@ -386,7 +384,7 @@ export class TerminalTitleActions extends Disposable {
 				highlightToggledItems: true,
 				menuOptions: { shouldForwardArgs: true },
 				actionViewItemProvider: (action) => this.createActionViewItem(action, contextMenuService),
-			},
+			} satisfies IMenuWorkbenchToolBarOptions,
 		));
 		this.element = this.toolbar.element;
 		this.element.classList.add('ash-terminal-title-toolbar');

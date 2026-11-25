@@ -16,6 +16,9 @@ import { ContextKeyService, IContextKeyService } from '../../../platform/context
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { NativeMenubarControl } from '../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import type { INativeMenubarData, INativeMenubarSelection } from '../../../platform/menubar/common/nativeMenubar.js';
@@ -26,7 +29,7 @@ import { TestNotificationService } from '../../../workbench/services/notificatio
 test('Sessions and Workbench menus keep product commands separate while sharing menu interaction', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
-	using services = new InstantiationService();
+	using services = new InstantiationService(new ServiceCollection(getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)!));
 	using commands = new CommandService(services);
 	using contextKeys = new ContextKeyService();
 	const menus = new MenuService(commands, contextKeys);

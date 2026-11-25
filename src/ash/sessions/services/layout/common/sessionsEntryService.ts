@@ -23,7 +23,7 @@ export interface ISessionsEntry {
 	readonly openDocumentConversation?: (resource: URI, signal: AbortSignal) => Promise<void>;
 	/** Places the ordinary Chat view beside this editor and sets its initial visibility. */
 	readonly conversation?: 'visible' | 'optional';
-	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
+	/** Overrides workspace navigation; omission uses the workspace sidebar or its registered default. */
 	readonly sidebarContainerId?: string;
 	/** Whether this entry allows the title bar workspace mode control. Defaults to true. */
 	readonly showWorkspaceModeControl?: boolean;

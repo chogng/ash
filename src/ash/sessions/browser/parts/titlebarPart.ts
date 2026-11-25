@@ -5,31 +5,26 @@ import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/t
 import './media/titlebarpart.css';
 import './titlebar/media/menubarControl.css';
 import { sessionsConversationBackground } from '../../common/theme.js';
-import { getWindowId, h } from '../../../base/browser/dom.js';
+import { addDisposableListener, h, isEditableElement, isElement } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Color } from '../../../base/common/color.js';
-import type { ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
-import type { IAction } from '../../../base/common/actions.js';
 import { environment } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
-import { IMenuService } from '../../../platform/actions/common/actions.js';
-import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
-import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../platform/actions/browser/toolbar.js';
 import { WebTitlebarPart, type ITitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
 import type { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
-import { Menus } from '../menus.js';
+import { activityBarPositionCommandPrefix, Menus } from '../menus.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IsNewSessionContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { autorun, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
+import { autorun, observableFromEvent } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
 import { titleBarBackground } from '../../../workbench/common/theme.js';
-import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../common/chatWorkspace.js';
 import { SessionsWindowTitlebarHeight } from '../../../platform/window/common/window.js';
 
@@ -59,7 +54,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	updateProperties(): void { }
 	registerVariables(): void { }
 
-	private readonly activityActions: WorkbenchToolBar;
+	private readonly activityActions: MenuWorkbenchToolBar;
 	private readonly leftControls: HTMLElement;
 	private readonly rightControls: HTMLElement;
 	private readonly pageContent: HTMLElement;
@@ -67,7 +62,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly editorHeaders: HTMLElement;
 	private readonly sidePaneActions: MenuWorkbenchToolBar;
 	private readonly layoutActions: MenuWorkbenchToolBar;
-	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
 
 	/** Intrinsic left controls, their gaps and the sidebar-aligned outer insets. */
@@ -80,19 +74,36 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	constructor(
 		container: HTMLElement,
 		presentation: 'application-menu' | 'actions-only',
-		@IMenuService menuService: IMenuService,
-		@IContextMenuService contextMenus: IContextMenuService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IActionViewItemService presentations: IActionViewItemService,
+		@IContextMenuService contextMenus: IContextMenuService,
 	) {
 		super(container, themeService, storageService, 0);
 		const ownerWindow = container.ownerDocument.defaultView!;
 		const pixels = (value: string): number => Number.parseFloat(value) || 0;
 		this.domNode.classList.add('ash-sessions-titlebar');
 		this.updateStyles();
+		const showContextMenu = (event: MouseEvent | KeyboardEvent): void => {
+			if (event.defaultPrevented || !isElement(event.target) || isEditableElement(event.target)) return;
+			const anchor = event.type === 'contextmenu'
+				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: ownerWindow }
+				: event.target;
+			event.preventDefault();
+			event.stopPropagation();
+			contextMenus.showContextMenu({
+				getAnchor: () => anchor,
+				menuId: Menus.TitleBarContext,
+				contextKeyService: contextKeys.getContextKeyService(event.target),
+				autoSelectFirstItem: event.type === 'keydown',
+				getCheckedActionsRepresentation: action => action.id.startsWith(activityBarPositionCommandPrefix) ? 'radio' : 'checkbox',
+			});
+		};
+		this._register(addDisposableListener(this.domNode, 'contextmenu', showContextMenu));
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) showContextMenu(event);
+		}));
 		const left = this.leftControls = h(container.ownerDocument, 'div');
 		left.className = 'ash-sessions-titlebar-left';
 		this.contentDomNode.append(left);
@@ -162,25 +173,21 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this.pageContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-page-content' });
 		this.sessionContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-session-content' });
 		this.contentDomNode.append(this.pageContent, this.sessionContent);
-		const pageActions = this._register(new MenuWorkbenchToolBar(this.pageContent, menuService, contextMenus, Menus.TitleBarPageContent, {
+		this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.sessionContent, Menus.CommandCenter, {
+			ariaLabel: localize('sessions.titlebar.title', 'Session title'),
+			contextKeyService: contextKeys,
+			tabNavigation: 'each-action',
+		}));
+		const pageActions = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.pageContent, Menus.TitleBarPageContent, {
 			ariaLabel: localize({ bundle: 'ash.regions', key: 'titleBarPageActions' }, 'Page title actions'),
 			contextKeyService: contextKeys,
 			toolbarOptions: { primaryGroup: () => true },
-			actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(
-				action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
-			),
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		const updatePageVisibility = (): void => {
 			this.pageContent.hidden = pageActions.element.hidden;
 			this.domNode.classList.toggle('has-page-content', !this.pageContent.hidden);
 		};
 		this._register(pageActions.onDidChangeMenuItems(updatePageVisibility));
-		this._register(presentations.onDidChange(menu => {
-			if (menu === Menus.TitleBarPageContent) {
-				pageActions.refresh();
-				updatePageVisibility();
-			}
-		}));
 		updatePageVisibility();
 		const right = this.rightControls = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
@@ -192,14 +199,12 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			return pixels(style.paddingLeft) + pixels(style.paddingRight);
 		};
 		const layoutActions = this.layoutActions = this._register(
-			new MenuWorkbenchToolBar(right, menuService, contextMenus, Menus.TitleBarRightLayout, {
+			instantiationService.createInstance(MenuWorkbenchToolBar, right, Menus.TitleBarRightLayout, {
 				ariaLabel: localize({ bundle: 'ash', key: 'windowMode.layout' }, 'Code layout'),
 				presentation: 'inherit-foreground',
 				highlightToggledItems: true,
 				contextKeyService: contextKeys,
-				actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarRightLayout, action.id)?.(
-					action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
-				),
+
 				responsiveBehavior: {
 					enabled: true,
 					observedElement: this.contentDomNode,
@@ -217,18 +222,16 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
 					},
 				},
-			}),
+			} satisfies IMenuWorkbenchToolBarOptions),
 		);
 		layoutActions.element.classList.add('ash-sessions-titlebar-actions');
-		this._register(presentations.onDidChange(menu => {
-			if (menu === Menus.TitleBarRightLayout) layoutActions.refresh();
-		}));
-		this.activityActions = this._register(new WorkbenchToolBar(right, contextMenus, {
+		const activityActions = this.activityActions = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, right, Menus.TitleBarAccounts, {
 			ariaLabel: localize('workbench.accounts', 'Accounts'),
 			presentation: 'inherit-foreground',
-			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
-		}));
-		this.sidePaneActions = this._register(new MenuWorkbenchToolBar(this.contentDomNode, menuService, contextMenus, Menus.TitleBarSidePane, {
+			contextKeyService: contextKeys,
+		} satisfies IMenuWorkbenchToolBarOptions));
+		this._register(activityActions.onDidChangeMenuItems(() => this.updateRightControlsVisibility()));
+		this.sidePaneActions = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.contentDomNode, Menus.TitleBarSidePane, {
 			ariaLabel: localize({ bundle: 'ash', key: 'sessions.layout.sidePane' }, 'Code side panel'),
 			presentation: 'inherit-foreground',
 			highlightToggledItems: true,
@@ -277,28 +280,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 
 	public override updateStyles(): void {
 		this.domNode.style.setProperty('--ash-sessions-titlebar-background', getSessionsTitlebarBackground(this.theme) ?? '');
-	}
-
-	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable {
-		this.sessionContent.replaceChildren(content);
-		const menuState = autorun(reader => {
-			if (content.parentElement === this.sessionContent) {
-				this.sessionContent.classList.toggle('session-menu-open', menuOpen.read(reader));
-			}
-		});
-		return toDisposable(() => {
-			menuState.dispose();
-			if (content.parentElement === this.sessionContent) {
-				this.sessionContent.classList.remove('session-menu-open');
-				content.remove();
-			}
-		});
-	}
-
-	public setActivityActions(actions: readonly IAction[], actionViewItemProvider: ActionViewItemProvider): void {
-		this.activityActionViewItemProvider = actionViewItemProvider;
-		this.activityActions.setActions([], [], actions);
-		this.updateRightControlsVisibility();
 	}
 
 	private updateRightControlsVisibility(): void {

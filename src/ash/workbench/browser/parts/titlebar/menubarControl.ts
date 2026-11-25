@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { defaultButtonStyles, defaultMenuStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/menubarControl.css';
 import { getActiveElement } from '../../../../base/browser/dom.js';
@@ -8,9 +9,8 @@ import { ActionRunner, SubmenuAction, type IAction } from '../../../../base/comm
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../platform/actions/browser/toolbar.js';
 import { type IMenu, IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize, ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -87,11 +87,12 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 		container: HTMLElement,
 		options: MenubarOptions,
 		@IMenuService menuService: IMenuService,
-		@IContextMenuService contextMenuService: IContextMenuService,
+
 		@ILocalizationService localizationService: ILocalizationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@INotificationService notifications: INotificationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		const applicationMenuLabel = () => localize(localizationService, { bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu');
@@ -107,7 +108,7 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 			icon: Lxicon.menu, enabled: true,
 			run: () => this.menuItem?.open(),
 		};
-		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
+		this.toolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, container, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
 			contextKeyService,
 			ariaLabel: localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions'),
 			presentation: 'inherit-foreground',
@@ -126,7 +127,7 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 				this.menuItem = item;
 				return item;
 			},
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		this.domNode = this.toolbar.element;
 		this.domNode.classList.add('ash-titlebar-left-actions');
 		this._register(this.toolbar.onDidChangeMenuItems(() => this.menuItem?.close()));

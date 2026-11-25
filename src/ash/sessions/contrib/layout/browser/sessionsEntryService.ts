@@ -59,6 +59,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
+	private readonly workspaceSidebars = new Map<'chat' | 'code', string>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
 	private readonly activeBrowserKey = observableValue<string | undefined>(this, undefined);
 	public readonly conversationBrowserContext = derived(reader => {
@@ -379,11 +380,17 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
 				}
 				this.conversation.setChatSource(entry.chatSource);
-				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
+				const visibleSidebar = this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id;
+				// A product page can borrow the sidebar without becoming the workspace's default navigation.
+				if (previousEntry && visibleSidebar && (previousEntry.content !== 'editor' || previousEntry.sidebarContainerId !== visibleSidebar)) {
+					this.workspaceSidebars.set(previousEntry.workspaceMode === 'code' ? 'code' : 'chat', visibleSidebar);
+				}
+				const mode = entry.workspaceMode === 'code' ? 'code' : 'chat';
+				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === mode;
 				const defaultNavigation = this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id;
 				const sidebarContainerId = entry.sidebarContainerId
 					?? (sharedWorkspace && entry.workspaceMode === 'code' ? CODE_NAVIGATION_CONTAINER_ID : undefined)
-					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
+					?? (sameWorkspace ? this.workspaceSidebars.get(mode) : undefined)
 					?? defaultNavigation
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				const context = entry.browserContext?.get();

@@ -1,6 +1,9 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+
+const customizeNavigation = (page: Page) => page.locator('.ash-customize-navigation');
+const collapseSidebar = (page: Page) => page.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
 
 suite('Customize page', () => {
 	const browser = useBrowserTests();
@@ -25,7 +28,7 @@ suite('Customize page', () => {
 		await expect(entry).toHaveAttribute('aria-current', 'page');
 		await expect(entry.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
 		const root = page.locator('.ash-customize');
-		await expect(root.getByRole('tab')).toHaveText(['Skills', 'Connectors', 'Plugins']);
+		await expect(root.getByRole('tab')).toHaveCount(0);
 		await expect(root.locator('.ash-customize-card-name')).toHaveText([
 			'code-review',
 			'research-notes',
@@ -51,8 +54,63 @@ suite('Customize page', () => {
 		await expect(root.getByRole('button', { name: 'Sort resources' })).toBeFocused();
 		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 		await expect(root).toBeVisible();
+		await expect(root.getByRole('tab')).toHaveText(['Skills', 'Connectors', 'Plugins']);
 		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 		await expect(entry).toBeVisible();
+		await expect(root.getByRole('tab')).toHaveCount(0);
+	});
+
+	test('opens installed resources in the main area and restores the retained Chat sidebar', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?customize&catalog&projectCreation&projectPdfPreview');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const nav = customizeNavigation(page);
+		const root = page.locator('.ash-customize');
+		const mode = page.locator('.ash-window-mode-control');
+		const chat = mode.getByRole('button', { name: 'Chat / Agents', exact: true });
+		const customize = page.locator('[data-action-id="sessions.open.customize"] button');
+		const conversationList = page.locator('.ash-chat-navigation-list');
+		await expect(conversationList).toBeVisible();
+		const group = conversationList.getByRole('button', { name: 'PDF project', exact: true });
+		const report = conversationList.getByRole('button', { name: 'report.pdf', exact: true });
+		await group.press('ArrowRight');
+		await expect(report).toBeVisible();
+		await customize.click();
+		await expect(conversationList).toBeHidden();
+		const plugin = nav.getByRole('list', { name: 'Installed plugins' }).getByRole('button', { name: 'Local productivity' });
+		const skill = nav.getByRole('list', { name: 'Installed skills' }).getByRole('button', { name: 'research-notes' });
+		await plugin.press('Enter');
+		await expect(root.locator('.ash-extension-editor')).toContainText('Local productivity');
+		await expect(plugin).toHaveAttribute('aria-current', 'true');
+		await skill.press('Enter');
+		await expect(root.locator('.ash-extension-editor')).toContainText('Reusable research instructions.');
+		await expect(skill).toHaveAttribute('aria-current', 'true');
+		await root.getByRole('button', { name: 'Back to Skills' }).press('Enter');
+		await expect(skill).toBeFocused();
+		await skill.press('Home');
+		await expect(nav.getByRole('button', { name: 'Discover', exact: true })).toBeFocused();
+		await nav.getByRole('button', { name: 'Connections', exact: true }).click();
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Team library']);
+		await chat.click();
+		await expect(nav).toBeHidden();
+		await expect(report).toBeVisible();
+	});
+
+	test('shows a bundled account in its plugin details and lists the connection once', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?customize&packageConnector');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('[data-action-id="sessions.open.customize"] button').click();
+		const nav = customizeNavigation(page);
+		const root = page.locator('.ash-customize');
+		await nav.getByRole('button', { name: 'fixture.package-0', exact: true }).click();
+		const details = root.locator('.ash-extension-editor');
+		await expect(details).toContainText('Plugin connections');
+		await expect(details).toContainText('Team library');
+		await expect(details).toContainText('Disconnected');
+		await nav.getByRole('button', { name: 'Connections', exact: true }).click();
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Team library']);
+		await expect(root.locator('.ash-customize-card-metadata')).toContainText('From fixture.package-0');
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -65,14 +123,16 @@ suite('Customize page', () => {
 				await page.locator('.ash-sessions-activity-content')
 					.getByRole('button', { name: '自定义', exact: true }).click();
 			}
+			await collapseSidebar(page);
 			const root = page.locator('.ash-customize');
 			const panel = root.getByRole('tabpanel');
 			const badge = root.locator('.ash-customize-results-heading .ash-count-badge');
 			const collection = root.locator('.ash-customize-toolbar > .ash-segmented-control');
+			const actions = root.getByRole('toolbar', { name: chinese ? '自定义操作' : 'Customization actions' });
 			const grid = root.locator('.ash-customize-grid');
-			for (const width of [1280, 760]) {
+			for (const width of [1280, 740]) {
 				await page.setViewportSize({ width, height: 720 });
-				if (width === 760) {
+				if (width <= 740) {
 					await expect(root).toHaveClass(/narrow/);
 				} else {
 					await expect(root).not.toHaveClass(/narrow/);
@@ -116,6 +176,14 @@ suite('Customize page', () => {
 				await root.getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
 				await expect(badge).toHaveText('4');
 				expect(await collection.boundingBox()).toEqual(collectionBounds);
+				if (width === 740) {
+					const actionsBounds = (await actions.boundingBox())!;
+					expect(actionsBounds.x).toBeGreaterThan(collectionBounds.x + collectionBounds.width);
+					expect(actionsBounds.y + actionsBounds.height / 2).toBeCloseTo(
+						collectionBounds.y + collectionBounds.height / 2,
+						0,
+					);
+				}
 				await root.getByRole('tab', { name: chinese ? '插件' : 'Plugins', exact: true }).click();
 				await expect(panel).toHaveAttribute('aria-busy', 'false');
 				expect(await collection.boundingBox()).toEqual(collectionBounds);
@@ -355,6 +423,7 @@ suite('Customize page', () => {
 
 	test('switches categories and discovery, handles source failures, and opens package details', async () => {
 		const { page } = browser;
+		await collapseSidebar(page);
 		const root = page.locator('.ash-customize');
 		await root.getByRole('tab', { name: 'Connectors', exact: true }).click();
 		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Team library']);
@@ -423,7 +492,7 @@ suite('Customize page', () => {
 					.click();
 			}
 			const root = page.locator('.ash-customize');
-			await root.getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
+			await customizeNavigation(page).getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
 			const install = root.getByRole('button', {
 				name: chinese ? '安装 Data explorer' : 'Install Data explorer',
 				exact: true,
@@ -442,6 +511,8 @@ suite('Customize page', () => {
 			});
 			await expect(installed.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'check');
 			await expect(installed).toBeFocused();
+			await expect(customizeNavigation(page).getByRole('list', { name: chinese ? '已安装插件' : 'Installed plugins' })
+				.getByRole('button', { name: 'fixture.package-0', exact: true })).toBeVisible();
 			const toast = page.locator('.ash-notification');
 			await expect(toast).toHaveCount(1);
 			await expect(toast.locator('.ash-notification-message')).toHaveText(
@@ -483,7 +554,7 @@ suite('Customize page', () => {
 			.getByRole('button', { name: 'Customize', exact: true })
 			.click();
 		const root = page.locator('.ash-customize');
-		await root.getByRole('button', { name: 'Discover', exact: true }).click();
+		await customizeNavigation(page).getByRole('button', { name: 'Discover', exact: true }).click();
 		const install = root.getByRole('button', { name: 'Install Data explorer', exact: true });
 		await install.click();
 		const review = page.getByRole('dialog', { name: 'Install', exact: true });
@@ -503,6 +574,7 @@ suite('Customize page', () => {
 
 	test('supports keyboard categories, card navigation, narrow layouts and high contrast', async () => {
 		const { page } = browser;
+		await collapseSidebar(page);
 		const root = page.locator('.ash-customize');
 		await root.getByRole('tab', { name: 'Skills', exact: true }).focus();
 		await page.keyboard.press('ArrowRight');
@@ -529,7 +601,7 @@ suite('Customize page', () => {
 		await expect(root.getByRole('button', { name: 'code-review', exact: true })).toBeFocused();
 		await page.keyboard.press('End');
 		await expect(root.getByRole('button', { name: 'writing-guide', exact: true })).toBeFocused();
-		await page.setViewportSize({ width: 760, height: 900 });
+		await page.setViewportSize({ width: 740, height: 900 });
 		await expect(root).toHaveClass(/narrow/);
 		expect(await root.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		const cards = root.locator('.ash-customize-card');
@@ -549,9 +621,11 @@ suite('Customize page', () => {
 			.click();
 		const root = page.locator('.ash-customize');
 		await expect(root.getByRole('heading', { name: '自定义', exact: true })).toBeVisible();
+		const nav = customizeNavigation(page);
+		await expect(nav.getByRole('heading')).toHaveText(['已安装插件', '已安装技能']);
+		await expect(nav.getByRole('button', { name: '连接', exact: true })).toBeVisible();
+		await nav.getByRole('button', { name: '发现', exact: true }).click();
 		await expect(root.getByRole('tab')).toHaveText(['技能', '连接器', '插件']);
-		await expect(root.getByRole('button', { name: '你的', exact: true })).toHaveAttribute('aria-pressed', 'true');
-		await root.getByRole('button', { name: '发现', exact: true }).click();
 		await expect(root.locator('.ash-customize-hero')).toContainText('让 Ash 学会新的工作方法');
 		await expect(root.getByRole('status')).toContainText('4 个资源');
 		await root.getByRole('button', { name: '搜索', exact: true }).click();

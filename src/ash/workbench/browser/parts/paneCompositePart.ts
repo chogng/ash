@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { Separator } from '../../../base/common/actions.js';
 import { SeparatorActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -12,7 +13,7 @@ import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js'
 import type { IDimension } from '../../../base/browser/dom.js';
 import { localize, type ILocalizationService, type LocalizationKey } from '../../services/localization/common/localizationService.js';
 import { MenuWorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
-import type { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
+import type { MenuId } from '../../../platform/actions/common/actions.js';
 import type { IContextKey } from '../../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, ActiveViewletContext } from '../../common/contextkeys.js';
@@ -26,7 +27,6 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../platform/
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
-	readonly menuService: IMenuService;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly menuId: MenuId;
 	readonly primaryGroup?: string;
@@ -87,6 +87,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		@IThemeService themeService: IThemeService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IActivityService activityService: IActivityService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, options.id, themeService, storageService);
 		this.activeCompositeStorageKey = options.activeCompositeStorageKey ?? activeCompositeStorageKeys[options.location];
@@ -133,6 +134,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.viewTitleActionsDomNode.className = 'ash-pane-composite-title-view-actions';
 		this.partTitleActionsDomNode = h(ownerDocument, 'div');
 		this.partTitleActionsDomNode.className = 'ash-pane-composite-title-part-actions';
+		this.partTitleActionsDomNode.hidden = true;
 		this.titleActionsSlotDomNode.append(this.viewTitleActionsDomNode, this.partTitleActionsDomNode);
 		this.titleDomNode.append(this.titleContentDomNode, this.titleActionsSlotDomNode);
 		const compositeActions = h(ownerDocument, 'div');
@@ -142,12 +144,10 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		if (contextMenus) this.createCompositeToolBar(compositeActions, contextMenus, ariaLabel);
 
 		if (options.titleActions) {
-			const actions = this._register(new MenuWorkbenchToolBar(
+			const actions = this._register(instantiationService.createInstance(MenuWorkbenchToolBar,
 				this.partTitleActionsDomNode,
-				options.titleActions.menuService,
-				options.titleActions.contextMenuProvider,
 				options.titleActions.menuId,
-				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
+				{ contextMenuProvider: options.titleActions.contextMenuProvider, contextKeyService: options.contextKeyService, highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
 			));
 			actions.element.classList.add('ash-pane-composite-title-menu-actions');
 			if (options.location === ViewContainerLocation.Panel || options.location === ViewContainerLocation.AuxiliaryBar) {
@@ -156,10 +156,13 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				separator.classList.add('ash-pane-composite-title-separator');
 				separator.setAttribute('aria-orientation', 'vertical');
 				this.partTitleActionsDomNode.prepend(separator);
-				const updateSeparator = () => { separator.hidden = actions.element.hidden; };
-				this._register(actions.onDidChangeMenuItems(updateSeparator));
-				updateSeparator();
 			}
+			const updateTitleActions = (): void => {
+				this.partTitleActionsDomNode.hidden = actions.element.hidden;
+				this.updateTitleVisibility();
+			};
+			this._register(actions.onDidChangeMenuItems(updateTitleActions));
+			updateTitleActions();
 		}
 
 		this.setCompositeBarVisible(options.compositeBarVisible ?? true);
@@ -186,6 +189,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		const composite = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 		if (this.location === ViewContainerLocation.Chat) this.setTitleProjection(composite?.partTitleProjection);
 		composite?.setMergedTitleActionsHost(this.viewTitleActionsDomNode, this.compositeToolBar?.element);
+		this.updateTitleVisibility();
 	}
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
@@ -234,7 +238,10 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	}
 
 	private updateTitleVisibility(): void {
-		this.titleDomNode.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsDomNode.childElementCount === 0 && this.partTitleActionsDomNode.childElementCount === 0;
+		const compositeToolbar = this.compositeToolBar?.element;
+		const hasCompositeActions = compositeToolbar && !compositeToolbar.hidden && this.titleDomNode.contains(compositeToolbar);
+		this.titleDomNode.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && !hasCompositeActions
+			&& this.viewTitleActionsDomNode.childElementCount === 0 && this.partTitleActionsDomNode.hidden;
 	}
 
 	private storeActiveComposite(compositeId: string): void {

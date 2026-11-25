@@ -1,16 +1,22 @@
 .ash-sessions-inbox-button.ash-button {
-	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	position: relative;
 	flex: 0 0 auto;
+	color: var(--ash-sessions-activityBar-foreground);
+}
+
+.ash-sessions-inbox-button.ash-button:not(.ash-sessions-activity-item) {
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	width: var(--ash-toolbar-actionSize);
 	height: var(--ash-toolbar-actionSize);
 	min-height: var(--ash-toolbar-actionSize);
 	margin-inline-end: var(--ash-sessions-sidebar-item-inset);
 	padding: 0;
-	color: var(--ash-sessions-activityBar-foreground);
 }
 
-.ash-sessions-inbox-button.ash-button:is(:hover, .expanded) {
+.ash-sessions-inbox-button.ash-button:not(.ash-sessions-activity-item):is(
+		:hover,
+		.active
+	) {
 	background: var(--ash-sessions-sidebar-hover-background);
 }
 
@@ -33,6 +39,10 @@
 	overflow: auto;
 	overflow-wrap: anywhere;
 	border-radius: inherit;
+}
+
+.ash-sessions-inbox-rail {
+	width: var(--ash-sessions-activity-rail-popup-width);
 }
 
 .ash-sessions-inbox > :is(h2, p) {

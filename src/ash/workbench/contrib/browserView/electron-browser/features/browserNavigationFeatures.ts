@@ -21,7 +21,7 @@ import { localize } from '../../../../../nls.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
-import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from './browserDevToolsFeature.js';
@@ -71,7 +71,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		@IInstantiationService instantiation: IInstantiationService,
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IMenuService menuService: IMenuService,
+
 		@IContextKeyService contexts: IContextKeyService,
 		@IBrowserViewWorkbenchService browsers: IBrowserViewWorkbenchService,
 		@IBrowserDownloadsView private readonly downloads: IBrowserDownloadsView,
@@ -111,7 +111,8 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.elementSelectionContext = CONTEXT_BROWSER_ELEMENT_SELECTION_MODE.bindTo(this.pageContexts);
 		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(this.pageContexts);
 		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(this.pageContexts);
-		this._register(new MenuWorkbenchToolBar(sharing, menuService, pageMenus, MenuId.BrowserActionsToolbar, {
+		this._register(instantiation.createInstance(MenuWorkbenchToolBar, sharing, MenuId.BrowserActionsToolbar, {
+			contextMenuProvider: pageMenus,
 			ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions'),
 			contextKeyService: this.pageContexts,
 			menuOptions: { arg: editor },

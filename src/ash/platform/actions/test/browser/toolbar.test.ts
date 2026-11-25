@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from './testMenuToolbarServices.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from '../../../contextkey/common/contextkey.js';
 import assert from 'node:assert/strict';
@@ -432,18 +433,13 @@ test('menu toolbar applies custom primary groups and submenu inlining', async ()
 		createMenu: () => menu,
 		getMenuActions: () => groups,
 	} as import('../../../../platform/actions/common/actions.js').IMenuService;
-	using toolbar = new MenuWorkbenchToolBar(
-		dom.window.document.body,
-		menuService,
-		{ showContextMenu() { } },
-		MenuId.for('test.toolbar.custom-groups'),
-		{
-			toolbarOptions: {
-				primaryGroup: 'inline',
-				shouldInlineSubmenu: () => true,
-			},
+	using toolbarServices = createTestMenuToolbarServices(menuService, { showContextMenu() { } });
+	using toolbar = toolbarServices.createInstance(MenuWorkbenchToolBar, dom.window.document.body, MenuId.for('test.toolbar.custom-groups'), {
+		toolbarOptions: {
+			primaryGroup: 'inline',
+			shouldInlineSubmenu: () => true,
 		},
-	);
+	});
 
 	assert.deepEqual(
 		[...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')]
@@ -557,16 +553,12 @@ test('menu toolbar keeps navigation inline and moves other groups into More Acti
 	let shownOptions:
 		| import('../../../../base/browser/contextmenu.js').IContextMenuDelegate
 		| undefined;
-	const toolbar = new MenuWorkbenchToolBar(
-		dom.window.document.body,
-		menus,
-		{
-			showContextMenu(options) {
-				shownOptions = options;
-			},
+	using toolbarServices = createTestMenuToolbarServices(menus, {
+		showContextMenu(options) {
+			shownOptions = options;
 		},
-		menuId,
-	);
+	});
+	const toolbar = toolbarServices.createInstance(MenuWorkbenchToolBar, dom.window.document.body, menuId, undefined);
 	dom.window.document.body.append(toolbar.element);
 
 	const buttons = toolbar.element.querySelectorAll('button');
@@ -624,12 +616,8 @@ test('menu toolbar projects empty state as a stable visual class', async () => {
 		when: ContextKeyExpr.has('test.toolbar.visible'),
 	}));
 	const contexts = registrations.add(new ContextKeyService());
-	const toolbar = new MenuWorkbenchToolBar(
-		dom.window.document.body,
-		new MenuService(new CommandService(new InstantiationService()), contexts),
-		{ showContextMenu() { } },
-		menuId,
-	);
+	using toolbarServices = createTestMenuToolbarServices(new MenuService(new CommandService(new InstantiationService()), contexts), { showContextMenu() { } });
+	const toolbar = toolbarServices.createInstance(MenuWorkbenchToolBar, dom.window.document.body, menuId, undefined);
 	dom.window.document.body.append(toolbar.element);
 	let menuChanges = 0;
 	toolbar.onDidChangeMenuItems(() => menuChanges++);
@@ -648,6 +636,58 @@ test('menu toolbar projects empty state as a stable visual class', async () => {
 	toolbar.dispose();
 	dom.window.close();
 	Reflect.deleteProperty(globalThis, 'window');
+});
+
+test('menu toolbar follows command and submenu view registrations in its window', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const { MenuId, MenusRegistry } = await import('../../common/actions.js');
+	const { MenuService } = await import('../../common/menuService.js');
+	const { IActionViewItemService } = await import('../../browser/actionViewItemService.js');
+	const { MenuWorkbenchToolBar } = await import('../../browser/toolbar.js');
+	const { ButtonActionViewItem } = await import('../../../../base/browser/ui/actionbar/actionViewItems.js');
+	const { ContextKeyService } = await import('../../../contextkey/browser/contextKeyService.js');
+	const { DisposableStore } = await import('../../../../base/common/lifecycle.js');
+	try {
+		using resources = new DisposableStore();
+		const contextKeys = resources.add(new ContextKeyService());
+		const { InstantiationService } = await import('../../../instantiation/common/instantiationService.js');
+		const { CommandService } = await import('../../../../workbench/services/commands/common/commandService.js');
+		const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
+		const menuService = new MenuService(commands, contextKeys);
+		const services = resources.add(createTestMenuToolbarServices(menuService, { showContextMenu() { } }));
+		const presentations = services.get(IActionViewItemService);
+		const menu = MenuId.for('test.toolbar.viewItems');
+		const submenu = MenuId.for('test.toolbar.viewItems.submenu');
+		const commandId = 'test.toolbar.viewItems.command';
+		resources.add(MenusRegistry.appendMenuItems([
+			{ id: menu, item: { command: { id: commandId, title: 'Command' }, group: 'navigation', order: 1 } },
+			{ id: menu, item: { submenu, title: 'Submenu', group: 'navigation', order: 2 } },
+			{ id: submenu, item: { command: { id: 'test.toolbar.viewItems.child', title: 'Child' } } },
+		]));
+		const actionContext = {};
+		const toolbar = resources.add(services.createInstance(MenuWorkbenchToolBar, dom.window.document.body, menu, { actionContext }));
+		const labels = () => [...toolbar.element.querySelectorAll('button')].map(button => button.textContent);
+		assert.deepEqual(labels(), ['Command', 'Submenu']);
+		toolbar.element.querySelector('button')!.focus();
+		const makeView = (label: string) => (action: import('../../../../base/common/actions.js').IAction) =>
+			new ButtonActionViewItem({ ...action, label, run: (...args) => action.run(...args) });
+		const commandView = resources.add(presentations.register(menu, commandId, (action, options, scope) => {
+			assert.equal(scope, services);
+			assert.equal(options.actionContext, actionContext);
+			return makeView('Registered command')(action);
+		}));
+		resources.add(presentations.register(menu, submenu, makeView('Registered submenu')));
+		assert.deepEqual(labels(), ['Registered command', 'Registered submenu']);
+		assert.equal(dom.window.document.activeElement, toolbar.element.querySelector('button'));
+		const trigger = dom.window.document.activeElement;
+		resources.add(presentations.register(submenu, commandId, makeView('Different menu')));
+		assert.equal(dom.window.document.activeElement, trigger);
+		commandView.dispose();
+		assert.deepEqual(labels(), ['Command', 'Registered submenu']);
+		assert.equal(dom.window.document.activeElement, toolbar.element.querySelector('button'));
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('menu toolbar retains action slots for enablement and toggle changes', async () => {
@@ -689,12 +729,8 @@ test('menu toolbar retains action slots for enablement and toggle changes', asyn
 		group: 'navigation',
 	}));
 	const contexts = registrations.add(new ContextKeyService());
-	const toolbar = new MenuWorkbenchToolBar(
-		dom.window.document.body,
-		new MenuService(new CommandService(new InstantiationService()), contexts),
-		{ showContextMenu() { } },
-		menuId,
-	);
+	using toolbarServices = createTestMenuToolbarServices(new MenuService(new CommandService(new InstantiationService()), contexts), { showContextMenu() { } });
+	const toolbar = toolbarServices.createInstance(MenuWorkbenchToolBar, dom.window.document.body, menuId, undefined);
 	dom.window.document.body.append(toolbar.element);
 	const slot = toolbar.element.querySelector<HTMLElement>(`[data-action-id='${actionId}']`);
 	assert.ok(slot);

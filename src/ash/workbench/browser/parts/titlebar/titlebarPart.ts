@@ -304,10 +304,8 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		centerAdjacentActionsDomNode.className = 'ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region';
 		centerDomNode.append(centerAdjacentActionsDomNode);
 		this.centerAdjacentActions = this._register(
-			new MenuWorkbenchToolBar(
+			instantiationService.createInstance(MenuWorkbenchToolBar,
 				centerAdjacentActionsDomNode,
-				menuService,
-				contextMenuService,
 				MenuId.TitleBarAdjacentCenter,
 				{ presentation: 'inherit-foreground', contextKeyService: this.contextKeyService },
 			),

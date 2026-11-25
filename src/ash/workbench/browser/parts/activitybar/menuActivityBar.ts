@@ -1,9 +1,10 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './media/menuActivityBar.css';
 import { addDisposableListener, isHTMLElement } from '../../../../base/browser/dom.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { IMenuService, type MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../platform/actions/browser/toolbar.js';
+import { type MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -21,19 +22,19 @@ export class MenuActivityBar extends Disposable {
 	constructor(
 		container: HTMLElement,
 		options: IMenuActivityBarOptions,
-		@IMenuService menuService: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@INotificationService notifications: INotificationService,
 	) {
 		super();
-		const toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.menuId, {
+		const toolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, container, options.menuId, {
 			ariaLabel: options.ariaLabel,
 			contextKeyService,
 			orientation: 'vertical',
 			highlightToggledItems: true,
 			toolbarOptions: { primaryGroup: () => true, useSeparatorsInPrimaryActions: true },
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		this.element = toolbar.element;
 		this.element.classList.add('ash-menu-activity-bar');
 		this._register(toolbar.actionRunner.onDidRun(({ error }) => {

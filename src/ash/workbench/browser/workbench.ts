@@ -1185,7 +1185,6 @@ export class Workbench extends Disposable {
 			ariaLabelKey: { bundle: 'ash.regions', key: 'primarySidebar' },
 			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'primarySidebarViews' },
 			titleActions: {
-				menuService: menus,
 				contextMenuProvider: contextMenus,
 				menuId: MenuId.SidebarTitle,
 				primaryGroup: 'navigation',
@@ -1209,7 +1208,6 @@ export class Workbench extends Disposable {
 			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'agentSidebarViews' },
 			compositeBarContainerFilter: () => false,
 			titleActions: {
-				menuService: menus,
 				contextMenuProvider: contextMenus,
 				menuId: MenuId.AgentSidebarTitle,
 			},
@@ -1494,7 +1492,7 @@ export class Workbench extends Disposable {
 				viewsAriaLabel: 'Chat',
 				viewsAriaLabelKey: { bundle: 'ash.views', key: 'chat' },
 				compositeBarVisible: false,
-				titleActions: { menuService: menus, contextMenuProvider: contextMenus, menuId: MenuId.ChatHostTitle },
+				titleActions: { contextMenuProvider: contextMenus, menuId: MenuId.ChatHostTitle },
 			}));
 			// Dispose the host first so it can detach its borrowed content.
 			const chat = this._register(services.createInstance(ChatHostPart, workbenchRoot));

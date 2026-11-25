@@ -130,6 +130,10 @@ export class ToolBar extends Disposable {
 		this.actionBar.setFocusable(focusable);
 	}
 
+	setOrientation(orientation: ActionBarOrientation): void {
+		this.actionBar.setOrientation(orientation);
+	}
+
 	setAriaLabel(label: string): void {
 		this.element.setAttribute('aria-label', label);
 	}

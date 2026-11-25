@@ -53,7 +53,7 @@ suite('Sessions input stack browser layout', () => {
 		await expect(projectSearch).toBeVisible();
 		await projectSearch.press('Escape');
 		await expect(stack.locator('.ash-session-chat-input-prs')).toBeHidden();
-		await expect(stack.locator('.ash-chat-input-notice-slot')).toBeHidden();
+		await expect(stack.locator('.ash-chat-input-notice-slot:visible')).toHaveCount(0);
 		const tip = stack.locator('.ash-chat-input-tip');
 		await expect(tip).toBeVisible();
 		const input = stack.locator('.ash-chat-input-container');
@@ -85,7 +85,7 @@ suite('Sessions input stack browser layout', () => {
 		await expect(previous).toBeFocused();
 		const next = toolbar.getByRole('button', { name: 'Next tip', exact: true });
 		await next.press('Enter');
-		await expect(tip).toContainText('Choose Plan');
+		await expect(tip).toContainText('Start the message with /plan');
 		await expect(next).toBeFocused();
 		await next.press('ArrowLeft');
 		await expect(previous).toBeFocused();

@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from '../../../../../../platform/actions/test/browser/testMenuToolbarServices.js';
 import { TestViewDescriptorService } from '../../../../../test/browser/workbenchTestServices.js';
 import { ActivityService } from '../../../../../../workbench/services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../../../workbench/services/activity/common/activity.js';
@@ -373,9 +374,11 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, { command: { id: 'fixture.containerContext', title: 'Container context' }, when: ContextKeyExpr.equals('viewContainer', active.id) }));
 	resources.add(MenusRegistry.appendMenuItem(MenuId.SidebarTitle, { command: { id: 'fixture.globalAction', title: 'Global action' }, group: 'navigation' }));
 	let shown: readonly import('../../../../../../base/common/actions.js').IAction[] = [];
-	const part = resources.add(services.createInstance(SidebarPart, browserEnvironment.window.document.body, {
+	const contextMenuProvider = { showContextMenu: (delegate: import('../../../../../../base/browser/contextmenu.js').IContextMenuDelegate) => { shown = delegate.getActions() ?? []; } };
+	const toolbarServices = resources.add(createTestMenuToolbarServices(menus, contextMenuProvider, services));
+	const part = resources.add(toolbarServices.createInstance(SidebarPart, browserEnvironment.window.document.body, {
 		openComposite: async () => null, viewDescriptorService: descriptors, contextKeyService: context,
-		titleActions: { menuService: menus, contextMenuProvider: { showContextMenu: (delegate: import('../../../../../../base/browser/contextmenu.js').IContextMenuDelegate) => { shown = delegate.getActions?.() ?? []; } }, menuId: MenuId.SidebarTitle, primaryGroup: 'navigation' },
+		titleActions: { contextMenuProvider, menuId: MenuId.SidebarTitle, primaryGroup: 'navigation' },
 	}));
 	const create = (descriptor: typeof active | typeof empty) => services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id),

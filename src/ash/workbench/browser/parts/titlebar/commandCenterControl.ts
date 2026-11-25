@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './commandCenterControl.css';
 import { h } from '../../../../base/browser/dom.js';
 import { setAriaAttribute } from '../../../../base/browser/ui/aria/aria.js';
@@ -5,7 +6,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -31,7 +32,7 @@ export class CommandCenterControl extends Disposable {
 		localizationService: ILocalizationService | undefined,
 		options: ICommandCenterControlOptions | undefined,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
-		@IMenuService menuService: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 	) {
 		super();
@@ -44,7 +45,7 @@ export class CommandCenterControl extends Disposable {
 		this.domNode.append(navigationDomNode);
 		const navigation = options
 			? this._register(new WorkbenchToolBar(navigationDomNode, contextMenuService, { presentation: 'inherit-foreground' }))
-			: this._register(new MenuWorkbenchToolBar(navigationDomNode, menuService, contextMenuService, MenuId.CommandCenter, { presentation: 'inherit-foreground' }));
+			: this._register(instantiationService.createInstance(MenuWorkbenchToolBar, navigationDomNode, MenuId.CommandCenter, { presentation: 'inherit-foreground' }));
 		this.domNode.classList.toggle('ash-titlebar-command-center-custom', options !== undefined);
 
 		const label = () => localize(localizationService, { bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands');

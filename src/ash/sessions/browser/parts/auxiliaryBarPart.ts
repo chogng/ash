@@ -1,5 +1,5 @@
 import { h } from '../../../base/browser/dom.js';
-import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
+import { MenuId } from '../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
@@ -36,7 +36,6 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		@IActivityService activityService: IActivityService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
-		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 	) {
 		super(
@@ -51,7 +50,6 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
 				compositeBarVisible: false,
 				titleActions: {
-					menuService: menus,
 					contextMenuProvider: contextMenus,
 					menuId: MenuId.AuxiliaryBarTitle,
 				},
@@ -65,6 +63,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			themeService,
 			storage,
 			activityService,
+			instantiationService,
 		);
 		this.fallbackTitle = h(container.ownerDocument, 'span');
 		this.fallbackTitle.className = 'ash-sessions-tool-title';

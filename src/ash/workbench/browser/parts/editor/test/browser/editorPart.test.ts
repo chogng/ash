@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from '../../../../../../platform/actions/test/browser/testMenuToolbarServices.js';
 import { testWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
 import { TestHostService } from '../../../../../services/host/test/browser/testHostService.js';
@@ -234,7 +235,10 @@ function createEditorPart(
 	parent?: InstantiationService,
 ): InstanceType<typeof EditorPart> {
 	const services = editorTestServices.add(createTestEditorServices(options.configurationService, parent));
-	return registerTestComponentServices(services).createInstance(EditorPart, container, options);
+	const scope = options.titleActions ? editorTestServices.add(createTestMenuToolbarServices(
+		options.titleActions.menuService, options.titleActions.contextMenuProvider, services,
+	)) : services;
+	return registerTestComponentServices(scope).createInstance(EditorPart, container, options);
 }
 
 /** Editor lifecycle tests use fixed window chrome; title calculation is exercised in the title service suite. */

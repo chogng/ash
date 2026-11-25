@@ -87,7 +87,7 @@ export class SidebarPart extends PaneCompositePart {
 			compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
 			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? 'vertical' : 'horizontal',
 			titleActions: options.titleActions,
-		}, themeService, storageService, activityService);
+		}, themeService, storageService, activityService, instantiationService);
 		this.domNode.classList.add('ash-sidebar-part');
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.

@@ -67,8 +67,8 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			viewsAriaLabel: 'Auxiliary sidebar views',
 			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
 			compositeBarContextMenuProvider: contextMenuService,
-			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.AuxiliaryBarTitle },
-		}, themeService, storageService, activityService);
+			titleActions: { contextMenuProvider: contextMenuService, menuId: MenuId.AuxiliaryBarTitle },
+		}, themeService, storageService, activityService, instantiationService);
 		this.contentDomNode.classList.add('ash-auxiliarybar-content');
 		this.selectorHost = h(container.ownerDocument, 'div');
 		this.selectorHost.className = 'ash-auxiliarybar-view-selector';

@@ -37,6 +37,7 @@ import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services
 import { WorkbenchThemesRegistry } from '../../../src/ash/workbench/common/theme.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { installDebugClientFixture } from '../../../src/ash/workbench/contrib/debug/test/common/debugClientFixture.js';
+import type { ServerNotification } from '../../../.build/protocol/typescript/index.js';
 
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -416,9 +417,23 @@ if (new URL(location.href).searchParams.has('customize')) {
 	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
 		id: `fixture.package-${index}`, version: '1.0.0', packageType: 'plugin', displayName, description: `Tools and reusable instructions for ${displayName.toLowerCase()}.`,
 	}));
-	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = [];
+	const withPackageConnector = new URL(location.href).searchParams.has('packageConnector');
+	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = withPackageConnector ? [{
+		installationId: 'installed:fixture.package-0', package: { id: 'fixture.package-0', version: '1.0.0', digest: 'a'.repeat(64) }, state: 'installed',
+		capabilities: [{ reference: { id: 'mcp:fixture.mcp' }, kind: 'mcp', id: 'fixture.mcp', contractVersion: '1', permissions: [], authenticationProvider: null }],
+	}] : [];
+	const extensionChanges = new Emitter<ServerNotification>();
+	window.addEventListener('pagehide', () => extensionChanges.dispose(), { once: true });
+	const serverEvents = globalThis.ashWebWorkbenchHost!.api.events;
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost!.api,
+		events: {
+			subscribe(listener) {
+				const server = serverEvents.subscribe(listener);
+				const changes = extensionChanges.event(listener);
+				return { dispose() { server.dispose(); changes.dispose(); } };
+			},
+		},
 		skills: {
 			...disconnectedApi.skills, list: async () => catalog,
 			read: async () => {
@@ -434,7 +449,8 @@ if (new URL(location.href).searchParams.has('customize')) {
 			hasEditorExtensions: true, enabled: true, granted: false, effective: false, revoked: false,
 		}] }) },
 		connectors: { ...disconnectedApi.connectors, list: async () => ({ generation: 1, connectors: [{
-			id: 'fixture.connector', displayName: 'Team library', description: 'Search shared project documents.', runtimeServerId: 'fixture.mcp', mcpServerId: null,
+			id: 'fixture.connector', displayName: 'Team library', description: 'Search shared project documents.',
+			runtimeServerId: withPackageConnector ? 'marketplace:fixture.package-0:mcp:fixture.mcp' : 'fixture.mcp', mcpServerId: null,
 			definitionDigest: 'a'.repeat(64), connectionGeneration: 1, enabled: false, state: { status: 'disconnected' },
 			availableActions: [], oauthMethods: [], credentialCleanupPending: false,
 		}] }) },
@@ -449,6 +465,7 @@ if (new URL(location.href).searchParams.has('customize')) {
 					capabilities: [{ reference: { id: `skill:${packageId}` }, kind: 'skill' as const, id: 'fixture-skill', contractVersion: '1', permissions: [], authenticationProvider: null }],
 				};
 				installed.push(result);
+				extensionChanges.fire({ method: 'extensions/changed', params: { instanceId: 'fixture', generation: 1 + installed.length } });
 				return result;
 			},
 			editorExtensions: async () => ({ revision: 1, extensions: [] }),

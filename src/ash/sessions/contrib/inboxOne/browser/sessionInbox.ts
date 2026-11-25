@@ -1,25 +1,24 @@
 import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore, ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
+import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import type { Button } from '../../../../base/browser/ui/button/button.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewFocusRestore, ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { equals } from '../../../../base/common/arrays.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
-import { localize, localize2 } from '../../../../nls.js';
-import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { IAgentSessionsService } from '../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
-import { SHOW_INBOX_NOTIFICATIONS_COMMAND_ID } from '../../../../workbench/contrib/sessions/browser/inboxNotificationsConstants.js';
 import { IInboxNotificationsService, InboxNotificationActionKind, InboxNotificationsSortMode, InboxTab, isPullRequestNotificationKind, type IInboxNotificationItem } from '../../../../workbench/contrib/sessions/common/inboxNotificationsService.js';
-import { ISessionsSidebarFooter } from '../../../browser/parts/sidebarPart.js';
 import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
+import { SessionsConfiguration, type SessionsActivityBarLocation } from '../../../common/configuration.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IChatListCatalog } from '../../chat/browser/chatListModel.js';
@@ -38,18 +37,26 @@ const viewTitles: Record<InboxView, string> = {
 	[InboxTab.Done]: doneTitle,
 };
 
-/** Projects conversations that need attention into the sidebar footer. */
-export class SessionInbox extends Disposable {
-	private readonly button: Button;
+export interface ISessionInbox {
+	showInbox(): void;
+	createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem;
+}
+
+export const ISessionInbox = createDecorator<ISessionInbox>('sessionInbox');
+
+/** Projects conversations that need attention into the sidebar or Activity Bar footer. */
+export class SessionInbox extends Disposable implements ISessionInbox {
+	private button: Button | undefined;
 	private readonly mode: IObservable<'chat' | 'code'>;
+	private readonly activityBarLocation: IObservable<SessionsActivityBarLocation>;
 	private readonly opening = this._register(new MutableDisposable());
 	private panel: HTMLElement | undefined;
 	private readonly view = observableValue<InboxView>(this, 'attention');
 	private renderedItems: readonly IInboxNotificationItem[] = [];
 
 	constructor(
-		@ISessionsSidebarFooter private readonly sidebar: ISessionsSidebarFooter,
-		@IAgentWorkbenchLayoutService layout: IAgentWorkbenchLayoutService,
+		@IAgentWorkbenchLayoutService private readonly layout: IAgentWorkbenchLayoutService,
+		@IConfigurationService configuration: IConfigurationService,
 		@IInboxNotificationsService private readonly inbox: IInboxNotificationsService,
 		@IAgentSessionsService private readonly agentSessions: IAgentSessionsService,
 		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
@@ -59,36 +66,10 @@ export class SessionInbox extends Disposable {
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
-		const container = sidebar.footer;
+		this.activityBarLocation = observableFromEvent(this, listener => configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) listener(event);
+		}), () => configuration.getValue<SessionsActivityBarLocation>(SessionsConfiguration.activityBarLocation));
 		const sidebarVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sidebar'));
-		const document = container.ownerDocument;
-		this.button = this._register(new Button(container, { ...defaultButtonStyles, label: title, icon: Lxicon.inbox, iconOnly: true, title }));
-		this.button.domNode.classList.add('ash-sessions-inbox-button');
-		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
-		this.button.domNode.setAttribute('aria-expanded', 'false');
-		this._register(contextKeys.createScoped(this.button.domNode)).createKey('sessionsInboxFocused', true);
-		const dot = h(document, 'span', { className: 'ash-sessions-inbox-dot' });
-		dot.setAttribute('aria-hidden', 'true');
-		this.button.domNode.append(dot);
-		this._register(this.button.onDidClick(() => {
-			if (this.panel) this.contextViews.hide();
-			else this.show();
-		}));
-		this._register(addDisposableListener(this.button.domNode, 'contextmenu', event => this.showOptions(event)));
-		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
-			if (isContextMenuKey(event)) this.showOptions(event);
-		}));
-		this._register(CommandsRegistry.register(SHOW_INBOX_NOTIFICATIONS_COMMAND_ID, () => {
-			if (!layout.isPartVisible('sidebar')) layout.showPart('sidebar');
-			if (layout.isPartVisible('sidebar') && !this.panel) this.show();
-		}));
-		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
-			command: {
-				id: SHOW_INBOX_NOTIFICATIONS_COMMAND_ID,
-				title: localize2({ bundle: 'ash.sessions', key: 'sessions.inbox.show' }, 'Show Inbox'),
-			},
-		}));
-
 		const modeKey = new Set([SessionsWorkspaceModeContext.key]);
 		const mode = this.mode = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(modeKey)) listener(event);
@@ -103,14 +84,9 @@ export class SessionInbox extends Disposable {
 			}
 		}));
 		this._register(autorun(reader => {
-			const count = this.inbox.attentionCount.read(reader);
 			const view = this.view.read(reader);
 			const items = this.getItems(view, reader);
 			const busy = view === 'attention' && this.inbox.isLoading.read(reader);
-			dot.hidden = count === 0;
-			this.button.domNode.setAttribute('aria-label', count
-				? localize({ bundle: 'ash.sessions', key: 'sessions.inbox.count' }, 'Inbox, sessions needing attention: {0}', count)
-				: title);
 			if (this.panel) {
 				if (this.panel.getAttribute('aria-busy') !== String(busy) || !equals(this.renderedItems, items, (left, right) =>
 					left.id === right.id && left.title === right.title && left.description === right.description)) {
@@ -121,16 +97,69 @@ export class SessionInbox extends Disposable {
 		this._register(autorun(reader => {
 			mode.read(reader);
 			sidebarVisible.read(reader);
+			this.activityBarLocation.read(reader);
 			if (this.panel) this.contextViews.hide();
 		}));
 		this._register(toDisposable(() => { if (this.panel) this.contextViews.hide(); }));
 	}
 
-	private show(view: InboxView = 'attention'): void {
+	showInbox(): void {
+		if (!this.layout.isPartVisible('sidebar')) this.layout.showPart('sidebar');
+		if (this.layout.isPartVisible('sidebar') && !this.panel) this.show();
+	}
+
+	createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem {
+		return new InboxActionViewItem(action, options, button => this.attachButton(button));
+	}
+
+	private attachButton(button: Button): IDisposable {
 		if (this.panel) this.contextViews.hide();
-		const button = this.button.domNode;
-		const footer = this.sidebar.footer;
+		this.button = button;
+		const store = new DisposableStore();
+		const element = button.domNode;
+		element.setAttribute('aria-haspopup', 'dialog');
+		element.setAttribute('aria-expanded', 'false');
+		store.add(this.contextKeys.createScoped(element)).createKey('sessionsInboxFocused', true);
+		const dot = h(element.ownerDocument, 'span', { className: 'ash-sessions-inbox-dot' });
+		dot.setAttribute('aria-hidden', 'true');
+		element.append(dot);
+		store.add(button.onDidClick(() => {
+			if (this.panel) this.contextViews.hide();
+			else this.show();
+		}));
+		store.add(addDisposableListener(element, 'contextmenu', event => this.showOptions(event, element)));
+		store.add(addDisposableListener(element, 'keydown', event => {
+			if (isContextMenuKey(event)) this.showOptions(event, element);
+		}));
+		store.add(autorun(reader => {
+			const location = this.activityBarLocation.read(reader);
+			button.toggleClassName('ash-sessions-activity-item', location === 'left' || location === 'right');
+			const count = this.inbox.attentionCount.read(reader);
+			dot.hidden = count === 0;
+			element.setAttribute('aria-label', count
+				? localize({ bundle: 'ash.sessions', key: 'sessions.inbox.count' }, 'Inbox, sessions needing attention: {0}', count)
+				: title);
+		}));
+		store.add(toDisposable(() => {
+			// Menu refresh can mount the replacement before disposing the previous view.
+			if (this.button !== button) return;
+			if (this.panel) this.contextViews.hide();
+			this.button = undefined;
+		}));
+		return store;
+	}
+
+	private show(view: InboxView = 'attention'): void {
+		const trigger = this.button;
+		if (!trigger) return;
+		if (this.panel) this.contextViews.hide();
+		const button = trigger.domNode;
+		const footer = button.closest('.ash-sessions-sidebar-footer');
+		if (!footer) return;
+		const location = this.activityBarLocation.get();
+		const inRail = location === 'left' || location === 'right';
 		const panel = h(button.ownerDocument, 'section', { className: 'ash-sessions-inbox' });
+		panel.classList.toggle('ash-sessions-inbox-rail', inRail);
 		panel.setAttribute('role', 'dialog');
 		panel.setAttribute('aria-label', viewTitles[view]);
 		panel.tabIndex = -1;
@@ -142,17 +171,17 @@ export class SessionInbox extends Disposable {
 			const { width } = footer.getBoundingClientRect();
 			panel.style.width = `calc(${width}px - 2 * (var(--ash-spacing-size120) + var(--ash-strokeThickness)))`;
 		};
-		updateWidth();
 		const resizeFrame = new MutableDisposable();
-		const resize = observeResize(footer, () => {
+		if (!inRail) updateWidth();
+		const resize = !inRail ? observeResize(footer, () => {
 			// Updating the dialog also resizes the shared ContextView.
 			resizeFrame.value = scheduleAtNextAnimationFrame(getWindow(footer), updateWidth);
-		});
+		}) : undefined;
 		this.panel = panel;
-		this.button.focus();
+		trigger.focus();
 		if (this.contextViews.show({
 			// Center across the sidebar while keeping the vertical anchor on the button.
-			anchor: {
+			anchor: inRail ? button : {
 				get left() {
 					const { left, width } = footer.getBoundingClientRect();
 					return left + width / 2;
@@ -161,24 +190,25 @@ export class SessionInbox extends Disposable {
 				width: 0,
 				get height() { return button.getBoundingClientRect().height; },
 			},
-			anchorPosition: AnchorPosition.Above,
-			anchorAlignment: AnchorAlignment.Center,
+			anchorPosition: location === 'left' ? AnchorPosition.Below : AnchorPosition.Above,
+			anchorAlignment: inRail ? AnchorAlignment.Right : AnchorAlignment.Center,
+			anchorAxisAlignment: inRail ? AnchorAxisAlignment.Horizontal : undefined,
 			content: panel,
 			presentation: 'dialog',
 			focusRestore: ContextViewFocusRestore.Previous,
 			isTargetWithin: target => button.contains(target),
 			onHide: () => {
 				context.dispose();
-				resize.dispose();
+				resize?.dispose();
 				resizeFrame.dispose();
 				this.panel = undefined;
 				this.renderedItems = [];
-				this.button.toggleClassName('expanded', false);
-				this.button.domNode.setAttribute('aria-expanded', 'false');
+				trigger.toggleClassName('active', false);
+				button.setAttribute('aria-expanded', 'false');
 			},
 		})) {
-			this.button.toggleClassName('expanded', true);
-			this.button.domNode.setAttribute('aria-expanded', 'true');
+			trigger.toggleClassName('active', true);
+			button.setAttribute('aria-expanded', 'true');
 			(panel.querySelector('button') ?? panel).focus();
 		}
 	}
@@ -243,14 +273,14 @@ export class SessionInbox extends Disposable {
 		}
 	}
 
-	private showOptions(event: MouseEvent | KeyboardEvent): void {
+	private showOptions(event: MouseEvent | KeyboardEvent, anchor: HTMLElement): void {
 		const sort = this.inbox.sortMode.get();
 		const sortActions = [
 			[InboxNotificationsSortMode.Priority, localize({ bundle: 'ash.sessions', key: 'sessions.inbox.sortPriority' }, 'Sort by Priority')],
 			[InboxNotificationsSortMode.Recency, localize({ bundle: 'ash.sessions', key: 'sessions.inbox.sortRecency' }, 'Sort by Recency')],
 		] as const;
 		const historyViews = ['dismissed', InboxTab.OnHold, InboxTab.Done] as const;
-		this.showMenu(event, this.button.domNode, [
+		this.showMenu(event, anchor, [
 			...sortActions.map(([mode, label]) => ({
 				id: mode, label, tooltip: '', enabled: true, checked: mode === sort,
 				run: () => { this.inbox.setSortMode(mode); this.show(); },
@@ -305,10 +335,27 @@ export class SessionInbox extends Disposable {
 			getActions: () => actions,
 			autoSelectFirstItem: true,
 			onHide: (cancelled, reason) => {
-				if (cancelled && reason === ContextViewHideReason.Escape) this.button.focus();
+				if (cancelled && reason === ContextViewHideReason.Escape) this.button?.focus();
 			},
 		});
 	}
+}
+
+class InboxActionViewItem extends ActionViewItem {
+	private button!: Button;
+
+	constructor(action: IAction, options: ActionViewItemOptions, private readonly attachButton: (button: Button) => IDisposable) {
+		super(action, options);
+	}
+
+	override render(container: HTMLElement): void {
+		this.button = this.createButton(container, { label: this.action.label, icon: Lxicon.inbox, iconOnly: true, title: this.action.label });
+		this.button.domNode.classList.add('ash-sessions-inbox-button');
+		this._register(this.attachButton(this.button));
+	}
+
+	override focus(): void { this.button.focus(); }
+	override setTabbable(tabbable: boolean): void { this.button.domNode.tabIndex = tabbable ? 0 : -1; }
 }
 
 function isContextMenuKey(event: KeyboardEvent): boolean {

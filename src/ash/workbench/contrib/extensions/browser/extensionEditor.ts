@@ -34,7 +34,7 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, getMarketplaceMcpServerId, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
@@ -672,7 +672,7 @@ export class ExtensionEditor extends EditorPane {
 		this.header.description.textContent = details?.description ?? input.summary.description;
 		this.header.metadata.textContent = [input.summary.id, input.summary.version, details?.license].filter(Boolean).join(' · ');
 		this.renderOverview();
-		this.renderInfo([{
+		const info: DetailInfoSection[] = [{
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.summary.id },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: input.summary.version },
@@ -681,7 +681,9 @@ export class ExtensionEditor extends EditorPane {
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: details ? details.source === 'official' ? localize({ bundle: 'ash.extensions', key: 'official' }, 'Official package') : localize({ bundle: 'ash.extensions', key: 'thirdParty' }, 'Third-party package') : '' },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailDigest' }, 'Package digest'), value: installation?.package.digest ?? '' },
 			]
-		}]);
+		}];
+		this.renderInfo(info);
+		const packageConnections = this.options.presentation === 'page' && installation ? this.readPackageConnections(installation) : undefined;
 		if (input.summary.packageType === 'editorExtension' || input.summary.packageType === 'editor') { void this.loadPackageDocument(input, signal, version); }
 		this.capabilities.textContent = details ? describeExtensionCapabilities(details) : installation?.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n') ?? '';
 		const hasInstalled = installed.some(entry => entry.package.id === input.summary.id);
@@ -719,6 +721,41 @@ export class ExtensionEditor extends EditorPane {
 				return this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id });
 			});
 		}
+		if (packageConnections) {
+			const connections = await packageConnections;
+			if (connections && !signal.aborted && !this.isDisposed && version === this.loadVersion) {
+				this.renderInfo([connections, ...info]);
+			}
+		}
+	}
+
+	private async readPackageConnections(installation: ExtensionsInstalledPackage): Promise<DetailInfoSection | undefined> {
+		const capabilities = installation.capabilities.filter(capability => capability.kind === 'mcp');
+		if (!capabilities.length) return undefined;
+		const [accounts, runtime] = await Promise.allSettled([
+			this.connectors.list(),
+			this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
+		]);
+		const connectors = accounts.status === 'fulfilled' ? accounts.value.connectors : [];
+		const servers = runtime.status === 'fulfilled' ? runtime.value?.servers ?? [] : [];
+		const missingStatus = runtime.status === 'fulfilled' && runtime.value
+			? localize({ bundle: 'ash.extensions', key: 'mcpStatusNotReported' }, 'No runtime status reported')
+			: localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.');
+		return {
+			label: localize({ bundle: 'ash.extensions', key: 'packageConnections' }, 'Plugin connections'),
+			rows: capabilities.map(capability => {
+				const id = getMarketplaceMcpServerId(installation.package.id, capability.id);
+				const connector = connectors.find(entry => entry.mcpDeclarationId === id || entry.mcpServerId === id);
+				if (connector) {
+					return { label: connector.displayName, value: describeConnectorState(connector.state, connector.enabled) };
+				}
+				const server = servers.find(entry => entry.id === id);
+				return {
+					label: server?.displayName || capability.id,
+					value: server ? describeMcpServerState(server.state) : missingStatus,
+				};
+			}),
+		};
 	}
 
 	private renderEnablement(options: { readonly label: string; readonly checked: boolean; readonly enabled?: boolean; readonly change?: (checked: boolean) => Promise<unknown>; }): void {

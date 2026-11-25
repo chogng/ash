@@ -214,7 +214,17 @@
 	flex: 1;
 }
 
-.ash-sessions-titlebar-session-content.session-menu-open {
+.ash-sessions-titlebar-session-content > .ash-toolbar,
+.ash-sessions-titlebar-session-content
+	> .ash-toolbar
+	> .ash-action-view-item:only-child {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-sessions-titlebar-session-content:has(
+	.ash-sessions-titlebar-widget.session-menu-open
+) {
 	/* Let the open menu receive outside clicks in the window's drag region. */
 	-webkit-app-region: no-drag;
 }

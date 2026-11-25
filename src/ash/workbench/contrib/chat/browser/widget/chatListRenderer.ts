@@ -22,7 +22,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../platform/actions/browser/toolbar.js';
 import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
@@ -473,7 +473,7 @@ export class ChatListItemRenderer extends Disposable {
 
 	private createMessageToolbar(actions: HTMLElement, menu: MenuId, label: string, context: IContextKeyService, lifetime: DisposableStore): MenuWorkbenchToolBar {
 		const windowId = getWindowId(getWindow(actions)) ?? 0;
-		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, menu, {
+		const toolbar = lifetime.add(this.instantiationService.createInstance(MenuWorkbenchToolBar, actions, menu, {
 			ariaLabel: label,
 			contextKeyService: context,
 			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
@@ -490,7 +490,7 @@ export class ChatListItemRenderer extends Disposable {
 					?? createActionViewItem(action, this.contextMenus, buttonOptions)
 					?? new ButtonActionViewItem(action, buttonOptions);
 			},
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		lifetime.add(toolbar.actionRunner.onDidRun(event => {
 			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
 		}));

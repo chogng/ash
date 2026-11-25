@@ -6,8 +6,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { Action2, IMenuService, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { Action2, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -136,35 +135,31 @@ export class ComposerSessionControls extends Disposable {
 		environmentSetup: HTMLElement,
 		readonly model: IChatWidgetModel,
 		readonly persistDraft: () => Promise<void>,
-		@IMenuService menus: IMenuService,
-		@IContextMenuService contextMenus: IContextMenuService,
-		@IActionViewItemService presentations: IActionViewItemService,
-		@IInstantiationService instantiation: IInstantiationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		this.setupCard = h(environmentSetup.ownerDocument, 'div', { className: 'ash-sessions-environment-card' });
 		environmentSetup.append(this.setupCard);
 		this._register(toDisposable(() => this.setupCard.remove()));
 		const menu = Menus.NewSessionChatInputToolbar;
-		const toolbar = this._register(new MenuWorkbenchToolBar(footer, menus, contextMenus, menu, {
+		const toolbar = this._register(instantiation.createInstance(MenuWorkbenchToolBar, footer, menu, {
 			ariaLabel: localize('sessions.newChatComposer.sessionControls', 'Session controls'),
 			tabNavigation: 'each-action',
-			actionViewItemProvider: (action, options) => {
-				if (!pickers.some(picker => picker.id === action.id)) return undefined;
-				const item = presentations.lookUp(menu, action.id)?.(action, { ...options, actionContext: this }, instantiation, 0);
-				if (!(item instanceof ComposerPickerActionViewItem)) {
-					throw new Error(`Missing composer picker presentation for ${action.id}`);
-				}
-				this.items.set(action.id, item);
-				return item;
-			},
+			actionContext: this,
 		}));
 		toolbar.element.classList.add('ash-sessions-composer-controls');
 		footer.prepend(toolbar.element);
 		this._register(toDisposable(() => toolbar.element.remove()));
-		const update = (): void => { toolbar.element.hidden = !model.untitledSessionId; };
+		const update = (): void => { toolbar.element.hidden = !model.untitledSessionId || toolbar.getItemsLength() === 0; };
 		update();
 		this._register(model.onDidChange(update));
+		this._register(toolbar.onDidChangeMenuItems(update));
+	}
+
+	createPicker(action: IAction, kind: ComposerPicker): ComposerPickerActionViewItem {
+		const item = this.instantiation.createInstance(ComposerPickerActionViewItem, action, kind, this);
+		this.items.set(action.id, item);
+		return item;
 	}
 
 	setVisible(visible: boolean): void {
@@ -188,10 +183,10 @@ export class SharedChatInputComposerContribution extends Disposable {
 	constructor(@IActionViewItemService presentations: IActionViewItemService) {
 		super();
 		for (const { kind, id } of pickers) {
-			this._register(presentations.register(Menus.NewSessionChatInputToolbar, id, (action, options, instantiation) => {
+			this._register(presentations.register(Menus.NewSessionChatInputToolbar, id, (action, options) => {
 				const owner = options.actionContext;
 				return owner instanceof ComposerSessionControls
-					? instantiation.createInstance(ComposerPickerActionViewItem, action, kind, owner)
+					? owner.createPicker(action, kind)
 					: undefined;
 			}));
 		}

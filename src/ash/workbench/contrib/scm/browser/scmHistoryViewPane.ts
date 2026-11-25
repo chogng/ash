@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../nls.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -20,7 +21,7 @@ import { ResourceTree, type IResourceNode } from '../../../../base/common/resour
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../platform/actions/browser/toolbar.js';
 import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -362,7 +363,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService, @ISCMService private readonly scmService: ISCMService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService, @ISCMService private readonly scmService: ISCMService, @IInstantiationService instantiationService: IInstantiationService) {
 		super(container, { ...options, showActions: ViewPaneShowActions.WhenExpanded });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
@@ -403,10 +404,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		this._register(toDisposable(() => this.providerIdContext.reset()));
 		this.currentItemContext = CurrentHistoryItemAvailable.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.currentItemContext.reset()));
-		const toolbar = this._register(new MenuWorkbenchToolBar(
+		const toolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar,
 			this.headerActionsElement,
-			menuService,
-			contextMenuService,
 			MenuId.SCMHistoryTitle,
 			{
 				ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this },
@@ -438,7 +437,7 @@ export class SCMHistoryViewPane extends ViewPane {
 						}
 					}(action, options);
 				},
-			},
+			} satisfies IMenuWorkbenchToolBarOptions,
 		));
 		toolbar.element.classList.add('ash-scm-remote-actions');
 		this._register(this.filterPresentation.onDidChange(() => toolbar.relayout()));

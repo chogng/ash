@@ -1,7 +1,7 @@
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import './media/sidebarPart.css';
-import { h } from '../../../base/browser/dom.js';
+import { h, isHTMLElement } from '../../../base/browser/dom.js';
 import { localize } from '../../../nls.js';
 import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
 import type { SessionsActivityBarLocation } from '../../common/configuration.js';
@@ -9,7 +9,7 @@ import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/
 import { IViewDescriptorService } from '../../../workbench/common/views.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IWorkbenchLayoutService } from '../../../workbench/services/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -21,13 +21,9 @@ import { createLoadingSpinner } from '../../../base/browser/ui/loadingSpinner/lo
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-
-export interface ISessionsSidebarFooter {
-	/** Window-owned mount point. Contributions manage their own footer controls. */
-	readonly footer: HTMLElement;
-}
-
-export const ISessionsSidebarFooter = createServiceIdentifier<ISessionsSidebarFooter>('sessionsSidebarFooter');
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { MenuWorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
+import { Menus } from '../menus.js';
 
 /** Shared container host with Sessions Activity Bar placement and sizing. */
 export class SidebarPart extends WorkbenchSidebarPart {
@@ -36,8 +32,8 @@ export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly bottomActivityBarHost: HTMLDivElement;
 	private readonly bottomNavigationHost: HTMLDivElement;
 	private readonly updateStatus: HTMLDivElement;
-	public readonly activityBarAccountHost: HTMLDivElement;
-	public readonly footer: HTMLDivElement;
+	private readonly footer: HTMLDivElement;
+	private readonly footerToolbar: MenuWorkbenchToolBar;
 	override get minimumWidth(): number { return isWeb ? 270 : 170; }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number {
@@ -57,9 +53,11 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		@IUpdateService updateService: IUpdateService,
 		@IHoverService hoverService: IHoverService,
 		@INotificationService notifications: INotificationService,
+		@IContextMenuService contextMenus: IContextMenuService,
 	) {
 		super(container, {
 			viewDescriptorService: descriptors, contextKeyService: contextKeys, compositeBarVisible: false,
+			titleActions: { contextMenuProvider: contextMenus, menuId: Menus.SidebarTitle },
 			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 		}, themeService, storage, activityService, layoutService, configurationService, instantiationService);
 		this.topActivityBarHost = h(container.ownerDocument, 'div');
@@ -73,9 +71,19 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
 		this.bottomNavigationHost = h(container.ownerDocument, 'div');
 		this.footer = h(container.ownerDocument, 'div', { className: 'ash-sessions-sidebar-footer' });
-		this.activityBarAccountHost = h(container.ownerDocument, 'div', { className: 'ash-sessions-sidebar-accounts' });
-		this.footer.append(this.activityBarAccountHost);
 		this.bottomActivityBarHost.append(this.bottomNavigationHost, this.footer);
+		const footerContext = this._register(contextKeys.createScoped(this.footer));
+		footerContext.createKey('sessionsActivityBarFocused', true);
+		const footerToolbar = this.footerToolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.footer, Menus.SidebarFooter, {
+			ariaLabel: localize('sessions.sidebarFooter', 'Sidebar actions'),
+			tabNavigation: 'each-action',
+			contextKeyService: footerContext,
+			menuOptions: { renderShortTitle: true },
+			toolbarOptions: { primaryGroup: () => true },
+		}));
+		const updateFooterVisibility = (): void => { this.footer.hidden = footerToolbar.getItemsLength() === 0; };
+		this._register(footerToolbar.onDidChangeMenuItems(updateFooterVisibility));
+		updateFooterVisibility();
 		this.updateStatus = h(container.ownerDocument, 'div');
 		this.updateStatus.className = 'ash-sessions-update-status';
 		this.updateStatus.setAttribute('role', 'status');
@@ -133,10 +141,18 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		const side = location === 'left' || location === 'right' ? location : undefined;
 		const integrated = location === ActivityBarPosition.DEFAULT;
 		const atBottom = location === ActivityBarPosition.BOTTOM;
+		const focused = this.footer.ownerDocument.activeElement;
 		this.topActivityBarHost.classList.toggle('integrated', integrated);
 		this.bottomActivityBarHost.classList.toggle('integrated', !atBottom);
 		this.topActivityBarHost.hidden = atBottom || side !== undefined;
 		this.sideActivityBarHost.hidden = side === undefined;
+		this.bottomActivityBarHost.hidden = side !== undefined;
+		const footerHost = side ? this.sideActivityBarHost : this.bottomActivityBarHost;
+		this.footerToolbar.setOrientation(side ? 'vertical' : 'horizontal');
+		if (this.footer.parentElement !== footerHost) {
+			footerHost.append(this.footer);
+			if (isHTMLElement(focused) && this.footer.contains(focused)) focused.focus();
+		}
 		if (side) {
 			this.domNode.dataset.activityBarSide = side;
 			return this.sideActivityBarHost;

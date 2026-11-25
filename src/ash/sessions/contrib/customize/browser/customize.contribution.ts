@@ -6,15 +6,27 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
+import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Menus } from '../../../browser/menus.js';
+import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
-import { CustomizeEditorPane } from './customizeEditor.js';
+import { CUSTOMIZE_NAVIGATION_CONTAINER, CUSTOMIZE_NAVIGATION_VIEW, CustomizeEditorPane } from './customizeEditor.js';
+import { CustomizeNavigationView } from './customizeNavigationView.js';
+
+SessionsViewRegistry.registerViewContainer({
+	id: CUSTOMIZE_NAVIGATION_CONTAINER, title: localize('customize.title', 'Customize'), location: ViewContainerLocation.Sidebar, order: 8,
+});
+SessionsViewRegistry.registerViews(CUSTOMIZE_NAVIGATION_CONTAINER, [{
+	id: CUSTOMIZE_NAVIGATION_VIEW, title: localize('customize.title', 'Customize'),
+	ctorDescriptor: new SyncDescriptor(CustomizeNavigationView), canToggleVisibility: false,
+}]);
 
 registerEditorPane({
 	id: 'sessions.editor.customize', name: localize('customize.title', 'Customize'),
@@ -35,6 +47,7 @@ registerAction2(class OpenCustomize extends Action2 {
 		const editors = accessor.get(IEditorPart);
 		await entries.openEntry({
 			id: 'customize', workspaceMode: 'current', activityContext: 'sessions.activity.customizeSelected', content: 'editor', showEditorTabs: false,
+			sidebarContainerId: CUSTOMIZE_NAVIGATION_CONTAINER,
 			restoreCommand: 'sessions.open.customize', focus: 'editor',
 			editorInput: {
 				resource: URI.from({ scheme: 'ash-customize', path: '/page' }), label: localize('customize.title', 'Customize'),

@@ -39,7 +39,12 @@ suite('Sessions native titlebar layout', () => {
 			await expect(editorHeaders).toBeVisible();
 			await expectEditorHeadersAligned();
 			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
-			await expect(titlebar.locator('[data-action-id="sessions.activity.accounts"] button')).toBeVisible();
+			const accounts = titlebar.locator('[data-action-id="sessions.activity.accounts"] button');
+			await accounts.press('Shift+F10');
+			await expect(page.getByRole('menuitemcheckbox', { name: locale === 'zh-CN' ? '隐藏侧边栏' : 'Hide sidebar', exact: true })).toBeVisible();
+			await expect(page.getByRole('menuitem', { name: locale === 'zh-CN' ? '活动栏位置' : 'Activity Bar Position', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(accounts).toBeFocused();
 			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'default'));
 			await expectEditorHeadersAligned();
 			for (const width of [900, 640]) {
@@ -49,6 +54,8 @@ suite('Sessions native titlebar layout', () => {
 			}
 			await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!(true));
 			await expect(conversation).toBeVisible();
+			await expect(conversation.getByRole('toolbar', { name: locale === 'zh-CN' ? '会话标题' : 'Session title', exact: true })
+				.locator('[data-action-id="sessions.showSessionsPicker"] .ash-sessions-titlebar-widget')).toBeVisible();
 		});
 	}
 

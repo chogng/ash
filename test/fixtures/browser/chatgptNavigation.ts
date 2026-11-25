@@ -17,7 +17,7 @@ import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/b
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
 import { ISessionFolderAuthorizationService } from '../../../src/ash/sessions/common/sessionWorkspace.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
-import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
 import { documentConversationStorageKeys } from '../../../src/ash/sessions/contrib/chat/browser/documentConversation.js';
@@ -554,11 +554,9 @@ const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';
 titlebarContent.style.display = 'contents';
 document.body.prepend(titlebarContent);
-const presentations = services.get(IActionViewItemService);
-resources.add(new MenuWorkbenchToolBar(titlebarContent, menuService, services.get(IContextMenuService), Menus.TitleBarPageContent, {
+resources.add(services.createInstance(MenuWorkbenchToolBar, titlebarContent, Menus.TitleBarPageContent, {
 	toolbarOptions: { primaryGroup: () => true },
-	actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(action, options, services, 0),
-}));
+} satisfies IMenuWorkbenchToolBarOptions));
 const chatViews = services.createInstance(ChatViewFactory);
 resources.add(chatViews.registerSource('chatgpt', chatGPTViewSource));
 widget = resources.add(chatViews.createChatView('chatgpt', document.getElementById('editor')!));

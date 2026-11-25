@@ -1,10 +1,11 @@
+import { assertDefined } from '../../../../../base/common/types.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CodeConversationPageContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping, type SidebarProjectTypeFilter } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../platform/actions/browser/toolbar.js';
 import { MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
@@ -279,6 +280,8 @@ export class SessionsList extends DomWidget {
 		this.loadExpandedProjectFiles();
 	}, 0));
 
+	private readonly instantiation: IInstantiationService;
+
 	public get element(): HTMLElement { return this.domNode; }
 
 	constructor(container: HTMLElement, title: string, presentation: SessionsListPresentation,
@@ -302,11 +305,13 @@ export class SessionsList extends DomWidget {
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
-		@IInstantiationService private readonly instantiation?: IInstantiationService,
+		@IInstantiationService instantiation?: IInstantiationService,
 		@IConfigurationService configuration?: IConfigurationService,
 		@IAgentSessionActionsService private readonly sessionActions?: IAgentSessionActionsService,
 	) {
 		super();
+		assertDefined(instantiation, 'Sessions list instantiation service');
+		this.instantiation = instantiation;
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
 		this.createProjectForConversation = contributed?.createProjectForConversation;
@@ -439,7 +444,7 @@ export class SessionsList extends DomWidget {
 			run: create,
 		} : undefined;
 		this.listToolbar = createSessionsListToolbar(
-			h(ownerDocument, 'div'), this._store, menus, contextMenus, menuContext,
+			h(ownerDocument, 'div'), this._store, this.instantiation, contextMenus, menuContext,
 			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
 		);
 		if (contributed) {
@@ -1231,7 +1236,7 @@ export class SessionsList extends DomWidget {
 				const entry = this.catalogRows.get(key);
 				const setIcon = entry ? entry.setIcon && ((icon: Icon | undefined) => this.catalogRows.get(key)?.setIcon?.(icon))
 					: (icon: Icon | undefined) => this.listModel.setRowIcon(key, icon?.id);
-				const leading = (kind === 'conversation' || kind === 'file') && this.instantiation
+				const leading = (kind === 'conversation' || kind === 'file')
 					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', forkReference || kind === 'file' ? undefined : setIcon)
 					: undefined;
 				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading));
@@ -1247,8 +1252,8 @@ export class SessionsList extends DomWidget {
 			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
 			const projectId = this.mode === 'code' ? options?.project?.id : undefined;
-			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode, this.contextMenus,
-				collapsed => this.tree.setSectionCollapsed(key, collapsed), this.menus, projectId));
+			const section = this.sections.get(key) ?? this.sections.set(key, this.instantiation.createInstance(SessionListSection, ownerDocument, key, kind, this.mode,
+				(collapsed?: boolean) => this.tree.setSectionCollapsed(key, collapsed), projectId));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
@@ -1680,11 +1685,11 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 }
 
 /** Shared Projects header controls for the conversation catalogs. */
-function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, menus: IMenuService,
+function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, instantiation: IInstantiationService,
 	contextMenus: IContextMenuService, contextKeys: IContextKeyService | undefined,
 	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[],
 	createProject: IAction | undefined): MenuWorkbenchToolBar {
-	const toolbar = disposables.add(new MenuWorkbenchToolBar(container, menus, contextMenus, menuId, {
+	const toolbar = disposables.add(instantiation.createInstance(MenuWorkbenchToolBar, container, menuId, {
 		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
 		contextKeyService: contextKeys,
 		leadingActions: createProject && [createProject],
@@ -1713,7 +1718,7 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 				{ ...options, iconOnly: true },
 			);
 		},
-	}));
+	} satisfies IMenuWorkbenchToolBarOptions));
 	toolbar.element.classList.add('ash-sessions-list-more');
 	// Toolbar inputs stay within the header without activating tree rows.
 	disposables.add(addDisposableListener(toolbar.element, 'click', event => event.stopPropagation()));
@@ -2014,8 +2019,9 @@ class SessionListSection extends Disposable {
 	get title(): string { return this.label.title; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
-	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code', contextMenus: IContextMenuService,
-		toggle: (collapsed?: boolean) => void, menus: IMenuService, projectId?: string) {
+	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code',
+		toggle: (collapsed?: boolean) => void, projectId: string | undefined,
+		@IContextMenuService contextMenus: IContextMenuService, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
@@ -2036,7 +2042,7 @@ class SessionListSection extends Disposable {
 				if (this.moreButton) this.contextMenu?.(this.moreButton);
 			}, true);
 			if (projectId) {
-				this.actions = this._register(new MenuWorkbenchToolBar(this.domNode, menus, contextMenus, Menus.SessionSectionToolbar, {
+				this.actions = this._register(instantiation.createInstance(MenuWorkbenchToolBar, this.domNode, Menus.SessionSectionToolbar, {
 					ariaLabel: localize('projects.toolbar', 'Project actions'),
 					tabNavigation: 'each-action',
 					menuOptions: { arg: { projectId } },
@@ -2044,7 +2050,7 @@ class SessionListSection extends Disposable {
 					actionViewItemProvider: (action, options) => action instanceof MenuItemAction
 						? new MenuEntryActionViewItem(action, { ...options, iconOnly: true })
 						: undefined,
-				}));
+				} satisfies IMenuWorkbenchToolBarOptions));
 			} else {
 				this.actions = this._register(new WorkbenchToolBar(this.domNode, contextMenus, { ariaLabel: more.label }));
 				this.actions.setActions([more]);

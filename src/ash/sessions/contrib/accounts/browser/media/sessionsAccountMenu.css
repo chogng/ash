@@ -7,3 +7,9 @@
 	min-width: 0;
 	grid-template-columns: minmax(0, 1fr);
 }
+
+.ash-sessions-window .ash-menu.ash-sessions-rail-account-menu {
+	max-width: var(--ash-sessions-activity-rail-popup-width);
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr);
+}

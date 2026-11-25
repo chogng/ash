@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Menus } from '../../../browser/menus.js';
 import { getActiveElement, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -7,8 +8,8 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { IMenuService, type MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../platform/actions/browser/toolbar.js';
+import { type MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -39,7 +40,7 @@ export class ArtifactTitleBarWidget extends Disposable {
 		document: Document,
 		ariaLabel: string,
 		menu: MenuId | undefined,
-		@IMenuService menus: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -74,16 +75,16 @@ export class ArtifactTitleBarWidget extends Disposable {
 					: undefined,
 		};
 		this.toolbar = this._register(menu
-			? new MenuWorkbenchToolBar(this.actionsHost, menus, contextMenus, menu, { ...options, contextKeyService: contextKeys })
+			? instantiationService.createInstance(MenuWorkbenchToolBar, this.actionsHost, menu, { ...options, contextKeyService: contextKeys })
 			: new WorkbenchToolBar(this.actionsHost, contextMenus, options));
-		this._register(new MenuWorkbenchToolBar(this.actionsHost, menus, contextMenus, Menus.EditorPartLayout, {
+		this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.actionsHost, Menus.EditorPartLayout, {
 			ariaLabel: localize('sessions.layout.editorActions', 'Editor layout'),
 			presentation: 'inherit-foreground',
 			contextKeyService: contextKeys,
 			actionViewItemProvider: (action, options) => new ButtonActionViewItem(action, {
 				...options, iconOnly: action.id !== 'sessions.toggleSessionPart' || !action.checked,
 			}),
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 	}
 
 	setTitle(title: string): void {

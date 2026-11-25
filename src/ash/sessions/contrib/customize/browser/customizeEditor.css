@@ -37,10 +37,26 @@
 	display: none;
 }
 
-.ash-customize-catalog > h1 {
+.ash-customize-header > h1 {
 	margin: 0 0 var(--ash-spacing-size280);
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-customize-header.compact {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	margin-bottom: var(--ash-spacing-size280);
+}
+
+.ash-customize-header.compact > :is(h1, .ash-customize-toolbar) {
+	margin-bottom: 0;
+}
+
+.ash-customize-header.compact > .ash-customize-toolbar {
+	flex: 1 1 min-content;
 }
 
 .ash-customize-toolbar,
@@ -68,7 +84,8 @@
 }
 
 .ash-customize-tools {
-	flex: 1 1 auto;
+	/* Fit the actions on the current line before giving search its preferred width. */
+	flex: 1 1 min-content;
 	justify-content: flex-end;
 	gap: var(--ash-spacing-size80);
 }
@@ -274,10 +291,6 @@
 
 .ash-customize.narrow .ash-customize-grid {
 	grid-template-columns: minmax(0, 1fr);
-}
-
-.ash-customize.narrow .ash-customize-tools {
-	flex-basis: 100%;
 }
 
 .hc-black .ash-customize-card,

@@ -1,0 +1,55 @@
+.ash-customize-navigation {
+	box-sizing: border-box;
+	min-height: 0;
+	height: 100%;
+	overflow: auto;
+	padding: var(--ash-spacing-size120) var(--ash-sessions-sidebar-row-inset);
+}
+
+.ash-customize-navigation-group,
+.ash-customize-navigation-connections {
+	margin-block-start: var(--ash-spacing-size120);
+}
+
+.ash-customize-navigation-group h2,
+.ash-customize-navigation-group ul {
+	margin: 0;
+}
+
+.ash-customize-navigation-group ul {
+	padding: 0;
+	list-style: none;
+}
+
+.ash-customize-navigation .ash-button {
+	width: 100%;
+	min-height: var(--ash-sessions-sidebar-row-height);
+	justify-content: flex-start;
+	padding-inline: var(--ash-sessions-sidebar-item-inset);
+}
+
+.ash-customize-navigation .ash-button-content {
+	min-width: 0;
+}
+
+.ash-customize-navigation .ash-button-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-customize-navigation-group h2 .ash-button {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-customize-navigation .ash-button[aria-current="true"] {
+	background: var(--ash-tabList-activeBackground);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-customize-navigation .ash-button[aria-current="true"]:focus-visible {
+	outline-color: var(--ash-focusBorder);
+}

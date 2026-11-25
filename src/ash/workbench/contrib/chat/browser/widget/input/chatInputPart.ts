@@ -71,7 +71,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { Emitter, PauseableEmitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -635,7 +635,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
-			: this.createSecondaryToolbar(contextMenuService, menuService);
+			: this.createSecondaryToolbar(contextMenuService);
 		this.changesPill = this._register(instantiationService.createInstance(ChatChangesPill, this.element, () => {
 			void this.runSecondaryAction(async () => { await this.delegate.openChanges?.(this.state.changesRevision); });
 		}, () => this.focus(), this.delegate.readWorkspaceChanges));
@@ -2106,7 +2106,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 	}
 
-	private createSecondaryToolbar(contextMenus: IContextMenuService, menuService: IMenuService): HTMLElement {
+	private createSecondaryToolbar(contextMenus: IContextMenuService): HTMLElement {
 		const container = h(this.element.ownerDocument, 'div');
 		container.className = 'ash-chat-secondary-toolbar';
 		const owner = this;
@@ -2123,7 +2123,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.workspaceHost = h(container.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot' });
 		container.append(this.workspaceHost);
 
-		const secondaryToolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.ChatInputSecondary, {
+		const secondaryToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, container, MenuId.ChatInputSecondary, {
 			ariaLabel: localize('chat.input.secondaryActions', 'Chat secondary actions'),
 			leadingActions: [this.attachAction, permissions],
 			presentation: 'inherit-foreground',
@@ -2146,17 +2146,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				});
 				return this.permissionWidget;
 			},
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		secondaryToolbar.element.classList.add('ash-chat-secondary-input-toolbar');
 		this.createContextUsageToolbar(container, contextMenus);
 		this.status.className = 'ash-chat-status-summary';
 		container.append(this.status);
-		const statusToolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.ChatInputStatus, {
+		const statusToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, container, MenuId.ChatInputStatus, {
 			ariaLabel: localize('chat.input.statusActions', 'Chat status actions'),
 			presentation: 'inherit-foreground',
 			// Status indicators stay inline instead of disappearing into More Actions.
 			toolbarOptions: { primaryGroup: () => true },
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		statusToolbar.element.classList.add('ash-chat-input-status-toolbar');
 		this.renderFooter();
 		return container;

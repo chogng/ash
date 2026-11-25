@@ -21,6 +21,11 @@ import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpS
 import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 
+/** Matches the marketplace MCP declaration identity supplied by the backend. */
+export function getMarketplaceMcpServerId(packageId: string, capabilityId: string): string {
+	return `marketplace:${packageId}:mcp:${capabilityId}`;
+}
+
 /** The sidebar and detail header share the same concise, localized Skill description. */
 export function getSkillSummary(skill: SkillDescriptor): string {
 	if (skill.id.source === 'builtin:skill-source:ash-release') {

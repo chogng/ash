@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from '../../../../platform/actions/test/browser/testMenuToolbarServices.js';
 import { languagePackCatalog as chineseCatalog } from '../../../../../../.build/desktop/localization/localizationCatalog.zh-CN.js';
 import { AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewService } from '../../../contrib/accessibility/browser/accessibleView.js';
@@ -152,7 +153,8 @@ services.registerInstance(INotificationsCenter, center);
 const titlebar = h(document, 'div');
 titlebar.style.cssText = 'position: absolute; top: 0; right: 12px; height: 35px; display: flex; align-items: center';
 root.append(titlebar);
-resources.add(new MenuWorkbenchToolBar(titlebar, services.get(IMenuService), services.get(IContextMenuService), MenuId.TitleBar));
+const toolbarServices = resources.add(createTestMenuToolbarServices(services.get(IMenuService), services.get(IContextMenuService), services));
+resources.add(toolbarServices.createInstance(MenuWorkbenchToolBar, titlebar, MenuId.TitleBar, undefined));
 if (hasStatusbar && !registerAfterPart) { createStatusbarPart(); }
 services.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }) } as unknown as import('../../../../platform/extensions/common/extensionApi.js').IExtensionApi);
 const extensionMessages = resources.add(services.createInstance(MainThreadMessageService));

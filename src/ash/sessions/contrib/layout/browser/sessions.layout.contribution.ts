@@ -9,7 +9,8 @@ import { IPreferencesService } from '../../../../workbench/services/preferences/
 import { COLLAB_CONTAINER_ID } from '../../../../workbench/contrib/collab/common/collab.js';
 import { SessionsEntryService, documentEntry } from './sessionsEntryService.js';
 import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
-import { CHAT_WORKSPACE_ENTRY_REQUEST } from '../../../common/chatWorkspace.js';
+import { CHAT_WORKSPACE_ENTRY_REQUEST, CHAT_WORKSPACE_NAVIGATION_ID } from '../../../common/chatWorkspace.js';
+import { SessionsViewRegistry } from '../../../common/views.js';
 
 class SessionsLayoutContribution extends Disposable {
 	constructor(@ISessionsEntryService layout: ISessionsEntryService) {
@@ -23,8 +24,9 @@ class SessionsLayoutContribution extends Disposable {
 			await layout.openEntry(documentEntry, undefined, source === 'restore' ? { source } : undefined);
 			if (source !== 'restore') await accessor.get(IPreferencesService).openUserSettings({ section: 'agents' });
 		}));
+		const chatSidebar = SessionsViewRegistry.getViewContainer(CHAT_WORKSPACE_NAVIGATION_ID)?.id ?? SESSIONS_NAVIGATION_CONTAINER_ID;
 		for (const [id, sidebar, focus] of [
-			['chat', SESSIONS_NAVIGATION_CONTAINER_ID, 'conversation'],
+			['chat', chatSidebar, 'conversation'],
 			['collaboration', COLLAB_CONTAINER_ID, 'sidebar'],
 		] as const) {
 			const entry: ISessionsEntry = {

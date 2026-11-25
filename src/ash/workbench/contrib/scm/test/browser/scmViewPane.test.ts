@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from '../../../../../platform/actions/test/browser/testMenuToolbarServices.js';
 import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -210,7 +211,7 @@ test('SCM history title operations keep refresh and busy state with their starti
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.operation.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history.operation.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
 			setupDelayedHover: () => testManagedHover(),
 			setupHover: () => testManagedHover(),
 			showHover: () => testManagedHover(),
@@ -334,7 +335,7 @@ for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 			await configuration.updateValue('scm.graph.badges', 'all');
 			using ui = createTestComponentServices(undefined, undefined, browser.window.document);
 			using quickInput = new TestQuickInputService({ container: browser.window.document.body });
-			using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.fetched.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+			using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history.fetched.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
 				setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
 				showManagedHover() { },
 				showAndFocusLastHover() { },
@@ -446,7 +447,7 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		using configuration = new InMemoryConfigurationService();
 		using ui = createTestComponentServices(undefined, undefined, browser.window.document);
 		using quickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.live-filter.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history.live-filter.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
 			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
 			showManagedHover() { },
 			showAndFocusLastHover() { },
@@ -583,7 +584,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
 		await historyConfiguration.updateValue('scm.graph.pageSize', 3);
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.hover.test', title: 'Graph' }, view, menus, testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), {
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history.hover.test', title: 'Graph' }, view, menus, testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), {
 			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
 		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } },
 			{ writeText: async (text: string) => { copied = text; } } as unknown as IClipboardService,
@@ -678,7 +679,7 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.lateHead.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history.lateHead.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
 			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
 			showManagedHover() { },
 			showAndFocusLastHover() { },
@@ -813,7 +814,7 @@ test('SCMHistoryViewPane loads another history page only on demand', async () =>
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'ash.gitGraph.pagination.test', title: 'Graph' }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'ash.gitGraph.pagination.test', title: 'Graph' }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph .ash-list') !== null);
@@ -921,7 +922,7 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 			showAndFocusLastHover() { },
 			hideHover() { }
 		};
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'retained-state', title: 'Graph' }, view, new MenuService(new CommandService(services), context), testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, uiServices.get(IStorageService), scm);
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'retained-state', title: 'Graph' }, view, new MenuService(new CommandService(services), context), testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, uiServices.get(IStorageService), scm);
 		pane.setVisible(true);
 		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
 		Object.defineProperty(graph, 'clientHeight', { configurable: true, value: 100 });
@@ -1062,7 +1063,7 @@ test('SCMHistoryViewPane virtualizes loaded history rows', async () => {
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'ash.gitGraph.virtualized.test', title: 'Graph' }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'ash.gitGraph.virtualized.test', title: 'Graph' }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		pane.setVisible(true);
 		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph');
 		assert.ok(graph);
@@ -1213,7 +1214,7 @@ test('SCMHistoryViewPane expands commit files and opens a selected change in the
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'ash.gitGraph.changes.test', title: 'Graph' }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'ash.gitGraph.changes.test', title: 'Graph' }, history.viewService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-commit') !== null);
@@ -1447,7 +1448,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
-		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
+		using pane = createTestSCMHistoryViewPane(SCMHistoryViewPane, browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
 		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!.closest<HTMLElement>('[role="treeitem"]')!;
@@ -2432,6 +2433,25 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	return Object.keys(globals);
+}
+
+type HistoryViewConstructor = typeof import('../../browser/scmHistoryViewPane.js').SCMHistoryViewPane;
+type HistoryViewArguments = ConstructorParameters<HistoryViewConstructor> extends [...infer Args, unknown] ? Args : never;
+
+function createTestSCMHistoryViewPane(ViewPane: HistoryViewConstructor, ...args: HistoryViewArguments): InstanceType<HistoryViewConstructor> {
+	class TestHistoryViewPane extends ViewPane {
+		constructor() {
+			const services = createTestMenuToolbarServices(args[3], args[4]);
+			try {
+				super(...args, services);
+			} catch (error) {
+				services.dispose();
+				throw error;
+			}
+			this._register(services);
+		}
+	}
+	return new TestHistoryViewPane();
 }
 
 suite('SCM badge and decorations', () => {

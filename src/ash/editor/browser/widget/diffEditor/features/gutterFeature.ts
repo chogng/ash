@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
@@ -9,10 +10,9 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
-import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 import { Range } from '../../../../common/core/range.js';
@@ -55,8 +55,9 @@ export class DiffEditorGutter extends Disposable {
 		private readonly widget: DiffEditorWidget,
 		private readonly onDidChangeWidth: () => void,
 		@IMenuService private readonly menus: IMenuService,
-		@IContextMenuService private readonly contextMenu: IContextMenuService,
+
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
@@ -184,7 +185,7 @@ export class DiffEditorGutter extends Disposable {
 			modifiedUri: this.model.modified.uri,
 		};
 		const revertLabel = menuId === MenuId.DiffEditorSelectionToolbar ? localize('diffEditor.revertSelection', 'Revert selected changes') : localize('diffEditor.revertChange', 'Revert change');
-		const toolbar = store.add(new MenuWorkbenchToolBar(node, this.menus, this.contextMenu, menuId, {
+		const toolbar = store.add(this.instantiationService.createInstance(MenuWorkbenchToolBar, node, menuId, {
 			leadingActions: this.canRevert ? [{
 				id: 'diffEditor.revert',
 				label: revertLabel,
@@ -199,7 +200,7 @@ export class DiffEditorGutter extends Disposable {
 			contextKeyService: this.scope,
 			menuOptions: { arg: context, shouldForwardArgs: true },
 			toolbarOptions: { primaryGroup: group => group.startsWith('primary') || group === 'navigation' },
-		}));
+		} satisfies IMenuWorkbenchToolBarOptions));
 		store.add(observeElementSize(toolbar.element, ({ height }) => {
 			if (node.hidden) return;
 			if (height === item.height) return;

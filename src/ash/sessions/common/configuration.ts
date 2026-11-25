@@ -71,11 +71,11 @@ export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityB
 
 export function getSessionsActivityBarLocationOptions(): readonly { value: SessionsActivityBarLocation; label: string; }[] {
 	return [
-		{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBarPositionDefault', 'Default') },
-		{ value: 'left', label: localize('workbench.sideBar.location.left', 'Left') },
-		{ value: 'right', label: localize('workbench.sideBar.location.right', 'Right') },
-		{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBarPositionTop', 'Top') },
-		{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBarPositionBottom', 'Bottom') },
+		{ value: ActivityBarPosition.DEFAULT, get label() { return localize('workbench.activityBarPositionDefault', 'Default'); } },
+		{ value: 'left', get label() { return localize('workbench.sideBar.location.left', 'Left'); } },
+		{ value: 'right', get label() { return localize('workbench.sideBar.location.right', 'Right'); } },
+		{ value: ActivityBarPosition.TOP, get label() { return localize('workbench.activityBarPositionTop', 'Top'); } },
+		{ value: ActivityBarPosition.BOTTOM, get label() { return localize('workbench.activityBarPositionBottom', 'Bottom'); } },
 	];
 }
 

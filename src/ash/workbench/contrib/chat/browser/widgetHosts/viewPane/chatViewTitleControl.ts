@@ -1,7 +1,7 @@
 import './media/chatViewTitleControl.css';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { AnchorPosition } from '../../../../../../base/common/layout.js';
-import { MenuWorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, type IMenuWorkbenchToolBarOptions } from '../../../../../../platform/actions/browser/toolbar.js';
 import { getFlatContextMenuActions } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
@@ -86,10 +86,8 @@ export class ChatViewTitleControl extends Disposable {
 		this.actionsElement = h(ownerDocument, 'div');
 		this.actionsElement.className = 'ash-chat-title-actions';
 		container.append(this.actionsElement);
-		const toolbar = this._register(new MenuWorkbenchToolBar(
+		const toolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar,
 			this.actionsElement,
-			menuService,
-			contextMenuService,
 			MenuId.ChatTitle,
 			{
 				hoverAnchorPosition: AnchorPosition.Below,
@@ -97,13 +95,11 @@ export class ChatViewTitleControl extends Disposable {
 				actionViewItemProvider: (action, options) => action.id === SHOW_CHAT_HISTORY_COMMAND_ID
 					? new ChatHistoryActionViewItem(action, options, anchor => this.openHistory(anchor))
 					: undefined,
-			},
+			} satisfies IMenuWorkbenchToolBarOptions,
 		));
 		toolbar.element.setAttribute('aria-label', localize('chat.title.actions', 'Chat actions'));
-		this.layoutToolbar = this._register(new MenuWorkbenchToolBar(
+		this.layoutToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar,
 			this.actionsElement,
-			menuService,
-			contextMenuService,
 			MenuId.ChatTitleLayout,
 			{ highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
 		));

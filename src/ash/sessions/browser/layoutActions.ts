@@ -199,8 +199,8 @@ export function registerLayoutActions(
 	}));
 	disposables.add(
 		MenusRegistry.appendMenuItems([
-			{
-				id: Menus.TitleBarLeftLayout,
+			...[Menus.TitleBarLeftLayout, Menus.TitleBarContext].map(id => ({
+				id,
 				item: {
 					command: {
 						id: 'ash.sessions.toggleSidebar',
@@ -219,7 +219,7 @@ export function registerLayoutActions(
 					group: 'navigation',
 					order: 0,
 				},
-			},
+			})),
 		]),
 	);
 	for (const [id, title, icon, precondition, order] of [

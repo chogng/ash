@@ -2339,77 +2339,80 @@ test(
 	{ tag: ['@electron-ui', '@electron-app-server'] },
 	async ({ application, target, workbench }) => {
 		if (target.kind !== 'electron' || !('windows' in application)) return;
-		const page = await workbench.openAgentsWindow(target.kind);
-		const original = await (async () => {
-			return (await readUserSettings(page)).content;
-		})();
+		let page = await workbench.openAgentsWindow(target.kind);
+		const original = (await readUserSettings(page)).content;
 		const updateSettings = async (location: string): Promise<void> => {
-			await (async values => {
-				const snapshot = await readUserSettings(page);
-				const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
-				settings['sessions.activityBar.location'] = values.location;
-				await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
-			})({ location });
+			const snapshot = await readUserSettings(page);
+			const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
+			settings['sessions.activityBar.location'] = location;
+			await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
 		};
 		try {
 			await updateSettings('default');
 			await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
 			await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
-			const activityNavigation = page.locator('.ash-sessions-activity-content');
-			await expectActivityIconSize(activityNavigation, 16);
-			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+			let activityNavigation = page.locator('.ash-sessions-activity-content');
+			await expect(activityNavigation).toHaveClass(/\blabeled\b/u);
+			await expectActivityIconSize(activityNavigation, 18);
+			const modes = page.locator('.ash-window-mode-control');
+			const code = modes.getByRole('button', { name: 'Code', exact: true });
+			const chat = modes.getByRole('button', { name: 'Chat / Agents', exact: true });
+			const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
 			const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
-			const projects = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects' });
-			await activityNavigation.getByRole('button', { name: 'More', exact: true }).click();
+			await code.click();
+			await expect(code).toHaveAttribute('aria-pressed', 'true');
+			await expectActivityIconSize(activityNavigation, 18);
+			await more.click();
+			await expect(collaboration).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await chat.click();
+			await expect(chat).toHaveAttribute('aria-pressed', 'true');
+			await more.click();
 			await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
 			await collaboration.click();
 			await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
-			await page
-				.locator('.ash-window-mode-control')
-				.getByRole('button', { name: 'Chat / Agents', exact: true })
-				.click();
+			const projects = activityNavigation.getByRole('button', { name: 'Projects', exact: true });
 			await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 			await projects.click();
+			await expect(page.locator('[data-part="editor"] .ash-projects')).toBeVisible();
 			await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 			await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
+			await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+			await expect(activityNavigation).toBeHidden();
 			await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-			await page
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'New', exact: true })
-				.click();
+			const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
+			await newSession.click();
 			await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
-			const chatButton = page.locator('.ash-sessions-activity-content button').first();
-			await expect(chatButton).toBeVisible();
-			await chatButton.click({ button: 'right' });
-			await page.keyboard.press('Escape');
+			const placementItems = await new Menus(page).inspect(application, () => newSession.click({ button: 'right' }));
+			expect(placementItems.map(item => item.label)).toContain('Activity Bar Position');
 			await updateSettings('top');
 			await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
-			await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-			await expectActivityIconSize(activityNavigation, 16);
-			await page.reload();
-			await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-			await expectActivityIconSize(activityNavigation, 16);
+			await expect(page.locator('.ash-sessions-activity-host.top .ash-sessions-activity-content.horizontal')).toBeVisible();
+			await expectActivityIconSize(activityNavigation, 18);
+			page = await workbench.reopenAgentsWindow(application, page);
+			activityNavigation = page.locator('.ash-sessions-activity-content');
+			await expect(page.locator('.ash-sessions-activity-host.top .ash-sessions-activity-content.horizontal')).toBeVisible();
+			await expectActivityIconSize(activityNavigation, 18);
 			const titlebarAccounts = page
 				.locator('[data-part="titlebar"]')
 				.getByRole('button', { name: 'Accounts', exact: true });
 			const accountItems = await new Menus(page).inspect(application, () => titlebarAccounts.press('Enter'));
 			expect(accountItems.map(item => item.label)).toEqual(
-				expect.arrayContaining(['Settings', 'Return to Workbench']),
+				expect.arrayContaining(['Settings', 'Open IDE']),
 			);
 			await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'false');
 			await updateSettings('bottom');
-			await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
-			await expectActivityIconSize(activityNavigation, 16);
+			await expect(page.locator('.ash-sessions-activity-host.bottom .ash-sessions-activity-content.horizontal')).toBeVisible();
+			await expectActivityIconSize(activityNavigation, 18);
 			await expect(page.locator('.ash-sessions-activity-host.bottom').getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
 			await expect(titlebarAccounts).toHaveCount(0);
 			await updateSettings('default');
-			await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
-			await expectActivityIconSize(activityNavigation, 16);
+			await expect(activityNavigation).toHaveClass(/\blabeled\b/u);
+			await expect(activityNavigation).toBeVisible();
+			await expectActivityIconSize(activityNavigation, 18);
 		} finally {
-			await (async source => {
-				const snapshot = await readUserSettings(page);
-				await writeUserSettings(page, source, snapshot.revision);
-			})(original);
+			const snapshot = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, original, snapshot.revision);
 		}
 	},
 );
@@ -3550,20 +3553,19 @@ focusTest(
 	},
 );
 
-test('Sessions Activity Bar tooltips follow side, top and bottom placement without replacing buttons', async ({
+focusTest('Sessions Activity Bar tooltips follow active placement and stay anchored after resize', async ({
 	application,
 	target,
 	workbench,
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const chat = navigation.getByRole('button', { name: /^New(?:\.|$)/u });
+	const newSession = navigation.getByRole('button', { name: /^New(?:\.|$)/u });
 	const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
-	const originalChat = await chat.elementHandle();
 	const checkTooltip = async (
 		trigger: Locator,
 		label: string,
-		direction: 'right' | 'below' | 'above',
+		direction: 'left' | 'right' | 'below' | 'above',
 		keyboard = false,
 	): Promise<void> => {
 		await page.mouse.move(600, 400);
@@ -3586,6 +3588,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		expect(anchor).not.toBeNull();
 		expect(hover).not.toBeNull();
 		if (direction === 'right') expect(hover!.x).toBeGreaterThanOrEqual(anchor!.x + anchor!.width);
+		if (direction === 'left') expect(hover!.x + hover!.width).toBeLessThanOrEqual(anchor!.x);
 		if (direction === 'below') expect(hover!.y).toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
 		if (direction === 'above') expect(hover!.y + hover!.height).toBeLessThanOrEqual(anchor!.y);
 		await expect(trigger).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id')) ?? '');
@@ -3595,41 +3598,37 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		await expect(trigger).not.toHaveAttribute('aria-describedby');
 		if (keyboard) await expect(trigger).toBeFocused();
 	};
-	const setPosition = async (position: string): Promise<void> => {
-		if ('windows' in application && process.platform === 'darwin') {
-			await captureElectronMenu(application, () => accounts.click({ button: 'right' }), { label: position });
-		} else {
-			await accounts.click({ button: 'right' });
-			await page
-				.getByRole('menu')
-				.last()
-				.getByRole('menuitem', { name: 'Activity Bar Position' })
-				.press('ArrowRight');
-			await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
-		}
-	};
-	await checkTooltip(chat, 'Chat', 'right');
-	for (const label of ['Collab', 'Projects', 'Code', 'Accounts']) {
+	const menus = new Menus(page);
+	const setPosition = (position: string): Promise<void> =>
+		menus.select(application, () => accounts.click({ button: 'right' }), ['Activity Bar Position', position]);
+	await checkTooltip(newSession, 'New', 'right');
+	for (const label of ['Search', 'Projects', 'Customize']) {
 		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
 	}
 	await checkTooltip(accounts, 'Accounts', 'right', true);
+	await setPosition('Right');
+	await expect(page.locator('[data-part="sidebar"]')).toHaveAttribute('data-activity-bar-side', 'right');
+	await checkTooltip(newSession, 'New', 'left');
+	await checkTooltip(accounts, 'Accounts', 'left', true);
 	await setPosition('Top');
-	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-	await checkTooltip(chat, 'Chat', 'below', true);
+	await expect(page.locator('.ash-sessions-activity-host.top .ash-sessions-activity-content.horizontal')).toBeVisible();
+	await checkTooltip(newSession, 'New', 'below', true);
 	await checkTooltip(accounts, 'Accounts', 'below');
 	await workbench.setAppearance(application, 'dark', page);
 	await setPosition('Bottom');
-	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
-	await checkTooltip(chat, 'Chat', 'above');
+	await expect(page.locator('.ash-sessions-activity-host.bottom .ash-sessions-activity-content.horizontal')).toBeVisible();
+	await checkTooltip(newSession, 'New', 'above');
 	await checkTooltip(accounts, 'Accounts', 'above', true);
 	await setPosition('Default');
-	await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
+	await expect(navigation).toHaveClass(/\blabeled\b/u);
+	const originalNewSession = await newSession.elementHandle();
 	const originalAccounts = await accounts.elementHandle();
 	await page.setViewportSize({ width: 900, height: 600 });
-	await checkTooltip(chat, 'Chat', 'right');
-	expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
+	await checkTooltip(newSession, 'New', 'right');
+	await checkTooltip(accounts, 'Accounts', 'right', true);
+	expect(await newSession.evaluate((element, original) => element === original, originalNewSession)).toBe(true);
 	expect(await accounts.evaluate((element, original) => element === original, originalAccounts)).toBe(true);
-	await originalChat!.dispose();
+	await originalNewSession!.dispose();
 	await originalAccounts!.dispose();
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 	await returnFromSessions(page, application);

@@ -4,7 +4,6 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
@@ -28,11 +27,10 @@ export class DesktopAuxiliaryBarPart extends AuxiliaryBarPart {
 		@IActivityService activity: IActivityService,
 		@IInstantiationService private readonly services: IInstantiationService,
 		@IThemeService theme: IThemeService,
-		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IViewsService private readonly views: IViewsService,
 	) {
-		super(container, { id: 'editor-details' }, descriptors, contextKeys, storage, activity, services, theme, menus, contextMenus);
+		super(container, { id: 'editor-details' }, descriptors, contextKeys, storage, activity, services, theme, contextMenus);
 		this.domNode.classList.add('ash-desktop-auxiliarybar');
 	}
 

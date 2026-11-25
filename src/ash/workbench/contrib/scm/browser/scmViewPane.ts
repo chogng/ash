@@ -31,7 +31,7 @@ import { ViewPane, ViewWelcomeController, type IViewPaneOptions } from '../../..
 import { ViewsRegistry } from '../../../common/views.js';
 import { ISCMService, ISCMViewService, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, SCMViewModeContext, SCMViewSortKeyContext, type SCMViewMode, type SCMViewSortKey, type ISCMProvider, type ISCMResource, type ISCMResourceGroup, type ISCMRepository, VIEW_PANE_ID } from '../common/scm.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -82,8 +82,8 @@ export class ScmViewPane extends ViewPane {
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@IMenuService private readonly menuService: IMenuService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
 		@ICommandService private readonly commandService: ICommandService,
@@ -215,7 +215,7 @@ export class ScmViewPane extends ViewPane {
 		this.providerListener.value = provider?.onDidChangeResources(() => this.render());
 		// Capture the repository when constructing actions; a later selection must not retarget an open menu.
 		this.titleToolbar.clear();
-		this.titleToolbar.value = new MenuWorkbenchToolBar(this.headerActionsElement, this.menuService, this.contextMenuProvider, MenuId.SCMTitle, {
+		this.titleToolbar.value = this.instantiationService.createInstance(MenuWorkbenchToolBar, this.headerActionsElement, MenuId.SCMTitle, {
 			ariaLabel: localize('scm.titleActions', 'Source control actions'),
 			contextKeyService: this.titleContext, menuOptions: { arg: this.scmViewService.activeRepository?.id },
 		});

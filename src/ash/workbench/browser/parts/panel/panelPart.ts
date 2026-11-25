@@ -4,7 +4,7 @@ import './media/panelpart.css';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { ViewContainerLocation } from '../../../common/views.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
@@ -23,7 +23,6 @@ export class PanelPart extends PaneCompositePart {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IStorageService storageService: IStorageService,
 		@ILocalizationService localizationService: ILocalizationService,
-		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
@@ -42,8 +41,8 @@ export class PanelPart extends PaneCompositePart {
 			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'panelViews' },
 			compositeBarPresentation: 'label',
 			compositeBarContextMenuProvider: contextMenuService,
-			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
-		}, themeService, storageService, activityService);
+			titleActions: { contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
+		}, themeService, storageService, activityService, instantiationService);
 		this.titleDomNode.classList.add('ash-panel-title-control');
 	}
 

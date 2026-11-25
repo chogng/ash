@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import './artifactToolbar.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -9,7 +10,6 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { localize } from '../../../../../nls.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
-import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
@@ -43,7 +43,7 @@ export class ArtifactToolbar extends Disposable {
 		ownerDocument: Document,
 		options: { readonly appearance?: 'canvas'; readonly menuClassName?: string; readonly menuIconPlacement?: IContextMenuDelegate['iconPlacement']; readonly getMenuActionViewItem?: IContextMenuDelegate['getActionViewItem']; },
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
-		@IMenuService menuService: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
@@ -71,7 +71,8 @@ export class ArtifactToolbar extends Disposable {
 			this.hideMenu();
 			this.domNode.remove();
 		}));
-		this.workspaceToolbar = this._register(new MenuWorkbenchToolBar(this.domNode, menuService, this.menuProvider, Menus.ArtifactToolbar, {
+		this.workspaceToolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, this.domNode, Menus.ArtifactToolbar, {
+			contextMenuProvider: this.menuProvider,
 			ariaLabel: localize('sessions.artifacts.workspaceActions', 'Workspace actions'),
 			contextKeyService: contextKeys,
 			menuOptions: { shouldForwardArgs: true },

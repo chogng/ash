@@ -86,7 +86,8 @@ export class EditorHeaderControl extends Disposable {
 		if (actions) {
 			const trailing = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-tabs-trailing' });
 			actionRow.append(trailing);
-			this._register(new MenuWorkbenchToolBar(trailing, actions.menuService, actions.contextMenuProvider, MenuId.EditorTabsTrailing, {
+			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, trailing, MenuId.EditorTabsTrailing, {
+				contextMenuProvider: actions.contextMenuProvider,
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
 				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
@@ -96,7 +97,8 @@ export class EditorHeaderControl extends Disposable {
 		if (actions && viewOptions.menuIds?.headerPrimary && this.headerRow) {
 			const primary = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-primary' });
 			actionRow.append(primary);
-			this._register(new MenuWorkbenchToolBar(primary, actions.menuService, actions.contextMenuProvider, viewOptions.menuIds.headerPrimary, {
+			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, primary, viewOptions.menuIds.headerPrimary, {
+				contextMenuProvider: actions.contextMenuProvider,
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
 				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
@@ -106,12 +108,11 @@ export class EditorHeaderControl extends Disposable {
 		actionsContainer.className = 'ash-editor-title-actions';
 		actionRow.append(actionsContainer);
 		this.toolbar = this._register(actions
-			? new MenuWorkbenchToolBar(
+			? instantiationService.createInstance(MenuWorkbenchToolBar,
 				actionsContainer,
-				actions.menuService,
-				actions.contextMenuProvider,
 				viewOptions.menuIds?.editorActions ?? MenuId.EditorTitle,
 				{
+					contextMenuProvider: actions.contextMenuProvider,
 					ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 					highlightToggledItems: true,
 					hoverAnchorPosition: AnchorPosition.Below,
@@ -132,7 +133,8 @@ export class EditorHeaderControl extends Disposable {
 		if (actions && viewOptions.menuIds?.headerLayout && this.headerRow) {
 			const layoutActions = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-layout' });
 			actionRow.append(layoutActions);
-			this._register(new MenuWorkbenchToolBar(layoutActions, actions.menuService, actions.contextMenuProvider, viewOptions.menuIds.headerLayout, {
+			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, layoutActions, viewOptions.menuIds.headerLayout, {
+				contextMenuProvider: actions.contextMenuProvider,
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
 				highlightToggledItems: false,

@@ -4,6 +4,7 @@ import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/
 export const Menus = {
 	ActivityBar: new MenuId('SessionsActivityBar'),
 	ActivityBarContext: new MenuId('SessionsActivityBarContext'),
+	ActivityBarPosition: new MenuId('SessionsActivityBarPosition'),
 	SessionActivityBar: new MenuId('SessionActivityBar'),
 	SessionActivityBarContext: new MenuId('SessionActivityBarContext'),
 	CustomViewAutomations: new MenuId('CustomViewAutomations'),
@@ -16,6 +17,9 @@ export const Menus = {
 	SidebarCodeProjectContext: new MenuId('SidebarCodeProjectContext'),
 	SessionSectionToolbar: new MenuId('SessionSectionToolbar'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
+	SidebarTitle: new MenuId('SessionsSidebarTitle'),
+	SidebarFooter: new MenuId('SessionsSidebarFooter'),
+	AccountMenu: new MenuId('SessionsAccountMenu'),
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
 	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
 	ArtifactToolbar: new MenuId('ArtifactToolbar'),
@@ -24,8 +28,11 @@ export const Menus = {
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
 	TitleBarLeftLayout: new MenuId('SessionsTitleBarLeftLayout'),
+	TitleBarContext: new MenuId('SessionsTitleBarContext'),
+	CommandCenter: new MenuId('SessionsCommandCenter'),
 	TitleBarPageContent: new MenuId('SessionsTitleBarPageContent'),
 	TitleBarRightLayout: new MenuId('SessionsTitleBarRightLayout'),
+	TitleBarAccounts: new MenuId('SessionsTitleBarAccounts'),
 	TitleBarSidePane: new MenuId('SessionsTitleBarSidePane'),
 	SessionTitleBar: new MenuId('SessionsSessionTitleBar'),
 	EditorPartLayout: new MenuId('SessionsEditorPartLayout'),
@@ -37,6 +44,8 @@ export const Menus = {
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),
 } as const;
+
+export const activityBarPositionCommandPrefix = 'sessions.action.activityBar.position.';
 
 export const SessionActivityBarVisibleContext = new RawContextKey<boolean>('sessions.sessionActivityBarVisible', false);
 export const SessionsFlatLayoutContext = new RawContextKey<boolean>('sessions.flatLayout', false);

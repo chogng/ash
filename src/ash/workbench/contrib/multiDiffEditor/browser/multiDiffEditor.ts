@@ -13,7 +13,6 @@ import { TextFileBinaryError } from '../../../services/textfile/common/textFileS
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
@@ -32,7 +31,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { MenuId, IMenuService } from '../../../../platform/actions/common/actions.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
@@ -356,8 +355,7 @@ class MultiDiffEditorSession extends Disposable {
 		@IResourceLabelService private readonly resourceLabels: IResourceLabelService,
 		@ITextModelResourceService private readonly modelService: ITextModelResourceService,
 		@IDiffService diffService: IDiffService,
-		@IMenuService private readonly menuService: IMenuService,
-		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IEditorService private readonly editorService: IEditorService,
 	) {
@@ -644,7 +642,7 @@ class MultiDiffEditorSession extends Disposable {
 		};
 		resources.add(item.onDidChange(updateLanguage));
 		updateLanguage();
-		const toolbar = resources.add(new MenuWorkbenchToolBar(container, this.menuService, this.contextMenuService, MenuId.MultiDiffEditorFileToolbar, {
+		const toolbar = resources.add(this.instantiationService.createInstance(MenuWorkbenchToolBar, container, MenuId.MultiDiffEditorFileToolbar, {
 			ariaLabel: localize('multiDiff.fileActions', '{0} actions', input.label),
 			presentation: 'inherit-foreground',
 			contextKeyService: scoped,

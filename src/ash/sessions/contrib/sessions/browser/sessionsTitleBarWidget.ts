@@ -1,17 +1,15 @@
 import { Menus } from '../../../browser/menus.js';
-import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
-import { IMenuService } from '../../../../platform/actions/common/actions.js';
-import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import './media/sessionsTitleBarWidget.css';
-import { getActiveElement, getWindowId, h } from '../../../../base/browser/dom.js';
+import { getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Action, Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, derived, observableFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { environment } from '../../../../base/common/platform.js';
@@ -35,8 +33,6 @@ import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
 import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
 import { TitleMenuActionViewItem } from '../../../browser/parts/titlebar/titleMenuActionViewItem.js';
-import { getSessionsTitlebarPart } from '../../../browser/parts/titlebarPart.js';
-import { ITitleService } from '../../../../workbench/services/title/browser/titleService.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
@@ -67,11 +63,15 @@ interface TitleRename {
 }
 
 /** Presents the active conversation and its available title actions. */
-export class SessionsTitleBarWidget extends Disposable {
-	static readonly ID = 'sessions.contrib.titleBarWidget';
+export class SessionsTitleBarWidget extends ActionViewItem {
+	private readonly element: HTMLElement;
+	private readonly titleButton: Button;
+	private readonly titleMenu: TitleMenuActionViewItem;
+	private readonly titleMenuHost: HTMLElement;
 
 	constructor(
-		@ITitleService titleService: ITitleService,
+		action: IAction,
+		options: ActionViewItemOptions,
 		@ISessionsService sessions: ISessionsService,
 		@ICustomViewService customViews: ICustomViewService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
@@ -91,13 +91,11 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IChatListCatalog catalog: IChatListCatalog,
 		@ISessionsConversationService conversation: ISessionsConversationService,
 		@IConfigurationService configuration: IConfigurationService,
-		@IMenuService menus: IMenuService,
-		@IActionViewItemService presentations: IActionViewItemService,
 	) {
-		super();
+		super(action, options);
 		const fixes = instantiation.createInstance(BlockedSessionsCIFixModel);
 		const picker = this._register(new MutableDisposable());
-		const element = h(layout.mainContainer.ownerDocument, 'div', { className: 'ash-sessions-titlebar-widget' });
+		const element = this.element = h(layout.mainContainer.ownerDocument, 'div', { className: 'ash-sessions-titlebar-widget' });
 		const titleContainer = h(element.ownerDocument, 'div', { className: 'ash-sessions-titlebar-title' });
 		element.append(titleContainer);
 		const modeKey = SessionsWorkspaceModeContext.key;
@@ -121,7 +119,7 @@ export class SessionsTitleBarWidget extends Disposable {
 			return desktopChat.get() || target === undefined ? undefined : JSON.stringify([mode.get(), target]);
 		};
 		const canAct = (entry: ChatListEntry) => !entry.disabled && !entry.actionsDisabled;
-		const button = this._register(new Button(titleContainer, {
+		const button = this.titleButton = this._register(new Button(titleContainer, {
 			...defaultButtonStyles,
 			presentation: 'quiet',
 			size: 'small',
@@ -140,15 +138,15 @@ export class SessionsTitleBarWidget extends Disposable {
 			},
 		}));
 		button.domNode.classList.add('ash-titlebar-interactive-region');
-		const titleMenuHost = h(element.ownerDocument, 'div');
+		const titleMenuHost = this.titleMenuHost = h(element.ownerDocument, 'div');
 		titleContainer.append(titleMenuHost);
 		const titleAction = this._register(new Action('sessions.titlebar.chatActions'));
-		const titleMenu = this._register(new TitleMenuActionViewItem(titleAction, () => {
+		const titleMenu = this.titleMenu = this._register(new TitleMenuActionViewItem(titleAction, () => {
 			return desktopChat.get() ? getDesktopChatActions() : getSessionActions('chat', true);
 		}, contextMenus, () => getRenameAction()));
 		titleMenu.render(titleMenuHost);
-		const menuOpen = observableValue('sessionTitleMenuOpen', false);
-		this._register(titleMenu.onDidChangeVisibility(visible => menuOpen.set(visible, undefined)));
+		const setMenuOpen = (visible: boolean) => { element.classList.toggle('session-menu-open', visible); };
+		this._register(titleMenu.onDidChangeVisibility(setMenuOpen));
 		let combinedMenu = false;
 		const titleHovers = [button.domNode, titleMenu.element].map(target => this._register(hovers.setupHover({ target, content: undefined })));
 		let edit: { readonly target: TitleRename; readonly restoreFocus: boolean; saving: boolean; } | undefined;
@@ -230,14 +228,14 @@ export class SessionsTitleBarWidget extends Disposable {
 			const cancellation = new CancellationTokenSource();
 			const request = { key, cancellation };
 			activeMenu = request;
-			menuOpen.set(true, undefined);
+			setMenuOpen(true);
 			const anchor = menuButton.domNode;
 			anchor.setAttribute('aria-expanded', 'true');
 			const close = (reason?: ContextViewHideReason) => {
 				if (activeMenu !== request) return;
 				activeMenu = undefined;
 				cancellation.dispose();
-				menuOpen.set(false, undefined);
+				setMenuOpen(false);
 				anchor.setAttribute('aria-expanded', 'false');
 				if (reason === ContextViewHideReason.Escape && anchor.isConnected && !element.hidden && !menuButton.hidden) menuButton.focus();
 			};
@@ -337,14 +335,12 @@ export class SessionsTitleBarWidget extends Disposable {
 		menuButton.domNode.setAttribute('aria-expanded', 'false');
 		const actionsHost = h(element.ownerDocument, 'div', { className: 'ash-sessions-titlebar-conversation-actions' });
 		element.append(actionsHost);
-		const toolbar = this._register(new MenuWorkbenchToolBar(actionsHost, menus, contextMenus, Menus.SessionTitleBar, {
+		this._register(instantiation.createInstance(MenuWorkbenchToolBar, actionsHost, Menus.SessionTitleBar, {
 			ariaLabel: localize('sessions.titlebar.actions', 'Conversation actions'),
 			contextKeyService: contextKeys,
 			menuOptions: { shouldForwardArgs: true },
 			highlightToggledItems: true,
-			actionViewItemProvider: (action, options) => presentations.lookUp(Menus.SessionTitleBar, action.id)?.(action, options, instantiation, getWindowId(element.ownerDocument.defaultView!) ?? 0),
 		}));
-		this._register(presentations.onDidChange(menu => { if (menu === Menus.SessionTitleBar) toolbar.refresh(); }));
 
 		const sharing = observableValue('sessionTitleSharing', false);
 		const shareAction: IAction = {
@@ -484,6 +480,19 @@ export class SessionsTitleBarWidget extends Disposable {
 			};
 			for (const hover of titleHovers) hover.update(hoverContent);
 		}));
-		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen));
+	}
+
+	override render(container: HTMLElement): void {
+		container.classList.remove('icon');
+		container.append(this.element);
+	}
+
+	override focus(): void {
+		(this.titleMenuHost.hidden ? this.titleButton : this.titleMenu).focus();
+	}
+
+	override setTabbable(tabbable: boolean): void {
+		this.titleButton.domNode.tabIndex = tabbable ? 0 : -1;
+		this.titleMenu.setTabbable(tabbable);
 	}
 }

@@ -1,3 +1,4 @@
+import { createTestMenuToolbarServices } from './testMenuToolbarServices.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
@@ -65,7 +66,8 @@ suite('Menu default split actions', () => {
 			dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Alt' }));
 			assert.equal(main.textContent, 'New');
 
-			using toolbar = new MenuWorkbenchToolBar(dom.window.document.body, menus, provider, titleMenu);
+			using toolbarServices = createTestMenuToolbarServices(menus, provider);
+			using toolbar = toolbarServices.createInstance(MenuWorkbenchToolBar, dom.window.document.body, titleMenu, undefined);
 			const dropdown = toolbar.element.querySelector<HTMLButtonElement>('.ash-split-action-dropdown button')!;
 			dropdown.focus();
 			dropdown.click();

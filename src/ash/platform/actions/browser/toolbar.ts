@@ -5,9 +5,13 @@ import { ToolBar, type IToolBarResponsiveBehaviorOptions, type MoreActionsPlacem
 import { SubmenuAction, type IAction, type IActionRunner } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { getWindow, getWindowId } from '../../../base/browser/dom.js';
 import type { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../contextview/browser/contextView.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { IActionViewItemService } from './actionViewItemService.js';
 import { createActionViewItem, getActionBarActions } from './menuEntryActionViewItem.js';
-import { MenuId, type IMenu, type IMenuActionOptions, type IMenuChangeEvent, type IMenuService } from '../common/actions.js';
+import { IMenuService, MenuId, SubmenuItemAction, type IMenu, type IMenuActionOptions, type IMenuChangeEvent } from '../common/actions.js';
 
 export interface IWorkbenchToolBarOptions {
 	readonly actionRunner?: IActionRunner;
@@ -54,6 +58,10 @@ export class WorkbenchToolBar extends ToolBar {
 }
 
 export interface IMenuWorkbenchToolBarOptions extends IWorkbenchToolBarOptions {
+	/** Supplies the popup surface for a host with its own contextual menus. */
+	readonly contextMenuProvider?: IContextMenuProvider;
+	/** Initial action context, available to registered view factories during construction. */
+	readonly actionContext?: unknown;
 	readonly leadingActions?: readonly IAction[];
 	readonly menuOptions?: IMenuActionOptions;
 	readonly contextKeyService?: IContextKeyService;
@@ -78,19 +86,36 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 
 	constructor(
 		container: HTMLElement,
-		menuService: IMenuService,
-		contextMenuProvider: IContextMenuProvider,
 		menuId: MenuId,
-		options: IMenuWorkbenchToolBarOptions = {},
+		options: IMenuWorkbenchToolBarOptions | undefined,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@IActionViewItemService actionViewItems: IActionViewItemService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, contextMenuProvider, options);
+		options ??= {};
+		super(container, options.contextMenuProvider ?? contextMenuService, {
+			...options,
+			actionViewItemProvider: (action, itemOptions) => {
+				const itemId = action instanceof SubmenuItemAction ? action.item.submenu : action.id;
+				const factory = actionViewItems.lookUp(menuId, itemId);
+				if (!factory) return options.actionViewItemProvider?.(action, itemOptions);
+				return factory(action, { ...itemOptions, actionContext: options.actionContext }, instantiationService, getWindowId(getWindow(container)) ?? 0);
+			},
+		});
 		this.leadingActions = options.leadingActions ?? [];
 		this.menuOptions = options.menuOptions;
 		this.toolbarOptions = options.toolbarOptions;
 		const menu = this._register(menuService.createMenu(menuId, options.contextKeyService));
 		this.menu = menu;
+		this.context = options.actionContext;
 		this._register(menu.onDidChange((event) => {
 			this.update(event);
+			this.changeMenuItemsEmitter.fire(this);
+		}));
+		this._register(actionViewItems.onDidChange(changedMenu => {
+			if (changedMenu !== menuId) return;
+			this.update();
 			this.changeMenuItemsEmitter.fire(this);
 		}));
 		this.update();

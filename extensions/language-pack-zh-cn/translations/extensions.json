@@ -207,6 +207,7 @@
     "mcpUnavailable": "不可用",
     "mcpStatusUnavailable": "MCP 服务器状态不可用。",
     "mcpStatusNotReported": "未报告运行状态",
+    "packageConnections": "插件连接",
     "mcpStatusReadFailed": "无法加载 MCP 服务器状态：{0}",
     "mcpPackagesReadFailed": "无法加载已安装的包：{0}",
     "mcpToolsReadFailed": "无法加载工具说明：{0}",

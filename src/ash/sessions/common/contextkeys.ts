@@ -1,5 +1,6 @@
-import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { ArtifactKind } from './artifactKind.js';
+import type { SessionsActivityBarLocation } from './configuration.js';
 
 /** The artifact owning a toolbar or context menu, scoped to its editor rather than global focus. */
 export const ArtifactKindContext = new RawContextKey<ArtifactKind | undefined>('sessions.artifacts.kind', undefined);
@@ -20,6 +21,10 @@ export const CodeConversationPageContext = new RawContextKey<boolean>('sessions.
 
 /** The navigation action whose context menu is being resolved. */
 export const ActivityBarItemContext = new RawContextKey<string>('sessions.activityBar.actionId', '');
+
+/** Layout projection for the actions shared by the sidebar footer and title bar. */
+export const SessionsActivityBarLocationContext = new RawContextKey<SessionsActivityBarLocation | undefined>('sessions.activityBar.location', undefined);
+export const SessionsActivityBarOnSide = ContextKeyExpr.or(SessionsActivityBarLocationContext.isEqualTo('left'), SessionsActivityBarLocationContext.isEqualTo('right'))!;
 
 /** Describes the row that opened a Sessions context menu. */
 export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);
