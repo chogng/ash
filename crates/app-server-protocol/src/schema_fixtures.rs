@@ -136,9 +136,9 @@ fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile
         })
     ));
     assert_eq!(serde_json::to_value(parsed).unwrap(), request);
-    let mut retired = request.clone();
-    retired["mode"] = serde_json::json!("plan");
-    assert!(serde_json::from_value::<SessionRequest>(retired).is_err());
+    let mut invalid = request.clone();
+    invalid["unknownField"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<SessionRequest>(invalid).is_err());
     let mut explicit = request.clone();
     explicit["approvalMode"] = serde_json::json!("auto");
     let parsed: SessionRequest = serde_json::from_value(explicit.clone()).unwrap();
@@ -1246,7 +1246,7 @@ fn audio_upload_and_turn_input_round_trip_without_image_fields() {
 }
 
 #[test]
-fn queued_model_and_effort_round_trip_without_the_retired_mode_field() {
+fn queued_model_and_effort_round_trip_and_reject_unknown_fields() {
     let value = serde_json::json!({"commandId":"queued", "sessionId":"session", "threadId":"thread",
         "input":[{"type":"text","text":"/ask Explain the module"}],
         "model":{"provider":"test", "model":"model"}, "reasoningEffort":"high", "approvalMode":"manual"});
@@ -1254,9 +1254,9 @@ fn queued_model_and_effort_round_trip_without_the_retired_mode_field() {
         serde_json::from_value(value.clone()).unwrap();
     assert_eq!(request.tool_mode, None);
     assert_eq!(serde_json::to_value(request).unwrap(), value);
-    let mut retired = value;
-    retired["mode"] = serde_json::json!("ask");
-    assert!(serde_json::from_value::<crate::protocol::queue::QueueEnqueueParams>(retired).is_err());
+    let mut invalid = value;
+    invalid["unknownField"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<crate::protocol::queue::QueueEnqueueParams>(invalid).is_err());
 }
 
 #[test]

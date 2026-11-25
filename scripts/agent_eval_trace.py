@@ -214,12 +214,16 @@ def trace_metrics(path: Path, outcome: dict | None = None) -> dict:
                         "source": ref,
                     }
                 )
-        elif kind in {"turnAccepted", "turnModeChanged"}:
+        elif kind == "turnAccepted":
             instructions = event.get("instructions")
             snapshot = None
+            task_command = None
             if instructions is not None:
                 if not isinstance(instructions, dict):
                     raise ValueError("invalid frozen instructions")
+                task_command = instructions.get("taskCommand")
+                if task_command is not None and not isinstance(task_command, str):
+                    raise ValueError("invalid frozen task command")
                 # Hash the full frozen composition, not merely its primary body or revision.
                 snapshot = {
                     "owner": instructions["owner"],
@@ -238,11 +242,11 @@ def trace_metrics(path: Path, outcome: dict | None = None) -> dict:
                 {
                     "source": ref,
                     "instructions": snapshot,
+                    "taskCommand": task_command,
                     **{
                         key: event.get(key)
                         for key in (
                             "kind",
-                            "mode",
                             "model",
                             "reasoningEffort",
                             "toolProfile",

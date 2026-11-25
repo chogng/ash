@@ -12,8 +12,6 @@ use serde::ser::SerializeStruct;
 /// Schema version written for newly persisted Thread history records.
 /// Version 39 stores task execution only in frozen task instructions.
 /// Version 38 introduced request-scoped task commands.
-/// Version 37 records frozen model guidance under `agentModes`.
-/// Version 36 records the Swarm execution as `swarm`.
 /// Version 35 supports opt-in context-window tool hints in frozen Turn policies.
 /// Version 34 records the actual Turn execution directory at acceptance.
 /// Version 33 records the Session classification as kind.

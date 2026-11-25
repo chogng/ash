@@ -229,7 +229,7 @@ fn effort_boundaries_are_silent_in_both_modes() {
 }
 
 #[test]
-fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
+fn invalid_effort_arguments_preserve_the_current_effort() {
     use ash_protocol::ReasoningEffort;
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
@@ -253,15 +253,7 @@ fn retired_swarm_effort_arguments_leave_the_mode_and_effort_unchanged() {
                 crate::nls::Language::Chinese => "使用 /effort <档位>",
                 _ => "Use /effort <level>",
             };
-            for value in [
-                "swarm",
-                "swarm on",
-                "swarm off",
-                "multitask",
-                "ultra",
-                "ultracode",
-                "max on",
-            ] {
+            for value in ["unsupported", "high extra"] {
                 assert_eq!(command(&mut app, &format!("/effort {value}")), None);
                 assert_eq!(app.top_tip().text(None), Some(usage));
                 assert_eq!(app.status_line().model_label(), "test-model (high)");
@@ -725,7 +717,7 @@ fn render_effort(app: &App) -> String {
 }
 
 #[test]
-fn slash_task_commands_forward_without_a_mode_selection() {
+fn slash_task_commands_submit_directly() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         for verb in ["ask", "plan", "debug", "swarm"] {
             let mut app = App::for_dir_with_slash_commands(

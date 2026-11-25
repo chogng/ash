@@ -537,8 +537,9 @@ class AgentEvalTraceTests(unittest.TestCase):
             "id": "core",
             "revision": "v1",
             "body": "primary",
+            "taskCommand": "plan",
             "shared": [
-                {"owner": "prompts", "id": "mode", "revision": "v1", "body": "first"}
+                {"owner": "prompts", "id": "shared", "revision": "v1", "body": "first"}
             ],
         }
         changed = copy.deepcopy(instructions)
@@ -551,7 +552,6 @@ class AgentEvalTraceTests(unittest.TestCase):
                         {
                             "type": "turnAccepted",
                             "instructions": instructions,
-                            "mode": "default",
                             "kind": "coding",
                             "toolProfile": {
                                 "id": "tools",
@@ -559,9 +559,21 @@ class AgentEvalTraceTests(unittest.TestCase):
                             },
                         },
                         {
-                            "type": "turnModeChanged",
+                            "type": "turnAccepted",
+                            "turnId": "second-turn",
                             "instructions": changed,
-                            "mode": "plan",
+                            "kind": "coding",
+                        },
+                        {
+                            "type": "turnAccepted",
+                            "turnId": "default-turn",
+                            "instructions": {
+                                "owner": "prompts",
+                                "id": "core",
+                                "revision": "v1",
+                                "body": "primary",
+                            },
+                            "kind": "coding",
                         },
                     ],
                 )
@@ -574,6 +586,11 @@ class AgentEvalTraceTests(unittest.TestCase):
         )
         self.assertEqual(selections[0]["toolProfile"]["definitionDigest"], "digest")
         self.assertEqual(selections[1]["source"]["sequence"], 2)
+        self.assertEqual(selections[1]["source"]["turnId"], "second-turn")
+        self.assertEqual(
+            [selection["taskCommand"] for selection in selections],
+            ["plan", "plan", None],
+        )
         self.assertNotIn("body", selections[0]["instructions"])
 
     def test_invalid_usage_and_ambiguous_local_facts_cannot_be_graded_as_valid(self):

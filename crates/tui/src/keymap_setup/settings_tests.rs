@@ -106,7 +106,7 @@ fn invalid_keybinding_root_and_rules_are_rejected() {
     for keybindings in [
         json!({}),
         json!([{"key": "ctrl+k escape", "block": true}]),
-        json!([{"key": "shift+tab", "command": "ashCode.action.cycleAgentMode"}]),
+        json!([{"key": "shift+tab", "command": "ashCode.action.unknown"}]),
     ] {
         let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), keybindings)]));
         assert!(settings_from_tui(&section).is_err());

@@ -35,7 +35,7 @@ use crossterm::event::MouseEventKind;
 use ratatui::layout::Rect;
 
 #[test]
-fn composer_footer_keeps_input_focus_without_a_mode_picker() {
+fn composer_footer_pointer_keeps_input_focus() {
     use ratatui::layout::Position;
     for (width, language) in [
         (80, crate::nls::Language::English),

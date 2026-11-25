@@ -334,16 +334,15 @@ test('App Server params decoding rejects integers that JSON cannot preserve exac
 	);
 });
 
-
-test('Turn and queue requests take a task command in text and reject the retired mode field', () => {
+test('Turn and queue requests take a task command in text and reject unknown fields', () => {
 	const identity = { sessionId: 'session', commandId: 'command' };
 	const input = [{ type: 'text', text: '/swarm Review the changes' }];
 	const request = { type: 'startTurn', threadId: 'thread', expectedSequence: 1, input };
 	const queue = { ...identity, threadId: 'thread', input };
 	assert.deepEqual(decodeAppServerRequestParams('session/request', { ...identity, request }), { ...identity, request });
 	assert.deepEqual(decodeAppServerRequestParams('queue/enqueue', queue), queue);
-	assert.throws(() => decodeAppServerRequestParams('session/request', { ...identity, request: { ...request, mode: 'swarm' } }), AppServerProtocolDecodeError);
-	assert.throws(() => decodeAppServerRequestParams('queue/enqueue', { ...queue, mode: 'swarm' }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('session/request', { ...identity, request: { ...request, unknownField: true } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('queue/enqueue', { ...queue, unknownField: true }), AppServerProtocolDecodeError);
 });
 
 test('Feature map keys and queue edits are validated from the generated schema', () => {

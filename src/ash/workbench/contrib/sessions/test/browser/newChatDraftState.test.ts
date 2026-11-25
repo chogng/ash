@@ -24,13 +24,13 @@ test('stored drafts retain code reference positions and reject references to dif
 	assert.throws(() => readNewChatDraftState(fixture.storage, 'selection'), /Invalid Agents Window context reference/);
 });
 
-test('stored drafts reject the retired mode field', () => {
+test('stored drafts reject unknown fields', () => {
 	using fixture = createStorage();
 	const { storage } = fixture;
-	const retired = JSON.stringify({ state: JSON.stringify({ ...draft, mode: 'swarm', contexts: [] }) });
-	storage.store('sessions.inputDraft:retired', retired, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.throws(() => readNewChatDraftState(storage, 'retired'), /Invalid Agents Window draft/);
-	assert.equal(storage.get('sessions.inputDraft:retired', StorageScope.WORKSPACE), retired);
+	const invalid = JSON.stringify({ state: JSON.stringify({ ...draft, unknownField: true, contexts: [] }) });
+	storage.store('sessions.inputDraft:invalid', invalid, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.throws(() => readNewChatDraftState(storage, 'invalid'), /Invalid Agents Window draft/);
+	assert.equal(storage.get('sessions.inputDraft:invalid', StorageScope.WORKSPACE), invalid);
 });
 
 test('a stored Swarm draft keeps its separate attachment after editing', () => {

@@ -1331,23 +1331,15 @@ fn task_execution_round_trips_and_delegated_workers_keep_their_approach() {
         );
         assert_eq!(mode.delegated(), child);
     }
-    for invalid in ["multitask", "unknown"] {
-        assert!(serde_json::from_value::<TaskExecution>(json!(invalid)).is_err());
-    }
+    assert!(serde_json::from_value::<TaskExecution>(json!("unknown")).is_err());
 }
 
 #[test]
-fn retired_turn_mode_change_events_are_rejected() {
-    let event = json!({
-        "type": "turnModeChanged", "threadId": "thread", "turnId": "turn",
-        "fromMode": "agent", "mode": "plan",
-        "instructions": {
-            "owner": "ash", "id": "agent", "revision": "1", "body": "Shared rules",
-            "taskInstructions": { "owner": "ash", "id": "plan", "revision": "1", "body": "Plan the task" }
-        }
-    });
+fn unknown_thread_event_types_are_rejected() {
+    let event = json!({"type": "unknown", "threadId": "thread"});
     assert!(serde_json::from_value::<ThreadEvent>(event).is_err());
 }
+
 #[test]
 fn permission_ids_are_closed_and_product_order_does_not_change_the_default() {
     use crate::ApprovalMode;

@@ -1938,7 +1938,7 @@ fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
 }
 
 #[test]
-fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
+fn queue_steering_rejects_a_different_approach_without_changing_the_active_turn() {
     let root = tempfile::tempdir().unwrap();
     let (server, _) = queued_server(root.path());
     let mut connection = server.connection();
@@ -2015,12 +2015,12 @@ fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
     assert!(
         matches!(server.deliver_queued_message(&message).unwrap(),
         queue::Delivery::Rejected(reason) if reason == "steerModeMismatch"),
-        "an existing Steer receipt must not let a queued mode bypass the target mode"
+        "an existing Steer receipt must not let a queued task bypass the active approach"
     );
 }
 
 #[test]
-fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
+fn queued_task_command_recovers_its_frozen_approach() {
     let root = tempfile::tempdir().unwrap();
     let (server, _) = queued_server(root.path());
     let mut connection = server.connection();
@@ -2035,14 +2035,13 @@ fn queued_task_command_recovers_its_frozen_approach_without_a_mode() {
     );
     let accepted: queue::QueuedMessage =
         serde_json::from_value(response["result"].clone()).expect(&response.to_string());
-    assert!(response["result"]["request"].get("mode").is_none());
     assert_eq!(
         accepted.request.task_command,
         Some(ash_protocol::TaskExecution::Swarm)
     );
-    let mut retired = response["result"].clone();
-    retired["request"]["mode"] = "swarm".into();
-    assert!(serde_json::from_value::<queue::QueuedMessage>(retired).is_err());
+    let mut invalid = response["result"].clone();
+    invalid["request"]["unknownField"] = true.into();
+    assert!(serde_json::from_value::<queue::QueuedMessage>(invalid).is_err());
     let mut queued = accepted.clone();
     for (index, (interpretation, text, command)) in [
         ("literal", "/init", None),

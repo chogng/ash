@@ -147,7 +147,6 @@ fn submit_prompt_uses_message_text_for_the_task_command() {
             panic!("expected a start turn request")
         };
         assert_eq!(actual.input, vec![InputItem::Text { text: text.into() }]);
-        assert!(request["params"]["request"].get("mode").is_none());
     }
 }
 

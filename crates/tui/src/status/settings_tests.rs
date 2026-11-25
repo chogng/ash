@@ -36,15 +36,15 @@ fn configured_order_controls_status_line_order() {
 }
 
 #[test]
-fn status_line_rejects_retired_items_in_current_settings() {
+fn status_line_rejects_unknown_items() {
     let result = StatusLineSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
         "statusLine".into(),
-        json!(["model", "mode"]),
+        json!(["model", "unknown"]),
     )])));
     assert!(
         result
             .unwrap_err()
-            .contains("invalid [tui].statusLine item `mode`")
+            .contains("invalid [tui].statusLine item `unknown`")
     );
 }
 

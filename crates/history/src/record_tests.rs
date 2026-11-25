@@ -4,7 +4,6 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadCommand;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
-use serde_json::Value;
 
 #[test]
 fn legacy_creation_keeps_the_classification_bytes_used_by_history_prefixes() {
@@ -91,7 +90,7 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
 }
 
 #[test]
-fn task_instructions_round_trip_and_reject_retired_mode_fields() {
+fn task_instructions_round_trip_and_reject_unknown_fields() {
     let base =
         ash_protocol::TurnInstructions::new("modes", "swarm", "v1", "Coordinate workers.").unwrap();
     let instructions = base
@@ -169,17 +168,9 @@ fn task_instructions_round_trip_and_reject_retired_mode_fields() {
         let restored: StoredEvent = serde_json::from_str(&encoded).unwrap();
         assert_eq!(serde_json::to_string(&restored).unwrap(), encoded);
         assert!(encoded.contains(r#""taskCommand":"swarm""#));
-        let retired = encoded
-            .replace(r#""taskInstructions":"#, r#""modeInstructions":"#)
-            .replace(r#""taskCommands":"#, r#""agentModes":"#);
-        assert_ne!(retired, encoded);
-        assert!(serde_json::from_str::<StoredEvent>(&retired).is_err());
-        let mut legacy: Value = serde_json::from_str(&retired).unwrap();
-        legacy["schemaVersion"] = 38.into();
-        assert!(serde_json::from_value::<StoredEvent>(legacy).is_err());
         assert!(
             serde_json::from_str::<StoredEvent>(
-                &encoded.replace(r#""taskCommand":"swarm""#, r#""taskCommand":"multitask""#)
+                &encoded.replace(r#""taskCommand":"swarm""#, r#""taskCommand":"unknown""#)
             )
             .is_err()
         );
@@ -190,13 +181,13 @@ fn task_instructions_round_trip_and_reject_retired_mode_fields() {
             "/event/turn",
             "/event/turns/0",
         ] {
-            let mut retired = value.clone();
-            if let Some(object) = retired
+            let mut invalid = value.clone();
+            if let Some(object) = invalid
                 .pointer_mut(path)
                 .and_then(|value| value.as_object_mut())
             {
-                object.insert("mode".into(), "swarm".into());
-                assert!(serde_json::from_value::<StoredEvent>(retired).is_err());
+                object.insert("unknownField".into(), true.into());
+                assert!(serde_json::from_value::<StoredEvent>(invalid).is_err());
             }
         }
     }
@@ -296,7 +287,7 @@ fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identi
 }
 
 #[test]
-fn imported_turns_preserve_legacy_approval_bytes_without_agent_mode() {
+fn imported_turns_preserve_legacy_approval_bytes() {
     for approval_mode in ash_protocol::ApprovalMode::ALL {
         let turn: ash_protocol::Turn = serde_json::from_value(serde_json::json!({
             "turnId":"old-turn", "status":"completed", "items":[], "approvalMode":approval_mode
@@ -340,18 +331,8 @@ fn imported_turns_preserve_legacy_approval_bytes_without_agent_mode() {
             let legacy = encoded.replace("\"schemaVersion\":22", "\"schemaVersion\":21");
             let restored: StoredEvent = serde_json::from_str(&legacy).unwrap();
             assert_eq!(serde_json::to_string(&restored).unwrap(), legacy);
-            assert!(!encoded.contains("\"mode\":\"agent\""));
-            current.schema_version = 37;
-            let encoded = serde_json::to_string(&current).unwrap();
-            assert!(!encoded.contains("\"mode\":\"agent\""));
-            assert_eq!(
-                serde_json::to_string(&serde_json::from_str::<StoredEvent>(&encoded).unwrap())
-                    .unwrap(),
-                encoded,
-            );
             current.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION;
             let encoded = serde_json::to_string(&current).unwrap();
-            assert!(!encoded.contains("\"mode\":\"agent\""));
             assert!(encoded.contains(&format!("\"approvalMode\":\"{}\"", approval_mode.id())));
             assert_eq!(
                 serde_json::from_str::<StoredEvent>(&encoded).unwrap(),

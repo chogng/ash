@@ -96,21 +96,21 @@ fn legacy_single_asset_remains_a_single_recorded_asset() {
 }
 
 #[test]
-fn replacing_mode_retains_common_rules_and_model_selection() {
+fn replacing_task_instructions_retains_common_rules_and_model_selection() {
     let shared = TurnInstructions::new("prompts", "common", "v1", "shared rules").unwrap();
-    let parent_mode = TurnInstructions::new("modes", "swarm", "v2", "coordinate").unwrap();
-    let worker_mode = TurnInstructions::new("modes", "agent", "v2", "execute").unwrap();
+    let parent_task = TurnInstructions::new("tasks", "swarm", "v2", "coordinate").unwrap();
+    let worker_task = TurnInstructions::new("tasks", "agent", "v2", "execute").unwrap();
     let base = TurnInstructions::new("prompts", "task", "v1", "task rules")
         .unwrap()
         .with_shared(&shared)
         .with_model_guidance(ModelInstructionSelection::Generic { model: None })
-        .with_task_instructions(&parent_mode);
-    let worker = base.clone().with_task_instructions(&worker_mode);
+        .with_task_instructions(&parent_task);
+    let worker = base.clone().with_task_instructions(&worker_task);
     assert_eq!(worker.id(), base.id());
     assert_eq!(worker.body(), base.body());
     assert_eq!(worker.shared(), base.shared());
     assert_eq!(worker.model_guidance(), base.model_guidance());
-    assert_eq!(worker.task_instructions(), Some(&worker_mode.as_text()));
+    assert_eq!(worker.task_instructions(), Some(&worker_task.as_text()));
     let restored: TurnInstructions =
         serde_json::from_value(serde_json::to_value(&worker).unwrap()).unwrap();
     assert_eq!(restored, worker);
