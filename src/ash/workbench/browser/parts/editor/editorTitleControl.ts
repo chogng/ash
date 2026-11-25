@@ -1,5 +1,7 @@
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/editorTitleControl.css';
+import { DragAndDropObserver } from '../../../../base/browser/dnd.js';
+import { DndCssClasses } from '../../../../base/browser/ui/dnd/dnd.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -30,6 +32,8 @@ import type { IEditorPaneDescriptor } from '../../editor.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorGroupViewOptions } from './editor.js';
+import { containsExternalEditorDrop } from './editorDropData.js';
+import { isEditorTabCopyRequested } from './editorTabDragAndDrop.js';
 
 /** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
@@ -102,6 +106,7 @@ export class EditorTitleControl extends Disposable {
 			viewOptions,
 			this.tabStrip,
 		));
+		if (this.header.addTabElement) this.registerAddTabDropTarget(this.header.addTabElement);
 		this.lockIndicator = h(ownerDocument, 'span');
 		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
 		this.lockIndicator.hidden = true;
@@ -210,6 +215,33 @@ export class EditorTitleControl extends Disposable {
 		}
 		const rows = this.headerElement.hidden ? 0 : this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		this.domNode.style.setProperty('--ash-editor-tab-rows', String(rows));
+	}
+
+	private registerAddTabDropTarget(element: HTMLElement): void {
+		const clearFeedback = (): void => { element.classList.remove(DndCssClasses.DropBefore); };
+		// Add Tab sits outside the scrollable tab list but shares its end insertion point.
+		this._register(new DragAndDropObserver(element, {
+			onDragOver: event => {
+				const local = this.delegate.isDragging();
+				const accepted = local || containsExternalEditorDrop(event);
+				element.classList.toggle(DndCssClasses.DropBefore, accepted);
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = local
+						? this.delegate.getDragOperation?.(isEditorTabCopyRequested(event)) ?? 'move'
+						: accepted ? 'copy' : 'none';
+				}
+			},
+			onDragLeave: clearFeedback,
+			onDrop: event => {
+				clearFeedback();
+				const local = this.delegate.isDragging();
+				if (!local && !containsExternalEditorDrop(event)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				if (local) this.delegate.drop(undefined, 'after', isEditorTabCopyRequested(event));
+				else this.delegate.dropExternal(event, undefined, 'after');
+			},
+		}));
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {

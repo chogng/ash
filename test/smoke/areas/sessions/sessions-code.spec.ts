@@ -488,6 +488,46 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	expect(failures).toEqual([]);
 });
 
+test('Dragging onto Add Tab moves an editor to the end of the Code tab strip', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.files.newUntitledFile');
+	await commands.runCommand('workbench.action.files.newUntitledFile');
+	const strip = page.locator('.ash-editor-tab-strip').filter({ has: page.getByRole('tab', { name: 'Untitled-1', exact: true }) });
+	const tabs = strip.getByRole('tab');
+	const addTab = strip.getByRole('button', { name: 'Add Tab', exact: true });
+	const addTabToolbar = strip.getByRole('toolbar', { name: 'Add Tab', exact: true });
+	await expect(tabs).toHaveText(['Untitled-1', 'Untitled-2']);
+	await expect(addTab).toBeVisible();
+	const source = await tabs.first().boundingBox();
+	const destination = await addTab.boundingBox();
+	if (!source || !destination) throw new Error('Editor tab and Add Tab button must be visible to drag');
+	const startX = source.x + source.width / 2;
+	const startY = source.y + source.height / 2;
+	const endX = destination.x + destination.width / 2;
+	const endY = destination.y + destination.height / 2;
+	await page.mouse.move(startX, startY);
+	await page.mouse.down();
+	let marker = 'none';
+	try {
+		await page.mouse.move(endX, endY, { steps: 12 });
+		await page.mouse.move(endX + 1, endY);
+		marker = await addTabToolbar.evaluate(element => getComputedStyle(element, '::before').content);
+	} finally {
+		await page.mouse.up();
+	}
+	await expect(tabs).toHaveText(['Untitled-2', 'Untitled-1']);
+	expect(marker).toBe('""');
+	await expect(addTabToolbar).not.toHaveClass(/ash-dnd-drop-before/u);
+	await addTab.click();
+	await expect(page.getByRole('menuitem', { name: 'New Tab', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await addTab.drop({ files: { name: 'dropped.txt', mimeType: 'text/plain', buffer: Buffer.from('Dropped editor contents') } });
+	await expect(tabs).toHaveText(['Untitled-2', 'Untitled-1', 'dropped.txt']);
+	await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+});
+
 test('New Tab searches files in its group and opens a URL', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();

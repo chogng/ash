@@ -48,6 +48,7 @@ export interface EditorHeaderActions {
 /** Owns the actions and breadcrumbs alongside one group's editor tabs. */
 export class EditorHeaderControl extends Disposable {
 	public static readonly HEIGHT = 32;
+	readonly addTabElement?: HTMLElement;
 	private readonly heightEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
 	private readonly breadcrumbs: EditorBreadcrumbsControl;
@@ -102,6 +103,7 @@ export class EditorHeaderControl extends Disposable {
 						: undefined,
 				}));
 				toolbar.element.classList.add('ash-editor-add-tab');
+				this.addTabElement = toolbar.element;
 				const updateAddTab = (): void => {
 					const entries = getFlatContextMenuActions(menu.getActions(menuOptions));
 					toolbar.setActions(entries.length ? [new SubmenuAction('workbench.editor.addTab', label, entries, Lxicon.add)] : []);

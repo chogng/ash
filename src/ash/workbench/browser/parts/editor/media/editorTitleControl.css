@@ -115,8 +115,20 @@
 }
 
 .ash-editor-add-tab {
+	position: relative;
 	flex: none;
 	align-self: center;
+}
+
+.ash-editor-add-tab.ash-dnd-drop-before::before {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	z-index: 1;
+	width: 2px;
+	content: "";
+	pointer-events: none;
+	background: var(--ash-focusBorder);
 }
 
 .ash-editor-header-label {
