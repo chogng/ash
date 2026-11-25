@@ -110,6 +110,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
+					'workbench.contrib.sessions.editorTitleMenuBridge',
 					'workbench.contrib.sessionsLayout',
 					'sessions.contrib.filesView',
 					'workbench.contrib.call',

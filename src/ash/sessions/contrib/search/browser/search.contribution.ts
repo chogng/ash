@@ -27,6 +27,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { ISessionsSearchService, SessionsSearchService } from './searchService.js';
@@ -61,7 +62,7 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 });
 MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
 	command: { id: 'workbench.action.quickOpen', title: localize2('workbench.editor.goToFile', 'Go to File') },
-	when: ContextKeyExpr.and(canSearchFiles, ContextKeyExpr.equals('sessions.editorTool', 'files')),
+	when: ContextKeyExpr.and(canSearchFiles, SessionsEditorToolContext.isEqualTo('files')),
 	group: '1_view',
 });
 KeybindingsRegistry.registerKeybindingRule({

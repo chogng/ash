@@ -74,7 +74,7 @@ const workbench = resources.add(
 		},
 		returnToWorkbench: () => { },
 		openIdeExtensions: () => { },
-		contributionIds: ['sessions.contrib.filesView', 'workbench.contrib.sessionsLayout', 'sessions.contrib.sharedChatInputComposer', 'workbench.contrib.workspaceFolderManagement', 'sessions.contrib.inboxOne'],
+		contributionIds: ['sessions.contrib.filesView', 'workbench.contrib.sessions.editorTitleMenuBridge', 'workbench.contrib.sessionsLayout', 'sessions.contrib.sharedChatInputComposer', 'workbench.contrib.workspaceFolderManagement', 'sessions.contrib.inboxOne'],
 	}),
 );
 await workbench.whenRestored;

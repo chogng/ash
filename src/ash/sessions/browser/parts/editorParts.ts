@@ -28,7 +28,8 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { DesktopMainEditorPart } from './desktopEditorPart.js';
 import { DesktopToolEditorPart } from './desktopToolEditorPart.js';
-import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool, type ToolSlot } from './desktopEditorArea.js';
+import { desktopEditorTools, SessionsEditorToolContext, type DesktopEditorTool } from '../../common/contextkeys.js';
+import { DesktopEditorArea, type ToolSlot } from './desktopEditorArea.js';
 
 /** Documents are serialized once. Sessions adds only their Part membership and geometry. */
 export interface DesktopEditorWorkingSet extends EditorWorkingSet {
@@ -167,7 +168,7 @@ export class EditorParts extends WorkbenchEditorParts {
 			area.domNode.append(container);
 			resources.add(toDisposable(() => container.remove()));
 			const context = resources.add(contextKeys.createScoped(container));
-			context.createKey('sessions.editorTool', tool);
+			context.createKey(SessionsEditorToolContext.key, tool);
 			const scope = services.createChild(undefined, resources);
 			scope.registerInstance(IContextKeyService, context);
 			const part = resources.add(scope.createInstance(ctor, container, { ...partOptions, contextKeyService: context }));

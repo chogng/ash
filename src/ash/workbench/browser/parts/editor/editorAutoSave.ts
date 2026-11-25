@@ -1,10 +1,10 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration, type EditorAutoSaveMode } from '../../../services/editor/common/editorConfiguration.js';
-import type { IWorkingCopy, IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import type { IEditorPart } from './editorPart.js';
+import { type IWorkingCopy, IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import { IEditorPart } from './editorPart.js';
 import { SaveReason } from '../../../common/editor.js';
 
 /** Coordinates configuration-driven saves without taking ownership of editor models. */
@@ -18,9 +18,9 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 	private activeWorkingCopy: IWorkingCopy | undefined;
 
 	constructor(
-		private readonly editorPart: IEditorPart,
-		private readonly workingCopies: IWorkingCopyService,
-		private readonly configuration: IConfigurationService,
+		@IEditorPart private readonly editorPart: IEditorPart,
+		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		for (const workingCopy of workingCopies.getAll()) this.attach(workingCopy);

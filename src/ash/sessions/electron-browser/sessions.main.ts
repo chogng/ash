@@ -343,6 +343,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
+					'workbench.contrib.sessions.editorTitleMenuBridge',
 					'workbench.contrib.sessionsLayout',
 					'sessions.contrib.filesView',
 					'terminal.native',

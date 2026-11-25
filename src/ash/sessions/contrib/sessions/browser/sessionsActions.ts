@@ -17,7 +17,7 @@ import { groupSessionsForPicker, pickSessionDestination, type ISessionPickItem }
 import { runSessionsListMove } from './views/sessionsListChatMove.js';
 import { Menus } from '../../../browser/menus.js';
 import { SHOW_ASH_CHAT_COMMAND } from '../../../common/chatWorkspace.js';
-import { SessionsMenuCanMoveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { SessionsEditorToolContext, SessionsMenuCanMoveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 export const SHOW_SESSIONS_PICKER_COMMAND_ID = 'sessions.showSessionsPicker';
 
@@ -91,7 +91,7 @@ registerAction2(class ReopenLastClosedItemAction extends Action2 {
 			precondition: IsSessionsWindowContext.isEqualTo(true),
 			keybinding: {
 				weight: KeybindingWeight.SessionsContrib,
-				when: ContextKeyExpr.not('sessions.editorTool'),
+				when: ContextKeyExpr.not(SessionsEditorToolContext.key),
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT,
 			},
 		});

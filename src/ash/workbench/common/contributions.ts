@@ -3,8 +3,10 @@ import {
 	type IDisposable,
 	toDisposable,
 } from '../../base/common/lifecycle.js';
-import type {
-	ServicesAccessor,
+import type { Constructor } from '../../platform/instantiation/common/descriptors.js';
+import {
+	IInstantiationService,
+	type ServicesAccessor,
 } from '../../platform/instantiation/common/instantiation.js';
 
 /** Startup point at which a workbench contribution is instantiated. */
@@ -193,7 +195,7 @@ export const WorkbenchContributionsRegistry =
 	new WorkbenchContributionRegistry();
 
 /**
- * Registers a process-lifetime contribution declaration.
+ * Registers a process-lifetime contribution factory for custom window assembly.
  *
  * Contribution modules should call this during module evaluation, before a
  * workbench host is created.
@@ -204,6 +206,16 @@ export function registerWorkbenchContribution(
 	factory: WorkbenchContributionFactory,
 ): void {
 	WorkbenchContributionsRegistry.registerStatic(id, phase, factory);
+}
+
+/** Declares a contribution whose constructor dependencies come from the owning window. */
+export function registerWorkbenchContribution2(
+	id: string,
+	ctor: Constructor<IWorkbenchContribution>,
+	phase: WorkbenchPhase,
+): void {
+	WorkbenchContributionsRegistry.registerStatic(id, phase, accessor =>
+		accessor.get(IInstantiationService).createInstance(ctor));
 }
 
 function validateContributionId(id: string): void {

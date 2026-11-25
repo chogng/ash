@@ -76,6 +76,7 @@ import '../workbench/contrib/output/browser/output.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/editor/browser/diffEditor.sessions.contribution.js';
+import './contrib/editor/browser/editor.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/codeReview/browser/codeReview.contribution.js';
 import './contrib/codeReview/browser/bots.contribution.js';

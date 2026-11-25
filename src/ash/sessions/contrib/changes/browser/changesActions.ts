@@ -1,19 +1,24 @@
+import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
+import { Menus } from '../../../browser/menus.js';
+import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileIsBinaryContext, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFilesViewMenu, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
+import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize2 } from '../../../../nls.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerDiffEditorViewMenu } from '../../../../workbench/browser/parts/editor/diffEditorCommands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js';
+import { ActiveEditorContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { SessionChangesEditor } from './sessionChangesEditor.js';
-import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ChangesCanPreviewCommitContext, ChangesHasWorkspaceContext, ChangesScopeContext, SessionChangesEditor } from './sessionChangesEditor.js';
+import { ISessionChangesService } from '../common/sessionChangesService.js';
 
 registerDiffEditorViewMenu(ActiveEditorContext.isEqualTo(SessionChangesEditor.ID));
 
@@ -67,7 +72,7 @@ class ExpandFullFileAction extends Action2 {
 			icon: Lxicon.unfold,
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(captureFile, ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				when: ContextKeyExpr.and(captureFile, MultiDiffEditorFileIsBinaryContext.isEqualTo(false)),
 				group: 'navigation', order: 23,
 			},
 		});
@@ -85,7 +90,7 @@ class CollapseUnchangedRegionsAction extends Action2 {
 			icon: Lxicon.fold,
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(captureFile, ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
+				when: ContextKeyExpr.and(captureFile, MultiDiffEditorFileIsBinaryContext.isEqualTo(false)),
 				group: 'navigation', order: 24,
 			},
 		});
@@ -107,7 +112,7 @@ class PreviewChangesetFileAction extends Action2 {
 			precondition: ContextKeyExpr.has('sessions.changesCanPreview'),
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
+				when: ActiveEditorContext.isEqualTo(SessionChangesEditor.ID),
 				group: 'navigation', order: 30,
 			},
 		});
@@ -130,3 +135,59 @@ class PreviewChangesetFileAction extends Action2 {
 }
 
 registerAction2(PreviewChangesetFileAction);
+
+/** Contributes actions for the Changes editor group in the Agent Window. */
+export function registerChangesEditorTitleActions(editor: IEditorPart): IDisposable {
+	const disposables = new DisposableStore();
+	const getGroup = (arg: unknown) =>
+		(isRecord(arg) ? editor.groups.find(group => group.id === arg.groupId) : undefined) ?? editor.activeGroup;
+	const changesTool = ContextKeyExpr.and(SessionsCodeEditorContext.isEqualTo(true), SessionsEditorToolContext.isEqualTo('changes'));
+	const previewCommitId = 'ash.sessions.changes.previewCommit';
+	disposables.add(CommandsRegistry.register(previewCommitId, (_accessor, arg) => {
+		const pane = getGroup(arg)?.activePane;
+		return pane instanceof SessionChangesEditor ? pane.previewCommit() : undefined;
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		command: { id: previewCommitId, title: localize2('sessions.changes.previewCommit', 'Preview commit…') },
+		when: ContextKeyExpr.and(changesTool, ChangesHasWorkspaceContext.isEqualTo(true), ChangesCanPreviewCommitContext.isEqualTo(true),
+			ContextKeyExpr.or(ChangesScopeContext.isEqualTo('all'), ChangesScopeContext.isEqualTo('turn'))),
+		group: '1_changes', order: 0,
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		submenu: MultiDiffEditorFilesViewMenu, title: getMultiDiffEditorFilesViewTitle(),
+		when: ContextKeyExpr.and(changesTool, MultiDiffEditorFileListAvailableContext.isEqualTo(true)), group: '1_changes', order: 1,
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderPrimary, {
+		submenu: Menus.SessionsChangesScope, title: localize2('sessions.changes.title', 'Changes'),
+		when: changesTool, group: 'navigation',
+	}));
+	for (const [order, [scope, title]] of ([
+		['all', localize2('sessions.changes.allChanges', 'All Changes')],
+		['turn', localize2('sessions.changes.chooseTurn', 'Changes from Turn')],
+		['uncommitted', localize2('sessions.changes.uncommittedChanges', 'Uncommitted Changes')],
+		['branch', localize2('sessions.changes.compareAgainst', 'Compare Against…')],
+	] as const).entries()) {
+		const id = `ash.sessions.changesScope.${scope}`;
+		disposables.add(CommandsRegistry.register(id, (_accessor, arg) => {
+			const group = getGroup(arg);
+			if (group?.activePane instanceof SessionChangesEditor) return group.activePane.selectScope(scope, group.id);
+			return undefined;
+		}));
+		disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsChangesScope, {
+			command: { id, title, toggled: ChangesScopeContext.isEqualTo(scope) }, group: 'navigation', order,
+		}));
+	}
+
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderLayout, {
+		command: {
+			id: TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID,
+			title: getToggleMultiDiffEditorFileListTitle(),
+			icon: Lxicon.listUnordered,
+			toggled: MultiDiffEditorFileListEnabledContext.isEqualTo(true),
+		},
+		when: ContextKeyExpr.and(changesTool, MultiDiffEditorFileListAvailableContext.isEqualTo(true)),
+		group: 'navigation',
+		order: -1,
+	}));
+	return disposables;
+}

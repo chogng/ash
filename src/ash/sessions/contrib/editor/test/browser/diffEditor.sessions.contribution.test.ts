@@ -7,6 +7,8 @@ import { MenuId, SubmenuItemAction } from '../../../../../platform/actions/commo
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { SET_DIFF_VIEW_MODE_AUTOMATIC, SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, TOGGLE_DIFF_SIDE_BY_SIDE } from '../../../../../workbench/browser/parts/editor/diffEditorCommands.js';
 import { IDiffEditorCommandsService } from '../../../../../workbench/browser/parts/editor/diffEditorCommandsService.js';
@@ -20,12 +22,13 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { SESSIONS_DIFF_VIEW_MODE } from '../../../../common/configuration.js';
 import { ConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { SessionChangesEditor } from '../../../changes/browser/sessionChangesEditor.js';
-import '../../browser/diffEditor.sessions.contribution.js';
-import { SessionsDiffEditorCommandsService } from '../../browser/sessionsDiffEditorCommandsService.js';
+import { SessionsDiffEditorCommandsService } from '../../browser/diffEditor.sessions.contribution.js';
 
 test('Changes can set the shared diff view without a mounted diff and the single-file toggle restores Automatic', async () => {
 	using configuration = new (testConfigurationService(ConfigurationService))();
-	using services = new InstantiationService();
+	const registrations = new ServiceCollection();
+	registrations.set(IDiffEditorCommandsService, new SyncDescriptor(SessionsDiffEditorCommandsService, [], true));
+	using services = new InstantiationService(registrations);
 	using contexts = new ContextKeyService();
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contexts);
@@ -45,7 +48,6 @@ test('Changes can set the shared diff view without a mounted diff and the single
 		focusActiveEditor: () => { },
 	});
 	services.registerInstance(IConfigurationService, configuration);
-	services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 
 	const diffView = () => menuService.getMenuActions(MenuId.EditorTitle, { arg: { groupId: changesGroupId } })
 		.flatMap(([, actions]) => actions)

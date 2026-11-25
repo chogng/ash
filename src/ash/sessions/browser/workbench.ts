@@ -9,7 +9,7 @@ import { ICollabService } from '../../workbench/services/collab/common/collabSer
 import { CollabService } from '../../workbench/services/collab/browser/collabService.js';
 import { AppServerCollabService } from '../../workbench/services/collab/browser/appServerCollabService.js';
 import { IDiffEditorCommandsService } from '../../workbench/browser/parts/editor/diffEditorCommandsService.js';
-import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/sessionsDiffEditorCommandsService.js';
+import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/diffEditor.sessions.contribution.js';
 import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
@@ -567,6 +567,7 @@ export abstract class Workbench extends Disposable {
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
+		windowServices.set(IDiffEditorCommandsService, new SyncDescriptor(SessionsDiffEditorCommandsService, [], true));
 		// The scope's services can persist state while disposing; borrowed storage must outlive them.
 		this._register(storage);
 		const hostServices = this._register(new InstantiationService(hostPolicies));
@@ -1468,7 +1469,6 @@ export abstract class Workbench extends Disposable {
 				return true;
 			},
 		}));
-		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
 		if (!services.has(IBrowserViewWorkbenchService)) {

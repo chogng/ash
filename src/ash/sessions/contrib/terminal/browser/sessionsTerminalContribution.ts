@@ -1,21 +1,31 @@
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { RawContextKey, type IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
+import type { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
-import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditor } from '../../../../workbench/contrib/terminal/browser/terminalEditor.js';
+import { TerminalEditorCanSplitContext } from '../../../../workbench/contrib/terminal/common/terminalContextKey.js';
+import { TERMINAL_CONFIG_SECTION } from '../../../../workbench/contrib/terminal/common/terminal.js';
+import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
+import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { Menus } from '../../../browser/menus.js';
+import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
+import { Menus, SessionsFlatLayoutContext } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 
@@ -237,4 +247,76 @@ export function registerSessionsTerminalContribution(
 		},
 	));
 	return Object.assign(disposables, { startRestoringTabs });
+}
+
+const terminalCursorBlinkingSetting = `${TERMINAL_CONFIG_SECTION}.cursorBlinking`;
+const terminalCursorBlinkingContext = new RawContextKey<boolean>('sessions.terminalCursorBlinking', false);
+
+/** Contributes commands to the Terminal tool's editor title. */
+export function registerSessionsTerminalTitleActions(
+	editor: IEditorPart,
+	contextKeys: IContextKeyService,
+	configuration: IConfigurationService,
+): IDisposable {
+	const disposables = new DisposableStore();
+	const terminalInCode = ContextKeyExpr.and(codeVisible, SessionsEditorToolContext.isEqualTo('terminal'));
+	const liveShell = TerminalEditorCanSplitContext.isEqualTo(true);
+	const appServerAvailable = AppServerAvailableContext.isEqualTo(true);
+	const canSplit = ContextKeyExpr.and(liveShell, appServerAvailable);
+	const flatLayout = SessionsFlatLayoutContext.isEqualTo(true);
+	const modernLayout = ContextKeyExpr.not(SessionsFlatLayoutContext.key);
+	const flatTerminal = ContextKeyExpr.and(terminalInCode, flatLayout);
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		submenu: Menus.SessionsTerminalSplit,
+		title: localize2('terminal.group.splitMenu', 'Split Terminal'),
+		isSplitButton: true,
+		when: ContextKeyExpr.and(terminalInCode, liveShell, modernLayout),
+		group: 'navigation',
+	}));
+	for (const [order, [id, direction, title, modernTitle, icon, modernOrder]] of ([
+		['ash.sessions.splitTerminalUp', Direction.Up, localize2('sessions.terminal.menu.up', 'Up'), localize2('workbench.splitEditorUp', 'Split Up'), Lxicon.splitVertical, 1],
+		['ash.sessions.splitTerminalDown', Direction.Down, localize2('sessions.terminal.menu.down', 'Down'), localize2('workbench.splitEditorDown', 'Split Down'), Lxicon.splitVertical, 0],
+		['ash.sessions.splitTerminalLeft', Direction.Left, localize2('sessions.terminal.menu.left', 'Left'), localize2('workbench.splitEditorLeft', 'Split Left'), Lxicon.splitHorizontal, 2],
+		['ash.sessions.splitTerminalRight', Direction.Right, localize2('sessions.terminal.menu.right', 'Right'), localize2('workbench.splitEditorRight', 'Split Right'), Lxicon.splitHorizontal, 3],
+	] as const).entries()) {
+		disposables.add(CommandsRegistry.register(id, async (accessor, ...args) => {
+			const { groupedEditors: [source], preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const input = source?.group.activeInput;
+			if (input instanceof TerminalEditorInput) await accessor.get(ITerminalEditorService).splitPane(input, preserveFocus, direction);
+		}));
+		disposables.add(MenusRegistry.appendMenuItems([
+			{ id: Menus.SessionsTerminalSplit, item: { command: { id, title, precondition: canSplit }, when: flatLayout, order } },
+			{ id: Menus.SessionsTerminalSplit, item: { command: { id, title: modernTitle, icon, precondition: appServerAvailable }, when: modernLayout, order: modernOrder } },
+		]));
+	}
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		submenu: Menus.SessionsTerminalSplit, title: localize2('workbench.splitMenu', 'Split'), when: flatTerminal, group: '1_terminal', order: 0,
+	}));
+	disposables.add(CommandsRegistry.register('ash.sessions.clearTerminal', (accessor, ...args) => {
+		const { groupedEditors: [source] } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+		const pane = editor.groups.find(group => group.id === source?.group.id)?.activePane;
+		if (pane instanceof TerminalEditor) pane.getControl()?.clearBuffer();
+	}));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		command: { id: 'ash.sessions.clearTerminal', title: localize2('sessions.terminal.menu.clear', 'Clear'), precondition: liveShell },
+		when: flatTerminal, group: '1_terminal', order: 1,
+	}));
+	const cursorBlinking = terminalCursorBlinkingContext.bindTo(contextKeys);
+	const updateCursorBlinking = () => cursorBlinking.set(configuration.getValue<boolean>(terminalCursorBlinkingSetting) === true);
+	updateCursorBlinking();
+	disposables.add(configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(terminalCursorBlinkingSetting)) updateCursorBlinking();
+	}));
+	disposables.add(toDisposable(() => cursorBlinking.reset()));
+	disposables.add(CommandsRegistry.register('ash.sessions.toggleTerminalCursorBlinking', () =>
+		configuration.updateValue(terminalCursorBlinkingSetting, !configuration.getValue<boolean>(terminalCursorBlinkingSetting))));
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+		command: {
+			id: 'ash.sessions.toggleTerminalCursorBlinking',
+			title: localize2('sessions.terminal.menu.cursorBlink', 'Cursor Blink'),
+			toggled: terminalCursorBlinkingContext.isEqualTo(true),
+		},
+		when: flatTerminal, group: '1_terminal', order: 2,
+	}));
+	return disposables;
 }

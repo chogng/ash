@@ -31,6 +31,11 @@ export const SessionsActivityBarOnSide = ContextKeyExpr.or(SessionsActivityBarLo
 export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);
 export const SessionsMenuConversationPinnedContext = new RawContextKey<boolean>('sessions.menu.conversationPinned', false);
 export const SessionsMenuCanSetFolderContext = new RawContextKey<boolean>('sessions.menu.canSetFolder', false);
+export const desktopEditorTools = ['files', 'changes', 'browser', 'terminal', 'chat', 'search'] as const;
+export type DesktopEditorTool = typeof desktopEditorTools[number];
+
+export const SessionsEditorToolContext = new RawContextKey<DesktopEditorTool | undefined>('sessions.editorTool', undefined);
+
 export const SessionsMenuWorkspaceIdleContext = new RawContextKey<boolean>('sessions.menu.workspaceIdle', false);
 export const SessionsMenuCanMoveConversationContext = new RawContextKey<boolean>('sessions.menu.canMoveConversation', false);
 

@@ -5,6 +5,7 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 
 export const TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID = 'multiDiffEditor.toggleFileList';
+export const MultiDiffEditorFileIsBinaryContext = new RawContextKey<boolean>('multiDiffEditorFileIsBinary', false);
 export const MultiDiffEditorFileListAvailableContext = new RawContextKey<boolean>('multiDiffEditorFileListAvailable', false);
 export const MultiDiffEditorFileListEnabledContext = new RawContextKey<boolean>('multiDiffEditorFileListEnabled', false);
 export const MultiDiffEditorFileListFocusedContext = new RawContextKey<boolean>('multiDiffEditorFileListFocus', false);

@@ -30,7 +30,10 @@ import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '
 import { ChatConversationPageContext, CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryDetailsContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
-import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
+import { registerDesktopEditorLayoutActions } from '../../../browser/layoutActions.js';
+import { registerChangesEditorTitleActions } from '../../changes/browser/changesActions.js';
+import { registerSessionsModalEditorActions } from '../../editor/browser/editor.contribution.js';
+import { registerSessionsTerminalTitleActions } from '../../terminal/browser/sessionsTerminalContribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { CHAT_WORKSPACE_ENTRY_REQUEST, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../common/chatWorkspace.js';
@@ -225,7 +228,10 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!this.isDocumentContent) await this.openEntry(documentEntry);
 			await this.controller.whenSettled();
 		}));
-		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
+		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts));
+		this._register(registerChangesEditorTitleActions(editor));
+		this._register(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
+		this._register(registerSessionsModalEditorActions(editor as EditorParts, () => this.isDocumentContent));
 		this._register(BaseLayoutController.registerSidePaneToggleAction(() => {
 			const entry = this.activeEntry.get();
 			if (!this.isDocumentContent && !this.chatConversation.get()) return;

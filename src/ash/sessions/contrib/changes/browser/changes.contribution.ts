@@ -14,7 +14,7 @@ import { ChangesViewService } from './changesViewService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesService } from './sessionChangesService.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -31,7 +31,7 @@ SessionsViewRegistry.registerStaticViewContainer({
 });
 SessionsViewRegistry.registerStaticViews(CHANGES_VIEW_CONTAINER_ID, [{
 	id: CHANGES_VIEW_ID, title: 'Changes', localizationKey,
-	ctorDescriptor: new SyncDescriptor(ChangesViewPane), when: ContextKeyExpr.has('sessions.desktopCode'), canToggleVisibility: false,
+	ctorDescriptor: new SyncDescriptor(ChangesViewPane), when: SessionsCodeEditorContext.isEqualTo(true), canToggleVisibility: false,
 }]);
 
 registerEditorPane({

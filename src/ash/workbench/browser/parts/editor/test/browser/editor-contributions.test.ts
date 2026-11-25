@@ -17,11 +17,11 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
-import { StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from '../../../../../services/editor/common/editorConfiguration.js';
 import { EditorPane } from '../../editorPane.js';
 
-import type { IEditorPart } from '../../editorPart.js';
+import { IEditorPart } from '../../editorPart.js';
 import { EditorAutoSave } from '../../editorAutoSave.js';
 import { ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from '../../editorStatus.js';
 
@@ -375,7 +375,9 @@ test('Editor status actions update the real model and clear when the active edit
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = services.createInstance(EditorStatusContribution, editorPart, statusbar);
+	services.registerInstance(IEditorPart, editorPart);
+	services.registerInstance(IStatusbarService, statusbar);
+	using contribution = services.createInstance(EditorStatusContribution);
 	const entry = (suffix: string) => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === `ash.status.editor.${suffix}`)!.entry;
 	assert.equal(entry('eol').text, 'CRLF');
 	model.updateOptions({ tabSize: 4, indentSize: 4, insertSpaces: false });

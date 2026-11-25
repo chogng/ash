@@ -23,8 +23,8 @@ import { Action2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 
-import type { IEditorPart } from './editorPart.js';
-import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import { IEditorPart } from './editorPart.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
 /** Projects the active editor's cursor, format, language, and save state. */
 export class EditorStatusContribution extends Disposable implements IWorkbenchContribution {
@@ -45,8 +45,8 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	private activeControl: ICodeEditor | undefined;
 
 	constructor(
-		private readonly editorPart: IEditorPart,
-		private readonly statusbar: IStatusbarService,
+		@IEditorPart private readonly editorPart: IEditorPart,
+		@IStatusbarService private readonly statusbar: IStatusbarService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
 		@ICommandService private readonly commands: ICommandService,

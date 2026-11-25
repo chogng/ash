@@ -1,13 +1,9 @@
 import { EditorPanes } from '../../editor.js';
 import { binaryDiffEditorDescriptor } from './binaryDiffEditor.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { QuickAccessRegistry } from '../../../../platform/quickinput/common/quickAccess.js';
 import { localize } from '../../../../nls.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
-import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from './editorActions.js';
 import { CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from './editorCommands.js';
 import './diffEditor.workbench.contribution.js';
@@ -21,7 +17,6 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { ConfigureEditorAction } from '../../actions/layoutActions.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from './editorAutoSave.js';
-import { IEditorPart } from './editorPart.js';
 import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from './editorStatus.js';
 import { DynamicEditorConfigurations } from './editorConfiguration.js';
@@ -111,11 +106,7 @@ for (const [id, key, title, icon, order] of [
 	});
 }
 
-registerWorkbenchContribution(
-	DynamicEditorConfigurations.ID,
-	WorkbenchPhase.AfterRestored,
-	() => new DynamicEditorConfigurations(),
-);
+registerWorkbenchContribution2(DynamicEditorConfigurations.ID, DynamicEditorConfigurations, WorkbenchPhase.AfterRestored);
 
 QuickAccessRegistry.register({
 	prefix: AllEditorsByMostRecentlyUsedQuickAccess.PREFIX,
@@ -131,21 +122,5 @@ QuickAccessRegistry.register({
 	ctor: ActiveGroupEditorsByMostRecentlyUsedQuickAccess,
 });
 
-registerWorkbenchContribution(
-	EditorStatusContribution.ID,
-	WorkbenchPhase.AfterRestored,
-	accessor => accessor.get(IInstantiationService).createInstance(EditorStatusContribution,
-		accessor.get(IEditorPart),
-		accessor.get(IStatusbarService),
-	),
-);
-
-registerWorkbenchContribution(
-	EditorAutoSave.ID,
-	WorkbenchPhase.AfterRestored,
-	accessor => new EditorAutoSave(
-		accessor.get(IEditorPart),
-		accessor.get(IWorkingCopyService),
-		accessor.get(IConfigurationService),
-	),
-);
+registerWorkbenchContribution2(EditorStatusContribution.ID, EditorStatusContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(EditorAutoSave.ID, EditorAutoSave, WorkbenchPhase.AfterRestored);

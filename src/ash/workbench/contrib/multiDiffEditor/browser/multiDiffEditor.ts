@@ -56,7 +56,7 @@ import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/ed
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IResourceLabelService, type IResourceLabel } from '../../../browser/labels.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
-import { getMultiDiffEditorFileListViewMode, isMultiDiffEditorFileListEnabled, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFileListViewModeContext, onDidChangeMultiDiffEditorFileList, type MultiDiffEditorFileListViewMode } from '../common/multiDiffEditor.js';
+import { getMultiDiffEditorFileListViewMode, isMultiDiffEditorFileListEnabled, MultiDiffEditorFileIsBinaryContext, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFileListViewModeContext, onDidChangeMultiDiffEditorFileList, type MultiDiffEditorFileListViewMode } from '../common/multiDiffEditor.js';
 import { MultiDiffEditorWithFileListWidget } from './multiDiffEditorWithFileListWidget.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
@@ -623,7 +623,7 @@ class MultiDiffEditorSession extends Disposable {
 		const resources = new DisposableStore();
 		const scoped = resources.add(this.contextKeyService.createScoped(container));
 		ActiveEditorContext.bindTo(scoped).set(this.options.activeEditorId ?? MULTI_DIFF_EDITOR_ID);
-		scoped.createKey('multiDiffEditorFileIsBinary', input.binary === true);
+		scoped.createKey<boolean>(MultiDiffEditorFileIsBinaryContext.key, input.binary === true);
 		for (const [key, value] of Object.entries(input.contextKeys ?? {})) { scoped.createKey(key, value); }
 		const resource = (input.goToFile ?? input.modified).resource;
 		ActiveEditorReadonlyContext.bindTo(scoped).set(input.modified.readOnly === true);

@@ -7,7 +7,8 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
-import { DesktopEditorArea, type DesktopEditorTool } from '../../browser/parts/desktopEditorArea.js';
+import { DesktopEditorArea } from '../../browser/parts/desktopEditorArea.js';
+import { SessionsEditorToolContext, type DesktopEditorTool } from '../../common/contextkeys.js';
 import { EditorParts } from '../../browser/parts/editorParts.js';
 import { DesktopToolEditorPart } from '../../browser/parts/desktopToolEditorPart.js';
 import { IMenuService } from '../../../platform/actions/common/actions.js';
@@ -51,7 +52,7 @@ export function createDesktopEditorTestServices(services: InstantiationService, 
 	const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 	for (const part of editor.parts) {
 		if (part instanceof DesktopToolEditorPart) {
-			const tool = contextKeys.getContext(part.domNode).getValue<Exclude<DesktopEditorTool, 'files'>>('sessions.editorTool')!;
+			const tool = contextKeys.getContext(part.domNode).getValue<Exclude<DesktopEditorTool, 'files'>>(SessionsEditorToolContext.key)!;
 			tools.set(tool, part);
 		}
 	}

@@ -8,6 +8,7 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import type { ICanvasReference } from '../../../common/canvasReference.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -85,7 +86,7 @@ export function registerCanvasCommands(accessor: ServicesAccessor): IDisposable 
 		constructor() {
 			super({
 				id: 'workbench.action.chat.closeCanvas', title: localize2('canvas.close', 'Close Canvas'), f1: true,
-				precondition: ContextKeyExpr.equals('activeEditor', CanvasInput.EDITOR_ID),
+				precondition: ActiveEditorContext.isEqualTo(CanvasInput.EDITOR_ID),
 			});
 		}
 		async run(accessor: ServicesAccessor): Promise<void> {

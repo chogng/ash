@@ -1,8 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ISessionsEntryService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
@@ -43,4 +42,4 @@ class SessionsLayoutContribution extends Disposable {
 
 registerSingleton(ISessionsEntryService, SessionsEntryService, InstantiationType.Delayed);
 registerSingleton(ISessionEditorWorkingSetService, SessionEditorWorkingSetService, InstantiationType.Delayed);
-registerWorkbenchContribution('workbench.contrib.sessionsLayout', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SessionsLayoutContribution));
+registerWorkbenchContribution2('workbench.contrib.sessionsLayout', SessionsLayoutContribution, WorkbenchPhase.BlockRestore);

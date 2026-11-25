@@ -43,7 +43,7 @@ import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../.
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 
-import { StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -843,7 +843,10 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	using statusbar = new StatusbarService();
 	container.registerInstance(IFileTextModelService, models);
 	const statusPart = { domNode: parent, activeInput: input, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
-	using status = container.createInstance(EditorStatusContribution, statusPart, statusbar);
+	using statusServices = container.createChild();
+	statusServices.registerInstance(IEditorPart, statusPart);
+	statusServices.registerInstance(IStatusbarService, statusbar);
+	using status = statusServices.createInstance(EditorStatusContribution);
 	const cursorStatus = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;
 	assert.equal(cursorStatus(), 'Ln 1, Col 1');
 	widget.modifiedEditor.focus();

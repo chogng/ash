@@ -6,7 +6,8 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { ContextKeyExpr, type Context, type ContextKeyValue } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE } from '../../../../workbench/browser/parts/editor/diffEditorCommands.js';
-import { ActiveEditorContext, IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
+import { ActiveEditorContext, IsSessionsWindowContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
+import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { DIFF_EDITOR_ID } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { BrowserViewEditorId } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
@@ -90,20 +91,18 @@ const windowKey = IsSessionsWindowContext.key;
 const canvasKey = 'sessionsDesignCanvasActive';
 const layersKey = 'sessionsDesignLayersFocused';
 const artifactCanvasTextKey = 'sessionsDesignTextEditing';
-const codeKey = 'sessions.desktopCode';
-const editorToolKey = 'sessions.editorTool';
 const pickersKey = NewSessionPickersAvailableContext.key;
-const agentKeys = new Set([windowKey, canvasKey, layersKey, artifactCanvasTextKey, codeKey, pickersKey]);
+const agentKeys = new Set([windowKey, canvasKey, layersKey, artifactCanvasTextKey, SessionsCodeEditorContext.key, pickersKey]);
 
 // Resolve the bindings as if the feature owned focus, so shortcuts for hidden
 // panes and inactive editing modes are still discoverable from this modal.
 const scopes: readonly Scope[] = [
 	{ group: 'newCode', keys: [pickersKey], values: { [pickersKey]: true, [ChatContextKeys.inChatInput.key]: true } },
-	{ group: 'terminal', keys: [codeKey], values: { [codeKey]: true } },
+	{ group: 'terminal', keys: [SessionsCodeEditorContext.key], values: { [SessionsCodeEditorContext.key]: true } },
 	{ group: 'designLayers', keys: [layersKey], values: { [layersKey]: true } },
 	{ group: 'designCanvas', keys: [canvasKey], values: { [canvasKey]: true } },
 	{ group: 'artifactCanvasText', keys: [artifactCanvasTextKey], values: { [artifactCanvasTextKey]: true } },
-	{ group: 'conversations', keys: [editorToolKey], values: { [editorToolKey]: false } },
+	{ group: 'conversations', keys: [SessionsEditorToolContext.key], values: {} },
 	{ group: 'navigation', keys: [windowKey], values: {} },
 ];
 
@@ -148,8 +147,8 @@ export function getSessionsKeyboardShortcutGroups(keybindings: IKeybindingServic
 
 	const commands = CommandsRegistry.getCommands();
 	const inactive: Readonly<Record<string, ContextKeyValue>> = {
-		[pickersKey]: false, [codeKey]: false, [canvasKey]: false, [layersKey]: false,
-		[artifactCanvasTextKey]: false, [editorToolKey]: undefined,
+		[pickersKey]: false, [SessionsCodeEditorContext.key]: false, [canvasKey]: false, [layersKey]: false,
+		[artifactCanvasTextKey]: false, [SessionsEditorToolContext.key]: undefined,
 	};
 	const windowContexts = scopes.map(scope => ({
 		scope,

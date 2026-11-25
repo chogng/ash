@@ -10,31 +10,37 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MenuId, MenusRegistry, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { CODE_EDITOR_ID } from '../../../../../workbench/browser/parts/editor/textResourceEditor.js';
-import { AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../../workbench/common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../../workbench/common/contextkeys.js';
 import { IChatAttachmentResolveService } from '../../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../../workbench/contrib/terminal/common/terminal.js';
 import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { Direction } from '../../../../../base/browser/ui/grid/grid.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import type { ChatContextAttachment } from '../../../../../workbench/services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { registerDesktopEditorLayoutActions } from '../../../../browser/layoutActions.js';
 import { Menus, SessionsFlatLayoutContext } from '../../../../browser/menus.js';
+import { SessionsEditorToolContext } from '../../../../common/contextkeys.js';
+import type { EditorParts } from '../../../../browser/parts/editorParts.js';
 import type { SessionsPart } from '../../../../browser/parts/sessionsPart.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
-import { EditorTitleMenuBridgeContribution, registerAddFileAsContextAction } from '../../browser/editor.contribution.js';
+import { registerChangesEditorTitleActions } from '../../../changes/browser/changesActions.js';
+import { registerSessionsTerminalTitleActions } from '../../../terminal/browser/sessionsTerminalContribution.js';
+import { EditorTitleMenuBridgeContribution, registerAddFileAsContextAction, registerSessionsModalEditorActions } from '../../browser/editor.contribution.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -76,6 +82,34 @@ test('the Command Palette adds the active file to the Sessions draft', async () 
 	assert.equal(entry(), undefined);
 });
 
+test('the startup contribution projects shared editor commands and submenus until the window closes', () => {
+	using services = new InstantiationService();
+	using contribution = WorkbenchContributionsRegistry.createHost(
+		services, error => { throw error; }, [EditorTitleMenuBridgeContribution.ID],
+	);
+	const submenu = MenuId.for('test.sessions.editorTitleSubmenu');
+	const shared = { command: { id: 'test.sessions.sharedEditorCommand', title: 'Shared editor command' } };
+	const excluded = { command: { id: 'workbench.action.splitEditor', title: 'Split editor' } };
+	const dynamic = { submenu, title: 'Dynamic editor submenu', group: 'navigation' };
+	using initialPlacements = MenusRegistry.appendMenuItems([
+		{ id: MenuId.EditorTitle, item: shared },
+		{ id: MenuId.EditorTitle, item: excluded },
+	]);
+	const projected = () => MenusRegistry.getMenuItems(Menus.SessionsEditorTitle);
+	assert.ok(!projected().includes(shared));
+	contribution.advance(WorkbenchPhase.BlockStartup);
+	assert.ok(projected().includes(shared));
+	assert.ok(!projected().includes(excluded));
+	using submenuPlacement = MenusRegistry.appendMenuItem(MenuId.EditorTitle, dynamic);
+	assert.ok(projected().includes(dynamic));
+	submenuPlacement.dispose();
+	assert.ok(!projected().includes(dynamic));
+	assert.ok(projected().includes(shared));
+	contribution.dispose();
+	assert.ok(!projected().includes(shared));
+	assert.ok(MenusRegistry.getMenuItems(MenuId.EditorTitle).includes(shared));
+});
+
 test('editor contributions follow layout state, serialize Add Tab commands and release window registrations', async () => {
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
@@ -83,7 +117,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	services.registerInstance(IConfigurationService, configuration);
 	const flatLayout = SessionsFlatLayoutContext.bindTo(contextKeys);
 	flatLayout.set(true);
-	contextKeys.setContext('sessions.editorTool', 'files');
+	const editorTool = SessionsEditorToolContext.bindTo(contextKeys);
+	editorTool.set('files');
 	using commands = new CommandService(services);
 	using layoutChanged = new Emitter<void>();
 	using editorChanged = new Emitter<void>();
@@ -124,28 +159,34 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		async showEditor() { parts.editor = true; filesDetails.isEditorVisible = true; },
 		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
 	} as unknown as DesktopLayoutController;
-	services.registerInstance(ILayoutService, {
+	const layout = {
 		isPartVisible: (part: keyof typeof parts) => parts[part],
 		onDidLayoutMainContainer: layoutChanged.event,
-	} as unknown as IAgentWorkbenchLayoutService);
-	services.registerInstance(IEditorPart, {
+	} as unknown as IAgentWorkbenchLayoutService;
+	const editor = {
 		onDidChangeEditors: editorChanged.event, filesPart: filesDetails,
 		groups: [{ id: 2, activeInput: { resource: URI.parse('ash-session-changes:/test') } }],
 		isGroupVisible() { return changesVisible; },
 		get filesDetailsOpen() { return parts.auxiliarybar; },
 		get filesDetailsVisible() { return parts.editor && parts.auxiliarybar; },
 		get fileEditorsVisible() { return true; },
-	} as unknown as IEditorPart);
-	services.registerInstance(IContextKeyService, contextKeys);
+	} as unknown as EditorParts;
 	const menus = new MenuService(commands, contextKeys);
-	using title = menus.createMenu(MenuId.EditorTitle);
 	using addTab = menus.createMenu(Menus.SessionsEditorTabsBarAddTab);
 	const addTabLabels = () => addTab.getActions().flatMap(([, actions]) => actions.map(action => action.label));
 	using palette = menus.createMenu(MenuId.CommandPalette);
 	const paletteIds = () => palette.getActions().flatMap(([, actions]) => actions).map(action => action.id).sort();
 	// Shared editor imports may already contribute commands to the same registry.
 	const existingPaletteIds = paletteIds();
-	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
+	const registerEntryActions = () => {
+		const registrations = new DisposableStore();
+		registrations.add(registerDesktopEditorLayoutActions(controller, context, contextKeys, layout, editor));
+		registrations.add(registerChangesEditorTitleActions(editor));
+		registrations.add(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
+		registrations.add(registerSessionsModalEditorActions(editor, () => context.isDocumentContent));
+		return registrations;
+	};
+	using contribution = registerEntryActions();
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
 	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
 	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
@@ -159,8 +200,10 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.equal(headerActions()[0]?.checked, true);
 	contextKeys.setContext('sessions.editorToolMaximized', false);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
-	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
-	contextKeys.setContext('sessions.editorTool', 'changes');
+	assert.deepEqual(desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1].map(action => action.id),
+		['ash.sessions.toggleDetails', 'ash.sessions.showEditor']);
+	assert.ok(!MenusRegistry.getMenuItems(MenuId.EditorTitle).some(item => 'command' in item && item.command.id === 'ash.sessions.toggleDetails'));
+	editorTool.set('changes');
 	contextKeys.setContext('sessions.changes.hasWorkspace', true);
 	contextKeys.setContext('sessions.changes.scope', 'all');
 	assert.ok(!desktopIds().includes('ash.sessions.changes.previewCommit'));
@@ -187,14 +230,9 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	}
 	contextKeys.setContext('sessions.changes.scope', 'all');
 	flatLayout.set(true);
-	contextKeys.setContext('sessions.editorTool', 'files');
-	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
-		command: { id: 'test.desktopEditor.action', title: 'Dynamic editor command' }, group: 'navigation',
-	});
-	assert.ok(desktopIds().includes('test.desktopEditor.action'));
-	dynamic.dispose();
-	assert.ok(!desktopIds().includes('test.desktopEditor.action'));
-	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
+	editorTool.set('files');
+	const layoutTitleActions = () => desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1] ?? [];
+	const titleState = () => layoutTitleActions().map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Toggle details', true, false], ['Show editor', true, undefined]]);
 	assert.deepEqual(addTabLabels(), ['Open Files', 'Open Changes']);
 	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeys);
@@ -212,24 +250,24 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
-	contextKeys.setContext('sessions.editorTool', 'changes');
+	editorTool.set('changes');
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
 	flatLayout.set(false);
 	assert.ok(!headerActions().some(action => action.id === 'ash.sessions.toggleChangesFileList'));
 	assert.equal(headerActions().find(action => action.id === 'multiDiffEditor.toggleFileList')?.checked, true);
 	flatLayout.set(true);
-	contextKeys.setContext('sessions.editorTool', 'terminal');
+	editorTool.set('terminal');
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
-	contextKeys.setContext('sessions.editorTool', 'files');
+	editorTool.set('files');
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.filesVisible'), true, 'Files remains selected while its editor is visible without the attached tree');
 	supportsDetails = false;
 	editorChanged.fire();
-	assert.equal(title.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleDetails')?.enabled, false);
-	contextKeys.setContext('sessions.editorTool', 'terminal');
+	assert.equal(layoutTitleActions().find(action => action.id === 'ash.sessions.toggleDetails')?.enabled, false);
+	editorTool.set('terminal');
 	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
 	assert.ok(!desktopIds().includes('workbench.action.terminal.selectDefaultProfile'));
 	assert.ok(!desktopIds().includes('ash.sessions.configureTerminal'));
@@ -241,7 +279,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.equal(unavailableClear?.enabled, false);
 	assert.equal(unavailableBlink?.enabled, true);
 	assert.ok(desktopIds().includes('ash.sessions.toggleTerminalCursorBlinking'), 'an unavailable terminal still has More Actions');
-	contextKeys.setContext('sessions.editorTool', 'files');
+	editorTool.set('files');
 	parts.editor = false;
 	layoutChanged.fire();
 	assert.equal(contextKeys.getValue('sessions.editorContentVisible'), false);
@@ -282,7 +320,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.deepEqual(headerActions(), []);
 	contextKeys.setContext('sessions.chatConversationPage', false);
 	contextKeys.setContext('sessions.editorHasMultipleTools', true);
-	assert.deepEqual(title.getActions(), []);
+	assert.deepEqual(layoutTitleActions(), []);
 	assert.deepEqual(paletteIds(), existingPaletteIds);
 	await commands.executeCommand('workbench.agentSessions.action.viewChanges');
 	assert.deepEqual(effects, ['files', 'changes']);
@@ -309,7 +347,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	try {
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		documentContent.set(true, undefined);
-		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
+		using translated = registerEntryActions();
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
 		assert.deepEqual(headerActions().map(action => action.label), ['最大化工具窗格', '切换详情', '隐藏工具区域']);
 		contextKeys.setContext('sessions.editorToolMaximized', true);
@@ -320,7 +358,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		appServerAvailable.reset();
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件');
 		assert.equal(changesAction().label, '更改');
-		contextKeys.setContext('sessions.editorTool', 'terminal');
+		editorTool.set('terminal');
 		assert.deepEqual(headerActions().map(action => action.label), ['最大化工具窗格', '隐藏工具区域']);
 		contextKeys.setContext('terminalEditorCanSplit', true);
 		const split = desktopTitle.getActions().flatMap(([, actions]) => actions)
@@ -342,7 +380,7 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 	services.registerInstance(IConfigurationService, configuration);
 	const flat = SessionsFlatLayoutContext.bindTo(contextKeys);
 	flat.set(true);
-	contextKeys.setContext('sessions.editorTool', 'terminal');
+	SessionsEditorToolContext.bindTo(contextKeys).set('terminal');
 	contextKeys.setContext('appServerAvailable', true);
 	contextKeys.setContext('terminalEditorCanSplit', true);
 	SessionsCodeEditorContext.bindTo(contextKeys).set(true);
@@ -350,8 +388,7 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 	const input = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
 	const source = { id: 1, activeInput: input, inputs: [input], selectedInputs: [input] };
 	services.registerInstance(IEditorGroupsService, { getGroup: () => source } as unknown as IEditorGroupsService);
-	services.registerInstance(ILayoutService, { isPartVisible: () => false, onDidLayoutMainContainer: Event.None } as unknown as IAgentWorkbenchLayoutService);
-	services.registerInstance(IEditorPart, { groups: [source], onDidChangeEditors: Event.None, filesPart: { onDidChangeDetailsVisibility: Event.None } } as unknown as IEditorPart);
+	const editor = { groups: [source] } as unknown as IEditorPart;
 	const paneSplits: Direction[] = [];
 	services.registerInstance(ITerminalEditorService, {
 		async splitPane(source: TerminalEditorInput, preserveFocus: boolean, direction: Direction) {
@@ -360,10 +397,7 @@ test('the Flat Terminal title splits the selected shell within its terminal tab'
 			paneSplits.push(direction);
 		},
 	} as ITerminalEditorService);
-	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, { supportsDetails: true }, {
-		isDocumentContent: true,
-		documentContent: observableValue('document content', true),
-	});
+	using contribution = registerSessionsTerminalTitleActions(editor, contextKeys, configuration);
 	const menus = new MenuService(commands, contextKeys);
 	using title = menus.createMenu(Menus.SessionsEditorTitle);
 	const groupActions = (group: string) => title.getActions({ arg: { groupId: source.id } }).find(([name]) => name === group)?.[1] ?? [];
@@ -400,9 +434,10 @@ test('Word Wrap in Files updates the Agents Window preference and reflects the e
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
-	contextKeys.setContext('sessions.desktopCode', true);
-	contextKeys.setContext('sessions.editorTool', 'files');
-	contextKeys.setContext('activeEditor', CODE_EDITOR_ID);
+	SessionsCodeEditorContext.bindTo(contextKeys).set(true);
+	const editorTool = SessionsEditorToolContext.bindTo(contextKeys);
+	editorTool.set('files');
+	ActiveEditorContext.bindTo(contextKeys).set(CODE_EDITOR_ID);
 	contextKeys.setContext('config.editor.wordWrap', 'bounded');
 	const writes: [string, unknown][] = [];
 	services.registerInstance(IConfigurationService, {
@@ -422,6 +457,6 @@ test('Word Wrap in Files updates the Agents Window preference and reflects the e
 	assert.equal(wordWrap()?.checked, false);
 	await wordWrap()?.run();
 	assert.deepEqual(writes, [['sessions.editor.wordWrap', 'off'], ['sessions.editor.wordWrap', 'on']]);
-	contextKeys.setContext('sessions.editorTool', 'changes');
+	editorTool.set('changes');
 	assert.equal(wordWrap(), undefined);
 });

@@ -13,6 +13,7 @@ import type { EditorPart } from '../../../workbench/browser/parts/editor/editorP
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import { GroupDirection } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
+import type { DesktopEditorTool } from '../../common/contextkeys.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { EditorHasMultipleToolsContext, EditorToolMaximizedContext } from '../menus.js';
@@ -25,9 +26,6 @@ const toolGridOptions = {
 	preserveSplitWeights: true,
 	styles: { separatorBorder: 'var(--ash-sessions-tool-separator, var(--ash-contrastBorder, var(--ash-editorGroup-border)))' },
 };
-
-export const desktopEditorTools = ['files', 'changes', 'browser', 'terminal', 'chat', 'search'] as const;
-export type DesktopEditorTool = typeof desktopEditorTools[number];
 
 export interface ToolSlot {
 	readonly anchors: readonly DesktopEditorTool[];

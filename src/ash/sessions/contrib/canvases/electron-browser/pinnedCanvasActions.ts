@@ -3,6 +3,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -37,8 +38,8 @@ registerAction2(class AddCanvasToSidebarAction extends Action2 {
 	constructor() {
 		super({
 			id: ADD_CANVAS_TO_SIDEBAR_COMMAND_ID, title: localize2('pinnedCanvas.add', 'Add Canvas to Sidebar'), icon: Lxicon.pin, f1: true,
-			precondition: ContextKeyExpr.equals('activeEditor', CanvasInput.EDITOR_ID),
-			menu: { id: MenuId.EditorTitleContext, group: 'canvas', when: ContextKeyExpr.equals('activeEditor', CanvasInput.EDITOR_ID) }
+			precondition: ActiveEditorContext.isEqualTo(CanvasInput.EDITOR_ID),
+			menu: { id: MenuId.EditorTitleContext, group: 'canvas', when: ActiveEditorContext.isEqualTo(CanvasInput.EDITOR_ID) }
 		});
 	}
 	run(accessor: ServicesAccessor, value?: unknown): void {
@@ -58,7 +59,7 @@ const headerActions = [
 
 for (const action of headerActions) {
 	registerAction2(class extends Action2 {
-		constructor() { super({ id: action.id, title: action.title, icon: action.icon, menu: action.id === REMOVE_CANVAS_FROM_SIDEBAR_COMMAND_ID ? [{ id: Menus.CustomViewCanvas, group: 'navigation' }, { id: MenuId.EditorTitleContext, group: 'canvas', when: ContextKeyExpr.equals('activeEditor', CanvasInput.EDITOR_ID) }] : { id: Menus.CustomViewCanvas, group: 'navigation' } }); }
+		constructor() { super({ id: action.id, title: action.title, icon: action.icon, menu: action.id === REMOVE_CANVAS_FROM_SIDEBAR_COMMAND_ID ? [{ id: Menus.CustomViewCanvas, group: 'navigation' }, { id: MenuId.EditorTitleContext, group: 'canvas', when: ActiveEditorContext.isEqualTo(CanvasInput.EDITOR_ID) }] : { id: Menus.CustomViewCanvas, group: 'navigation' } }); }
 		run(accessor: ServicesAccessor, value?: unknown): void | Promise<void> {
 			const candidate = target(accessor, value);
 			if (candidate) { return runPinnedAction(accessor, action, candidate); }

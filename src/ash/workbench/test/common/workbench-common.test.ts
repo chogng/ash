@@ -29,7 +29,9 @@ import {
 } from '../../../workbench/common/contextkeys.js';
 import { createTestWorkbenchContextKeysHandler } from './testWorkbenchContextKeys.js';
 import {
+	registerWorkbenchContribution2,
 	WorkbenchContributionRegistry,
+	WorkbenchContributionsRegistry,
 	WorkbenchPhase,
 } from '../../../workbench/common/contributions.js';
 import { WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
@@ -75,7 +77,9 @@ test('workbench context keys describe the current workspace', () => {
 		'auxiliaryBarMaximized',
 		'auxiliaryBarVisible',
 		'browserLocalFolderSupport',
+		'chatPartVisible',
 		'dirtyWorkingCopies',
+		'editorAreaHiddenByChat',
 		'editorAreaVisible',
 		'editorIsOpen',
 		'isDevelopment',
@@ -95,6 +99,8 @@ test('workbench context keys describe the current workspace', () => {
 	]]);
 	assert.equal(contextKeys.getValue('workbenchState'), 'folder');
 	assert.equal(contextKeys.getValue('workspaceFolderCount'), 1);
+	assert.equal(contextKeys.getValue('chatPartVisible'), false);
+	assert.equal(contextKeys.getValue('editorAreaHiddenByChat'), false);
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), false);
 	assert.equal(contextKeys.getValue('isNative'), true);
 	assert.equal(contextKeys.getValue('isWeb'), false);
@@ -164,6 +170,51 @@ test('workbench contributions start once at their declared phases', async () => 
 		'dispose:restored',
 		'dispose:startup',
 	]);
+});
+
+test('a constructor contribution resolves window services at its phase and releases its own instance', () => {
+	const service = createServiceIdentifier<string>('test.contributionWindow');
+	const id = 'test.constructorContribution';
+	const calls: string[] = [];
+
+	class WindowContribution extends Disposable {
+		constructor(@service windowName: string) {
+			super();
+			calls.push(`start:${windowName}`);
+			this._register(toDisposable(() => calls.push(`dispose:${windowName}`)));
+		}
+	}
+
+	registerWorkbenchContribution2(id, WindowContribution, WorkbenchPhase.BlockRestore);
+	using main = new InstantiationService();
+	main.registerInstance(service, 'main');
+	using auxiliary = main.createChild();
+	auxiliary.registerInstance(service, 'auxiliary');
+	using mainHost = WorkbenchContributionsRegistry.createHost(main, error => { throw error; }, [id]);
+	using auxiliaryHost = WorkbenchContributionsRegistry.createHost(auxiliary, error => { throw error; }, [id]);
+
+	mainHost.advance(WorkbenchPhase.BlockStartup);
+	auxiliaryHost.advance(WorkbenchPhase.BlockStartup);
+	assert.deepEqual(calls, []);
+	mainHost.advance(WorkbenchPhase.BlockRestore);
+	auxiliaryHost.advance(WorkbenchPhase.BlockRestore);
+	auxiliaryHost.advance(WorkbenchPhase.AfterRestored);
+	assert.deepEqual(calls, ['start:main', 'start:auxiliary']);
+	auxiliaryHost.dispose();
+	assert.deepEqual(calls, ['start:main', 'start:auxiliary', 'dispose:auxiliary']);
+	mainHost.dispose();
+	assert.deepEqual(calls, ['start:main', 'start:auxiliary', 'dispose:auxiliary', 'dispose:main']);
+
+	using missing = new InstantiationService();
+	const failures: string[] = [];
+	using missingHost = WorkbenchContributionsRegistry.createHost(missing, (error, contributionId) => {
+		assert.equal(contributionId, id);
+		assert.ok(error instanceof Error);
+		failures.push(error.message);
+	}, [id]);
+	missingHost.advance(WorkbenchPhase.BlockRestore);
+	missingHost.advance(WorkbenchPhase.AfterRestored);
+	assert.deepEqual(failures, ['Unknown service: test.contributionWindow']);
 });
 
 test('a product window starts only its selected contributions and rejects missing declarations', () => {

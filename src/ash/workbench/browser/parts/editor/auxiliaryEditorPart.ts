@@ -8,7 +8,7 @@ import { IStatusbarService } from '../../../services/statusbar/browser/statusbar
 import { StatusbarHeight } from '../workbenchPartDimensions.js';
 import { StatusbarPart, StatusbarService } from '../statusbar/statusbarPart.js';
 import type { IAuxiliaryTitlebarPart } from '../titlebar/titlebarPart.js';
-import type { IEditorPart } from './editorPart.js';
+import { IEditorPart } from './editorPart.js';
 import { EditorStatusContribution } from './editorStatus.js';
 import { localize2 } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -92,9 +92,10 @@ export class AuxiliaryEditorPart extends Disposable {
 			const statusbarService = this._register(new StatusbarService(rootStatusbar));
 			const statusServices = this._register(instantiationService.createChild());
 			statusServices.registerInstance(IStatusbarService, statusbarService);
+			statusServices.registerInstance(IEditorPart, creation.part);
 			statusServices.registerInstance(IAccessibilityService, accessibility);
 			const statusbarPart = this._register(statusServices.createInstance(StatusbarPart, window.container));
-			this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
+			this._register(statusServices.createInstance(EditorStatusContribution));
 			let compact: boolean | undefined;
 			const updateWindowChrome = (): void => {
 				const singleEditor = creation.part.groups.length === 1 && creation.part.activeGroup.inputs.length === 1;

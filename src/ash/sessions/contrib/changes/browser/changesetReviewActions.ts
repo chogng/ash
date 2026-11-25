@@ -7,6 +7,7 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { ActiveEditorContext, ResourceContext } from '../../../../workbench/common/contextkeys.js';
 import { MultiDiffEditorFileListContextMenu } from '../../../../workbench/contrib/multiDiffEditor/common/multiDiffEditor.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { CHANGESET_REVIEW_ACTION_ID, ChangesScopeContext, SessionChangesEditor } from './sessionChangesEditor.js';
@@ -17,8 +18,8 @@ export class ChangesetReviewAction extends Action2 {
 			id: CHANGESET_REVIEW_ACTION_ID, title: localize2('sessions.changes.viewed', 'Viewed'),
 			icon: Lxicon.check,
 			precondition: ContextKeyExpr.has('sessions.changesCanReview'),
-			toggled: ContextKeyExpr.in('resource', 'sessions.changesReviewedFiles'),
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), group: 'navigation', order: 1 },
+			toggled: ContextKeyExpr.in(ResourceContext.key, 'sessions.changesReviewedFiles'),
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: ActiveEditorContext.isEqualTo(SessionChangesEditor.ID), group: 'navigation', order: 1 },
 		});
 	}
 	public async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
@@ -69,7 +70,7 @@ for (const [reviewed, id, title] of [
 			super({
 				id, title, menu: {
 					id: MultiDiffEditorFileListContextMenu, group: 'navigation',
-					when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
+					when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(SessionChangesEditor.ID),
 						ContextKeyExpr.or(ChangesScopeContext.isEqualTo('all'), ChangesScopeContext.isEqualTo('turn'))),
 				}
 			});
