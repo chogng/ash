@@ -170,7 +170,7 @@ export interface IDialogService {
 	confirm(options: IConfirmationDialogOptions): Promise<IConfirmationDialogResult>;
 	prompt<T>(options: IActionPromptOptions<T>): Promise<IActionPromptResult<T>>;
 	input(options: IInputDialogOptions): Promise<IInputDialogResult>;
-	about(): Promise<void>;
+	about(additionalDetails?: readonly string[]): Promise<void>;
 }
 
 export const IDialogService =

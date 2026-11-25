@@ -22,6 +22,9 @@ test('UI startup does not resolve or require a backend package', { tag: ['@elect
 			environment: { ...process.env, ASH_TEST_REJECT_BACKEND_PACKAGE: lookup },
 		});
 		await expect(desktop.driver.workbench.element).toBeVisible();
+		const { workbench } = desktop.driver;
+		const about = await workbench.dialogs.confirm(desktop.application, 'About Ash', 'OK', () => workbench.quickaccess.runCommand('workbench.action.showAboutDialog'));
+		expect(about.detail).toMatch(/^Version \d+\.\d+\.\d+\S*$/);
 		expect(await readFile(`${lookup}.ready`, 'utf8')).toBe('ready');
 		expect(await desktop.application.evaluate(() => process.env.ASH_DESKTOP_UI_ONLY)).toBe('1');
 		expect(await access(lookup).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; })).toBe(false);

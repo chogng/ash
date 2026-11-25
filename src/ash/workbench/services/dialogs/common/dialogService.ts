@@ -98,12 +98,12 @@ export class DialogService extends Disposable
 		};
 	}
 
-	about(): Promise<void> {
+	about(additionalDetails: readonly string[] = []): Promise<void> {
 		return this.showMessage({
 			severity: DialogSeverity.Info,
 			title: localize('dialog.aboutTitle', 'About Ash'),
 			message: 'Ash',
-			detail: localize('dialog.aboutVersion', 'Version {0}', packageMetadata.version),
+			detail: [localize('dialog.aboutVersion', 'Version {0}', packageMetadata.version), ...additionalDetails].join('\n'),
 		});
 	}
 }

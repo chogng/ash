@@ -43,6 +43,10 @@ test('SSH Desktop edits, searches, forwards ports and recovers the same terminal
 			await expect(indicator).toHaveAttribute('aria-label', readyLabel);
 			expect(await connection()).toMatchObject({ kind: 'ssh', host: fixture.host, authority: `ssh+${fixture.host}` });
 		});
+		await test.step('Open About Ash with shareable SSH diagnostics', async () => {
+			const about = await workbench.dialogs.confirm(desktop!.application, 'About Ash', 'OK', () => workbench.quickaccess.runCommand('workbench.action.showAboutDialog'));
+			expect(about.detail.split('\n').slice(1)).toEqual(['Remote connection: SSH', 'Remote OS: macOS']);
+		});
 		await test.step('Edit and save a remote file through the editor', async () => {
 			await workbench.quickaccess.open('remote.txt');
 			await workbench.quickaccess.select('remote.txt');
