@@ -1486,7 +1486,10 @@ suite('chatContextActions browser component', () => {
 		await page.keyboard.press('Escape');
 	});
 
-	test('long source attachment buttons fit a narrow composer and remain keyboard accessible', async function () {
+	for (const { pickerLabel, path, number, title } of [
+		{ pickerLabel: 'Issue…', path: 'issues', number: '#12', title: 'Attachment issue' },
+		{ pickerLabel: 'Pull Request…', path: 'pull', number: '#24', title: 'Picker improvement' },
+	]) test(`long GitHub ${path} attachments keep their number visible in a narrow composer`, async function () {
 		const { page } = browserTests;
 
 		await page.goto('/chatInput.html?inlineCode=1');
@@ -1494,18 +1497,36 @@ suite('chatContextActions browser component', () => {
 		await page.setViewportSize({ width: 320, height: 600 });
 		await page.locator('main').evaluate(element => { element.style.width = '260px'; element.style.setProperty('--ash-contrastBorder', 'rgb(255, 255, 255)'); });
 		const owner = 'a'.repeat(160);
+		const repository = `${owner}/project`;
+		const reference = `${repository}/${path}/${number.slice(1)}`;
+		const name = `${repository} ${number}: ${title}`;
 		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
-		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
-		await picker.getByRole('combobox').fill(`https://github.com/${owner}/project/issues/12`);
-		await picker.getByRole('option', { name: `${owner}/project/issues/12`, exact: true }).click();
+		await picker.getByRole('option', { name: pickerLabel, exact: true }).click();
+		await picker.getByRole('combobox').fill(`https://github.com/${reference}`);
+		await picker.getByRole('option', { name: reference, exact: true }).click();
 		const item = page.locator('.ash-chat-input-editor');
-		await expect(page.locator('.ash-chat-attachment-chip[data-attachment-kind="issue"]')).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+		await expect(item.getByRole('group', { name, exact: true })).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
 		expect(await item.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		const open = item.getByRole('button', { name: `Open ${owner}/project #12: Attachment issue`, exact: true });
+		const open = item.getByRole('button', { name: `Open ${name}`, exact: true });
+		await expect(open).toHaveText(name);
+		expect(await open.evaluate((button, number) => {
+			const nodes = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+			for (let node = nodes.nextNode(); node; node = nodes.nextNode()) {
+				const offset = node.textContent!.indexOf(number);
+				if (offset < 0) continue;
+				const range = document.createRange();
+				range.setStart(node, offset);
+				range.setEnd(node, offset + number.length);
+				const numberBounds = range.getBoundingClientRect();
+				const labelBounds = button.getBoundingClientRect();
+				return numberBounds.width > 0 && numberBounds.left >= labelBounds.left && numberBounds.right <= labelBounds.right;
+			}
+			return false;
+		}, number)).toBe(true);
 		await open.press('Enter');
 		await expect(open).toBeFocused();
-		await expect(page.getByLabel('Opened sources')).toContainText(`https://github.com/${owner}/project/issues/12`);
+		await expect(page.getByLabel('Opened sources')).toContainText(`https://github.com/${reference}`);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {

@@ -122,6 +122,24 @@
 	object-fit: contain;
 }
 
+.ash-chat-github-attachment-label {
+	gap: 0;
+}
+
+.ash-chat-github-attachment-label > .ash-icon-label-icon {
+	margin-inline-end: var(--ash-spacing-size60);
+}
+
+.ash-chat-github-attachment-label > .ash-icon-label-suffix {
+	color: inherit;
+}
+
+.ash-chat-github-attachment-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .ash-chat-attachment-chip > .ash-button:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;

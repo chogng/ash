@@ -352,8 +352,11 @@ function createSourceAttachmentControl(attachment: ChatContextAttachment, icon: 
 	container.append(element);
 	resources.add(toDisposable(() => element.remove()));
 	const imageIcon = attachment.iconPath && !ThemeIcon.isThemeIcon(attachment.iconPath) ? attachment.iconPath : undefined;
+	const githubReference = (attachment.kind === 'issue' || attachment.kind === 'pullRequest') && attachment.id.startsWith('github:')
+		? /^(?<repository>[^/\s]+\/[^/\s]+)(?<number> #[1-9]\d*)(?<title>: .*)$/s.exec(attachment.name)?.groups
+		: undefined;
 	const source = resources.add(new Button(element, {
-		...defaultButtonStyles, label: imageIcon ? '' : attachment.name, icon: imageIcon ? undefined : icon,
+		...defaultButtonStyles, label: imageIcon || githubReference ? '' : attachment.name, icon: imageIcon || githubReference ? undefined : icon,
 		ariaLabel: localize('chat.context.open', 'Open {0}', attachment.name),
 		title: attachment.resource ? `${attachment.name}\n${attachment.resource.toString(true)}` : attachment.name,
 		size: 'small', presentation: 'quiet',
@@ -368,6 +371,14 @@ function createSourceAttachmentControl(attachment: ChatContextAttachment, icon: 
 		};
 		render();
 		resources.add(theme.onDidColorThemeChange(render));
+	} else if (githubReference) {
+		// Keep the number between the repository and title while either adjacent part can truncate.
+		const label = resources.add(new IconLabel(source.domNode, {
+			label: githubReference.repository, icon, suffix: githubReference.number, extraClasses: ['ash-chat-github-attachment-label'],
+		}));
+		const title = h(container.ownerDocument, 'span', { className: 'ash-chat-github-attachment-title' });
+		title.textContent = githubReference.title;
+		label.element.append(title);
 	}
 	source.domNode.classList.add('ash-chat-attachment-source');
 	const contentHover = resources.add(new AttachmentContentHover(source.domNode, () => source.setTitle(undefined)));
