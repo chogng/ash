@@ -27,7 +27,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
+import { IsNewSessionContext, SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { ISessionsSearchService, SessionsSearchService } from './searchService.js';
@@ -43,7 +43,11 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 			title: localize2('sessions.search.title', 'Search'),
 			icon: Lxicon.search,
 			precondition: canSearchFiles,
-			menu: { id: Menus.TitleBarRightLayout, when: canSearchFiles, group: '1_tools' },
+			menu: {
+				id: Menus.TitleBarRightLayout,
+				when: ContextKeyExpr.and(canSearchFiles, ContextKeyExpr.not(IsNewSessionContext.key)),
+				group: '1_tools',
+			},
 		});
 	}
 

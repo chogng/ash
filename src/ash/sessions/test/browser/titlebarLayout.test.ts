@@ -222,6 +222,27 @@ suite('Sessions native titlebar layout', () => {
 		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
 	});
 
+	test('Code New hides titlebar More Actions when a workspace folder is available', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const more = titlebar.locator('.ash-sessions-titlebar-right').getByRole('button', { name: '更多操作', exact: true });
+		const sidePanel = titlebar.getByRole('button', { name: '切换侧面板', exact: true });
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
+		await more.press('Enter');
+		await expect(page.getByRole('menuitem', { name: '搜索', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
+		await newSession.click();
+		await expect(newSession).toHaveAttribute('aria-current', 'page');
+		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
+		await expect(sidePanel).toBeVisible();
+		await expect(more).toHaveCount(0);
+	});
+
 	test('Code session information moves into More Actions when narrow and returns when widened', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost');

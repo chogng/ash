@@ -3,11 +3,13 @@ import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHos
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/workspaces.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
+import { WorkspaceFolderCountContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorParts } from '../../../src/ash/sessions/browser/parts/editorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../src/ash/sessions/browser/workbench.js';
@@ -514,6 +516,16 @@ const themes = WorkbenchThemesRegistry.registerColorThemes([darkColorTheme, ligh
 window.addEventListener('pagehide', () => themes.dispose(), { once: true });
 const initialErrorHandler = errorHandler.getUnexpectedErrorHandler();
 const multiHost = new URL(location.href).searchParams.has('multiHost') ? installMultiHostSessionsFixture() : undefined;
+let setWorkspaceFolderCount: (count: number) => void;
+registerWorkbenchServiceContribution({
+	service: createServiceIdentifier<object>('test.workspaceFolderCount'),
+	dependencies: [IContextKeyService],
+	install: ({ container }) => {
+		const contextKeys = container.get(IContextKeyService);
+		setWorkspaceFolderCount = count => contextKeys.setContext(WorkspaceFolderCountContext.key, count);
+		return {};
+	},
+});
 let main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
 window.addEventListener('pagehide', () => main.dispose(), { once: true });
 let workbench = await main.open();
@@ -538,6 +550,7 @@ declare global {
 			openChat(): Promise<void>;
 			showEmptyEditorArea?(conversationVisible?: boolean): void;
 			setTheme(id: string): Promise<void>;
+			setWorkspaceFolderCount(count: number): void;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
 			setUpdateState(value: UpdateState): void;
 			getUpdateInstallCount(): number;
@@ -572,6 +585,7 @@ window.ashSessionsIntegration = {
 		workbench = await main.open();
 	},
 	setTheme: id => workbench.configurationService.updateValue('workbench.colorTheme', id),
+	setWorkspaceFolderCount: count => setWorkspaceFolderCount(count),
 	updateConfiguration: (key, value) => workbench.configurationService.updateValue(key, value),
 };
 document.body.dataset.ready = 'true';
