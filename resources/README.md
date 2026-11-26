@@ -147,6 +147,12 @@ the original design masters or editing history. `fonts/reference/` retains the
 unmodified input TTFs for comparison. Edit the `.sfd` projects and keep trial
 exports in `.build/fonts/`. Approved Ash Sans exports ship from `fonts/runtime/`.
 
+The three Simplified Chinese faces ship as WOFF2 from `fonts/runtime/`. To
+refresh an export, use `python -m fontTools.ttLib.woff2 compress <source.ttf> -o <target.woff2>`
+with FontTools and Brotli. Use the approved Ash Sans SC TTF in `fonts/runtime/`
+and the Ash Serif SC and Ash Mono SC TTFs in `fonts/reference/`. Preserve the
+full glyph set and compare the decoded font tables with the source TTF.
+
 | Family       | Projects                                                            | Weights       |
 | ------------ | ------------------------------------------------------------------- | ------------- |
 | Ash Sans     | `AshSans-Regular.sfd`, `AshSans-Medium.sfd`, `AshSans-SemiBold.sfd` | 400, 500, 600 |

@@ -16,8 +16,8 @@
 
 @font-face {
 	font-family: "Ash Sans SC";
-	src: url("../../../../../resources/fonts/runtime/AshSansSC-Regular.ttf")
-		format("truetype");
+	src: url("../../../../../resources/fonts/runtime/AshSansSC-Regular.woff2")
+		format("woff2");
 	font-weight: 400;
 	font-display: swap;
 }
@@ -32,8 +32,8 @@
 
 @font-face {
 	font-family: "Ash Serif SC";
-	src: url("../../../../../resources/fonts/reference/AshSerifSC-Regular.ttf")
-		format("truetype");
+	src: url("../../../../../resources/fonts/runtime/AshSerifSC-Regular.woff2")
+		format("woff2");
 	font-weight: 400;
 	font-display: swap;
 }
@@ -48,21 +48,15 @@
 
 @font-face {
 	font-family: "Ash Mono SC";
-	src: url("../../../../../resources/fonts/reference/AshMonoSC-Regular.ttf")
-		format("truetype");
+	src: url("../../../../../resources/fonts/runtime/AshMonoSC-Regular.woff2")
+		format("woff2");
 	font-weight: 400;
 	font-display: swap;
 }
 
 :root,
 .ash-workbench {
-	--ash-font-family: "Ash Sans", var(--ash-system-font-family);
-}
-
-/* Use the Simplified Chinese glyph forms in Simplified Chinese interfaces. */
-:root:lang(zh-Hans, zh-CN, zh-SG),
-.ash-workbench:lang(zh-Hans, zh-CN, zh-SG) {
-	--ash-font-family: "Ash Sans", "Ash Sans SC", var(--ash-system-font-family);
+	--ash-font-family: var(--ash-system-font-family);
 }
 
 :root {

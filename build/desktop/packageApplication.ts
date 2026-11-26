@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 /** Hoist only the deployment: development keeps pnpm's isolated workspace layout. */
 export const productionDependencyDeployOptions = ['--filter', 'ash', '--config.node-linker=hoisted', 'deploy', '--prod', '--ignore-scripts'] as const;
 
-/** Publish source maps separately and omit build diagnostics and npm declarations. */
+/** Publish source maps separately and omit files unused by the Windows runtime. */
 export async function pruneWindowsApplication(application: string, sourceMaps: string): Promise<void> {
 	for (const directory of ['dist', 'node_modules']) {
 		const base = join(application, directory);
@@ -17,13 +17,19 @@ export async function pruneWindowsApplication(application: string, sourceMaps: s
 				await mkdir(dirname(target), { recursive: true });
 				await copyFile(path, target);
 			} else {
-				const isDeclaration = directory === 'node_modules' && /\.d\.(?:ts|cts|mts)$/u.test(name);
 				const isBuildReport = /^dist\/renderer\/ash\/build-(?:assets|metrics)\.json$/u.test(name);
-				if (!isDeclaration && !isBuildReport) continue;
+				if (!isBuildReport && !(directory === 'node_modules' && isUnusedWindowsDependencyFile(name, entry.name))) continue;
 			}
 			await unlink(path);
 		}
 	}
+}
+
+function isUnusedWindowsDependencyFile(path: string, basename: string): boolean {
+	if (/(?:^|[._-])(?:license|notice|thirdpartynotice|copyright|copying)s?(?:$|[._-])/iu.test(basename)) return false;
+	if (/\.d\.(?:ts|cts|mts)$/u.test(path)) return true;
+	// The prebuilt Koffi binding keeps its JavaScript loaders alongside the upstream compilation sources.
+	return /(?:^|\/)node_modules\/koffi\/(?:cnoke\.cjs$|lib\/native\/|vendor\/|src\/koffi\/(?:CMakeLists\.txt$|src\/(?:abi\/|trampolines\.cjs$|[^/]+\.(?:cc|hh|inc|def)$)))/u.test(path);
 }
 
 /** Deploy dependencies from locked manifests without traversing the build tree being packaged. */

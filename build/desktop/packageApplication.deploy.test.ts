@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 import { parseAllDocuments } from 'yaml';
 import { prepareElectronAddons } from './addons.ts';
-import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions, pruneWindowsApplication } from './packageApplication.ts';
 
 const repository = resolve(import.meta.dirname, '../..');
 const require = createRequire(join(repository, 'package.json'));
@@ -42,6 +42,10 @@ test('real pnpm deployment resolves locked production dependencies and loads nat
 	t.diagnostic(installation.stdout);
 	assert.equal(await readFile(join(source, 'pnpm-lock.yaml'), 'utf8'), originalLock, 'deploy must preserve the source lockfile');
 	await prepareElectronAddons(deployed);
+	if (process.platform === 'win32') {
+		await mkdir(join(deployed, 'dist'));
+		await pruneWindowsApplication(deployed, join(root, 'symbols'));
+	}
 	await cp(deployed, delivered, {
 		recursive: true, dereference: true,
 		filter: path => !ignoreApplicationFile(`/${relative(deployed, path).split(sep).join('/')}`),

@@ -20,12 +20,23 @@ test('dependency deployment preserves locked inputs and attribution without recu
 	for (const file of ['.build', 'src']) await assert.rejects(stat(join(destination, file)), { code: 'ENOENT' });
 });
 
-test('Windows deployment omits npm declarations and build metrics while preserving runtime resources', async t => {
+test('Windows deployment omits build inputs while preserving runtime resources and licenses', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-windows-deployment-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const app = join(root, 'app');
-	const omitted = ['node_modules/runtime/index.d.ts', 'node_modules/runtime/index.d.cts', 'node_modules/runtime/index.d.mts', 'dist/renderer/ash/build-metrics.json', 'dist/renderer/ash/build-assets.json'];
-	const retained = ['node_modules/runtime/index.js', 'node_modules/runtime/worker.ts', 'node_modules/runtime/LICENSE', 'dist/editor/lib.d.ts'];
+	const omitted = [
+		'node_modules/runtime/index.d.ts', 'node_modules/runtime/index.d.cts', 'node_modules/runtime/index.d.mts',
+		'dist/renderer/ash/build-metrics.json', 'dist/renderer/ash/build-assets.json',
+		'node_modules/koffi/cnoke.cjs', 'node_modules/koffi/lib/native/base/base.cc', 'node_modules/koffi/vendor/node-addon-api/napi.h',
+		'node_modules/koffi/src/koffi/CMakeLists.txt', 'node_modules/koffi/src/koffi/src/ffi.cc', 'node_modules/koffi/src/koffi/src/abi/x64win_asm.asm',
+	];
+	const retained = [
+		'node_modules/runtime/index.js', 'node_modules/runtime/worker.ts', 'node_modules/runtime/LICENSE', 'dist/editor/lib.d.ts',
+		'node_modules/playwright-core/lib/coreBundle.js', 'node_modules/playwright-core/lib/vite/traceViewer/assets/viewer.js.LICENSE',
+		...['dashboard', 'htmlReport', 'recorder', 'traceViewer'].map(tool => `node_modules/playwright-core/lib/vite/${tool}/index.html`),
+		'node_modules/koffi/index.js', 'node_modules/koffi/src/koffi/index.cjs', 'node_modules/koffi/src/koffi/src/static.js',
+		'node_modules/koffi/vendor/node-addon-api/LICENSE.md', 'node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node',
+	];
 	for (const name of [...omitted, ...retained]) {
 		const path = join(app, name);
 		await mkdir(join(path, '..'), { recursive: true });

@@ -68,7 +68,18 @@ while (pending.length) {
 for (const name of ['playwright-core', 'undici', 'koffi']) insideApp(appRequire.resolve(name));
 assert.equal(typeof appRequire('playwright-core').chromium.connectOverCDP, 'function');
 assert.equal(typeof appRequire('undici').WebSocket, 'function');
-assert.equal(typeof appRequire('koffi').load, 'function');
+const koffi = appRequire('koffi');
+assert.equal(typeof koffi.load, 'function');
+if (process.platform === 'win32') {
+	const kernel = koffi.load('kernel32.dll');
+	assert.equal(kernel.func('uint32_t __stdcall GetCurrentProcessId()')(), process.pid);
+	for (const tool of ['dashboard', 'htmlReport', 'recorder', 'traceViewer']) {
+		assert(existsSync(join(root, 'node_modules/playwright-core/lib/vite', tool, 'index.html')), `Playwright tool missing: ${tool}`);
+	}
+	for (const path of ['koffi/src/koffi/src/ffi.cc', 'koffi/vendor/node-addon-api/napi.h']) {
+		assert(!existsSync(join(root, 'node_modules', path)), `Koffi build input shipped: ${path}`);
+	}
+}
 const bindings = [];
 for (const [name, binary, exports] of [
 	['native-keymap', 'keymapping.node', ['getKeyMap', 'getCurrentKeyboardLayout', 'onDidChangeKeyboardLayout']],
