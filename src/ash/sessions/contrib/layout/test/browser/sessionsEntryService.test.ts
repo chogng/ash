@@ -961,9 +961,8 @@ class EntryFixture extends Disposable {
 			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
 			get fileEditorsVisible() { return true; },
 			area: { get hasContent() { return groups.some(group => group.id !== pageGroup.id && (fixture.groupVisibility.get(group.id) ?? true) && group.inputs.length > 0); } },
-			openNewTab: async (id = documentGroup.id) => {
-				const group = groups.find(group => group.id === id)!;
-				group.inputs.push({ resource: URI.parse('ash-sessions-new-tab:/fixture') });
+			showEmptyGroup: (id = documentGroup.id) => {
+				activeGroup = groups.filter((group): group is typeof documentGroup => 'closeEditor' in group).find(group => group.id === id)!;
 				fixture.groupVisibility.set(id, true);
 			},
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },

@@ -4,7 +4,7 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { SessionsConversationKind } from '../../sessions/common/sessionsConversation.js';
-import type { EditorOpenTarget, EditorReplacementTarget } from '../../../../workbench/services/editor/common/editorService.js';
+import type { EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
@@ -54,9 +54,8 @@ export interface ISessionsEntryService extends IDisposable {
 	readonly conversationEditors: readonly IResourceEditorInput[];
 	isConversationEditor(resource: URI, activeOnly?: boolean): boolean;
 	/** Keeps browser creation and editor opening inside the active Chat composition transaction. */
-	openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>, replace?: EditorReplacementTarget): Promise<void>;
+	openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void>;
 	/** Opens a picked file in the current workspace and replaces its launcher tab. */
-	openToolFile(resource: URI, replace: EditorReplacementTarget): Promise<void>;
 	/** Opens a project document beside Chat and returns focus to its sidebar row on close. */
 	openConversationFile(input: IResourceEditorInput, restoreFocus: () => void, signal: AbortSignal): Promise<void>;
 	/** Closes one tab in the current conversation through its owning editor group. */

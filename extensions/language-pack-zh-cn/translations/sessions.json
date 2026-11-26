@@ -892,8 +892,6 @@
     "sessions.layout.sideChat": "侧边聊天",
     "sessions.layout.iosSimulator": "iOS 模拟器",
     "sessions.layout.sideChatHelp": "在 Code 中，在空工具区的“打开”区域选择“侧边聊天”。焦点会移到新的输入框。使用编辑器标签页可以切换侧边聊天。",
-    "sessions.editorStart.newTab": "新标签页",
-    "sessions.editorStart.help": "搜索文件或输入 URL，然后按 Enter。按 Tab 可访问“打开”区域中的工具。选择工具后，对应的标签页会替换当前新标签页。按 Esc 可取消文件选择并返回此页。",
     "sessions.cards.toggleBrowser": "切换浏览器面板",
     "sessions.pdfPreview.controls": "PDF 操作",
     "sessions.pdfPreview.thumbnails": "页面缩略图",

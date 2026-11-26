@@ -11,13 +11,12 @@ import { Menus } from '../../../browser/menus.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
-import { EditorReplacementTarget } from '../../../../workbench/services/editor/common/editorService.js';
 
 export const NEW_BROWSER_TAB_COMMAND_ID = 'ash.sessions.newBrowserTab';
 
 export function registerAddTabActions(
-	openFiles: (target?: EditorReplacementTarget) => Promise<void> | false,
-	openChanges: (target?: EditorReplacementTarget) => Promise<void> | false,
+	openFiles: () => Promise<void> | false,
+	openChanges: () => Promise<void> | false,
 	filesWhen: ContextKeyExpression,
 	codeWhen: ContextKeyExpression,
 ): IDisposable {
@@ -40,8 +39,7 @@ export function registerAddTabActions(
 		changes,
 	];
 	for (const [order, action] of actions.entries()) {
-		registrations.add(CommandsRegistry.register(action.id, (_accessor, arg) =>
-			action.run(arg instanceof EditorReplacementTarget ? arg : undefined)));
+		registrations.add(CommandsRegistry.register(action.id, () => action.run()));
 		for (const id of [Menus.SessionsEditorTabsBarAddTab, Menus.SessionsEmptyEditorGroupAddTab]) {
 			registrations.add(MenusRegistry.appendMenuItem(id, {
 				command: { id: action.id, title: action.title, icon: action.icon }, when: action.when, group: 'navigation', order,

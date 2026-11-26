@@ -15,7 +15,7 @@ import {
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
-import { EditorReplacementTarget, IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../services/editor/common/editorService.js';
 import { BrowserEditor } from './browserEditor.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
 import { BrowserNewTabPlacementSettingId, BrowserViewModel, type BrowserNewTabPlacement, type IBrowserViewNetworkResolver, type IBrowserViewNetworkStatus, type IBrowserViewOpenOptions, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
@@ -254,8 +254,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			if (!input.model) { input.model = this.instantiationService.createInstance(BrowserViewModel, info); }
-			const target = await this.getPreferredGroup(openOptions);
-			await this.openEditor(input, { index: openOptions?.index, ignoreError: target instanceof EditorReplacementTarget || undefined }, target);
+			await this.openEditor(input, { index: openOptions?.index }, await this.getPreferredGroup(openOptions));
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			for (const callback of created) { callback?.(input); }

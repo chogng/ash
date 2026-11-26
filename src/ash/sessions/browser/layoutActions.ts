@@ -1,7 +1,5 @@
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../contrib/layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from '../contrib/editor/browser/addTabActions.js';
-import { NewTabCommandId } from '../contrib/editor/browser/newTabEditorInput.js';
-import { EditorReplacementTarget } from '../../workbench/services/editor/common/editorService.js';
 import { isRecord } from '../../base/common/types.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
@@ -195,11 +193,12 @@ export function registerLayoutActions(
 				title: localize2({ bundle: 'ash', key: 'sessions.layout.sideChat' }, 'Side Chat'),
 				icon: Lxicon.chat,
 				precondition: codeTools,
-				menu: { id: Menus.SessionsEmptyEditorGroupAddTab, when: codeTools, group: 'navigation', order: 3 },
+				menu: [Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTabsBarAddTab].map(id =>
+					({ id, when: codeTools, group: 'navigation', order: 3 })),
 			});
 		}
 
-		override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+		override async run(accessor: ServicesAccessor): Promise<void> {
 			if (contextKeys.getValue(SessionsCodeEditorContext.key) !== true) return;
 			const management = accessor.get(ISessionsManagementService);
 			const title = localize('chat.title.new', 'New Chat');
@@ -207,7 +206,7 @@ export function registerLayoutActions(
 			// without changing the main Sessions selection.
 			const draft = management.createUntitledSession(title, undefined, undefined, false);
 			const input = new SessionSideChatEditorInput(draft.untitledSessionId, title, { draft });
-			await editor.openEditor(input, { pinned: true }, target instanceof EditorReplacementTarget ? target : undefined);
+			await editor.openEditor(input, { pinned: true });
 		}
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEmptyEditorGroupAddTab, {
@@ -267,8 +266,7 @@ export function registerDesktopEditorLayoutActions(
 	contextKeys: IContextKeyService,
 	layout: IAgentWorkbenchLayoutService,
 	editor: EditorParts,
-	openChatFiles: (target?: EditorReplacementTarget) => Promise<void>,
-	openNewTab: (groupId?: number) => Promise<void>,
+	openChatFiles: () => Promise<void>,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const editorVisible = editorVisibleContext.bindTo(contextKeys);
@@ -313,8 +311,6 @@ export function registerDesktopEditorLayoutActions(
 	const codeWhen = SessionsCodeEditorContext.isEqualTo(true);
 	const multipleTools = EditorHasMultipleToolsContext.isEqualTo(true);
 	const hideToolWhen = ContextKeyExpr.and(ContextKeyExpr.or(codeWhen, chatTools), multipleTools);
-	disposables.add(CommandsRegistry.register(NewTabCommandId, (_accessor, arg) =>
-		context.runOperation(() => openNewTab(isRecord(arg) && typeof arg.groupId === 'number' && Number.isSafeInteger(arg.groupId) ? arg.groupId : undefined))));
 	disposables.add(CommandsRegistry.register(hideToolId, (_accessor, arg) => {
 		const code = context.isDocumentContent;
 		if (!code && !contextKeys.contextMatchesRules(hideToolWhen)) return;
@@ -349,10 +345,10 @@ export function registerDesktopEditorLayoutActions(
 	}
 	disposables.add(
 		registerAddTabActions(
-			target => context.isDocumentContent
-				? run(() => controller.openFiles(target))
-				: contextKeys.contextMatchesRules(chatTools) && context.runOperation(() => openChatFiles(target)),
-			target => run(() => controller.openChanges(target)),
+			() => context.isDocumentContent
+				? run(() => controller.openFiles())
+				: contextKeys.contextMatchesRules(chatTools) && context.runOperation(openChatFiles),
+			() => run(() => controller.openChanges()),
 			ContextKeyExpr.or(codeWhen, chatTools)!,
 			codeWhen,
 		),

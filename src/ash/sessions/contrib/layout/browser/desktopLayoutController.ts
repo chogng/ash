@@ -8,7 +8,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { IEditorService, type EditorReplacementTarget } from '../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { EditorWorkingSet } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
@@ -275,7 +275,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.setDocumentsVisible(true);
 		const files = (this.editor as EditorParts);
 		if (!this.documentGroups.some(group => group.inputs.length > 0)) {
-			await files.openNewTab();
+			files.showEmptyGroup();
+			this.editor.focus();
 			return;
 		}
 		if (files.filesDetailsOpen) { files.filesPart.setEditorVisible(true); }
@@ -309,13 +310,13 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (!this.isDisposed) { this.focus(); }
 	}
 
-	public async openFiles(target?: EditorReplacementTarget): Promise<void> {
-		if (!this.isDisposed) await this.detailPanel.openFiles(target);
+	public async openFiles(): Promise<void> {
+		if (!this.isDisposed) await this.detailPanel.openFiles();
 	}
 
-	public async openChanges(target?: EditorReplacementTarget): Promise<void> {
+	public async openChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
-		await this.tabs.openChanges(target);
+		await this.tabs.openChanges();
 	}
 
 	public async toggleChanges(): Promise<void> { await this.openChanges(); }

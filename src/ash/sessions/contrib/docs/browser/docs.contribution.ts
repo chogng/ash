@@ -27,7 +27,6 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { EditorReplacementTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../../workbench/common/editor.js';
 import { EDIT_CHAT_WRITING_COMMAND_ID } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
@@ -173,17 +172,13 @@ registerAction2(class NewDocumentAction extends Action2 {
 			menu: [
 				{ id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 },
 				{ id: Menus.SessionsEmptyEditorGroupAddTab, when: chatWorkspace, group: 'navigation', order: 1 },
+				{ id: Menus.SessionsEditorTabsBarAddTab, when: chatWorkspace, group: 'navigation', order: 1 },
 			],
 		});
 	}
-	override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+	override async run(accessor: ServicesAccessor): Promise<void> {
 		if (!accessor.get(IContextKeyService).contextMatchesRules(chatWorkspace)) return;
-		const replace = target instanceof EditorReplacementTarget ? target : undefined;
-		const editor = accessor.get(IEditorPart);
-		const group = replace && editor.groups.find(group => group.id === replace.groupId && group.inputs.includes(replace.input) && editor.isGroupVisible(group.id));
-		if (replace && !group) return;
 		await createDocsDocument(accessor);
-		if (group && replace && group.inputs.includes(replace.input)) await group.closeEditor(replace.input, { reason: 'replace' });
 	}
 });
 

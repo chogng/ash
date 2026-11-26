@@ -229,9 +229,9 @@ All non-phone Agents windows use the desktop detail layout. Phone viewports use 
 
 Files and Changes are editor inputs in the same group. Restoring a former Changes tool moves its tabs into that group and keeps the active selection. When a tool spans the editor area's top edge and has one visible group, the window title bar hosts that group's tab strip if space allows. Other groups show their tabs inside their panes. Commands and breadcrumbs stay in the pane. `DesktopWorkbenchLayout` reports the editor boundary to `TitlebarPart` so the conversation title and its actions stay alongside the conversation. Product pages can project their page-specific controls into the title bar.
 
-The Add Tab button opens a selectable New Tab in its editor group. Its context menu provides direct tool commands. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
+The Add Tab button opens the menu of tools. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
 
-Opening an empty side pane creates a New Tab editor in the active working set. It owns the file or URL input and the tool shortcuts. An accepted choice replaces the launcher at its index in a populated group. A launcher on its own can give its pane to the selected tool. Chat uses its conversation's retained groups. Cancelling the file picker keeps the launcher open. The file picker uses Quick Access for the active workspace, and URL entry opens the integrated browser where available. In the Files group, Open Files also reveals the docked Explorer in Code. Search requires a workspace.
+Opening the side pane without visible tools reveals an empty editor group. The group's `EmptyEditorGroupAddTab` shows the available tool commands until an editor opens. Files, Search and Browser open through their own commands and working sets. Chat uses its conversation's retained groups. In Code, Open Files also reveals the docked Explorer, and Search requires a workspace.
 
 The selected Changes tab exposes its scope and diff commands in the shared editor group.
 

@@ -43,6 +43,7 @@ import './media/editorgroupview.css';
 import { h } from '../../../../base/browser/dom.js';
 import { EditorGroupModel, type IEditorGroupModelEntry } from '../../../common/editor/editorGroupModel.js';
 import { EditorGroupWatermark } from './editorGroupWatermark.js';
+import { EmptyEditorGroupAddTab } from '../sessions/emptyEditorGroupAddTab.js';
 import { EditorTitleControl } from './editorTitleControl.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import type { EditorTabDescriptor, EditorTabsDelegate } from './editorTabsControl.js';
@@ -139,6 +140,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly titleControl: EditorTitleControl;
 	private readonly watermark: EditorGroupWatermark | undefined;
+	private readonly emptyGroupAddTab = this._register(new MutableDisposable<EmptyEditorGroupAddTab>());
+	private readonly emptyGroupMenu: MenuId | undefined;
 	private readonly panes: EditorPanes;
 	private readonly registry: IEditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
@@ -307,7 +310,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
 		this.panes = this._register(new EditorPanes(this.contentDomNode, this.titleControl.editorToolbarHost));
-		if (options.keybindingService) {
+		this.emptyGroupMenu = options.titleActions && options.menuIds?.emptyGroupAddTab;
+		if (!this.emptyGroupMenu && options.keybindingService) {
 			this.watermark = this._register(instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
@@ -353,6 +357,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
 		}));
+		if (this.emptyGroupMenu) this.renderContent();
 		this.renderChrome();
 	}
 
@@ -1034,8 +1039,17 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	focus(): void {
-		if (this.activePane) { this.panes.focus(); }
-		else { this.domNode.focus(); }
+		if (this.activePane) {
+			this.panes.focus();
+			return;
+		}
+		const addTab = this.emptyGroupAddTab.value;
+		if (addTab) {
+			if (addTab.focus()) return;
+			// With no available action the group is still a programmatic focus target.
+			this.domNode.tabIndex = -1;
+		}
+		this.domNode.focus();
 	}
 
 	setSelection(active: IResourceEditorInput, inactiveSelection: readonly IResourceEditorInput[] = []): void {
@@ -1070,6 +1084,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	private renderContent(): void {
 		const children: Element[] = [];
+		if (this.emptyGroupMenu && this.titleActions && !this.ordinaryContent && this.entries.length === 0) {
+			this.emptyGroupAddTab.value ??= this.instantiationService.createInstance(EmptyEditorGroupAddTab,
+				this.domNode.ownerDocument, this.id, this.emptyGroupMenu, this.scopedContextKeyService, this.titleActions.contextMenuProvider);
+			children.push(this.emptyGroupAddTab.value.element);
+		} else {
+			this.emptyGroupAddTab.clear();
+		}
 		if (this.ordinaryContent) {
 			children.push(this.ordinaryContent);
 		} else {
@@ -1091,7 +1112,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	private renderChrome(): void {
 		this.scopedContextKeyService?.setContext(ActiveEditorGroupLockedContext.key, this.isLocked);
-		if (this.activeInput) { this.domNode.removeAttribute('tabindex'); }
+		if (this.activeInput || this.emptyGroupAddTab.value) { this.domNode.removeAttribute('tabindex'); }
 		else { this.domNode.tabIndex = 0; }
 		let label = localize('workbench.editorGroup.label', 'Editor group');
 		if (!this.activeInput) { label = localize('workbench.editorGroup.emptyLabel', 'Empty editor group'); }

@@ -284,7 +284,7 @@ import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntrySer
 import { URI } from '../../base/common/uri.js';
 import { SessionsEditorService } from './sessionsEditorService.js';
 import { isImageResource } from '../../workbench/contrib/mediaPreview/common/mediaPreview.js';
-import { EditorReplacementTarget, IEditorService } from '../../workbench/services/editor/common/editorService.js';
+import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { IHistoryService } from '../../workbench/services/history/common/history.js';
 import { HistoryService } from '../../workbench/services/history/browser/historyService.js';
@@ -1562,11 +1562,10 @@ export abstract class Workbench extends Disposable {
 			}
 			updateBrowserContext();
 		}));
-		this._register(CommandsRegistry.register(NEW_BROWSER_TAB_COMMAND_ID, async (_accessor, address?: unknown, replacement?: unknown) => {
+		this._register(CommandsRegistry.register(NEW_BROWSER_TAB_COMMAND_ID, async (_accessor, address?: unknown) => {
 			const initialUrl = typeof address === 'string' ? address : 'about:blank';
-			const replace = address instanceof EditorReplacementTarget ? address : replacement instanceof EditorReplacementTarget ? replacement : undefined;
 			if (contextKeys.getValue(SessionsCodeEditorContext.key) === true) {
-				await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } }, undefined, { target: replace });
+				await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } });
 				return true;
 			}
 			let opened = false;
@@ -1574,7 +1573,7 @@ export abstract class Workbench extends Disposable {
 				await services.get(ISessionsEntryService).openConversationBrowser(async target => {
 					await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } }, undefined, { target });
 					opened = true;
-				}, replace);
+				});
 			}
 			return opened;
 		}));
@@ -1598,6 +1597,7 @@ export abstract class Workbench extends Disposable {
 				item: {
 					...browserTool,
 					command: newBrowser,
+					when: ContextKeyExpr.or(browserTool.when, ContextKeyExpr.and(ChatConversationPageContext.isEqualTo(true), SessionBrowserTabsAvailableContext.isEqualTo(true))),
 				},
 			},
 			{

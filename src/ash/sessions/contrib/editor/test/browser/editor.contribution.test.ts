@@ -182,7 +182,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		const registrations = new DisposableStore();
 		registrations.add(registerDesktopEditorLayoutActions(
 			controller, context, contextKeys, layout, editor,
-			async () => { effects.push('chat files'); }, async () => { effects.push('new tab'); },
+			async () => { effects.push('chat files'); },
 		));
 		registrations.add(registerChangesEditorTitleActions(editor));
 		registrations.add(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));

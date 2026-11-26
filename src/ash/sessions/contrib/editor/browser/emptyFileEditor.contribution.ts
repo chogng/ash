@@ -15,8 +15,6 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { Menus } from '../../../browser/menus.js';
 import { EmptyFileEditor } from './emptyFileEditor.js';
 import { EditorFilePickerFocusedContext } from './editorFilePicker.js';
-import { NewTabEditor } from './newTabEditor.js';
-import { NewTabEditorInput, newTabEditorSerializer } from './newTabEditorInput.js';
 import './emptyFileEditorAccessibility.js';
 
 registerEditorPane({
@@ -28,13 +26,6 @@ registerEditorPane({
 
 const serializer = new EmptyFileEditorSerializer();
 EditorInputSerializers.registerStatic(serializer);
-EditorInputSerializers.registerStatic(newTabEditorSerializer);
-registerEditorPane({
-	id: NewTabEditorInput.EDITOR_ID,
-	get name() { return localize('sessions.editorStart.newTab', 'New Tab'); },
-	canOpen: input => input instanceof NewTabEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => options.instantiationService!.createInstance(NewTabEditor),
-});
 
 registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 	constructor() {
@@ -52,21 +43,23 @@ registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 
 	override run(accessor: ServicesAccessor, target?: unknown): void {
 		const editor = target instanceof EmptyFileEditor ? target : accessor.get(IEditorService).activeEditorPane;
-		if ((editor instanceof EmptyFileEditor || editor instanceof NewTabEditor) && editor.isVisible()) editor.openFile();
+		if (editor instanceof EmptyFileEditor && editor.isVisible()) editor.openFile();
 	}
 });
 
 const code = SessionsCodeEditorContext.isEqualTo(true);
-MenusRegistry.appendMenuItem(Menus.SessionsEmptyEditorGroupAddTab, {
-	command: {
-		id: NEW_UNTITLED_FILE_COMMAND_ID,
-		title: localize2('sessions.emptyFileEditor.newFile', 'New File'),
-		icon: Lxicon.add,
-	},
-	when: code,
-	group: 'navigation',
-	order: 0.5,
-});
+for (const menu of [Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTabsBarAddTab]) {
+	MenusRegistry.appendMenuItem(menu, {
+		command: {
+			id: NEW_UNTITLED_FILE_COMMAND_ID,
+			title: localize2('sessions.emptyFileEditor.newFile', 'New File'),
+			icon: Lxicon.add,
+		},
+		when: code,
+		group: 'navigation',
+		order: 0.5,
+	});
+}
 
 KeybindingsRegistry.registerKeybindingRule({
 	command: NEW_UNTITLED_FILE_COMMAND_ID,

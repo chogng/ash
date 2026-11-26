@@ -28,7 +28,6 @@ import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, Brea
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
 import { EditorBreadcrumbsControl } from './breadcrumbsControl.js';
 import { EditorAddTabControl } from './editorAddTabControl.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from './breadcrumbsModel.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -96,11 +95,7 @@ export class EditorHeaderControl extends Disposable {
 			const menuOptions = group === undefined ? undefined : { arg: { groupId: group } };
 			if (viewOptions.menuIds?.tabsBarAddTab) {
 				const menu = actions.menuService.createMenu(viewOptions.menuIds.tabsBarAddTab, actions.contextKeyService);
-				const command = viewOptions.addTabCommand;
-				const openTab = command && group !== undefined
-					? () => instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(command, { groupId: group }))
-					: undefined;
-				this.addTabElement = this._register(new EditorAddTabControl(tabStrip ?? trailing, menu, actions.contextMenuProvider, group, openTab)).element;
+				this.addTabElement = this._register(new EditorAddTabControl(tabStrip ?? trailing, menu, actions.contextMenuProvider, group)).element;
 			}
 			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, trailing, MenuId.EditorTabsTrailing, {
 				contextMenuProvider: actions.contextMenuProvider,

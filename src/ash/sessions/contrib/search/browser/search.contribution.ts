@@ -2,7 +2,7 @@ import { localize, localize2 } from '../../../../nls.js';
 import '../../../../workbench/contrib/searchEditor/browser/searchEditor.contribution.js';
 import { isSearchEditorInput, OpenNewEditorCommandId } from '../../../../workbench/contrib/searchEditor/browser/constants.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { EditorReplacementTarget, IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ExplorerFolderContext, VIEW_ID } from '../../../../workbench/contrib/files/common/files.js';
 import { ResourceSchemeContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -61,12 +61,8 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+	override async run(accessor: ServicesAccessor): Promise<void> {
 		if (!accessor.get(IContextKeyService).contextMatchesRules(canSearchFiles)) return;
-		if (target instanceof EditorReplacementTarget) {
-			await accessor.get(ICommandService).executeCommand(OpenNewEditorCommandId, target);
-			return;
-		}
 		const editor = accessor.get(IEditorPart) as EditorParts;
 		const groups = editor.getToolGroups(isSearchEditorInput);
 		const group = groups.find(group => group.id === editor.activeGroup.id) ?? groups[0];

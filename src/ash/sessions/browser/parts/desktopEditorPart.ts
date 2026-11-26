@@ -21,7 +21,6 @@ import { EditorPart, type ISessionsEditorPage } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
-import { NewTabCommandId, NewTabEditorInput } from '../../contrib/editor/browser/newTabEditorInput.js';
 
 const DEFAULT_FILES_TREE_WIDTH = 300;
 const MINIMUM_NARROW_EDITOR_WIDTH = 160;
@@ -143,7 +142,7 @@ export class DesktopMainEditorPart extends EditorPart {
 	public get detailsVisible(): boolean {
 		const group = this.activeGroup;
 		const input = group.activeInput;
-		if (!input || input instanceof NewTabEditorInput || !this.hostVisible || !this.supportsFilesDetails() || this.isGroupVisible(this.pageGroupId)
+		if (!input || !this.hostVisible || !this.supportsFilesDetails() || this.isGroupVisible(this.pageGroupId)
 			|| !this.fileGroups.includes(group) || !this.isGroupVisible(group.id)) return false;
 		return this.detailsRequested && input.resource.scheme !== 'ash-session-changes';
 	}
@@ -186,8 +185,8 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.layoutDetails();
 	}
 
-	public async openFiles(open: (input: EmptyFileEditorInput) => Promise<unknown> = input => this.openEditor(input, { pinned: true })): Promise<void> {
-		await open(new EmptyFileEditorInput());
+	public async openFiles(): Promise<void> {
+		await this.openEditor(new EmptyFileEditorInput(), { pinned: true });
 		this.showDetails();
 		this.auxiliaryBar.focus();
 	}
@@ -238,14 +237,14 @@ export class DesktopMainEditorPart extends EditorPart {
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
 			showHeader: true,
-			showHeaderFor: editor => !(editor instanceof EmptyFileEditorInput || editor instanceof NewTabEditorInput),
-			addTabCommand: NewTabCommandId,
+			showHeaderFor: editor => !!editor && !(editor instanceof EmptyFileEditorInput),
 			showEditorToolbar: true,
 			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,
 				editorActions: Menus.SessionsEditorTitle,
 				tabsBarAddTab: Menus.SessionsEditorTabsBarAddTab,
+				emptyGroupAddTab: Menus.SessionsEmptyEditorGroupAddTab,
 			}
 		};
 	}
@@ -261,9 +260,9 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.layoutDetails();
 	}
 
-	public resolveDefaultGroup(input: IResourceEditorInput) {
+	public resolveDefaultGroup(input?: IResourceEditorInput) {
 		const groups = this.fileGroups;
-		const existing = groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()));
+		const existing = input && groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()));
 		return existing ?? groups.find(group => group === this.activeGroup) ?? groups[0]
 			?? this.insertGroup(this.activeGroup, Direction.Right).group;
 	}

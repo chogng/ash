@@ -57,8 +57,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		try {
 			returningPane?.addPane(resource, Direction.Down);
 			if (existing && !editorOptions?.preserveFocus) existing.activeResource = resource;
-			const target = editorOptions?.editorTarget ?? (editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
-			await this.editors.openEditor(existing ?? new TerminalEditorInput(resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus, ...(existing ? { revealIfOpened: true } : {}) }, target);
+			await this.editors.openEditor(existing ?? new TerminalEditorInput(resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus, ...(existing ? { revealIfOpened: true } : {}) }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
 			if (!editorOptions?.preserveFocus && this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
 			returningPane?.removePane(resource);

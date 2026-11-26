@@ -18,19 +18,17 @@ import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EmptyFileEditorInput, EmptyFileEditorSerializer } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
-import { EditorReplacementTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { EditorParts } from '../../browser/parts/editorParts.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
-import { NewTabEditorInput, newTabEditorSerializer } from '../../contrib/editor/browser/newTabEditorInput.js';
 
 function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
 	const registry = resources.add(new EditorPaneRegistry());
-	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID, EmptyFileEditorInput.EDITOR_ID, NewTabEditorInput.EDITOR_ID]) {
+	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID, EmptyFileEditorInput.EDITOR_ID]) {
 		resources.add(registry.registerEditorPane({
 			id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional,
 			create: () => new class extends EditorPane {
@@ -55,37 +53,42 @@ function fixture() {
 		}));
 	}
 	resources.add(inputSerializers.register(new EmptyFileEditorSerializer()));
-	resources.add(inputSerializers.register(newTabEditorSerializer));
 	const hosts = resources.add(createDesktopEditorTestServices(services, { registry, inputSerializers }, browserEnvironment.window.document));
 	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area, configuration: services.get(IConfigurationService) });
 }
 
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('replaces only the targeted launcher and restores its editor at the same index', async () => {
+	test('reveals a tabless group and opens Search in its own tool group', async () => {
 		using hosts = fixture();
-		const { editor } = hosts;
-		const first = { resource: URI.file('/first.txt') };
-		const last = { resource: URI.file('/last.txt') };
-		await editor.openEditor(first, { pinned: true });
-		const group = editor.activeGroup;
-		await editor.openNewTab(group.id);
-		const launcher = group.activeInput!;
-		await editor.openEditor(last, { pinned: true });
+		const { editor, area } = hosts;
+		editor.showEmptyGroup();
+		const emptyGroup = editor.activeGroup;
+		assert.deepEqual(emptyGroup.inputs, []);
+		assert.equal(area.isToolVisible('files'), true);
 		const search = { resource: URI.parse('untitled:/test.code-search'), editorId: SearchEditorID };
-		const target = new EditorReplacementTarget(group.id, launcher);
-		await editor.openEditor(search, {}, target);
-		assert.deepEqual(group.inputs, [first, search, last]);
-		assert.equal(group.activeInput, last);
-		await assert.rejects(editor.openEditor(search, {}, target), { name: 'CancellationError' });
-		await editor.openNewTab(group.id);
-		const retainedLauncher = group.activeInput!;
-
+		await editor.openEditor(search, { pinned: true });
+		assert.deepEqual(emptyGroup.inputs, []);
+		assert.equal(area.isToolVisible('files'), false);
+		assert.equal(area.isToolVisible('search'), true);
+		assert.deepEqual(editor.activeGroup.inputs, [search]);
+	});
+	test('skips saved launcher tabs while retaining their neighboring editors', async () => {
+		using hosts = fixture();
+		const input = { resource: URI.file('/first.txt') };
+		await hosts.editor.openEditor(input, { pinned: true });
+		const saved = hosts.editor.saveWorkingSet('legacy-launcher');
+		const groups = saved.groups.map(group => group.id === hosts.editor.activeGroup.id ? {
+			...group,
+			editors: [...group.editors, {
+				input: { typeId: 'ash.sessions.editorInput.newTab', value: 'ash-sessions-new-tab:/legacy' },
+				paneId: 'ash.sessions.editor.newTab', preview: false, sticky: false,
+			}],
+			activeEditorIndex: 1,
+		} : group);
 		using restored = fixture();
-		await restored.editor.applyWorkingSet(editor.saveWorkingSet('launcher-placement'));
-		const restoredGroup = restored.files.groups.find(group => group.inputs.length > 0)!;
-		assert.deepEqual(restoredGroup.inputs.map(input => input.resource.toString()), [first, search, last, retainedLauncher].map(input => input.resource.toString()));
-		assert.ok(restoredGroup.activeInput instanceof NewTabEditorInput);
+		await restored.editor.applyWorkingSet({ ...saved, groups });
+		assert.deepEqual(restored.editor.activeGroup.inputs.map(editor => editor.resource.toString()), [input.resource.toString()]);
 	});
 	test('retains separate Chat and Code browser groups in the existing browser Part', async () => {
 		using hosts = fixture();

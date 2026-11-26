@@ -14,7 +14,7 @@ import { EditorParts as WorkbenchEditorParts } from '../../../workbench/browser/
 import { IEditorPart, type EditorPart, type IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
-import { EditorReplacementTarget, type EditorOpenOptions, type EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { parseEditorWorkingSet, parseEditorWorkingSetLayout, type ApplyEditorWorkingSetOptions, type EditorWorkingSet, type EditorWorkingSetLayout, type EditorWorkingSetTarget, type EditorGroupWorkingSet } from '../../../workbench/services/editor/common/editorWorkingSet.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
@@ -32,7 +32,6 @@ import { DesktopMainEditorPart } from './desktopEditorPart.js';
 import { DesktopToolEditorPart } from './desktopToolEditorPart.js';
 import { desktopEditorTools, SessionsEditorToolContext, type DesktopEditorTool } from '../../common/contextkeys.js';
 import { EditorArea, type ToolSlot } from './editorPart.js';
-import { NewTabEditorInput } from '../../contrib/editor/browser/newTabEditorInput.js';
 
 /** Documents are serialized once. Sessions adds only their Part membership and geometry. */
 export interface DesktopEditorWorkingSet extends EditorWorkingSet {
@@ -144,7 +143,6 @@ export class EditorParts extends WorkbenchEditorParts {
 	private applying = false;
 	private waitForWorkingSet = () => Promise.resolve();
 	private readonly hosts: ReadonlyMap<DesktopEditorTool, EditorPart>;
-	private readonly replacingNewTabs = new WeakSet<NewTabEditorInput>();
 	public readonly filesPart: DesktopMainEditorPart;
 	public readonly area: EditorArea;
 
@@ -268,7 +266,7 @@ export class EditorParts extends WorkbenchEditorParts {
 	public get filesDetailsOpen(): boolean { return this.filesPart.detailsOpen; }
 	public get filesDetailsVisible(): boolean { return this.filesPart.detailsVisible; }
 	public get fileEditorsVisible(): boolean {
-		return this.filesPart.fileGroups.some(group => group.inputs.some(input => !(input instanceof NewTabEditorInput)) && this.filesPart.isGroupVisible(group.id));
+		return this.filesPart.fileGroups.some(group => group.inputs.length > 0 && this.filesPart.isGroupVisible(group.id));
 	}
 
 	public setGroupScope(contains: (id: number) => boolean, supportsFilesDetails: () => boolean = () => true): IDisposable {
@@ -297,11 +295,13 @@ export class EditorParts extends WorkbenchEditorParts {
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
 		const tools: DesktopEditorTool[] = [];
 		for (const [tool, part] of this.hosts) {
-			// Restored or pending groups can be visible internally while empty.
-			// Keep their tool Parts out of the Grid until they have an editor.
 			if (productPage ? tool === 'files' : part.groups.some(group => group.inputs.length > 0 && part.isGroupVisible(group.id))) {
 				tools.push(tool);
 			}
+		}
+		// An empty Files group can present the add-tab actions as the whole editor area.
+		if (tools.length === 0 && this.filesPart.groups.some(group => group.id !== this.pageGroupId && this.filesPart.isGroupVisible(group.id))) {
+			tools.push('files');
 		}
 		const active = this.isWindowEditorPart(this.activePart) ? undefined : this.toolForGroup(this.activeGroup.id);
 		this.area.syncVisible(tools, active, productPage, tools.length > 0);
@@ -341,19 +341,12 @@ export class EditorParts extends WorkbenchEditorParts {
 
 	public override whenReadyForWindowEditorReturn(): Promise<void> { return this.waitForWorkingSet(); }
 
-	public async openNewTab(groupId?: number): Promise<void> {
-		const input = new NewTabEditorInput();
-		const group = groupId === undefined ? this.filesPart.resolveDefaultGroup(input) : this.mainWindowGroups.find(group => group.id === groupId);
-		if (!group || group.id === this.pageGroupId) throw new CancellationError();
-		const part = this.owner(group.id);
-		await part.openEditor(input, { pinned: true, index: group.inputs.length }, { groupId: group.id });
-		this.syncArea();
+	public showEmptyGroup(groupId = this.filesPart.resolveDefaultGroup().id): void {
+		this.setGroupVisible(groupId, true);
+		this.activateGroup(groupId);
 	}
 
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		if (target instanceof EditorReplacementTarget && target.input instanceof NewTabEditorInput) {
-			return this.replaceNewTab(input, options, target, target.input);
-		}
 		const targetGroupId = typeof target === 'object' ? target.groupId : undefined;
 		const targetPart = targetGroupId !== undefined
 			? this.parts.find(part => part.groups.some(group => group.id === targetGroupId))
@@ -371,37 +364,6 @@ export class EditorParts extends WorkbenchEditorParts {
 			this.revealed.fire();
 		}
 		return pane;
-	}
-
-	private async replaceNewTab(input: IResourceEditorInput, options: EditorOpenOptions, target: EditorReplacementTarget, launcher: NewTabEditorInput): Promise<IEditorPane> {
-		const source = this.mainWindowGroups.find(group => group.id === target.groupId);
-		const index = source?.inputs.indexOf(launcher) ?? -1;
-		if (!source || index < 0 || !this.inWorkingSet(source.id) || !this.isGroupVisible(source.id) || this.replacingNewTabs.has(launcher)) throw new CancellationError();
-		const active = this.activeGroup === source && source.activeInput === launcher;
-		const explicitDestination = this.mainWindowGroups.find(group => group.id === target.destinationGroupId);
-		if (target.destinationGroupId !== undefined && !explicitDestination) throw new CancellationError();
-		// An otherwise empty Code group can give its slot to the selected tool.
-		// A populated group keeps the launcher index and its neighboring tabs.
-		const destination = explicitDestination ?? (source.inputs.length > 1 || this.toolForGroup(source.id) === editorTool(input) || !active ? source : undefined);
-		this.replacingNewTabs.add(launcher);
-		try {
-			const openOptions = { ...options, pinned: true, ignoreError: true, inactive: !active, preserveFocus: !active };
-			const pane = destination
-				? await this.owner(destination.id).openEditor(input, { ...openOptions, index: destination === source ? index : undefined }, { groupId: destination.id })
-				: await super.openEditor(input, openOptions);
-			const opened = this.mainWindowGroups.find(group => group.activePane === pane);
-			const reveal = active && opened && (this.activeGroup === source || this.activeGroup === opened);
-			if (source.inputs.includes(launcher)) await source.closeEditor(launcher, { skipConfirmation: true, reason: 'replace' });
-			this.syncArea();
-			if (reveal && this.mainWindowGroups.includes(opened) && this.isGroupVisible(opened.id)) {
-				this.activateGroup(opened.id);
-				this.revealed.fire();
-				opened.focus();
-			}
-			return pane;
-		} finally {
-			this.replacingNewTabs.delete(launcher);
-		}
 	}
 
 	public async moveModalEditorToMain(): Promise<void> {
@@ -438,13 +400,13 @@ export class EditorParts extends WorkbenchEditorParts {
 		}
 	}
 
-	public async openFiles(target?: EditorReplacementTarget): Promise<void> {
-		await this.filesPart.openFiles(target && (input => this.openEditor(input, { pinned: true }, target)));
+	public async openFiles(): Promise<void> {
+		await this.filesPart.openFiles();
 		this.syncArea();
 	}
 
 	public toggleFileEditors(): Promise<boolean> {
-		return this.toggleToolEditors(input => !(input instanceof NewTabEditorInput) && editorTool(input) === 'files');
+		return this.toggleToolEditors(input => editorTool(input) === 'files');
 	}
 
 	public getToolGroups(accepts: (input: IResourceEditorInput) => boolean): readonly IEditorGroupView[] {

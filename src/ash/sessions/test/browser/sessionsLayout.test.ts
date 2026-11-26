@@ -1505,8 +1505,7 @@ suite('sessions browser component', () => {
 		const group = editor.locator('.ash-editor-group:not(.ash-code-page-group):visible');
 		const owner = await group.elementHandle();
 		await strip.getByRole('button', { name: 'Add Tab', exact: true }).press('Enter');
-		await expect(strip.getByRole('tab', { name: 'New Tab', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await editor.getByRole('button', { name: 'Open Changes', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Open Changes', exact: true }).click();
 		await expect(changes).toHaveAttribute('aria-selected', 'true');
 		await expect(files).toHaveAttribute('aria-selected', 'false');
 		await expect(group.locator('.ash-sessions-changes-editor')).toBeVisible();

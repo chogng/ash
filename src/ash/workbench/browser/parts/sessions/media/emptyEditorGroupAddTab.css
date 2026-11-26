@@ -1,0 +1,19 @@
+.ash-empty-editor-group-add-tab {
+	box-sizing: border-box;
+	display: grid;
+	block-size: 100%;
+	justify-items: center;
+	align-items: safe center;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+}
+
+.ash-empty-editor-group-add-tab .ash-toolbar {
+	align-items: stretch;
+	max-inline-size: 100%;
+}
+
+.ash-empty-editor-group-add-tab .ash-button {
+	inline-size: 100%;
+	justify-content: flex-start;
+}
