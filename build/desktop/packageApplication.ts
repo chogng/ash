@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 /** Hoist only the deployment: development keeps pnpm's isolated workspace layout. */
 export const productionDependencyDeployOptions = ['--filter', 'ash', '--config.node-linker=hoisted', 'deploy', '--prod', '--ignore-scripts'] as const;
 
-/** Keep source maps alongside the build and omit npm declarations and redundant Paper documentation. */
+/** Publish source maps separately and omit build diagnostics and npm declarations. */
 export async function pruneWindowsApplication(application: string, sourceMaps: string): Promise<void> {
 	for (const directory of ['dist', 'node_modules']) {
 		const base = join(application, directory);
@@ -18,8 +18,8 @@ export async function pruneWindowsApplication(application: string, sourceMaps: s
 				await copyFile(path, target);
 			} else {
 				const isDeclaration = directory === 'node_modules' && /\.d\.(?:ts|cts|mts)$/u.test(name);
-				const isPaperDocumentation = /^node_modules\/paper\/dist\/(?:docs|paperjs)\//u.test(name);
-				if (!isDeclaration && !isPaperDocumentation) continue;
+				const isBuildReport = /^dist\/renderer\/ash\/build-(?:assets|metrics)\.json$/u.test(name);
+				if (!isDeclaration && !isBuildReport) continue;
 			}
 			await unlink(path);
 		}

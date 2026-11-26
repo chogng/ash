@@ -89,7 +89,8 @@ export async function exercisePackagedWorkbench(
 				await test.step(`${stage}: render packaged Markdown and a workspace image`, () => diagnostics.waitFor(async () => {
 					await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'sanity-preview.md' }).dblclick();
 					const source = workbench.editors.groupAt(0);
-					await source.editor.waitForEditorContents(contents => contents.includes('# Release webview'));
+					// The editor driver returns viewport lines, including soft wraps in the smoke window.
+					await source.editor.waitForEditorContents(contents => /#\s+Release\s+webview/u.test(contents));
 					await source.title.locator('[data-action-id="markdown.reopenAsPreview"] button').click();
 					const preview = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 					await expect(preview.getByRole('heading', { name: 'Release webview', exact: true })).toBeVisible();

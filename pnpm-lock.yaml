@@ -172,30 +172,12 @@ importers:
 
   .:
     dependencies:
-      '@xterm/addon-serialize':
-        specifier: 0.15.0-beta.301
-        version: 0.15.0-beta.301(@xterm/xterm@6.1.0-beta.304)
-      fontkit:
-        specifier: 2.0.4
-        version: 2.0.4
-      katex:
-        specifier: 0.18.2
-        version: 0.18.2
       koffi:
         specifier: 3.3.3
         version: 3.3.3
-      livekit-client:
-        specifier: 2.22.4
-        version: 2.22.4(@types/dom-mediacapture-record@1.0.22)
       native-keymap:
         specifier: 3.3.9
         version: 3.3.9
-      paper:
-        specifier: 0.12.18
-        version: 0.12.18
-      paperjs-offset:
-        specifier: 2.2.1
-        version: 2.2.1
       playwright-core:
         specifier: 1.61.1
         version: 1.61.1
@@ -239,6 +221,9 @@ importers:
       '@xterm/addon-search':
         specifier: 0.17.0-beta.301
         version: 0.17.0-beta.301(@xterm/xterm@6.1.0-beta.304)
+      '@xterm/addon-serialize':
+        specifier: 0.15.0-beta.301
+        version: 0.15.0-beta.301(@xterm/xterm@6.1.0-beta.304)
       '@xterm/xterm':
         specifier: 6.1.0-beta.304
         version: 6.1.0-beta.304
@@ -263,18 +248,33 @@ importers:
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
+      fontkit:
+        specifier: 2.0.4
+        version: 2.0.4
       harfbuzzjs:
         specifier: 1.6.3
         version: 1.6.3
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
+      katex:
+        specifier: 0.18.2
+        version: 0.18.2
+      livekit-client:
+        specifier: 2.22.4
+        version: 2.22.4(@types/dom-mediacapture-record@1.0.22)
       mocha:
         specifier: 12.0.1
         version: 12.0.1
       node:
         specifier: runtime:24.22.3
         version: runtime:24.22.3
+      paper:
+        specifier: 0.12.18
+        version: 0.12.18
+      paperjs-offset:
+        specifier: 2.2.1
+        version: 2.2.1
       pdfjs-dist:
         specifier: 6.1.200
         version: 6.1.200

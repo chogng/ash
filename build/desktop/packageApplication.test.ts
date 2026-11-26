@@ -20,19 +20,19 @@ test('dependency deployment preserves locked inputs and attribution without recu
 	for (const file of ['.build', 'src']) await assert.rejects(stat(join(destination, file)), { code: 'ENOENT' });
 });
 
-test('Windows deployment drops npm declarations and retains runtime files and editor resources', async t => {
+test('Windows deployment omits npm declarations and build metrics while preserving runtime resources', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-windows-deployment-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const app = join(root, 'app');
-	const declarations = ['node_modules/runtime/index.d.ts', 'node_modules/runtime/index.d.cts', 'node_modules/runtime/index.d.mts'];
+	const omitted = ['node_modules/runtime/index.d.ts', 'node_modules/runtime/index.d.cts', 'node_modules/runtime/index.d.mts', 'dist/renderer/ash/build-metrics.json', 'dist/renderer/ash/build-assets.json'];
 	const retained = ['node_modules/runtime/index.js', 'node_modules/runtime/worker.ts', 'node_modules/runtime/LICENSE', 'dist/editor/lib.d.ts'];
-	for (const name of [...declarations, ...retained]) {
+	for (const name of [...omitted, ...retained]) {
 		const path = join(app, name);
 		await mkdir(join(path, '..'), { recursive: true });
 		await writeFile(path, name);
 	}
 	await pruneWindowsApplication(app, join(root, 'symbols'));
-	for (const name of declarations) await assert.rejects(stat(join(app, name)), { code: 'ENOENT' });
+	for (const name of omitted) await assert.rejects(stat(join(app, name)), { code: 'ENOENT' });
 	for (const name of retained) assert.equal(await readFile(join(app, name), 'utf8'), name);
 });
 

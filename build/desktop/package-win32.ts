@@ -1,6 +1,5 @@
-import { bundleWindowsMain, copyHostOutput } from './host.ts';
+import { copyHostOutput, copyPreloadOutput, writeApplicationChecksums } from './host.ts';
 import { packager } from '@electron/packager';
-import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions, pruneWindowsApplication } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
 import { disableElectronNodeInspector } from './packageFuses.ts';
@@ -72,11 +71,9 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	const metadata = JSON.parse(await readFile(join(appStage, 'package.json'), 'utf8'));
 	metadata.main = 'dist/main/src/main.js';
 	await writeFile(join(appStage, 'package.json'), `${JSON.stringify(metadata, null, 2)}\n`);
-	for (const part of ['main', 'preload', 'renderer']) {
-		if (part === 'main') await copyHostOutput(join(buildRoot, part), join(appStage, 'dist', part));
-		else await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
-	}
-	await bundleWindowsMain(join(appStage, 'dist', 'main'));
+	await copyHostOutput(join(buildRoot, 'main'), join(appStage, 'dist', 'main'), { bundle: true });
+	await copyPreloadOutput(join(buildRoot, 'preload'), join(appStage, 'dist', 'preload'));
+	await cp(join(buildRoot, 'renderer'), join(appStage, 'dist', 'renderer'), { recursive: true });
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));

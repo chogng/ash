@@ -17,39 +17,62 @@ const sourceRoot = repositoryRoot;
 const outputRoot = desktopBuildPath(repositoryRoot);
 // Invoke TS7's Node launcher, which selects the installed platform executable.
 const compiler = join(sourceRoot, 'node_modules/@ash/typescript-compiler/bin/tsc');
-const preload = join(outputRoot, 'preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs');
 const projects = ['tsconfig.main.json', 'tsconfig.preload.json'] as const;
+const preloadEntries = [
+	'src/ash/base/parts/sandbox/electron-browser/preload.cjs',
+	'src/ash/platform/browserView/electron-browser/preload-browserView.js',
+] as const;
 
-/** Package only the selected native generation; development can retain running Windows executables. */
-export async function copyHostOutput(source: string, destination: string): Promise<void> {
+/** Package the current native helpers and the Main code needed by the selected layout. */
+export async function copyHostOutput(source: string, destination: string, options?: { readonly bundle: true; }): Promise<void> {
 	const { hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable } = await import(pathToFileURL(join(source, '.build/desktop/hostLogs.js')).href);
+	const helpers = [hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable];
 	await cp(source, destination, {
 		recursive: true, filter: path => {
 			const entry = relative(source, path).replaceAll('\\', '/');
-			return !['host-logs/', 'host-integrity/', 'image-opener/'].some(prefix => entry.startsWith(prefix))
-				|| [hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable].some(executable => executable === entry || executable?.startsWith(`${entry}/`));
+			if (!entry || helpers.some(executable => executable === entry || executable?.startsWith(`${entry}/`))) return true;
+			return !options?.bundle && !/^(?:host-logs|host-integrity|image-opener)(?:\/|$)/u.test(entry);
 		}
 	});
+	if (options?.bundle) await bundleMainOutput(source, destination);
 }
 
-/** Reduces the installed Windows startup graph while retaining lazy imports and native dependencies. */
-export async function bundleWindowsMain(mainOutput: string): Promise<void> {
+/** Main launches the utility process and watcher by filename, so each needs its own entrypoint. */
+async function bundleMainOutput(source: string, destination: string): Promise<void> {
 	const { build } = await import('esbuild');
-	const outdir = join(mainOutput, 'src');
 	const result = await build({
-		absWorkingDir: mainOutput,
-		entryPoints: [join(outdir, 'main.js')],
-		outdir,
+		absWorkingDir: source,
+		entryPoints: [
+			'src/main.js',
+			'src/ash/code/electron-utility/sharedProcess/sharedProcessMain.js',
+			'src/ash/code/electron-utility/fileWatcher/fileWatcherMain.js',
+		],
+		outbase: join(source, 'src'),
+		outdir: join(destination, 'src'),
 		platform: 'node',
 		format: 'esm',
 		target: 'node24',
 		packages: 'external',
 		bundle: true,
 		splitting: true,
+		minifySyntax: true,
+		minifyWhitespace: true,
 		sourcemap: 'linked',
 		write: false,
 	});
-	await Promise.all(result.outputFiles.map(file => writeFile(file.path, file.contents)));
+	await Promise.all(result.outputFiles.map(async file => {
+		await mkdir(dirname(file.path), { recursive: true });
+		await writeFile(file.path, file.contents);
+	}));
+}
+
+/** Both preload entrypoints are standalone scripts checked by verifyPreload. */
+export async function copyPreloadOutput(source: string, destination: string): Promise<void> {
+	for (const path of preloadEntries) {
+		const target = join(destination, path);
+		await mkdir(dirname(target), { recursive: true });
+		await cp(join(source, path), target);
+	}
 }
 
 /** Publish hashes after copying the final desktop assets; package.json cannot hash itself. */
@@ -411,7 +434,8 @@ async function prepareHostLogs(signal?: AbortSignal): Promise<void> {
 }
 
 async function verifyPreload(): Promise<void> {
-	for (const path of [preload, join(outputRoot, 'preload/src/ash/platform/browserView/electron-browser/preload-browserView.js')]) {
+	for (const entry of preloadEntries) {
+		const path = join(outputRoot, 'preload', entry);
 		const source = await readFile(path, 'utf8');
 		if (path.endsWith('preload-browserView.js') && /(^|\n)\s*(export|import)\s/.test(source)) { throw new Error('Browser preload must be a standalone script'); }
 		const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(match => match.groups?.module);

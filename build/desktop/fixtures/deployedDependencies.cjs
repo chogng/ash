@@ -65,9 +65,9 @@ while (pending.length) {
 }
 
 // Exercise JS loading and a Node-API native package as well as resolving manifests.
-for (const name of ['fontkit', 'katex', 'koffi']) insideApp(appRequire.resolve(name));
-assert.equal(typeof appRequire('fontkit').create, 'function');
-assert.match(appRequire('katex').renderToString('x^2'), /katex/);
+for (const name of ['playwright-core', 'undici', 'koffi']) insideApp(appRequire.resolve(name));
+assert.equal(typeof appRequire('playwright-core').chromium.connectOverCDP, 'function');
+assert.equal(typeof appRequire('undici').WebSocket, 'function');
 assert.equal(typeof appRequire('koffi').load, 'function');
 const bindings = [];
 for (const [name, binary, exports] of [
@@ -79,7 +79,7 @@ for (const [name, binary, exports] of [
 	for (const member of exports) assert.equal(typeof binding[member], 'function', `${name}.${member}`);
 	bindings.push(name);
 }
-for (const name of ['.pnpm', '.bin', 'electron', 'harfbuzzjs', 'typescript']) {
+for (const name of ['.pnpm', '.bin', 'electron', 'harfbuzzjs', 'typescript', '@xterm/addon-serialize', 'fontkit', 'katex', 'livekit-client', 'paper', 'paperjs-offset']) {
 	assert(!existsSync(join(root, 'node_modules', name)), `Development dependency or private pnpm data shipped: ${name}`);
 }
 console.log(JSON.stringify({ dependencies, bindings }));

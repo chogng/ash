@@ -58,15 +58,15 @@ test('real pnpm deployment resolves locked production dependencies and loads nat
 		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_PATH: '', NODE_OPTIONS: '' },
 	});
 	const result = JSON.parse((await probe()).stdout) as { dependencies: { name: string; version: string; path: string; }[]; bindings: string[]; };
-	assert(result.dependencies.some(dependency => dependency.name === 'fontkit'));
-	const transitive = result.dependencies.find(dependency => dependency.name === 'brotli');
-	assert(transitive, 'fontkit must retain its transitive Brotli dependency');
+	assert(result.dependencies.some(dependency => dependency.name === 'playwright-core'));
+	const transitive = result.dependencies.find(dependency => dependency.name.startsWith('@koromix/koffi-'));
+	assert(transitive, 'koffi must retain its platform binding');
 	assert.deepEqual(result.bindings, process.platform === 'win32' ? ['native-keymap', 'native-is-elevated'] : ['native-keymap']);
 	t.diagnostic(`Resolved ${result.dependencies.length} locked dependencies; loaded ${result.bindings.join(', ')} and koffi in Electron`);
 	await t.test('rejects a missing transitive production dependency', async () => {
 		const removed = join(root, 'removed-dependency');
 		await rename(transitive.path, removed);
-		try { await assert.rejects(probe(), /Cannot resolve locked dependency brotli/); }
+		try { await assert.rejects(probe(), { stderr: new RegExp(`Cannot resolve locked dependency ${transitive.name} from`) }); }
 		finally { await rename(removed, transitive.path); }
 	});
 	await t.test('rejects a corrupt native binding rather than accepting its JavaScript wrapper', async () => {

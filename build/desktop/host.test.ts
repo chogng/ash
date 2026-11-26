@@ -6,28 +6,65 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { bundleWindowsMain, copyHostOutput, writeApplicationChecksums } from './host.ts';
+import { copyHostOutput, copyPreloadOutput, writeApplicationChecksums } from './host.ts';
 import { createHash } from 'node:crypto';
 
-test('Windows packaging bundles the Main entry and keeps optional modules lazy', async t => {
+test('Windows packaging publishes only bundled Main and child entrypoints and keeps optional modules lazy', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-main-bundle-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	const directory = join(root, 'src');
-	const entry = join(directory, 'main.js');
-	await mkdir(directory);
+	const source = join(root, 'main');
+	const destination = join(root, 'app', 'dist', 'main');
+	const utility = 'src/ash/code/electron-utility';
+	const sharedProcess = `${utility}/sharedProcess/sharedProcessMain.js`;
+	const fileWatcher = `${utility}/fileWatcher/fileWatcherMain.js`;
+	const files = {
+		'.build/desktop/hostLogs.js': 'export const hostLogExecutable = "host-logs/current/host.exe";',
+		'host-logs/current/host.exe': 'current helper',
+		'host-logs/old/host.exe': 'old helper',
+		'src/startup.js': 'export const message = "ready";',
+		'src/optional.js': 'console.log("optional");',
+		'src/unused.js': 'throw new Error("unused");',
+		'src/main.js': 'import { message } from "./startup.js"; console.log(message); if (process.argv[2]) await import("./optional.js");',
+		[sharedProcess]: 'import { message } from "../../../../startup.js"; console.log(`shared ${message}`);',
+		[fileWatcher]: 'import { message } from "../../../../startup.js"; console.log(`watcher ${message}`);',
+	};
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
-	await writeFile(join(directory, 'startup.js'), 'export const message = "ready";');
-	await writeFile(join(directory, 'optional.js'), 'console.log("optional");');
-	await writeFile(entry, 'import { message } from "./startup.js"; console.log(message); if (process.argv[2]) await import("./optional.js");');
-
-	await bundleWindowsMain(root);
-	await rm(join(directory, 'startup.js'));
-	await rm(join(directory, 'optional.js'));
-	for (const [args, output] of [[[], 'ready'], [['open'], 'ready\noptional']] as const) {
-		const result = spawnSync(process.execPath, [entry, ...args], { encoding: 'utf8', windowsHide: true });
+	for (const [path, content] of Object.entries(files)) {
+		await mkdir(join(source, path, '..'), { recursive: true });
+		await writeFile(join(source, path), content);
+	}
+	await copyHostOutput(source, destination, { bundle: true });
+	for (const path of ['.build/desktop/hostLogs.js', 'host-logs/old/host.exe', 'src/startup.js', 'src/optional.js', 'src/unused.js']) {
+		await assert.rejects(stat(join(destination, path)), { code: 'ENOENT' });
+	}
+	assert.equal(await readFile(join(destination, 'host-logs/current/host.exe'), 'utf8'), 'current helper');
+	assert.equal(await readFile(join(source, 'src/startup.js'), 'utf8'), files['src/startup.js']);
+	for (const [path, args, output] of [
+		['src/main.js', [], 'ready'],
+		['src/main.js', ['open'], 'ready\noptional'],
+		[sharedProcess, [], 'shared ready'],
+		[fileWatcher, [], 'watcher ready'],
+	] as const) {
+		const result = spawnSync(process.execPath, [join(destination, path), ...args], { encoding: 'utf8', windowsHide: true });
 		assert.equal(result.status, 0, result.stderr);
 		assert.equal(result.stdout.trim().replaceAll('\r\n', '\n'), output);
 	}
+});
+
+test('Windows packaging copies the two standalone preload scripts', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-preload-package-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const source = join(root, 'preload');
+	const destination = join(root, 'app', 'dist', 'preload');
+	const entries = ['src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'src/ash/platform/browserView/electron-browser/preload-browserView.js'];
+	const unused = 'src/ash/base/common/uri.js';
+	for (const path of [...entries, unused]) {
+		await mkdir(join(source, path, '..'), { recursive: true });
+		await writeFile(join(source, path), path);
+	}
+	await copyPreloadOutput(source, destination);
+	for (const path of entries) assert.equal(await readFile(join(destination, path), 'utf8'), path);
+	await assert.rejects(stat(join(destination, unused)), { code: 'ENOENT' });
 });
 
 test('packaging publishes final desktop assets without hashing metadata or user files', async t => {
