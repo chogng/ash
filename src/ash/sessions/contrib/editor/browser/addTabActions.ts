@@ -9,69 +9,68 @@ import { NEW_FILE_TAB_COMMAND_ID } from '../../../../workbench/contrib/sessions/
 import { SessionsCategories } from '../../../../workbench/contrib/sessions/common/categories.js';
 import { Menus } from '../../../browser/menus.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-
-export function registerEditorStartAction(open: () => Promise<void>, when: ContextKeyExpression): IDisposable {
-	const registrations = new DisposableStore();
-	const command = { id: 'ash.sessions.openEditorStart', title: localize2({ bundle: 'ash', key: 'sessions.editorStart.newTab' }, 'New Tab'), icon: Lxicon.add };
-	registrations.add(CommandsRegistry.register(command.id, open));
-	registrations.add(MenusRegistry.appendMenuItems([Menus.SessionsEditorTabsBarAddTab, MenuId.CommandPalette]
-		.map(id => ({ id, item: { command, when, group: 'navigation', order: -1 } }))));
-	return registrations;
-}
+import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
-/** Contributes editor tab actions to the Code window. */
+export const NEW_BROWSER_TAB_COMMAND_ID = 'ash.sessions.newBrowserTab';
+
 export function registerAddTabActions(
 	openFiles: () => Promise<void> | false,
 	openChanges: () => Promise<void> | false,
-	when: ContextKeyExpression,
+	filesWhen: ContextKeyExpression,
+	codeWhen: ContextKeyExpression,
 ): IDisposable {
 	const registrations = new DisposableStore();
+	const changes = {
+		id: VIEW_SESSION_CHANGES_COMMAND_ID,
+		title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes'),
+		icon: Lxicon.diffChanges,
+		run: openChanges,
+		when: codeWhen,
+	};
 	const actions = [
 		{
 			id: NEW_FILE_TAB_COMMAND_ID,
 			title: localize2({ bundle: 'ash', key: 'sessions.layout.openFiles' }, 'Open Files'),
-			icon: Lxicon.folder,
+			icon: EmptyFileEditorInput.ICON,
 			run: openFiles,
+			when: filesWhen,
 		},
-		{
-			id: VIEW_SESSION_CHANGES_COMMAND_ID,
-			title: localize2({ bundle: 'ash', key: 'sessions.layout.openChanges' }, 'Open Changes'),
-			icon: Lxicon.diffChanges,
-			run: openChanges,
-		},
+		changes,
 	];
+	// Existing keybindings may invoke the former New Tab command directly.
+	registrations.add(CommandsRegistry.register('ash.sessions.openEditorStart', openFiles));
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
-		registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorStart, {
-			command: { id: action.id, title: action.title, icon: action.icon }, when, group: 'navigation', order,
-		}));
 		registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, {
-			command: { id: action.id, title: action.title }, when, group: 'navigation', order,
+			command: { id: action.id, title: action.title, icon: action.icon }, when: action.when, group: 'navigation', order,
 		}));
 		registrations.add(MenusRegistry.appendMenuItems(
 			[MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
 				item: {
 					command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
-					when,
+					when: action.when,
 					order: order + 4,
 					group: '2_code_layout',
 				},
 			})),
 		));
 	}
+	registrations.add(MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
+		command: { id: changes.id, title: changes.title, icon: changes.icon }, when: codeWhen, group: 'navigation', order: 1,
+	}));
 	const terminal = {
 		command: {
 			id: TerminalCommandId.CreateTerminalEditor,
 			title: localize2({ bundle: 'ash', key: 'terminal.title.new' }, 'New Terminal'),
 		},
-		when: ContextKeyExpr.and(when, AppServerAvailableContext.isEqualTo(true)),
+		when: ContextKeyExpr.and(codeWhen, AppServerAvailableContext.isEqualTo(true)),
 		group: 'navigation',
 		order: actions.length,
 	};
 	registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, terminal));
-	registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorStart, {
+	registrations.add(MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
 		...terminal, command: { ...terminal.command, icon: Lxicon.terminalSession },
 	}));
 	return registrations;

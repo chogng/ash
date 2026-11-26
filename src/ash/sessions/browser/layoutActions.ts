@@ -1,6 +1,5 @@
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../contrib/layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from '../contrib/editor/browser/addTabActions.js';
-import { EditorStartInput } from '../contrib/editor/browser/emptyFileEditor.js';
 import { isRecord } from '../../base/common/types.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
@@ -199,7 +198,7 @@ export function registerLayoutActions(
 				precondition: sessionTools.isEqualTo(true),
 				menu: [
 					{ id: Menus.TitleBarRightLayout, when: showSessionTools, group: '1_tools', order: 1 },
-					{ id: Menus.SessionsEditorStart, when: sessionTools.isEqualTo(true), group: 'navigation', order: 3 },
+					{ id: Menus.EmptyFileEditorActions, when: sessionTools.isEqualTo(true), group: 'navigation', order: 3 },
 				],
 			});
 		}
@@ -263,7 +262,6 @@ const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDe
 const filesTool = ContextKeyExpr.and(
 	SessionsEditorToolContext.isEqualTo('files'),
 	ContextKeyExpr.notEquals(ResourceSchemeContext.key, 'ash-session-changes'),
-	ContextKeyExpr.notEquals(ResourceSchemeContext.key, EditorStartInput.SCHEME),
 );
 
 /** Binds the desktop entry's editor commands to its layout state and navigation queue. */
@@ -273,6 +271,7 @@ export function registerDesktopEditorLayoutActions(
 	contextKeys: IContextKeyService,
 	layout: IAgentWorkbenchLayoutService,
 	editor: EditorParts,
+	openChatFiles: () => Promise<void>,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const editorVisible = editorVisibleContext.bindTo(contextKeys);
@@ -351,8 +350,11 @@ export function registerDesktopEditorLayoutActions(
 	}
 	disposables.add(
 		registerAddTabActions(
-			() => run(() => controller.openFiles()),
+			() => context.isDocumentContent
+				? run(() => controller.openFiles())
+				: contextKeys.contextMatchesRules(chatTools) && context.runOperation(openChatFiles),
 			() => run(() => controller.openChanges()),
+			ContextKeyExpr.or(codeWhen, chatTools)!,
 			codeWhen,
 		),
 	);

@@ -214,7 +214,7 @@ import { NativeChatPaneFactory } from '../contrib/chat/browser/nativeChatPaneFac
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
 import { ChatConversationPageContext, IsNewSessionContext, SessionBrowserTabsAvailableContext, SessionsActivityBarLocationContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
-import { EditorStartBrowserCommand } from '../contrib/editor/browser/emptyFileEditor.js';
+import { NEW_BROWSER_TAB_COMMAND_ID } from '../contrib/editor/browser/addTabActions.js';
 import { readNewChatDraftState } from '../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -1570,7 +1570,7 @@ export abstract class Workbench extends Disposable {
 			}
 			updateBrowserContext();
 		}));
-		this._register(CommandsRegistry.register(EditorStartBrowserCommand, async (_accessor, address?: unknown) => {
+		this._register(CommandsRegistry.register(NEW_BROWSER_TAB_COMMAND_ID, async (_accessor, address?: unknown) => {
 			const initialUrl = typeof address === 'string' ? address : 'about:blank';
 			if (contextKeys.getValue(SessionsCodeEditorContext.key) === true) {
 				await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } });
@@ -1594,7 +1594,7 @@ export abstract class Workbench extends Disposable {
 			group: 'navigation', order: 4.5,
 		};
 		const newBrowser = {
-			id: EditorStartBrowserCommand,
+			id: NEW_BROWSER_TAB_COMMAND_ID,
 			title: localize2({ bundle: 'ash.workbench', key: 'browser.newTabCommand' }, 'Browser: New Tab'),
 			icon: Lxicon.browserExplore,
 		};
@@ -1608,7 +1608,7 @@ export abstract class Workbench extends Disposable {
 				},
 			},
 			{
-				id: Menus.SessionsEditorStart,
+				id: Menus.EmptyFileEditorActions,
 				item: {
 					...browserTool, command: newBrowser,
 					when: ContextKeyExpr.or(browserTool.when, ContextKeyExpr.and(ChatConversationPageContext.isEqualTo(true), SessionBrowserTabsAvailableContext.isEqualTo(true))),

@@ -37,7 +37,7 @@ export const Menus = {
 	SessionTitleBar: new MenuId('SessionsSessionTitleBar'),
 	EditorPartLayout: new MenuId('SessionsEditorPartLayout'),
 	SessionsEditorTabsBarAddTab: new MenuId('SessionsEditorTabsBarAddTab'),
-	SessionsEditorStart: new MenuId('SessionsEditorStart'),
+	EmptyFileEditorActions: new MenuId('EmptyFileEditorActions'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
 	SessionsChangesScope: new MenuId('SessionsChangesScope'),

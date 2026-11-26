@@ -16,7 +16,8 @@ import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
-import { EditorInputSerializerRegistry, EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { EmptyFileEditorInput, EmptyFileEditorSerializer } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
+import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
@@ -27,7 +28,7 @@ function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
 	const registry = resources.add(new EditorPaneRegistry());
-	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID]) {
+	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID, EmptyFileEditorInput.EDITOR_ID]) {
 		resources.add(registry.registerEditorPane({
 			id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional,
 			create: () => new class extends EditorPane {
@@ -51,11 +52,7 @@ function fixture() {
 			deserialize: value => scheme === 'vscode-terminal' ? new TerminalEditorInput(URI.parse(value as string)) : { resource: URI.parse(value as string) },
 		}));
 	}
-	resources.add(inputSerializers.register({
-		typeId: 'sessions.editorInput.files', canSerialize: input => input.resource.scheme === 'ash-sessions-files',
-		serialize: input => EditorInputSerializers.serialize(input).value,
-		deserialize: value => EditorInputSerializers.deserialize({ typeId: 'sessions.editorInput.files', value: value as {} }),
-	}));
+	resources.add(inputSerializers.register(new EmptyFileEditorSerializer()));
 	const hosts = resources.add(createDesktopEditorTestServices(services, { registry, inputSerializers }, browserEnvironment.window.document));
 	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area, configuration: services.get(IConfigurationService) });
 }

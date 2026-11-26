@@ -229,7 +229,7 @@ Files and Changes are editor inputs in the same group. Restoring a former Change
 
 The Add Tab menu provides Files, Changes, Terminal and Browser. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
 
-Opening the side pane without an editor opens a New Tab in the active Chat or Code files group. Add Tab and the Command Palette can also open it. The page uses Quick Access for file search and the window's browser entry for URLs. Its shortcuts use the active mode's commands.
+Opening an empty side pane selects the Files tab in the active Chat or Code group. The same `EmptyFileEditor` opens from Add Tab or the Command Palette. It searches the active workspace through Quick Access and sends URLs to the integrated browser. In Code, Open Files also reveals the docked Explorer. The Add Tab menu opens the independent Search editor when a workspace is available. When the window title bar hosts the Files tab, the empty editor has no additional header row.
 
 The selected Changes tab exposes its scope and diff commands in the shared editor group.
 

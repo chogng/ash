@@ -26,6 +26,7 @@ export const enum AccessibleViewProviderId {
 	ActionWidget = 'actionWidget',
 	InspectEditorTokens = 'inspectEditorTokens',
 	Explorer = 'explorer',
+	EmptyFileEditor = 'emptyFileEditor',
 	SearchHelp = 'searchHelp',
 	SearchEditorHelp = 'searchEditorHelp',
 	GettingStarted = 'gettingStarted',

@@ -162,11 +162,14 @@ export class EditorTitleControl extends Disposable {
 		const strip = this.tabStrip;
 		const target = host ?? this.headerElement;
 		if (!strip || strip.parentElement === target) return;
+		const previousHeight = this.height;
 		const focused = strip.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = strip.contains(focused);
 		strip.classList.toggle('ash-editor-tab-strip-hosted', !!host);
 		target.prepend(strip);
+		this.updateVisibility();
 		if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+		if (this.height !== previousHeight) this.heightEmitter.fire();
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
@@ -199,8 +202,11 @@ export class EditorTitleControl extends Disposable {
 	}
 
 	private updateVisibility(): void {
-		this.domNode.hidden = this.headerElement.hidden = !this.titleVisible || !this.hasTitle;
-		if (this.tabStrip) this.tabStrip.hidden = this.headerElement.hidden;
+		const visible = this.titleVisible && this.hasTitle;
+		const tabsHosted = this.tabStrip && this.tabStrip.parentElement !== this.headerElement;
+		const showHeader = !tabsHosted || this.viewOptions.showHeaderFor?.(this.activeInput) !== false;
+		this.domNode.hidden = this.headerElement.hidden = !visible || !showHeader;
+		if (this.tabStrip) this.tabStrip.hidden = !visible;
 		this.updateRows();
 	}
 

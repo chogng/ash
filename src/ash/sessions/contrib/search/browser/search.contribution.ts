@@ -4,7 +4,7 @@ import { isSearchEditorInput, OpenNewEditorCommandId } from '../../../../workben
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ExplorerFolderContext, VIEW_ID } from '../../../../workbench/contrib/files/common/files.js';
-import { SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
+import { ResourceSchemeContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -30,6 +30,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IsNewSessionContext, SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
+import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { ISessionsSearchService, SessionsSearchService } from './searchService.js';
 
 registerSingleton(ISessionsSearchService, SessionsSearchService, InstantiationType.Delayed);
@@ -43,11 +44,19 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 			title: localize2('sessions.search.title', 'Search'),
 			icon: Lxicon.search,
 			precondition: canSearchFiles,
-			menu: {
-				id: Menus.TitleBarRightLayout,
-				when: ContextKeyExpr.and(canSearchFiles, ContextKeyExpr.not(IsNewSessionContext.key)),
-				group: '1_tools',
-			},
+			menu: [
+				{
+					id: Menus.SessionsEditorTabsBarAddTab,
+					when: canSearchFiles,
+					group: 'navigation',
+					order: 3,
+				},
+				{
+					id: Menus.TitleBarRightLayout,
+					when: ContextKeyExpr.and(canSearchFiles, ContextKeyExpr.not(IsNewSessionContext.key)),
+					group: '1_tools',
+				},
+			],
 		});
 	}
 
@@ -66,7 +75,7 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 });
 MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
 	command: { id: 'workbench.action.quickOpen', title: localize2('workbench.editor.goToFile', 'Go to File') },
-	when: ContextKeyExpr.and(canSearchFiles, SessionsEditorToolContext.isEqualTo('files')),
+	when: ContextKeyExpr.and(canSearchFiles, SessionsEditorToolContext.isEqualTo('files'), ContextKeyExpr.notEquals(ResourceSchemeContext.key, EmptyFileEditorInput.SCHEME)),
 	group: '1_view',
 });
 KeybindingsRegistry.registerKeybindingRule({

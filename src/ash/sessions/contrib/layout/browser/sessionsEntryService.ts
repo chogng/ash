@@ -33,8 +33,7 @@ import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLa
 import { registerDesktopEditorLayoutActions } from '../../../browser/layoutActions.js';
 import { registerChangesEditorTitleActions } from '../../changes/browser/changesActions.js';
 import { registerSessionsModalEditorActions } from '../../editor/browser/editor.contribution.js';
-import { registerEditorStartAction } from '../../editor/browser/addTabActions.js';
-import { EditorStartInput } from '../../editor/browser/emptyFileEditor.js';
+import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { registerSessionsTerminalTitleActions } from '../../terminal/browser/sessionsTerminalContribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -110,15 +109,20 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		return group;
 	}
 
-	private async openEditorStart(): Promise<void> {
+	private async openEmptyFileEditor(): Promise<void> {
 		if (this.isDocumentContent) {
-			await this.editors.openEditor(new EditorStartInput(), { pinned: true });
-		} else if (this.chatConversation.get()) {
-			const key = this.conversationGroupKey('files');
-			if (!key) return;
-			const group = this.getOrCreateConversationGroup('files', key);
-			await this.editors.openEditor(new EditorStartInput(), { pinned: true }, { groupId: group.id });
+			await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true });
+		} else {
+			await this.openChatFiles();
 		}
+	}
+
+	private async openChatFiles(): Promise<void> {
+		if (!this.chatConversation.get()) return;
+		const key = this.conversationGroupKey('files');
+		if (!key) return;
+		const group = this.getOrCreateConversationGroup('files', key);
+		await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, { groupId: group.id });
 	}
 	private get hasConversationEditors(): boolean {
 		return this.conversationEditors.length > 0 || !!this.getConversationGroup('files')?.inputs.length;
@@ -244,20 +248,16 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!this.isDocumentContent) await this.openEntry(documentEntry);
 			await this.controller.whenSettled();
 		}));
-		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts));
+		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts, () => this.openChatFiles()));
 		this._register(registerChangesEditorTitleActions(editor));
 		this._register(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
 		this._register(registerSessionsModalEditorActions(editor as EditorParts, () => this.isDocumentContent));
-		this._register(registerEditorStartAction(
-			() => this.runOperation(() => this.openEditorStart()),
-			ContextKeyExpr.or(SessionsCodeEditorContext.isEqualTo(true), ChatConversationPageContext.isEqualTo(true))!,
-		));
 		this._register(BaseLayoutController.registerSidePaneToggleAction(() => {
 			const entry = this.activeEntry.get();
 			if (!this.isDocumentContent && !this.chatConversation.get()) return;
 			return this.runOperation(async () => {
 				if (this.activeEntry.get() !== entry || (!this.isDocumentContent && !this.chatConversation.get())) return;
-				const visible = await layout.toggleSidePane(() => this.openEditorStart());
+				const visible = await layout.toggleSidePane(() => this.openEmptyFileEditor());
 				status(visible
 					? localize('sessions.layout.sidePaneShown', 'Side panel shown')
 					: localize('sessions.layout.sidePaneHidden', 'Side panel hidden'));

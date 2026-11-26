@@ -932,10 +932,13 @@ export class DesktopWorkbenchLayout
 
 		const groups = editors.mainWindowGroups.filter(group => group.inputs.length && editors.isGroupVisible(group.id));
 		const group = chat && groups.includes(editors.activeGroup) ? editors.activeGroup : groups[0];
-		if (!group) await openEmpty();
+		if (!group) {
+			if (code) editors.filesPart.hideDetails();
+			await openEmpty();
+		}
 		this.updateParts(() => {
 			if (group) editors.activateGroup(group.id);
-			if (code && this.reopenFilesDetails) editors.filesPart.showDetails();
+			if (group && code && this.reopenFilesDetails) editors.filesPart.showDetails();
 			this.showPart('editor');
 		});
 		if (this.isSidePaneVisible()) {

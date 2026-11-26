@@ -171,7 +171,7 @@ registerAction2(class NewDocumentAction extends Action2 {
 			id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), icon: Lxicon.fileText, f1: true, precondition: chatWorkspace,
 			menu: [
 				{ id: MenuId.MenubarFileMenu, when: chatWorkspace, group: '1_file', order: -0.5 },
-				{ id: Menus.SessionsEditorStart, when: chatWorkspace, group: 'navigation', order: 1 },
+				{ id: Menus.EmptyFileEditorActions, when: chatWorkspace, group: 'navigation', order: 1 },
 			],
 		});
 	}

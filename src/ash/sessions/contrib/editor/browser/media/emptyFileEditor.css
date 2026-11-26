@@ -1,4 +1,4 @@
-.ash-editor-start {
+.ash-empty-file-editor {
 	box-sizing: border-box;
 	display: flex;
 	block-size: 100%;
@@ -6,38 +6,38 @@
 	padding: var(--ash-spacing-size240);
 }
 
-.ash-editor-start-content {
+.ash-empty-file-editor-content {
 	display: grid;
 	gap: var(--ash-spacing-size240);
 	inline-size: min(100%, 400px);
 	margin: auto;
 }
 
-.ash-editor-start-search {
+.ash-empty-file-editor-search {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-editor-start-search > .ash-input-box {
+.ash-empty-file-editor-search > .ash-input-box {
 	flex: 1;
 	min-inline-size: 0;
 }
 
-.ash-editor-start-shortcuts h2 {
+.ash-empty-file-editor-shortcuts h2 {
 	margin: 0 0 var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-editor-start-actions {
+.ash-empty-file-editor-actions {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-editor-start-actions > .ash-button {
+.ash-empty-file-editor-actions > .ash-button {
 	justify-content: flex-start;
 	min-inline-size: 0;
 }

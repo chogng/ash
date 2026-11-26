@@ -180,7 +180,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	const existingPaletteIds = paletteIds();
 	const registerEntryActions = () => {
 		const registrations = new DisposableStore();
-		registrations.add(registerDesktopEditorLayoutActions(controller, context, contextKeys, layout, editor));
+		registrations.add(registerDesktopEditorLayoutActions(controller, context, contextKeys, layout, editor, async () => { effects.push('chat files'); }));
 		registrations.add(registerChangesEditorTitleActions(editor));
 		registrations.add(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
 		registrations.add(registerSessionsModalEditorActions(editor, () => context.isDocumentContent));
@@ -324,6 +324,9 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.hideTool']);
 	contextKeys.setContext('sessions.editorHasMultipleTools', false);
 	assert.deepEqual(headerActions(), []);
+	assert.deepEqual(addTabLabels(), ['Open Files']);
+	await commands.executeCommand(NEW_FILE_TAB_COMMAND_ID);
+	assert.equal(effects.pop(), 'chat files');
 	contextKeys.setContext('sessions.chatConversationPage', false);
 	contextKeys.setContext('sessions.editorHasMultipleTools', true);
 	assert.deepEqual(layoutTitleActions(), []);

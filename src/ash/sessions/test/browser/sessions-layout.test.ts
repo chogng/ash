@@ -10,6 +10,8 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
@@ -43,6 +45,8 @@ const { InstantiationService } = await import('../../../platform/instantiation/c
 const { ILayoutService } = await import('../../../platform/layout/browser/layoutService.js');
 const { DesktopExistingSessionStrategy } = await import('../../contrib/layout/browser/desktop/desktopExistingSessionStrategy.js');
 const { DesktopMainEditorPart } = await import('../../browser/parts/desktopEditorPart.js');
+const { EmptyFileEditor } = await import('../../contrib/editor/browser/emptyFileEditor.js');
+await import('../../contrib/editor/browser/emptyFileEditor.contribution.js');
 const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
@@ -102,6 +106,9 @@ test('opening Files creates one tab and reuses its owned AuxiliaryBarPart', asyn
 	using resources = new (await import('../../../base/common/lifecycle.js')).DisposableStore();
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
 	registerDesktopDetailsTestServices(resources, services);
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
+	services.registerInstance(IOpenerService, { open: async () => false } as unknown as IOpenerService);
+	services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
 	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, {});
 	let created = 0;
 	class TestDetailsView extends ViewPane {
@@ -121,7 +128,7 @@ test('opening Files creates one tab and reuses its owned AuxiliaryBarPart', asyn
 	const group = editor.activeGroup;
 	await editor.openFiles();
 	assert.deepEqual(group.inputs.map(input => input.resource.scheme), ['ash-sessions-files']);
-	assert.ok(group.activePane);
+	assert.ok(group.activePane instanceof EmptyFileEditor);
 	assert.equal(group.domNode.querySelector('[role="tab"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(editor.detailsOpen, true);
 	assert.equal(editor.auxiliaryBar, auxiliary);
@@ -142,11 +149,15 @@ test('opening Files creates one tab and reuses its owned AuxiliaryBarPart', asyn
 	const saved = editor.saveWorkingSet('legacy-files', [editor.pageGroupId]);
 	await editor.applyWorkingSet({
 		...saved, groups: saved.groups.map(group => ({
-			...group, activeEditorIndex: 0,
-			editors: [{ input: { typeId: 'sessions.editorInput.files', value: {} }, paneId: 'ash.sessions.emptyFileEditor', preview: false }],
+			...group, activeEditorIndex: 1,
+			editors: [
+				{ input: { typeId: 'sessions.editorInput.files', value: {} }, paneId: 'ash.sessions.emptyFileEditor', preview: false },
+				{ input: { typeId: 'sessions.editorInput.newTab', value: {} }, paneId: 'ash.sessions.editorStart', preview: false },
+			],
 		}))
 	}, { preserveGroups: [editor.pageGroupId] });
 	assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.scheme), ['ash-sessions-files']);
+	assert.ok(editor.activeGroup.activePane instanceof EmptyFileEditor);
 	editor.hideDetails();
 	assert.equal(editor.detailsOpen, false);
 	assert.equal(editor.auxiliaryBar, auxiliary);
