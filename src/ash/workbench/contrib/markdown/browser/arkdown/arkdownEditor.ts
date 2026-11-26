@@ -1,5 +1,5 @@
 import './media/arkdownEditor.css';
-import './arkdownColors.js';
+import { applyArkdownThemeColors } from './arkdownColors.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Checkbox } from '../../../../../base/browser/ui/toggle/toggle.js';
@@ -122,6 +122,7 @@ export class ArkdownEditor extends Disposable {
 		this.mode = mode;
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div', { className: 'stanza-arkdown-editor' });
+		applyArkdownThemeColors(this.domNode);
 		this.prose = h(document, 'div', { className: 'stanza-arkdown-prose', attributes: { role: 'textbox', 'aria-multiline': 'true', 'aria-label': localize({ bundle: 'ash.arkdown', key: 'documentBody' }, 'Document body'), 'data-arkdown-engine': 'wasm' } });
 		this.source = document.createElement('div');
 		this.source.className = 'stanza-arkdown-source';

@@ -32,7 +32,6 @@ import { TestConfigurationService } from '../../../workbench/services/configurat
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
-import { registerSessionsTerminalContribution } from '../../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { TitlebarPart } from '../../browser/parts/titlebarPart.js';
@@ -299,7 +298,6 @@ test('Sessions titlebar initializes localized actions and closes the application
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService), constObservable(false));
-	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const openMenus = (): number => browser.window.document.querySelectorAll('.ash-context-view [role="menu"]').length;
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
@@ -346,12 +344,12 @@ test('Sessions titlebar initializes localized actions and closes the application
 		menuButton().click();
 
 		assert.equal(openMenus(), 1);
-		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle terminal', 'More Actions']);
+		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(openMenus(), 0);
 		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
-		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle terminal', 'More Actions']);
+		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code']);
 		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
 		sidebarToggle.click();
 		assert.equal(systemMenuTitlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!.getAttribute('aria-pressed'), 'false');

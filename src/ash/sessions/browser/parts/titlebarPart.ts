@@ -19,7 +19,7 @@ import { activityBarPositionCommandPrefix, Menus } from '../menus.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { IsNewSessionContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { autorun, observableFromEvent } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
@@ -126,14 +126,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this._register(autorun(reader => {
 			this.domNode.classList.toggle('ash-sessions-titlebar-code', activeMode.read(reader) === 'code');
 		}));
-		const draftKeys = new Set([IsNewSessionContext.key]);
-		const updateDraftState = (): void => {
-			this.domNode.classList.toggle('is-new-session', contextKeys.getValue(IsNewSessionContext.key) === true);
-		};
-		this._register(contextKeys.onDidChangeContext(event => {
-			if (event.affectsSome(draftKeys)) updateDraftState();
-		}));
-		updateDraftState();
 		const modeHost = h(container.ownerDocument, 'div');
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
@@ -215,9 +207,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
-						// With no conversation, tabs and layout actions share the remaining width.
-						const sharesEditorWidth = !this.editorRegion.hidden && this.domNode.classList.contains('conversation-hidden') && this.domNode.classList.contains('has-editor-region');
-						const editorRegionWidth = sharesEditorWidth ? this.minimumEditorRegionWidth : this.editorRegion.getBoundingClientRect().width;
+						const editorRegionWidth = this.editorRegion.getBoundingClientRect().width;
 						const centerWidth = center.getClientRects().length ? Math.max(horizontalPadding(center), pixels(ownerWindow.getComputedStyle(center).minWidth)) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
@@ -248,27 +238,23 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorRegion, this.sidePaneActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
-	public layoutEditorRegion(left: number | undefined, page: HTMLElement | undefined, conversationVisible: boolean, setTabsHost: (host: HTMLElement | undefined) => void): void {
+	public layoutEditorRegion(left: number | undefined, page: HTMLElement | undefined, conversationVisible: boolean): void {
 		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
 		const row = this.contentDomNode;
 		const navigationEnd = this.leftControls.getBoundingClientRect().right;
 		const rightActionsWidth = this.activityActions.element.offsetWidth;
 		const canFitBesideConversation = left !== undefined && left - navigationEnd >= this.minimumEditorRegionWidth + rightActionsWidth;
-		const start = left !== undefined && (page || !conversationVisible || canFitBesideConversation)
+		const start = left !== undefined && (page || canFitBesideConversation)
 			? Math.max(left, navigationEnd + (page ? this.rightControls.offsetWidth : 0)) : undefined;
 		const availableWidth = start === undefined ? 0 : Math.max(0, row.getBoundingClientRect().right - start);
 		this.domNode.classList.toggle('has-editor-region', availableWidth > 0 && !page);
 		const windowInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) || 0;
 		const width = Math.max(0, availableWidth - windowInset - this.sidePaneActions.element.offsetWidth);
-		const hostTabs = !page && width - (conversationVisible ? 0 : rightActionsWidth) >= this.minimumEditorRegionWidth;
-		// Move focused tabs back while their old host is still visible.
-		if (!hostTabs) setTabsHost(undefined);
 		if (page && this.editorRegion.firstElementChild !== page) this.editorRegion.replaceChildren(page);
 		else if (!page && this.domNode.classList.contains('has-editor-page-header')) this.editorRegion.firstElementChild?.remove();
-		this.editorRegion.hidden = width === 0 || (!conversationVisible && !page && !hostTabs);
+		this.editorRegion.hidden = width === 0;
 		this.domNode.classList.toggle('has-editor-page-header', !!page);
 		this.editorRegion.style.flexBasis = `${width}px`;
-		if (hostTabs) setTabsHost(this.editorRegion);
 	}
 
 	public override updateStyles(): void {

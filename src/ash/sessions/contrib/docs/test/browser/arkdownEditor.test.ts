@@ -13,6 +13,19 @@ suite('Arkdown document editing', () => {
 		await browser.page.evaluate(({ source, mode }) => window.arkdownFixture.mount(source, mode), { source, mode });
 	};
 
+	test('existing document theme colors update the visible table header and inline text', async () => {
+		await mount('<span data-text-color="red">Marked text</span>\n\n| Heading |\n| --- |\n| Cell |');
+		const header = browser.page.getByRole('columnheader', { name: 'Heading', exact: true });
+		const markedText = browser.page.getByText('Marked text', { exact: true });
+
+		await browser.page.locator('#root').evaluate(root => {
+			root.style.setProperty('--ash-sessions-docs-tableHeaderBackground', '#f0e6ff');
+			root.style.setProperty('--ash-sessions-docs-textRed', '#9a2530');
+		});
+		await expect(header).toHaveCSS('background-color', 'rgb(240, 230, 255)');
+		await expect(markedText).toHaveCSS('color', 'rgb(154, 37, 48)');
+	});
+
 	test('select all replaces leading and trailing atomic content and Markdown block syntax', async () => {
 		await browser.page.route('https://docs-assets.test/**', route => route.abort());
 		const dropdown = '```ash-dropdown\n{"label":"Status","options":["Todo","Done"],"selected":0}\n```';

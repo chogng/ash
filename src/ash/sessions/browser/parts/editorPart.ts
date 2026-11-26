@@ -157,9 +157,6 @@ export class EditorArea extends Part {
 	private readonly gridConstraints = this._register(new MutableDisposable());
 	private reportedMinimum = new Dimension(EDITOR_PART_MINIMUM_WIDTH, 120);
 	private readonly views = new Map<DesktopEditorTool, ToolPartView>();
-	private readonly titlebarToolChanged = this._register(new Emitter<void>());
-	public readonly onDidChangeTitlebarTool = this.titlebarToolChanged.event;
-	private topTool: DesktopEditorTool | undefined;
 	private dimension: IDimension = new Dimension(0, 0);
 	private desired = new Set<DesktopEditorTool>();
 	private contentAvailable = false;
@@ -188,12 +185,6 @@ export class EditorArea extends Part {
 		this._register(toDisposable(() => this.multipleToolsContext.reset()));
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
-		this._register(addDisposableListener(container.ownerDocument, 'keydown', event => {
-			const target = event.target;
-			if (!(target instanceof container.ownerDocument.defaultView!.Element) || !target.closest('.ash-editor-tab-strip-hosted')) return;
-			const view = this.topTool && this.views.get(this.topTool);
-			if (view) this.moveToolFromHeader(event, view);
-		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(SessionsConfiguration.layoutStyle)) return;
 			for (const [tool, view] of this.views) {
@@ -292,18 +283,6 @@ export class EditorArea extends Part {
 	public get hasTools(): boolean { return this.desired.size > 0; }
 	public get hasContent(): boolean { return this.contentAvailable; }
 	public get hasProductPage(): boolean { return this.domNode.classList.contains('has-product-page'); }
-
-	/** A strip can use the titlebar region when its tool owns the full top edge. */
-	public get titlebarTool(): DesktopEditorTool | undefined { return this.topTool; }
-
-	private updateTitlebarTool(): void {
-		const grid = this.grid.value;
-		const tool = grid && [...this.views.values()].find(view => this.isToolVisible(view.partId)
-			&& [Direction.Up, Direction.Left, Direction.Right].every(direction => !grid.getNeighborViews(view, direction).length))?.partId;
-		if (this.topTool === tool) return;
-		this.topTool = tool;
-		this.titlebarToolChanged.fire();
-	}
 
 	private get currentTool(): DesktopEditorTool | undefined {
 		return this.active ?? this.desired.values().next().value;
@@ -569,7 +548,6 @@ export class EditorArea extends Part {
 			this.updatingVisibility = false;
 		}
 		this.publishMinimumSize();
-		this.updateTitlebarTool();
 	}
 
 	private withDesiredVisibility(node: SerializedGridDescriptor): SerializedGridDescriptor {
@@ -646,7 +624,6 @@ export class EditorArea extends Part {
 		this.manuallyArranged = true;
 		const focused = this.domNode.ownerDocument.activeElement;
 		this.grid.value!.moveView(this.views.get(tool)!, Sizing.Split, this.views.get(target)!, direction);
-		this.updateTitlebarTool();
 		if (focused instanceof this.domNode.ownerDocument.defaultView!.HTMLElement && focused.isConnected) { focused.focus(); }
 	}
 
@@ -744,6 +721,5 @@ export class EditorArea extends Part {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.grid.value?.layout(dimension.width, dimension.height);
-		this.updateTitlebarTool();
 	}
 }

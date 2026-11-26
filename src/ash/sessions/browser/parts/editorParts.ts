@@ -259,12 +259,6 @@ export class EditorParts extends WorkbenchEditorParts {
 		return restored;
 	}
 	public get mainWindowGroups(): readonly IEditorGroupView[] { return [...this.hosts.values()].flatMap(part => part.groups); }
-	public get titlebarTabsGroup(): IEditorGroupView | undefined {
-		const tool = this.area.titlebarTool;
-		const part = tool && this.hosts.get(tool);
-		const groups = part && part.groups.filter(group => group.id !== this.pageGroupId && part.isGroupVisible(group.id));
-		return groups && groups.length === 1 ? groups[0] : undefined;
-	}
 	public get filesDetailsOpen(): boolean { return this.filesPart.detailsOpen; }
 	public get filesDetailsVisible(): boolean { return this.filesPart.detailsVisible; }
 	public get fileEditorsVisible(): boolean {

@@ -338,10 +338,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		if (options.onDidActivate) {
 			this._register(addDisposableListener(this.domNode, 'focusin', options.onDidActivate));
-			const strip = this.titleControl.tabStrip;
-			if (strip) this._register(addDisposableListener(strip, 'focusin', () => {
-				if (!this.domNode.contains(strip)) options.onDidActivate?.();
-			}));
 		}
 		this._register(this.titleControl.onDidChangeHeight(() => {
 			this.panes.setToolbarHost(this.titleControl.editorToolbarHost);
@@ -1005,10 +1001,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 	}
 
-	public setTabStripHost(host: HTMLElement | undefined): void { this.titleControl.setTabStripHost(host); }
-
 	public containsFocus(element: Element | null): boolean {
-		return this.domNode.contains(element) || !!this.titleControl.tabStrip?.contains(element);
+		return this.domNode.contains(element);
 	}
 
 	public setContentRightInset(inset: number): void {

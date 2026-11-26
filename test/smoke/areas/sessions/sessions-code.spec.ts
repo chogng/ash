@@ -112,13 +112,13 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(tabs).toHaveCount(1);
 		const browser = page.locator('[data-editor-tool="browser"]');
 		const titleTabs = page.locator('[data-part="titlebar"]').getByRole('tab', { name: copy.browser, exact: true });
-		await expect(titleTabs).toHaveCount(1);
-		await expect(browser.getByRole('tab', { name: copy.browser, exact: true })).toHaveCount(0);
+		await expect(titleTabs).toHaveCount(0);
+		await expect(browser.getByRole('tab', { name: copy.browser, exact: true })).toHaveCount(1);
 		const toolbar = browser.locator('.ash-editor-group-header > .ash-editor-pane-toolbar-host .ash-browser-toolbar');
 		const address = toolbar.getByRole('textbox', { name: locale === 'zh-CN' ? '浏览器地址' : 'Browser address', exact: true });
 		await expect(address).toBeVisible();
 		await expect(address).toHaveAccessibleDescription(locale === 'zh-CN' ? /打开浏览器帮助/ : /for browser help/);
-		const firstAddress = await address.elementHandle();
+		const firstAddress = (await address.elementHandle())!;
 		await expect(browser.locator('.ash-browser-editor .ash-browser-toolbar:visible')).toHaveCount(0);
 		const blankPage = browser.locator('.ash-browser-welcome');
 		const historyButton = blankPage.getByRole('button', { name: copy.history, exact: true });
@@ -136,7 +136,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.fill(copy.newTab);
 		await search.press('Enter');
 		await expect(tabs).toHaveCount(2);
-		await expect(titleTabs).toHaveCount(2);
+		await expect(titleTabs).toHaveCount(0);
 		await expect(address).toHaveCount(1);
 		await expect.poll(() => firstAddress.evaluate(element => ({
 			hosted: !!element.closest('.ash-editor-pane-toolbar-host'),
@@ -147,7 +147,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(ids).toHaveLength(2);
 		await page.reload();
 		await expect(tabs).toHaveCount(2);
-		await expect(titleTabs).toHaveCount(2);
+		await expect(titleTabs).toHaveCount(0);
 		expect((await readPages()).map(view => view.id).sort()).toEqual(ids);
 		await commands.runCommand('workbench.action.browser.quickOpen');
 		await search.fill('about:blank');
@@ -329,9 +329,9 @@ test('Code keeps Files open until its tab closes', async ({ application, target,
 	const editor = () => page.locator('[data-part="editor"]');
 	const files = () => editor().locator('.ash-desktop-auxiliarybar');
 	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
-	const header = () => editor().locator('[data-editor-tool=files] .ash-editor-group-header:visible').first();
+	const header = () => editor().locator('[data-editor-tool=files] .ash-editor-group-header:visible');
 	await expect(files()).toBeVisible();
-	await expect(header()).toHaveCount(0);
+	await expect(header()).toHaveCount(1);
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
@@ -340,13 +340,13 @@ test('Code keeps Files open until its tab closes', async ({ application, target,
 	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
 	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
 	await expect(files()).toBeVisible();
-	await expect(header()).toHaveCount(0);
+	await expect(header()).toHaveCount(1);
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	page = await workbench.reopenAgentsWindow(application, page);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(files()).toBeVisible();
 	await expect(editor()).toBeVisible();
-	await expect(header()).toHaveCount(0);
+	await expect(header()).toHaveCount(1);
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await testInfo.attach('code-group-file-navigation', { body: await page.screenshot(), contentType: 'image/png' });

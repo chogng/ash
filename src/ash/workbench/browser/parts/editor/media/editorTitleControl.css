@@ -130,15 +130,8 @@
 	align-self: center;
 }
 
-.ash-editor-tab-strip:not(.ash-editor-tab-strip-hosted, [hidden]) {
+.ash-editor-tab-strip:not([hidden]) {
 	display: contents;
-}
-
-.ash-editor-tab-strip-hosted:not([hidden]) {
-	display: flex;
-	min-width: 0;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
 }
 
 .ash-editor-tab-strip > .ash-editor-tabs-control {

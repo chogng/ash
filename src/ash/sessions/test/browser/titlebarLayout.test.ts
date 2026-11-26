@@ -85,17 +85,18 @@ suite('Sessions native titlebar layout', () => {
 		const conversation = page.locator('[data-part="sessions"]');
 		const editor = page.locator('[data-part="editor"]');
 		const editorRegion = titlebar.locator('.ash-sessions-titlebar-editor-region');
-		const newTabLabel = page.locator('.ash-editor-tab-strip:visible').getByRole('tab', { name: '新标签页', exact: true });
+		const newTabLabel = editor.getByRole('tab', { name: '新标签页', exact: true });
 		const emptyFileSearch = editor.getByRole('textbox', { name: '搜索文件或输入 URL', exact: true });
-		const addTab = page.locator('.ash-editor-tab-strip:visible').getByRole('button', { name: '添加标签页', exact: true });
+		const addTab = editor.getByRole('button', { name: '添加标签页', exact: true });
 		const expectEditorTab = async (): Promise<void> => {
 			await expect(newTabLabel).toBeVisible();
 			await expect(newTabLabel).toHaveAttribute('aria-selected', 'true');
-			await expect(page.locator('.ash-editor-tab-strip:visible').getByRole('tab')).toHaveCount(1);
+			await expect(editor.getByRole('tab')).toHaveCount(1);
+			await expect(titlebar.getByRole('tab')).toHaveCount(0);
 			await expect(addTab).toBeVisible();
 			await expect.poll(async () => {
 				const [tab, pane] = await Promise.all([newTabLabel.boundingBox(), editor.boundingBox()]);
-				return !!tab && !!pane && tab.x >= pane.x;
+				return !!tab && !!pane && tab.y >= pane.y && tab.x >= pane.x;
 			}).toBe(true);
 		};
 		await expectCenteredTitlebarIcon(toggle);
@@ -125,6 +126,7 @@ suite('Sessions native titlebar layout', () => {
 		await maximize.press('Enter');
 		await expect(conversation).toBeHidden();
 		await expectEditorTab();
+		await expect(editorRegion).toBeHidden();
 		await expect(restore).toBeFocused();
 		await expect(restore).toHaveAttribute('aria-pressed', 'true');
 		await expect.poll(() => restore.boundingBox()).toEqual(maxBounds);
@@ -228,14 +230,14 @@ suite('Sessions native titlebar layout', () => {
 		await expect(open.getByRole('button', { name: '侧边聊天', exact: true })).toBeEnabled();
 		await expect(open.getByRole('button', { name: 'iOS 模拟器', exact: true })).toBeDisabled();
 		await expect(searchButton).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: '新标签页', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.getByRole('tab', { name: '新标签页', exact: true })).toHaveAttribute('aria-selected', 'true');
 		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
 		await expect(more).toHaveCount(0);
 		await searchButton.click();
 		await expect(page.locator('[data-editor-tool="search"] .ash-search-editor:visible')).toBeVisible();
 		await expect(open).toBeHidden();
-		await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: '搜索编辑器', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.getByRole('tab', { name: '文件', exact: true })).toHaveCount(0);
+		await expect(editor.getByRole('tab', { name: '搜索编辑器', exact: true })).toHaveAttribute('aria-selected', 'true');
 	});
 
 	test('Code Add Tab replaces the selected launcher in place beside existing tabs', async () => {
@@ -255,11 +257,11 @@ suite('Sessions native titlebar layout', () => {
 		const filePicker = editor.getByRole('textbox', { name: '搜索文件或输入 URL', exact: true });
 		await expect(filePicker).toBeFocused();
 		await filePicker.click({ trial: true });
-		const tabs = page.locator('.ash-editor-tab-strip:visible').getByRole('tab');
+		const tabs = editor.getByRole('tab');
 		await expect(tabs).toHaveText(['新标签页']);
 		await editor.getByRole('button', { name: '新建文件', exact: true }).click();
 		await expect(tabs).toHaveText(['Untitled-1']);
-		const addTab = page.locator('.ash-editor-tab-strip:visible').getByRole('button', { name: '添加标签页', exact: true });
+		const addTab = editor.getByRole('button', { name: '添加标签页', exact: true });
 		await addTab.press('Enter');
 		await expect(tabs).toHaveText(['Untitled-1', '新标签页']);
 		await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');

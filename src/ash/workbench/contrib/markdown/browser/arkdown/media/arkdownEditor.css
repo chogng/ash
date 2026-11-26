@@ -130,15 +130,14 @@
 	box-sizing: border-box;
 	min-width: 48px;
 	max-width: 42ch;
-	border: var(--ash-strokeThickness) solid
-		var(--ash-sessions-docs-tableBorder);
+	border: var(--ash-strokeThickness) solid var(--ash-arkdown-tableBorder);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
 	text-align: start;
 	vertical-align: top;
 }
 
 .stanza-arkdown-prose th {
-	background: var(--ash-sessions-docs-tableHeaderBackground);
+	background: var(--ash-arkdown-tableHeaderBackground);
 	font-weight: inherit;
 }
 
@@ -156,44 +155,44 @@
 
 .stanza-arkdown-prose .ash-arkdown-cell-gray {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellGray),
-		var(--ash-sessions-docs-cellGray)
+		var(--ash-arkdown-cellGray),
+		var(--ash-arkdown-cellGray)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-red {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellRed),
-		var(--ash-sessions-docs-cellRed)
+		var(--ash-arkdown-cellRed),
+		var(--ash-arkdown-cellRed)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-orange {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellOrange),
-		var(--ash-sessions-docs-cellOrange)
+		var(--ash-arkdown-cellOrange),
+		var(--ash-arkdown-cellOrange)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-yellow {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellYellow),
-		var(--ash-sessions-docs-cellYellow)
+		var(--ash-arkdown-cellYellow),
+		var(--ash-arkdown-cellYellow)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-green {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellGreen),
-		var(--ash-sessions-docs-cellGreen)
+		var(--ash-arkdown-cellGreen),
+		var(--ash-arkdown-cellGreen)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-blue {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellBlue),
-		var(--ash-sessions-docs-cellBlue)
+		var(--ash-arkdown-cellBlue),
+		var(--ash-arkdown-cellBlue)
 	);
 }
 .stanza-arkdown-prose .ash-arkdown-cell-purple {
 	background-image: linear-gradient(
-		var(--ash-sessions-docs-cellPurple),
-		var(--ash-sessions-docs-cellPurple)
+		var(--ash-arkdown-cellPurple),
+		var(--ash-arkdown-cellPurple)
 	);
 }
 .stanza-arkdown-prose pre {
@@ -205,24 +204,24 @@
 }
 
 .stanza-arkdown-prose .ash-arkdown-text-red {
-	color: var(--ash-sessions-docs-textRed);
+	color: var(--ash-arkdown-textRed);
 }
 .stanza-arkdown-prose .ash-arkdown-text-yellow {
-	color: var(--ash-sessions-docs-textYellow);
+	color: var(--ash-arkdown-textYellow);
 }
 .stanza-arkdown-prose .ash-arkdown-text-green {
-	color: var(--ash-sessions-docs-textGreen);
+	color: var(--ash-arkdown-textGreen);
 }
 .stanza-arkdown-prose .ash-arkdown-text-teal {
-	color: var(--ash-sessions-docs-textTeal);
+	color: var(--ash-arkdown-textTeal);
 }
 .stanza-arkdown-prose .ash-arkdown-text-purple {
-	color: var(--ash-sessions-docs-textPurple);
+	color: var(--ash-arkdown-textPurple);
 }
 
 .stanza-arkdown-prose mark {
 	color: inherit;
-	background: var(--ash-sessions-docs-highlightBackground);
+	background: var(--ash-arkdown-highlightBackground);
 	border-radius: var(--ash-cornerRadius-xSmall);
 }
 
@@ -435,7 +434,7 @@
 	text-decoration: underline var(--ash-charts-yellow);
 }
 .ash-arkdown-comment {
-	background: var(--ash-sessions-docs-commentBackground, transparent);
+	background: var(--ash-arkdown-commentBackground, transparent);
 	text-decoration: underline;
 	text-decoration-color: var(--ash-accent-foreground);
 	text-underline-offset: 3px;
@@ -453,10 +452,10 @@
 }
 .ash-arkdown-conflict:not([hidden]) {
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
-	background: var(--ash-editorWidget-background);
-	color: var(--ash-editorWidget-foreground);
+	background: var(--ash-dialog-background);
+	color: var(--ash-editor-foreground);
 	border-block-end: var(--ash-strokeThickness) solid
-		var(--ash-editorWidget-border);
+		var(--ash-contrastBorder, var(--ash-widget-border));
 	overflow-wrap: anywhere;
 }
 
@@ -466,7 +465,7 @@
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	border: var(--ash-strokeThickness) solid
-		var(--ash-input-border, var(--ash-editorWidget-border));
+		var(--ash-input-border, var(--ash-widget-border));
 	box-sizing: border-box;
 	inline-size: 100%;
 	margin-block-end: var(--ash-spacing-size80);

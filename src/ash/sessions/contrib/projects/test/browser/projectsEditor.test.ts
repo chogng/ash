@@ -907,7 +907,7 @@ suite('Projects toolbar', () => {
 					expect(Math.abs(titleBounds.y + titleBounds.height / 2 - searchBounds.y - searchBounds.height / 2)).toBeLessThan(1);
 					await search.click();
 					await expect(input).toBeFocused();
-					await expect(projects.locator('.ash-toolbar-search-field')).toHaveCSS('border-top-style', 'solid');
+					await expect(toolbar.locator('.ash-toolbar-search-field')).toHaveCSS('border-top-style', 'solid');
 					await expect
 						.poll(async () =>
 							toolbar

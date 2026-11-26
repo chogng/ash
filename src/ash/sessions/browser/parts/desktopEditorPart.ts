@@ -238,7 +238,6 @@ export class DesktopMainEditorPart extends EditorPart {
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
 			showHeader: true,
-			showHeaderFor: editor => !(editor instanceof EmptyFileEditorInput || editor instanceof NewTabEditorInput),
 			addTabCommand: NewTabCommandId,
 			showEditorToolbar: true,
 			menuIds: {

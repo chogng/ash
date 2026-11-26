@@ -1483,7 +1483,7 @@ suite('sessions browser component', () => {
 		await expect(conversation.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
 	});
 
-	test('Files and Changes share one titlebar tab list and keep their commands in the editor', async function () {
+	test('Files and Changes share an editor tab list with their commands', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost');
@@ -1492,8 +1492,8 @@ suite('sessions browser component', () => {
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const strip = titlebar.locator('.ash-sessions-titlebar-editor-region');
 		const editor = page.locator('[data-part="editor"]');
+		const strip = editor.locator('.ash-editor-tab-strip');
 		const files = strip.getByRole('tab', { name: 'Files', exact: true });
 		const changes = strip.getByRole('tab', { name: /^Changes\b/u });
 		for (const id of ['togglePanel', 'toggleChanges', 'toggleBrowser', 'toggleFiles']) {
@@ -1505,6 +1505,7 @@ suite('sessions browser component', () => {
 		const group = editor.locator('.ash-editor-group:not(.ash-code-page-group):visible');
 		const owner = await group.elementHandle();
 		await strip.getByRole('button', { name: 'Add Tab', exact: true }).press('Enter');
+		await expect(strip.getByRole('tab', { name: 'New Tab', exact: true })).toHaveAttribute('aria-selected', 'true');
 		await editor.getByRole('button', { name: 'Open Changes', exact: true }).click();
 		await expect(changes).toHaveAttribute('aria-selected', 'true');
 		await expect(files).toHaveAttribute('aria-selected', 'false');
@@ -1527,18 +1528,19 @@ suite('sessions browser component', () => {
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 
 		const titlebar = page.locator('[data-part="titlebar"]');
-		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
+		const tools = titlebar.getByRole('toolbar', { name: 'Conversation actions', exact: true });
 		const editor = page.locator('[data-part="editor"]');
 		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
 		await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!());
 		await expect(editor).toBeVisible();
 		await expect(editor.locator('[data-editor-tool]:visible')).toHaveCount(0);
 		await expect(titlebar.locator('[data-editor-tool]')).toHaveCount(0);
+		await expect(tools.getByRole('button', { name: 'Toggle session information', exact: true })).toBeVisible();
 		await expect.poll(async () => {
 			const actions = (await tools.boundingBox())!;
 			const split = (await editor.boundingBox())!;
 			return split.x - actions.x - actions.width;
-		}).toBeCloseTo(4, 0);
+		}).toBeGreaterThanOrEqual(0);
 		await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
 		await expect(editor.locator('.ash-sessions-changes-editor')).toBeVisible();
 	});
@@ -1990,7 +1992,7 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const sidePanel = titlebar.getByRole('toolbar', { name: 'Side panel', exact: true });
 		const togglePanel = sidePanel.getByRole('button', { name: 'Toggle Side Panel', exact: true });
-		const tab = titlebar.getByRole('tab', { name: 'report.pdf', exact: true });
+		const tab = editor.getByRole('tab', { name: 'report.pdf', exact: true });
 		const tabFrame = tab.locator('..');
 		await project.press('ArrowRight');
 		await expect(file).toBeVisible();
@@ -2009,10 +2011,11 @@ suite('sessions browser component', () => {
 		]).toEqual([8, 8, 8]);
 		await expect(togglePanel).toHaveAttribute('aria-pressed', 'true');
 		await expect(tab).toHaveAttribute('aria-selected', 'true');
+		await expect(titlebar.getByRole('tab')).toHaveCount(0);
 		await expect.poll(async () => {
-			const [tabBounds, toggleBounds] = await Promise.all([tabFrame.boundingBox(), togglePanel.boundingBox()]);
-			return { topOffset: tabBounds!.y - toggleBounds!.y, heightDifference: tabBounds!.height - toggleBounds!.height };
-		}).toEqual({ topOffset: 0, heightDifference: 0 });
+			const [tabBounds, editorBounds] = await Promise.all([tabFrame.boundingBox(), editor.boundingBox()]);
+			return !!tabBounds && !!editorBounds && tabBounds.y >= editorBounds.y;
+		}).toBe(true);
 		await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
 		await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 		await expect(conversation).toBeVisible();
@@ -2556,7 +2559,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-projects')).toHaveCSS('font-size', '14px');
 		const projectToolbar = page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('toolbar', { name: chinese ? '项目操作' : 'Project actions', exact: true });
 		await expect(projectToolbar.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true })).toHaveCSS('font-size', '14px');
-		await expect(page.locator('.ash-projects').getByRole('button', { name: 'Search project fixture', exact: true })).toHaveCSS('font-size', '14px');
+		await expect(page.locator('.ash-projects-view').getByRole('button', { name: 'Search project fixture', exact: true })).toHaveCSS('font-size', '14px');
 		await accounts.click();
 		await expect(settingsAction).toHaveCSS('font-size', '14px');
 		await settingsAction.click();

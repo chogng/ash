@@ -512,6 +512,42 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 	await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [{ ...ashFixtureModel, visible: true }] }), settings.revision);
 }
 
+test('shows the Code conversation separator after the first send', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+	const application = browser as ElectronApplication;
+	const requests: string[] = [];
+	await using catalog = createAshModelServer(requests);
+	await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const conversation = page.locator('[data-part="sessions"] .ash-sessions-chat-slot.active:visible');
+	const separatorWidth = () => conversation.evaluate(element => getComputedStyle(element, '::before').borderTopWidth);
+	await expect(conversation.locator('[data-untitled-session-id]')).toBeVisible();
+	await expect.poll(separatorWidth).toBe('0px');
+	await conversation.getByRole('group', { name: 'Recent projects', exact: true })
+		.getByRole('button', { name: basename(testWorkspace.directory), exact: true }).click();
+	await conversation.locator('.ash-chat-input-model-action').press('ArrowDown');
+	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	const automaticModel = picker.getByRole('switch', { name: 'Auto', exact: true });
+	if (await automaticModel.isChecked()) await automaticModel.press('Space');
+	await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
+	const composer = new Editor(conversation);
+	await composer.waitForEditorFocus();
+	await composer.waitForTypeInEditor('Test the Code conversation separator');
+	await expect.poll(separatorWidth).toBe('0px');
+	await conversation.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(conversation.locator('[data-session-id]')).toBeVisible();
+	await expect.poll(separatorWidth).toBe('1px');
+	await expect(conversation).toContainText('Answer from Ash');
+	expect(requests).toEqual([ashFixtureModel.model]);
+	const sessionId = (await conversation.locator('[data-session-id]').getAttribute('data-session-id'))!;
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(conversation.locator('[data-untitled-session-id]')).toBeVisible();
+	await expect.poll(separatorWidth).toBe('0px');
+	await page.locator(`[data-part="sidebar"] [data-item="session:${sessionId}"] .ash-sessions-list-item`).click();
+	await expect(conversation.locator('[data-session-id]')).toHaveAttribute('data-session-id', sessionId);
+	await expect.poll(separatorWidth).toBe('1px');
+});
+
 test.describe('Experimental ChatGPT desktop entry', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
 
@@ -2528,6 +2564,23 @@ test.describe('Ash project file copies', () => {
 		await expect(hideTool).toHaveCount(0);
 		await expect(toggle).toHaveAccessibleName('切换侧面板');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const sidePane = page.getByRole('toolbar', { name: '侧面板', exact: true });
+		const pdf = page.locator('.ash-sessions-pdf-preview:visible');
+		const pdfGroup = page.locator('.ash-editor-group').filter({ has: pdf });
+		const pdfHeader = pdfGroup.locator('.ash-editor-group-header');
+		const pdfControls = pdfHeader.locator(':scope > .ash-editor-pane-toolbar-host > .ash-sessions-pdf-controls');
+		await sidePane.getByRole('button', { name: '最大化侧面板', exact: true }).click();
+		await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+		await expect(pdfControls).toHaveAccessibleName('PDF 操作');
+		const title = (await titlebar.boundingBox())!;
+		const header = (await pdfHeader.boundingBox())!;
+		const tools = (await pdfControls.boundingBox())!;
+		expect(tools.y).toBeCloseTo(title.y + title.height, 0);
+		expect(tools.height).toBeCloseTo(header.height, 0);
+		await page.screenshot({ path: testInfo.outputPath('pdf-toolbar-chat-maximized.png') });
+		await sidePane.getByRole('button', { name: '还原侧面板大小', exact: true }).click();
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 		await openBrowser();
 		const browserPane = page.locator('.ash-tool-editor-workspace[data-editor-tool="browser"]');
 		await expect(browserPane).toBeVisible();
@@ -2544,24 +2597,23 @@ test.describe('Ash project file copies', () => {
 		expect(controlsBounds.y).toBeGreaterThanOrEqual(paneBounds.y);
 		expect(controlsBounds.y + controlsBounds.height).toBeLessThanOrEqual(paneBounds.y + paneBounds.height);
 		await page.screenshot({ path: testInfo.outputPath('chat-tool-controls.png') });
-		const titlebar = page.locator('[data-part="titlebar"]');
-		const titlebarTab = titlebar.getByRole('tab', { name: 'project-fixture.pdf', exact: true });
-		await expect(titlebarTab).toBeVisible();
-		const tab = await titlebarTab.elementHandle();
-		const tabTop = (await titlebarTab.boundingBox())!.y;
-		const sidePane = page.getByRole('toolbar', { name: '侧面板', exact: true });
+		await expect(titlebar.getByRole('tab', { name: 'project-fixture.pdf', exact: true })).toHaveCount(0);
+		const editorTab = pdfGroup.getByRole('tab', { name: 'project-fixture.pdf', exact: true });
+		await expect(editorTab).toBeVisible();
+		const tab = await editorTab.elementHandle();
+		const tabTop = (await editorTab.boundingBox())!.y;
 		await expect(browserControls.locator('[data-action-id="sessions.toggleSessionPart"]')).toHaveCount(0);
 		await sidePane.getByRole('button', { name: '最大化侧面板', exact: true }).click();
 		await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-		await expect(titlebarTab).toHaveAttribute('aria-selected', 'true');
-		expect((await titlebarTab.boundingBox())!.y).toBe(tabTop);
-		expect(await titlebarTab.evaluate((element, previous) => element === previous, tab)).toBe(true);
-		await page.screenshot({ path: testInfo.outputPath('pdf-maximized-titlebar.png') });
+		await expect(editorTab).toHaveAttribute('aria-selected', 'true');
+		expect((await editorTab.boundingBox())!.y).toBe(tabTop);
+		expect(await editorTab.evaluate((element, previous) => element === previous, tab)).toBe(true);
+		await page.screenshot({ path: testInfo.outputPath('pdf-maximized-editor.png') });
 		await sidePane.getByRole('button', { name: '还原侧面板大小', exact: true }).click();
 		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-		await expect(titlebarTab).toHaveAttribute('aria-selected', 'true');
-		expect((await titlebarTab.boundingBox())!.y).toBe(tabTop);
-		expect(await titlebarTab.evaluate((element, previous) => element === previous, tab)).toBe(true);
+		await expect(editorTab).toHaveAttribute('aria-selected', 'true');
+		expect((await editorTab.boundingBox())!.y).toBe(tabTop);
+		expect(await editorTab.evaluate((element, previous) => element === previous, tab)).toBe(true);
 		await toggle.press('Enter');
 		await expect(browserPane).toBeHidden();
 		await expect(fileTab).toBeHidden();
@@ -2755,6 +2807,39 @@ test.describe('ChatGPT project conversation title', () => {
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`ChatGPT initialization lifecycle in ${locale}`, () => {
 		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale, 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+		test('shows the Chat conversation separator once a conversation exists', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench }, testInfo) => {
+			const application = browser as ElectronApplication;
+			await installService(application);
+			const page = await workbench.openAgentsWindow(target.kind);
+			const titlebar = page.locator('[data-part="titlebar"]');
+			const conversation = page.locator('[data-part="sessions"] .ash-sessions-chat-slot:visible');
+			const separatorWidth = () => conversation.evaluate(element => getComputedStyle(element, '::before').borderTopWidth);
+			const chat = page.locator('.ash-chatgpt-widget');
+			const composer = new Editor(chat);
+			const history = page.getByRole('button', { name: 'First native history', exact: true });
+			await expect(history).toBeVisible();
+			await composer.waitForEditorFocus();
+			await expect.poll(separatorWidth).toBe('0px');
+			if (locale === 'zh-CN') await page.screenshot({ path: testInfo.outputPath('empty-chat.png') });
+			await composer.waitForTypeInEditor('Test the conversation title');
+			await expect.poll(separatorWidth).toBe('0px');
+			await chat.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
+			await expect(chat.locator('.ash-chat-item-agentMessage').last()).toContainText('First chunk');
+			await expect.poll(separatorWidth).toBe('1px');
+			await application.evaluate(() => globalThis.ashNativeFixture.advance());
+			await expect(chat.locator('.ash-chat-item-agentMessage').last()).toContainText('second chunk');
+			await application.evaluate(() => globalThis.ashNativeFixture.advance());
+			await expect(chat.locator('.ash-chat-item-agentMessage').last()).toContainText('complete');
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
+			await expect.poll(separatorWidth).toBe('0px');
+			await history.click();
+			await expect(chat).toContainText('History one answer');
+			await expect.poll(separatorWidth).toBe('1px');
+			await expect.poll(() => titlebar.evaluate(element => getComputedStyle(element, '::before').borderBottomWidth)).toBe('0px');
+			if (locale === 'zh-CN') await page.screenshot({ path: testInfo.outputPath('existing-chat.png') });
+		});
+
 		test('pasted images stay inside the ChatGPT composer and can be previewed and removed', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench }, testInfo) => {
 			const application = browser as ElectronApplication;
 			await installService(application);
