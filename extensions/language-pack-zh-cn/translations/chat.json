@@ -22,6 +22,8 @@
     "chat.subagent.waitingCapability": "等待所需能力",
     "chat.followups.suggested": "后续建议",
     "chat.planReview.help": "按 Tab 浏览提议的计划，或在无障碍视图中阅读。选择在编辑器中打开计划以添加行评论。也可以先填写总体反馈，再选择继续规划或批准并继续。",
+    "chat.computerUse.windowHeader": "电脑操作",
+    "chat.computerUse.windowQuestion": "选择一个窗口，允许智能体在本轮读取和操作该窗口。",
     "chat.followups.help": "在消息输入框按 Shift+Tab 前往后续建议。按 Enter 或空格将建议加入草稿。",
     "chat.subagent.openToSide": "在侧边打开",
     "chat.subagent.help": "子代理卡片显示最新状态和已返回的摘要。按 Tab 前往打开对话或在侧边打开，再按 Enter 或空格查看子会话。",

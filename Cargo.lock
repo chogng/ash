@@ -662,6 +662,7 @@ dependencies = [
  "ash-codebase",
  "ash-codebase-store",
  "ash-collab",
+ "ash-computer-use-protocol",
  "ash-config",
  "ash-connectors-extension",
  "ash-context-engine",
@@ -1273,6 +1274,27 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "ash-computer-use"
+version = "0.1.0"
+dependencies = [
+ "ash-computer-use-protocol",
+ "ash-external-ext",
+ "ash-external-ext-sdk",
+ "ash-screen-capture",
+ "base64 0.22.1",
+ "image",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
+name = "ash-computer-use-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

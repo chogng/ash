@@ -1,0 +1,26 @@
+[package]
+name = "ash-computer-use"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-computer-use"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+ash-computer-use-protocol.workspace = true
+ash-screen-capture.workspace = true
+base64.workspace = true
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+image = { workspace = true, features = ["png"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+ash-external-ext.workspace = true
+serde_json.workspace = true
+
+[lints.rust]
+# The crate root denies unsafe code outside its Windows platform module.
+unsafe_code = "allow"

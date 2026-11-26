@@ -106,6 +106,7 @@ def build_package_directory(
     lldb_extension_binary: Optional[Path] = None,
     javascript_debug_extension_binary: Optional[Path] = None,
     server_ready_extension_binary: Optional[Path] = None,
+    computer_use_binary: Optional[Path] = None,
 ) -> None:
     if git_extension_binary is None:
         raise RuntimeError("Git extension executable is required in product packages")
@@ -178,6 +179,10 @@ def build_package_directory(
         }
         if voice_host_binary is not None:
             executables["voiceHost"] = str(voice_host_binary)
+        if computer_use_binary is not None:
+            if spec.target != "x86_64-pc-windows-msvc" or node is not None:
+                raise ValueError("Computer Use requires a Windows x64 Desktop package")
+            executables["computerUse"] = str(computer_use_binary)
         if livekit is not None:
             executables["livekit"] = livekit["executable"]
         if livekit_client_binary is not None:

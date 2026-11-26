@@ -1297,7 +1297,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut mcp_policy = None;
     let mut dynamic_policy = None;
     let mut extension_policy = None;
-    let mut host_policy = None;
+    let mut host_policies = BTreeMap::new();
     let mut application_policy = None;
     let mut environment_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
@@ -1337,8 +1337,16 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             ToolPortKind::Extension if extension_policy.is_none() => {
                 extension_policy = Some(Arc::clone(&port.policy));
             }
-            ToolPortKind::Host if host_policy.is_none() => {
-                host_policy = Some(Arc::clone(&port.policy));
+            ToolPortKind::Host => {
+                let revision = port.policy.revision();
+                if host_policies
+                    .insert(revision.clone(), port.policy)
+                    .is_some()
+                {
+                    return Err(ToolCompositionError(format!(
+                        "duplicate product-hosted action policy revision: {revision}"
+                    )));
+                }
             }
             ToolPortKind::Local if local_policy.is_none() => {
                 local_policy = Some(Arc::clone(&port.policy));
@@ -1355,11 +1363,6 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             ToolPortKind::Extension => {
                 return Err(ToolCompositionError(
                     "multiple extension tool policy ports are not supported".into(),
-                ));
-            }
-            ToolPortKind::Host => {
-                return Err(ToolCompositionError(
-                    "multiple product-hosted policy ports are not supported".into(),
                 ));
             }
             ToolPortKind::Local => {
@@ -1475,7 +1478,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         policy: Arc::new(CompositeActionPolicyService {
             dynamic: dynamic_policy,
             extension: extension_policy,
-            host: host_policy,
+            host: host_policies,
             application: application_policy,
             environment: environment_policy,
             local: local_policy,
@@ -2235,27 +2238,30 @@ struct CompositeActionPolicyService {
     environment: Option<Arc<dyn ActionPolicyService>>,
     dynamic: Option<Arc<dyn ActionPolicyService>>,
     extension: Option<Arc<dyn ActionPolicyService>>,
-    host: Option<Arc<dyn ActionPolicyService>>,
+    host: BTreeMap<String, Arc<dyn ActionPolicyService>>,
     application: Option<Arc<dyn ActionPolicyService>>,
     local: Option<Arc<dyn ActionPolicyService>>,
     mcp: Option<Arc<dyn ActionPolicyService>>,
     search_enabled: bool,
 }
 
+impl CompositeActionPolicyService {
+    fn policies(&self) -> impl Iterator<Item = &Arc<dyn ActionPolicyService>> {
+        [&self.environment, &self.dynamic, &self.extension]
+            .into_iter()
+            .flatten()
+            .chain(self.host.values())
+            .chain(
+                [&self.application, &self.local, &self.mcp]
+                    .into_iter()
+                    .flatten(),
+            )
+    }
+}
+
 impl ActionPolicyService for CompositeActionPolicyService {
     fn check_approval_mode(&self, mode: ash_protocol::ApprovalMode) -> Result<(), CoreError> {
-        for policy in [
-            &self.environment,
-            &self.dynamic,
-            &self.extension,
-            &self.host,
-            &self.application,
-            &self.local,
-            &self.mcp,
-        ]
-        .into_iter()
-        .flatten()
-        {
+        for policy in self.policies() {
             policy.check_approval_mode(mode)?;
         }
         Ok(())
@@ -2267,18 +2273,7 @@ impl ActionPolicyService for CompositeActionPolicyService {
         thread: &ash_protocol::ThreadId,
     ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError> {
         let mut evidence = Vec::new();
-        for policy in [
-            &self.environment,
-            &self.dynamic,
-            &self.extension,
-            &self.host,
-            &self.application,
-            &self.local,
-            &self.mcp,
-        ]
-        .into_iter()
-        .flatten()
-        {
+        for policy in self.policies() {
             evidence.extend(policy.permission_context(session, thread)?);
         }
         Ok(evidence)
@@ -2309,9 +2304,15 @@ impl ActionPolicyService for CompositeActionPolicyService {
             self.extension
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
-            self.host
-                .as_ref()
-                .map_or_else(|| "none".into(), |policy| policy.revision()),
+            if self.host.is_empty() {
+                "none".into()
+            } else {
+                self.host
+                    .keys()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            },
             self.local
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
@@ -2337,6 +2338,7 @@ impl ActionPolicyService for CompositeActionPolicyService {
         if request.provenance().source_id() == MCP_SEARCH_TOOLS_NAME {
             return decide_mcp_catalog_search(request, cancellation);
         }
+        let revision = request.action_policy_revision().as_str();
         let policy = match request.provenance().source() {
             ActionSource::DynamicTool => self.dynamic.as_ref(),
             ActionSource::Plugin => self.extension.as_ref(),
@@ -2346,10 +2348,10 @@ impl ActionPolicyService for CompositeActionPolicyService {
                 self.application.as_ref()
             }
             ActionSource::BuiltInTool
-                if request.action_policy_revision().as_str()
-                    == crate::browser_tool::BROWSER_POLICY_REVISION =>
+                if self.host.contains_key(revision)
+                    || revision == crate::browser_tool::BROWSER_POLICY_REVISION =>
             {
-                self.host.as_ref()
+                self.host.get(revision)
             }
             ActionSource::BuiltInTool if request.provenance().source_id() == "environment" => {
                 self.environment.as_ref()

@@ -465,6 +465,7 @@ fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
     let tools = EnvToolPorts::new(
         Arc::new(UpdateBroker::default()),
         ToolPort::host(Arc::new(NoTools), Arc::new(RejectPolicy)).unwrap(),
+        None,
         ToolPort::application(Arc::new(NoTools), Arc::new(RejectPolicy)).unwrap(),
         None,
         None,

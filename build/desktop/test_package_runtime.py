@@ -4,8 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from build.desktop.package_runtime import build_desktop_runtime
+from build.lib.desktop_capabilities import stage_computer_use
 from build.lib.package import (
     file_sha256,
     record_system_signing,
@@ -14,9 +16,40 @@ from build.lib.package import (
 )
 from build.lib.package_test_support import create_runtime_package
 from build.lib.targets import target_spec
+from build.release.capabilities import validate_archive
 
 
 class DesktopRuntimeTests(unittest.TestCase):
+    def test_computer_use_is_staged_as_an_independent_release_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            spec = target_spec("x86_64-pc-windows-msvc")
+            desktop = root / "desktop"
+            resources = desktop / "ash-resources"
+            resources.mkdir(parents=True)
+            binary = root / "ash-computer-use.exe"
+            binary.write_bytes(b"native provider fixture")
+            archives = root / "archives"
+            kind = "desktop-computer-use"
+            with patch(
+                "build.lib.desktop_capabilities.build_binaries",
+                return_value={"ash-computer-use": binary},
+            ):
+                stage_computer_use(
+                    desktop,
+                    root / "staged",
+                    {"version": "0.0.0", "buildProfile": "release"},
+                    spec,
+                    archives,
+                )
+            descriptor = resources / "capabilities" / f"{kind}.json"
+            self.assertEqual(
+                [descriptor], [path for path in desktop.rglob("*") if path.is_file()]
+            )
+            release = json.loads(descriptor.read_text(encoding="utf-8"))
+            (archive,) = archives.glob("*.tar.gz")
+            validate_archive(archive, release, kind, spec.target)
+
     def test_network_remote_binding_is_verified_and_kept_without_remote_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

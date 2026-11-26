@@ -1242,6 +1242,7 @@ pub(crate) struct EnvToolPorts {
     reloadable: Arc<ReloadableToolPorts>,
     updates: Arc<UpdateBroker>,
     host: ToolPort,
+    desktop_tools: Option<ToolPort>,
     application: ToolPort,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
@@ -1297,6 +1298,7 @@ impl EnvToolPorts {
     fn new(
         updates: Arc<UpdateBroker>,
         host: ToolPort,
+        desktop_tools: Option<ToolPort>,
         application: ToolPort,
         environment: Option<ToolPort>,
         mcp: Option<ToolPort>,
@@ -1339,6 +1341,7 @@ impl EnvToolPorts {
             reloadable: ReloadableToolPorts::new(combined),
             updates,
             host,
+            desktop_tools,
             application,
             semantic_model_provider,
         }))
@@ -1447,6 +1450,11 @@ impl EnvToolPorts {
             .chain(next.environment.iter())
             .chain(next.dynamic.iter())
             .chain(next.host.iter())
+            .chain(
+                self.desktop_tools
+                    .iter()
+                    .filter(|_| next.executables_enabled),
+            )
             .chain(next.local.iter())
             .chain(next.mcp.iter())
             .cloned()
@@ -1731,6 +1739,14 @@ impl AppServer {
         let tools = EnvToolPorts::new(
             Arc::clone(&self.updates),
             self.browser_tool_port.clone(),
+            #[cfg(all(windows, target_arch = "x86_64"))]
+            super::computer_use::tool_port(
+                Arc::clone(&self.client_host),
+                Arc::clone(&self.calls),
+                self.home.as_deref(),
+            ),
+            #[cfg(not(all(windows, target_arch = "x86_64")))]
+            None,
             self.app_tool_port.clone(),
             self.execution_tool_port.clone(),
             mcp,

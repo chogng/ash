@@ -26,6 +26,7 @@ def desktop_capability_kinds() -> tuple[str, ...]:
     return (
         "desktop-typescript",
         "desktop-debug",
+        "desktop-computer-use",
         *(f"desktop-grammar-{name}" for name in grammars),
     )
 

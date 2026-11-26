@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "computer-use-protocol",
+    crate_name = "ash_computer_use_protocol",
+)

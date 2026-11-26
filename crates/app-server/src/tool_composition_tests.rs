@@ -56,7 +56,11 @@ fn registered_canvas_actions_use_the_browser_host_policy_without_a_browser_name_
         environment: None,
         dynamic: None,
         extension: None,
-        host: Some(Arc::new(crate::browser_tool::BrowserToolPolicy)),
+        host: [(
+            crate::browser_tool::BROWSER_POLICY_REVISION.into(),
+            Arc::new(crate::browser_tool::BrowserToolPolicy) as Arc<dyn ActionPolicyService>,
+        )]
+        .into(),
         application: None,
         local: None,
         mcp: None,

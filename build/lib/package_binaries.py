@@ -50,6 +50,7 @@ _BINARIES = {
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
+    "ash-computer-use": ("ash-computer-use", "--computer-use-bin"),
     "ash-remote-ssh-extension": (
         "ash-remote-ssh-extension",
         "--remote-ssh-extension-bin",
@@ -140,7 +141,12 @@ def build_binaries(
     if cargo_profile == "release" and "apple-darwin" in spec.target:
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
 
-    local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
+    local_hosts = {
+        "ash-computer-use",
+        "ash-livekit-client",
+        "ash-realtime-voice",
+        "ash-voice-host",
+    }
     if plan and cargo_profile == "dev-small":
         # The independently distributed Remote Server tracks its own Cargo inputs.
         local_hosts.add("ash-remote-server")

@@ -335,7 +335,7 @@ def publish_package(store: Path, package_store: Path, build) -> Path:
             shutil.rmtree(staging)
 
 
-def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
+def development_binary_inputs(spec: TargetSpec, *, desktop: bool) -> dict[str, None]:
     binaries = dict.fromkeys(
         [
             "ash-app-server",
@@ -364,6 +364,8 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
     if spec.is_windows:
         binaries["ash-windows-sandbox"] = None
         binaries["ash-windows-sandbox-service"] = None
+    if desktop and spec.target == "x86_64-pc-windows-msvc":
+        binaries["ash-computer-use"] = None
     if spec.is_linux:
         binaries["bwrap"] = None
     return binaries
@@ -387,7 +389,12 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             f"Reused Ash development package ({args.javascript_runtime}) at {existing}"
         )
         return existing
-    requested_binaries = {"ash-package-store": None, **development_binary_inputs(spec)}
+    requested_binaries = {
+        "ash-package-store": None,
+        **development_binary_inputs(
+            spec, desktop=args.javascript_runtime == "host-provided-node"
+        ),
+    }
     store.mkdir(parents=True, exist_ok=True)
     with exclusive_lock(store / "build-plan.lock", create=True):
         binaries = build_binaries(
@@ -592,6 +599,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             if args.javascript_runtime == "host-provided-node"
             else None,
             collaboration_server_binary=binaries["ash-collab-server"],
+            computer_use_binary=binaries.get("ash-computer-use"),
             livekit_package=livekit_package,
             media_package=media_package,
             remote_runtime_bundle=args.remote_runtime_bundle,

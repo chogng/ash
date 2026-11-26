@@ -390,6 +390,10 @@ class PrepareTests(unittest.TestCase):
                 path = root / name
                 path.write_text(name)
                 binaries[name] = path
+            if target == "x86_64-pc-windows-msvc":
+                provider = root / "ash-computer-use"
+                provider.write_text("ash-computer-use")
+                binaries["ash-computer-use"] = provider
             if spec.is_linux:
                 for name in ("ash-windows-sandbox", "ash-windows-sandbox-service"):
                     binaries.pop(name)
@@ -468,6 +472,10 @@ class PrepareTests(unittest.TestCase):
                 assemble.call_args.kwargs["voice_host_binary"],
             )
             self.assertIsNone(assemble.call_args.kwargs["media_package"])
+            self.assertEqual(
+                binaries.get("ash-computer-use"),
+                assemble.call_args.kwargs["computer_use_binary"],
+            )
             bubblewrap = assemble.call_args.args[14]
             if spec.is_linux:
                 self.assertEqual(binaries["bwrap"], bubblewrap.executable)

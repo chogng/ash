@@ -117,6 +117,8 @@ mod codebase_runtime;
 #[path = "server/request_processors/collaboration.rs"]
 mod collaboration_operations;
 mod collaboration_runtime;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod computer_use;
 #[path = "server/request_processors/configuration.rs"]
 mod config_operations;
 pub(crate) mod config_runtime;

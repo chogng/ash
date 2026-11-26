@@ -865,7 +865,19 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 				: request.type === 'permissions'
 					? { type: 'permissions', request: structuredClone(request.request) }
 					: request.type === 'userInput'
-						? { type: 'userInput', request: { ...request.request, questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
+						? {
+							type: 'userInput', request: {
+								...request.request, questions: request.request.questions.map(question => ({
+									...question,
+									...(question.id === 'ash.computerUse.window' && !question.allowFreeForm ? {
+										header: localize('chat.computerUse.windowHeader', 'Computer Use'),
+										question: localize('chat.computerUse.windowQuestion', 'Select a window to let the agent read and operate it for this turn.'),
+									} : undefined),
+									required: question.required ?? true,
+									options: question.options?.map(option => ({ ...option })),
+								}))
+							}
+						}
 						: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
 	};
 }

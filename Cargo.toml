@@ -58,10 +58,12 @@ members = [
     "crates/realtime-voice",
     "crates/system-dictation",
     "crates/screen-capture",
+    "crates/computer-use-protocol",
     "crates/agent-environment",
     "crates/agent-graph-store",
     "crates/github",
     "extensions/github-authentication",
+    "extensions/computer-use",
     "extensions/github",
     "extensions/remote-ssh",
     "extensions/academy",
@@ -621,6 +623,7 @@ ash-rollout-trace = { path = "crates/rollout-trace" }
 ash-rmcp-client = { path = "crates/rmcp-client" }
 ash-sandboxing = { path = "crates/sandboxing" }
 ash-screen-capture = { path = "crates/screen-capture" }
+ash-computer-use-protocol = { path = "crates/computer-use-protocol" }
 grep = { package = "ash-grep", path = "crates/grep" }
 arg0 = { package = "ash-arg0", path = "crates/arg0" }
 ash-secrets = { path = "crates/secrets" }

@@ -21,6 +21,7 @@ from build.lib.package_binaries import build_binaries
 from build.lib.desktop_capabilities import (
     split_debuggers,
     split_typescript,
+    stage_computer_use,
     stage_native_grammars,
 )
 from build.lib.targets import target_spec
@@ -165,6 +166,7 @@ def build_desktop_runtime(
             try:
                 split_typescript(output, staged, metadata, spec, capability_archives)
                 split_debuggers(output, staged, metadata, spec, capability_archives)
+                stage_computer_use(output, staged, metadata, spec, capability_archives)
                 stage_native_grammars(
                     output, staged, metadata, spec, capability_archives
                 )

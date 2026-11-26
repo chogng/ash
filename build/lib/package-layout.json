@@ -28,7 +28,8 @@
     "livekitClient": "bin/ash-livekit-client{exe}",
     "recognizer": "bin/ash-realtime-voice{exe}",
     "javascriptDebugExtension": "bin/ash-debug-javascript{exe}",
-    "serverReadyExtension": "bin/ash-debug-server-ready{exe}"
+    "serverReadyExtension": "bin/ash-debug-server-ready{exe}",
+    "computerUse": "bin/ash-computer-use{exe}"
   },
   "licenses": [
     {

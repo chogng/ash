@@ -10,6 +10,7 @@ from build.builtin import write_builtin_extension_index
 from build.lib.grammars import resolve_grammars_cargo_env
 from build.lib.media_package import DESKTOP_NATIVE_GRAMMARS, capability_release
 from build.lib.package import package_build_id, package_files
+from build.lib.package_binaries import build_binaries
 from build.lib.targets import TargetSpec
 
 
@@ -115,6 +116,26 @@ def split_debuggers(
         kind,
         f"bin/ash-debug-javascript{spec.executable_suffix}",
         archives,
+    )
+
+
+def stage_computer_use(
+    resources: Path, packages: Path, metadata: dict, spec: TargetSpec, archives: Path
+) -> None:
+    kind = "desktop-computer-use"
+    binary = build_binaries(
+        Path(__file__).resolve().parents[2],
+        spec,
+        {"ash-computer-use": None},
+        cargo="cargo",
+        cargo_profile=metadata["buildProfile"],
+    )["ash-computer-use"]
+    root = packages / kind
+    executable = Path("bin") / f"ash-computer-use{spec.executable_suffix}"
+    (root / executable).parent.mkdir(parents=True)
+    shutil.copy2(binary, root / executable)
+    write_capability(
+        resources, root, metadata, spec, kind, executable.as_posix(), archives
     )
 
 

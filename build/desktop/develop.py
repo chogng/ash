@@ -89,7 +89,7 @@ def build_development_server(
                 else build_binaries(
                     root,
                     spec,
-                    development_binary_inputs(spec),
+                    development_binary_inputs(spec, desktop=True),
                     cargo="cargo",
                     cargo_profile=PROFILE,
                     host_build=True,
