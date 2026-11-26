@@ -202,6 +202,16 @@ test('Agent Window copy feedback works in the inline code toolbar', async ({ pag
 	await expect(copyMessage).toHaveAttribute('title', 'Copy');
 });
 
+test('Agent Window highlights Zig code blocks with the Shiki Worker', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions&locale=zh-CN');
+	const source = ['```zig', 'const greeting = "你好🙂";', '```'].join('\n');
+	await page.evaluate(text => window.ashChatTranscriptIntegration.showCopiedMessage(text), source);
+	const block = page.locator('.ash-chat-code-block');
+	await expect(block.locator('.stanza-editor-token.token-keyword')).toHaveText('const');
+	await expect(block.locator('.stanza-editor-token.token-string').filter({ hasText: '你好🙂' })).toBeVisible();
+	expect(page.workers().some(worker => worker.url().includes('chatHighlightWorker'))).toBe(true);
+});
+
 test('removing an attachment cancels its read and rejects a late media result', async ({ page }) => {
 	await page.goto('/chatTranscript.html');
 	await page.evaluate(() => window.ashChatTranscriptIntegration.showMedia(true));

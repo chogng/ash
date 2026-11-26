@@ -140,6 +140,12 @@ def resolve_v8_cargo_env(
             RUSTY_V8_ARCHIVE=str(materialize(pair.archive, cache_directory).resolve()),
             RUSTY_V8_ARCHIVE_SHA256=pair.archive.sha256,
         )
+        if (
+            spec.target == "x86_64-pc-windows-msvc"
+            and lock_path.resolve() == DEFAULT_LOCK.resolve()
+        ):
+            # The locked Windows archive already provides ICU's common data.
+            result["ASH_V8_EMBEDDED_ICU"] = "1"
     return result
 
 

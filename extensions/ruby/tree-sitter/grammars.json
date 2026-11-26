@@ -1,6 +1,7 @@
 [
   {
     "name": "ruby",
+    "editorBundled": false,
     "highlights": ["queries/ruby.scm"],
     "tags": ["queries/ruby.tags.scm"],
     "folds": ["queries/ruby.folds.scm"],

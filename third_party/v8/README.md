@@ -31,6 +31,8 @@ bazel test //crates/v8-poc:v8-poc-unit-tests --compilation_mode=opt --test_arg=-
 
 Code Mode 在独立 `ash-code-mode-host` 中运行。`ash-external-js-ext` 为可选宿主，不默认入包；App Server 不直接链接 V8，避免与 WebRTC 的静态依赖冲突。二进制打包继续使用既有独立宿主入口和校验清单。
 
+Windows x64 Desktop 构建在 Electron 的 `icudtl.dat` 匹配 `windows-desktop-icu.sha256` 时，复用该数据。Code Mode 在初始化 V8 前校验数据并加载。更新 V8 或 Electron 时，先验证两端的 ICU 数据一致性与 `Intl` 执行，再更新摘要。
+
 ## 采用新版本
 
 依赖仓库先完成源码生产、全部目标的原生探针和发布汇总，产出候选 `runtime-lock.json`。Ash 随后同步根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`MODULE.bazel` 中的 crate header、archive 和 binding 声明，并验证受影响消费者。发布产物不可原地覆盖；版本升级与产品采用分别验收。

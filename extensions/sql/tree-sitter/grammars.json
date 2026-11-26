@@ -1,6 +1,7 @@
 [
   {
     "name": "sql",
+    "editorBundled": false,
     "highlights": ["queries/sql.scm"],
     "tags": ["queries/sql.tags.scm"],
     "injections": [],

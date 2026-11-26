@@ -1,6 +1,7 @@
 [
   {
     "name": "go",
+    "editorBundled": false,
     "highlights": ["queries/go.scm"],
     "tags": ["queries/go.tags.scm"],
     "injections": [],

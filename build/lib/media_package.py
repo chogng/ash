@@ -16,6 +16,19 @@ from build.lib.livekit import resolve_livekit
 from build.lib.version import read_workspace_version
 from build.lib.targets import TargetSpec
 
+DESKTOP_NATIVE_GRAMMARS = (
+    Path(__file__).resolve().parents[2] / "build/desktop/native-grammars.json"
+)
+
+
+def desktop_capability_kinds() -> tuple[str, ...]:
+    grammars = json.loads(DESKTOP_NATIVE_GRAMMARS.read_text(encoding="utf-8"))
+    return (
+        "desktop-typescript",
+        "desktop-debug",
+        *(f"desktop-grammar-{name}" for name in grammars),
+    )
+
 
 def build_media_package(
     output: Path,
@@ -115,8 +128,23 @@ def capability_release(
             raise ValueError(
                 "Capability package URL must be a credential-free HTTPS URL"
             )
-    validate_capability_package(package, spec, kind)
     metadata = json.loads((package / "ash-package.json").read_text())
+    if kind in desktop_capability_kinds():
+        files = package_files(package)
+        identity = {
+            key: value
+            for key, value in metadata.items()
+            if key not in ("files", "buildId")
+        }
+        if (
+            metadata.get("target") != spec.target
+            or metadata.get("javascriptRuntime") != {"kind": kind}
+            or metadata.get("files") != files
+            or metadata.get("buildId") != package_build_id(identity, files)
+        ):
+            raise ValueError("Invalid Desktop capability package identity")
+    else:
+        validate_capability_package(package, spec, kind)
     asset = (
         f"ash-{kind}-{metadata['buildId'].removeprefix('sha256:')}-{spec.target}.tar.gz"
     )

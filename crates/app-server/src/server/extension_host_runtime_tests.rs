@@ -232,6 +232,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     let deployments = super::source::built_in_deployments(
         super::source::BuiltInEditorExtensions::Product,
         Some(std::sync::Arc::new(Disabled)),
+        None,
     )
     .unwrap();
     let markdown = deployments

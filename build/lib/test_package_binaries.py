@@ -134,6 +134,7 @@ class BinaryIsolationTests(unittest.TestCase):
             environment.assert_called_once_with(
                 TARGETS["aarch64-apple-darwin"],
                 {"ash-app-server-protocol", "sherpa-onnx-sys"},
+                environ=None,
             )
             protocol.assert_called_once_with(root=root, cargo="cargo")
             selection = packages.call_args.args[1]

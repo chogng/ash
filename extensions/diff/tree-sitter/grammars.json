@@ -1,6 +1,7 @@
 [
   {
     "name": "diff",
+    "editorBundled": false,
     "highlights": ["queries/diff.scm"],
     "tags": ["queries/diff.tags.scm"],
     "injections": ["queries/diff.injections.scm"],

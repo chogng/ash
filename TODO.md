@@ -46,6 +46,10 @@
 
 - [ ] **测量** · Ash 已用隔离测试验证缓存复用、过期刷新和 429 恢复。现有浏览器连接读不到已登录 Edge 标签页的 DevTools Network，缺真实网页的请求次数、状态码和耗时。可访问 Network 后保持缓存开启，分别采样一次普通刷新和一次切回聚焦，单独记录 `/backend-api/conversations` 的请求，与 Ash 模拟结果对照。用模拟响应验证 429。
 
+## Desktop 安装包 · macOS 体积对照
+
+- [ ] **实机测量** · 已添加 ZIP 与 LZMA DMG 对照脚本。当前 Windows 环境缺少可用的 macOS 主机和已公证的 Desktop 发布包。取得两项后，对同一已附加公证票据的 `Ash.app` 运行 `python3 -B build/darwin/benchmark_desktop_archive.py --app /path/to/Ash.app --output .build/desktop-archive-benchmark`，记录下载字节和本地安装耗时，再决定是否增加 DMG 发布产物。
+
 ## Ash Chat · 公网分享
 
 - [ ] **验收 · 部署只读分享服务** · Ash 桌面已能通过本地 Worker 生成链接，独立浏览器可读到整段消息快照。默认公网地址仍返回 404，当前缺少目标 Cloudflare 账号的 Worker 和 R2 部署授权。取得授权后按 [分享服务部署说明](services/chat-share/README.md#deployment) 配置私有存储桶及过期规则，再用合成对话验证公网链接。

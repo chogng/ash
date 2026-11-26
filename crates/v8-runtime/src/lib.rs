@@ -72,6 +72,10 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
     if !linked_v8_sandbox_enabled() {
         return Err("JavaScript hosts must link against sandbox-enabled V8".into());
     }
+    // Explicit archive and source overrides can expect callers to supply ICU data.
+    #[cfg(ash_v8_electron_icu)]
+    electron_icu::initialize()?;
+    #[cfg(not(any(ash_v8_embedded_icu, ash_v8_electron_icu)))]
     v8::icu::set_common_data_78(deno_core_icudata::ICU_DATA)
         .map_err(|error| format!("failed to initialize ICU data: {error}"))?;
     // Cargo's V8_FROM_SOURCE and explicit archive overrides can bypass our patched
@@ -94,6 +98,9 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
         jit_mode,
     })
 }
+
+#[cfg(ash_v8_electron_icu)]
+mod electron_icu;
 
 fn linked_v8_sandbox_enabled() -> bool {
     unsafe extern "C" {

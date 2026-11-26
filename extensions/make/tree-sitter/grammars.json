@@ -1,6 +1,7 @@
 [
   {
     "name": "make",
+    "editorBundled": false,
     "highlights": ["queries/make.scm"],
     "tags": [],
     "folds": ["queries/make.folds.scm"],

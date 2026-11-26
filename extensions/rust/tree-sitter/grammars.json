@@ -1,6 +1,7 @@
 [
   {
     "name": "rust",
+    "editorBundled": false,
     "highlights": ["queries/rust.scm"],
     "tags": ["queries/rust.tags.scm"],
     "injections": [],

@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from build.lib.media_package import build_livekit_package  # noqa: E402
+from build.lib.media_package import desktop_capability_kinds  # noqa: E402
 from build.lib.media_package import build_media_package  # noqa: E402
 from build.lib.media_package import capability_release  # noqa: E402
 from build.lib.package import file_sha256  # noqa: E402
@@ -132,6 +133,11 @@ def stage_packages(
             ("media", "livekit")
             if target in SUPPORTED_TARGETS and not bundled
             else ("livekit",)
+        )
+        expected += tuple(
+            kind
+            for kind in desktop_capability_kinds()
+            if f"ash-resources/capabilities/{kind}.json" in files
         )
         for kind in expected:
             relative = f"ash-resources/capabilities/{kind}.json"

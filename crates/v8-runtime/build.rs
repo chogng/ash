@@ -3,6 +3,21 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/bounded_allocator.cc");
+    println!("cargo:rerun-if-env-changed=ASH_V8_EMBEDDED_ICU");
+    println!("cargo:rerun-if-env-changed=ASH_V8_ELECTRON_ICU");
+    println!("cargo:rustc-check-cfg=cfg(ash_v8_embedded_icu)");
+    println!("cargo:rustc-check-cfg=cfg(ash_v8_electron_icu)");
+    if matches!(std::env::var("ASH_V8_EMBEDDED_ICU").as_deref(), Ok("1")) {
+        println!("cargo:rustc-cfg=ash_v8_embedded_icu");
+    }
+    if std::env::var("ASH_V8_ELECTRON_ICU").as_deref() == Ok("1") {
+        assert_eq!(
+            std::env::var("TARGET").as_deref(),
+            Ok("x86_64-pc-windows-msvc")
+        );
+        assert_eq!(std::env::var("ASH_V8_EMBEDDED_ICU").as_deref(), Ok("1"));
+        println!("cargo:rustc-cfg=ash_v8_electron_icu");
+    }
     // Cargo owns source selection. Resolve headers from its locked graph so this shim and
     // the linked engine cannot silently use different V8 allocator interfaces.
     // Metadata resolves the workspace, whose other members may have uncached sources

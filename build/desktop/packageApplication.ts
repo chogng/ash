@@ -1,8 +1,30 @@
-import { cp, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, cp, mkdir, readdir, unlink } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
 
 /** Hoist only the deployment: development keeps pnpm's isolated workspace layout. */
 export const productionDependencyDeployOptions = ['--filter', 'ash', '--config.node-linker=hoisted', 'deploy', '--prod', '--ignore-scripts'] as const;
+
+/** Keep source maps alongside the build and omit npm declarations and redundant Paper documentation. */
+export async function pruneWindowsApplication(application: string, sourceMaps: string): Promise<void> {
+	for (const directory of ['dist', 'node_modules']) {
+		const base = join(application, directory);
+		for (const entry of await readdir(base, { recursive: true, withFileTypes: true })) {
+			if (!entry.isFile()) continue;
+			const path = join(entry.parentPath, entry.name);
+			const name = relative(application, path).replaceAll('\\', '/');
+			if (name.endsWith('.map')) {
+				const target = join(sourceMaps, name);
+				await mkdir(dirname(target), { recursive: true });
+				await copyFile(path, target);
+			} else {
+				const isDeclaration = directory === 'node_modules' && /\.d\.(?:ts|cts|mts)$/u.test(name);
+				const isPaperDocumentation = /^node_modules\/paper\/dist\/(?:docs|paperjs)\//u.test(name);
+				if (!isDeclaration && !isPaperDocumentation) continue;
+			}
+			await unlink(path);
+		}
+	}
+}
 
 /** Deploy dependencies from locked manifests without traversing the build tree being packaged. */
 export async function prepareProductionDependencyWorkspace(repository: string, destination: string): Promise<void> {

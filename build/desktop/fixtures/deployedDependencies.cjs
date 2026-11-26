@@ -79,7 +79,7 @@ for (const [name, binary, exports] of [
 	for (const member of exports) assert.equal(typeof binding[member], 'function', `${name}.${member}`);
 	bindings.push(name);
 }
-for (const name of ['.pnpm', '.bin', 'electron', 'typescript']) {
+for (const name of ['.pnpm', '.bin', 'electron', 'harfbuzzjs', 'typescript']) {
 	assert(!existsSync(join(root, 'node_modules', name)), `Development dependency or private pnpm data shipped: ${name}`);
 }
 console.log(JSON.stringify({ dependencies, bindings }));

@@ -74,17 +74,22 @@ impl DeferredExtensionPackage {
 
     /// Verifies the exact package tree before handing its path to an executable runtime.
     pub fn verify(&self) -> Result<(), ExtensionPackagesError> {
+        self.verify_at(&self.root)
+    }
+
+    /// Verifies the same product index against a tree acquired separately from the main package.
+    pub fn verify_at(&self, root: &Path) -> Result<(), ExtensionPackagesError> {
         let verify = || {
             let metadata =
-                fs::symlink_metadata(&self.root).map_err(|_| PackageSnapshotError::Unavailable)?;
+                fs::symlink_metadata(root).map_err(|_| PackageSnapshotError::Unavailable)?;
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 return Err(PackageSnapshotError::UnsafeEntry);
             }
             let mut budget = PackageScanBudget::new(self.index.total_bytes);
             let mut seen = std::collections::BTreeSet::new();
             scan_directory(
-                &self.root,
-                &self.root,
+                root,
+                root,
                 Path::new(""),
                 &mut budget,
                 &mut |path, bytes| {

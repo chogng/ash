@@ -221,6 +221,11 @@ def parse_arguments(
         help="Cargo profile used to build first-party package binaries.",
     )
     parser.add_argument(
+        "--desktop-native-grammars",
+        action="store_true",
+        help="Link only the built-in grammar set for the Windows Desktop package.",
+    )
+    parser.add_argument(
         "--ripgrep-lock",
         type=Path,
         default=DEFAULT_LOCK,
@@ -298,6 +303,12 @@ def build_package(args: argparse.Namespace) -> int:
         raise ValueError("Bundled media cannot also declare an on-demand media package")
     target = args.target or default_target()
     spec = TARGETS[target]
+    if args.desktop_native_grammars and (
+        target != "x86_64-pc-windows-msvc" or args.electron_version is None
+    ):
+        raise ValueError(
+            "Downloadable native grammars require Windows x64 Desktop packaging"
+        )
     if media_distribution == "bundled":
         from build.lib.sherpa import SUPPORTED_TARGETS
 
@@ -348,6 +359,9 @@ def build_package(args: argparse.Namespace) -> int:
         inputs,
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
+        environ=os.environ | {"ASH_DESKTOP_NATIVE_GRAMMARS": "1"}
+        if args.desktop_native_grammars
+        else None,
     )
     ripgrep = resolve_ripgrep(
         spec,

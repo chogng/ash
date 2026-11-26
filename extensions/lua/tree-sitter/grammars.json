@@ -1,6 +1,7 @@
 [
   {
     "name": "lua",
+    "editorBundled": false,
     "highlights": ["queries/lua.scm"],
     "tags": ["queries/lua.tags.scm"],
     "folds": ["queries/lua.folds.scm"],

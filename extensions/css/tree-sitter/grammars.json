@@ -1,6 +1,7 @@
 [
   {
     "name": "css",
+    "editorBundled": false,
     "highlights": ["queries/css.scm"],
     "tags": ["queries/css.tags.scm"],
     "injections": [],
@@ -17,6 +18,7 @@
   },
   {
     "name": "scss",
+    "editorBundled": false,
     "highlights": ["queries/css.scm", "queries/scss.scm"],
     "tags": ["queries/css.tags.scm", "queries/scss.tags.scm"],
     "injections": [],
@@ -33,6 +35,7 @@
   },
   {
     "name": "less",
+    "editorBundled": false,
     "highlights": ["queries/css.scm", "queries/less.scm"],
     "tags": ["queries/css.tags.scm", "queries/less.tags.scm"],
     "injections": [],

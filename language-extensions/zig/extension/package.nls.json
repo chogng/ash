@@ -1,0 +1,4 @@
+{
+  "displayName": "Zig Language Support",
+  "description": "Tree-sitter highlighting, folding, and outline for Zig files."
+}

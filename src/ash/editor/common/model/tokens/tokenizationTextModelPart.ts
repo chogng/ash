@@ -65,7 +65,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			return source ? new TreeSitterSyntaxTokenBackend(model, source.session, source.resolveStyle, source.measure) : undefined;
 		} : undefined);
 		this.tokenStore = this._register(createLanguageTokenStore(textModel));
-		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec)));
+		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec, textModel)));
 		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.tokenStore));
 		const tokenization = this;
 		this.languageTokens = Object.freeze({

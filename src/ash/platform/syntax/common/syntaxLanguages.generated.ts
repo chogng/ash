@@ -11,7 +11,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"batch",
 			"cmd"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-bat@ash"
 	},
 	{
 		"id": "starlark",
@@ -19,7 +21,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"starlark"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-bazel@ash"
 	},
 	{
 		"id": "bazelrc",
@@ -27,7 +31,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"bazelrc"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-bazel@ash"
 	},
 	{
 		"id": "clojure",
@@ -39,7 +45,9 @@ export const syntaxLanguageDefinitions = [
 			"clj",
 			"cljs",
 			"edn"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-clojure@ash"
 	},
 	{
 		"id": "coffeescript",
@@ -49,7 +57,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"coffee"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-coffeescript@ash"
 	},
 	{
 		"id": "c",
@@ -57,7 +67,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"c"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-cpp@ash"
 	},
 	{
 		"id": "cpp",
@@ -68,7 +80,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"c++",
 			"cxx"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-cpp@ash"
 	},
 	{
 		"id": "csharp",
@@ -80,7 +94,9 @@ export const syntaxLanguageDefinitions = [
 			"cs",
 			"c-sharp",
 			"c#"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-csharp@ash"
 	},
 	{
 		"id": "css",
@@ -88,7 +104,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"css"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-css@ash"
 	},
 	{
 		"id": "scss",
@@ -96,7 +114,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"scss"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-css@ash"
 	},
 	{
 		"id": "less",
@@ -104,7 +124,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"less"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-css@ash"
 	},
 	{
 		"id": "dart",
@@ -112,7 +134,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"dart"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-dart@ash"
 	},
 	{
 		"id": "diff",
@@ -120,7 +144,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"diff"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-diff@ash"
 	},
 	{
 		"id": "dockerfile",
@@ -131,7 +157,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"docker",
 			"containerfile"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-docker@ash"
 	},
 	{
 		"id": "dotenv",
@@ -141,7 +169,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"env"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-dotenv@ash"
 	},
 	{
 		"id": "gitcommit",
@@ -151,7 +181,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"commit_editmsg"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-git-base@ash"
 	},
 	{
 		"id": "gitrebase",
@@ -162,7 +194,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"git_rebase",
 			"git-rebase-todo"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-git-base@ash"
 	},
 	{
 		"id": "gitignore",
@@ -170,7 +204,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"ignore"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-git-base@ash"
 	},
 	{
 		"id": "go",
@@ -178,7 +214,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"go"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-go@ash"
 	},
 	{
 		"id": "groovy",
@@ -186,7 +224,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"groovy"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-groovy@ash"
 	},
 	{
 		"id": "html",
@@ -194,7 +234,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"html"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-html@ash"
 	},
 	{
 		"id": "ini",
@@ -202,7 +244,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"ini"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-ini@ash"
 	},
 	{
 		"id": "properties",
@@ -210,7 +254,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"properties"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-ini@ash"
 	},
 	{
 		"id": "java",
@@ -218,7 +264,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"java"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-java@ash"
 	},
 	{
 		"id": "javascript",
@@ -228,7 +276,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"js"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-javascript@ash"
 	},
 	{
 		"id": "javascriptreact",
@@ -239,7 +289,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"jsx"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-javascript@ash"
 	},
 	{
 		"id": "json",
@@ -247,7 +299,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"json"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-json@ash"
 	},
 	{
 		"id": "jsonc",
@@ -255,7 +309,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"jsonc"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-json@ash"
 	},
 	{
 		"id": "jsonl",
@@ -265,7 +321,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"ndjson"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-json@ash"
 	},
 	{
 		"id": "snippets",
@@ -273,7 +331,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"snippets"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-json@ash"
 	},
 	{
 		"id": "julia",
@@ -281,7 +341,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"julia"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-julia@ash"
 	},
 	{
 		"id": "log",
@@ -289,7 +351,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"log"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-log@ash"
 	},
 	{
 		"id": "lua",
@@ -299,7 +363,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"lua"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-lua@ash"
 	},
 	{
 		"id": "makefile",
@@ -309,7 +375,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"make"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-make@ash"
 	},
 	{
 		"id": "markdown",
@@ -319,7 +387,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"md"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-markdown-basics@ash"
 	},
 	{
 		"id": "markdown_inline",
@@ -327,7 +397,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [],
 		"aliases": [
 			"markdown-inline"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-markdown-basics@ash"
 	},
 	{
 		"id": "perl",
@@ -335,7 +407,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"perl"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-perl@ash"
 	},
 	{
 		"id": "php",
@@ -343,7 +417,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"php"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-php@ash"
 	},
 	{
 		"id": "powershell",
@@ -354,7 +430,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"ps1",
 			"pwsh"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-powershell@ash"
 	},
 	{
 		"id": "python",
@@ -364,7 +442,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"py"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-python@ash"
 	},
 	{
 		"id": "r",
@@ -372,7 +452,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"r"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-r@ash"
 	},
 	{
 		"id": "ruby",
@@ -382,7 +464,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"rb"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-ruby@ash"
 	},
 	{
 		"id": "rust",
@@ -392,7 +476,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"rs"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-rust@ash"
 	},
 	{
 		"id": "shell",
@@ -403,7 +489,9 @@ export const syntaxLanguageDefinitions = [
 		"aliases": [
 			"bash",
 			"sh"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-shellscript@ash"
 	},
 	{
 		"id": "sql",
@@ -411,7 +499,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"sql"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-sql@ash"
 	},
 	{
 		"id": "swift",
@@ -419,7 +509,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"swift"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-swift@ash"
 	},
 	{
 		"id": "toml",
@@ -427,7 +519,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"toml"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-toml@ash"
 	},
 	{
 		"id": "typescript",
@@ -437,7 +531,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"ts"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-typescript-basics@ash"
 	},
 	{
 		"id": "typescriptreact",
@@ -447,7 +543,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"tsx"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-typescript-basics@ash"
 	},
 	{
 		"id": "xml",
@@ -458,7 +556,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"xslt"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-xml@ash"
 	},
 	{
 		"id": "dtd",
@@ -466,7 +566,9 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"dtd"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-xml@ash"
 	},
 	{
 		"id": "dockercompose",
@@ -476,7 +578,9 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"compose"
-		]
+		],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-yaml@ash"
 	},
 	{
 		"id": "yaml",
@@ -484,6 +588,8 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [
 			"yaml"
 		],
-		"aliases": []
+		"aliases": [],
+		"editorBundled": false,
+		"editorPackage": "marketplace.syntax-yaml@ash"
 	}
 ] as const;

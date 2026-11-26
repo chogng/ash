@@ -127,6 +127,7 @@ pub(crate) mod connector_runtime;
 mod context_read_tests;
 #[path = "server/request_processors/debug.rs"]
 mod debug_operations;
+mod desktop_capabilities;
 #[path = "server/request_processors/diagnostics.rs"]
 mod diagnostics_operations;
 #[path = "server/request_processors/dictation.rs"]
@@ -1662,6 +1663,10 @@ impl AppServer {
     }
 
     pub(crate) fn with_home(mut self, home: Arc<ash_home::AshHome>) -> Self {
+        desktop_capabilities::install_native_grammar_resolver(
+            home.root().to_owned(),
+            Arc::clone(&self.calls),
+        );
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -2486,7 +2491,15 @@ impl AppServer {
                     .to_string(),
             );
         }
-        let runtime = extension_host_runtime::ExtensionHostRuntime::start(
+        let debug_access = self
+            .home
+            .as_ref()
+            .filter(|_| desktop_capabilities::is_declared(desktop_capabilities::DEBUG))
+            .map(|home| desktop_capabilities::DebugAccess {
+                home: home.root().to_owned(),
+                calls: Arc::clone(&self.calls),
+            });
+        let runtime = extension_host_runtime::ExtensionHostRuntime::start_with_debug(
             self.built_in_editor_extensions,
             self.plugins.clone(),
             self.plugins_manager.clone(),
@@ -2497,6 +2510,7 @@ impl AppServer {
             Arc::clone(&self.updates),
             Arc::clone(&self.client_host),
             Default::default(),
+            debug_access,
         )
         .map_err(|error| error.to_string())?;
         if let Some(storage) = &self.extension_state {
@@ -2932,9 +2946,7 @@ impl AppServer {
         policy: ash_http_client::OutboundNetworkPolicy,
     ) -> Self {
         self.channels.set_network_policy(policy.clone());
-        Arc::get_mut(&mut self.calls)
-            .expect("Call policy is installed before runtime dispatch")
-            .set_network_policy(policy.clone());
+        self.calls.set_network_policy(policy.clone());
         self.language
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

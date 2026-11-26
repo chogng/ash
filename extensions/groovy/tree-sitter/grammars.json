@@ -1,6 +1,7 @@
 [
   {
     "name": "groovy",
+    "editorBundled": false,
     "highlights": ["queries/groovy.scm"],
     "tags": ["queries/groovy.tags.scm"],
     "folds": ["queries/groovy.folds.scm"],

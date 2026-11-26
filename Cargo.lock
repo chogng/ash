@@ -3376,6 +3376,7 @@ version = "0.1.0"
 dependencies = [
  "ash-grammars",
  "ash-language",
+ "libloading",
  "ropey",
  "serde_json",
  "thiserror 2.0.21",
@@ -3900,6 +3901,7 @@ dependencies = [
  "cc",
  "deno_core_icudata",
  "serde_json",
+ "sha2 0.10.9",
  "v8",
 ]
 

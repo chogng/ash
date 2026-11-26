@@ -6,11 +6,13 @@ import { syntaxLanguageDefinitions } from './syntaxLanguages.generated.js';
 export type SyntaxLanguage = typeof syntaxLanguageDefinitions[number]['id'];
 export const syntaxLanguages: readonly SyntaxLanguage[] = syntaxLanguageDefinitions.map(language => language.id);
 export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [...language.editorIds]);
+export const bundledSyntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.filter(language => language.editorBundled).flatMap(language => [...language.editorIds]);
+export const bundledEditorSyntaxLanguages: ReadonlySet<SyntaxLanguage> = new Set(syntaxLanguageDefinitions.filter(language => language.editorBundled).map(language => language.id));
 const aliases = new Map<string, SyntaxLanguage>();
-const editorLanguages = new Map<SyntaxLanguage, string>();
+const editorLanguages = new Map<SyntaxLanguage, typeof syntaxLanguageDefinitions[number]>();
 for (const language of syntaxLanguageDefinitions) {
 	for (const id of [language.id, ...language.editorIds, ...language.aliases]) aliases.set(id, language.id);
-	editorLanguages.set(language.id, language.editorLanguage);
+	editorLanguages.set(language.id, language);
 }
 
 /** Normalize editor IDs and code-fence aliases before crossing the syntax boundary. */
@@ -20,7 +22,18 @@ export function syntaxLanguageForEditorLanguage(languageId: string): SyntaxLangu
 
 /** Resolve the editor configuration for an embedded parser. */
 export function editorLanguageForSyntaxLanguage(language: SyntaxLanguage): string {
-	return editorLanguages.get(language)!;
+	return editorLanguages.get(language)!.editorLanguage;
+}
+
+export function editorLanguageIdsForSyntaxLanguage(language: SyntaxLanguage): readonly string[] {
+	return editorLanguages.get(language)!.editorIds;
+}
+
+/** Installed syntax packages can add structure to a language the editor already recognizes. */
+export function optionalSyntaxPackageForEditorLanguage(languageId: string): string | undefined {
+	const id = syntaxLanguageForEditorLanguage(languageId);
+	const language = id && editorLanguages.get(id);
+	return language && !language.editorBundled ? language.editorPackage : undefined;
 }
 
 export interface SyntaxPosition {

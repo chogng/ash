@@ -28,6 +28,24 @@ for (const [name, kind] of [['keymap-sublime', 'editor'], ['remote-workspace', '
 	});
 }
 
+test('A Zig registry submission includes its declared parser and queries under the recorded license', async () => {
+	const directory = await mkdtemp(resolve(tmpdir(), 'ash-zig-'));
+	try {
+		const source = resolve(import.meta.dirname, '../../language-extensions/zig/extension');
+		const output = resolve(directory, 'submission');
+		await buildDeclarativePackage(source, output);
+		const catalog = JSON.parse(await readFile(resolve(output, 'catalog.json'), 'utf8'));
+		assert.deepEqual([catalog.id, catalog.packageType, catalog.license], ['marketplace/zig', 'language', 'MIT']);
+		const payload = resolve(output, 'package/language');
+		const manifest = JSON.parse(await readFile(resolve(payload, 'package.json'), 'utf8'));
+		const { wasm, highlights, tags, folds } = manifest.contributes.treeSitter[0];
+		for (const resource of [wasm, highlights, tags, folds]) {
+			assert.deepEqual(await readFile(resolve(payload, resource)), await readFile(resolve(source, resource)));
+		}
+		assert.deepEqual(await readFile(resolve(output, 'package/LICENSE')), await readFile(resolve(source, 'LICENSE')));
+	} finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('A declarative submission rejects executable entry points', async () => {
 	const directory = await mkdtemp(resolve(tmpdir(), 'ash-declarative-'));
 	try {

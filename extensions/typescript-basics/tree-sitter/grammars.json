@@ -1,6 +1,7 @@
 [
   {
     "name": "typescript",
+    "editorBundled": false,
     "highlights": [
       "@javascript/queries/javascript.scm",
       "queries/typescript.scm"
@@ -26,6 +27,7 @@
   },
   {
     "name": "tsx",
+    "editorBundled": false,
     "highlights": [
       "@javascript/queries/javascript.scm",
       "@javascript/queries/jsx.scm",

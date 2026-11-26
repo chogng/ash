@@ -47,6 +47,8 @@ import { toExtensionResourceURI } from '../../../../platform/extensionResourceLo
 import { ExtensionThemeRegistry, loadPackagedExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from '../common/extensionTheme.js';
 import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from '../common/extensionService.js';
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from '../common/extensionDebugAdapter.js';
+import type { ExtensionTreeSitterGrammar } from '../../treeSitter/common/extensionTreeSitterGrammar.js';
+import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 
 export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
@@ -55,6 +57,7 @@ export interface AppServerExtensionServiceOptions {
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	/** Allow the first window to finish restoring editors before loading optional assets. */
 	readonly loadStartupAssetsAfter?: Promise<void>;
+	readonly replaceTreeSitterGrammars?: (grammars: readonly ExtensionTreeSitterGrammar[]) => void;
 }
 
 interface LanguageConfigurationContribution {
@@ -140,6 +143,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 		this._register(toDisposable(() => {
 			this.reloadQueued = undefined;
+			this.options?.replaceTreeSitterGrammars?.([]);
 			this.activationHandler = undefined;
 			this.snippetHandler?.([]).commit();
 			this.snippetHandler = undefined;
@@ -328,6 +332,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			const preparedManifests = new Map<string, ExtensionManifest>();
+			const treeSitterGrammars: ExtensionTreeSitterGrammar[] = [];
+			const syntaxLanguages = new Set<string>();
 			const keybindings: IKeybindingRule[] = [];
 			let nextExtension = 0;
 			const preparationFailures = new Map<number, ExtensionServiceFailure>();
@@ -353,6 +359,30 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				const manifest = preparedManifests.get(extension.id)!;
+				if (this.options.replaceTreeSitterGrammars) {
+					for (const grammar of manifest.contributes.treeSitter) {
+						const builtin = syntaxLanguageForEditorLanguage(grammar.language);
+						const languageId = builtin ?? grammar.language;
+						const editorId = builtin ? editorLanguageForSyntaxLanguage(builtin) : languageId;
+						if (syntaxLanguages.has(languageId) || !manifest.contributes.languages.some(language => language.id === grammar.language || language.id === editorId)) {
+							throw new TypeError(`Invalid or conflicting Tree-sitter language '${grammar.language}' in '${extension.id}'`);
+						}
+						syntaxLanguages.add(languageId);
+						treeSitterGrammars.push({
+							languageId,
+							packageDigest: extension.packageSha256,
+							load: async () => {
+								const read = (path: string) => this.options.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
+								const [wasm, highlights, tags, folds, injections] = await Promise.all([
+									read(grammar.wasm), read(grammar.highlights), read(grammar.tags), read(grammar.folds),
+									grammar.injections ? read(grammar.injections) : undefined,
+								]);
+								const decoder = new TextDecoder('utf-8', { fatal: true });
+								return { wasm, highlights: decoder.decode(highlights), tags: decoder.decode(tags), folds: decoder.decode(folds), injections: injections && decoder.decode(injections) };
+							},
+						});
+					}
+				}
 				keybindings.push(...manifest.contributes.keybindings
 					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
 					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
@@ -585,6 +615,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.catalog = catalog;
 					this.activeCatalogSignature = signature;
 					this.activeSnippetOwnerRevision = snippetOwnerRevision;
+					this.options.replaceTreeSitterGrammars?.(treeSitterGrammars);
 					this.changeEmitter.fire(catalog);
 				});
 				if (startup) performance.mark('ash.workbench.extension-assets-ready');

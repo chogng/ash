@@ -1,0 +1,34 @@
+{
+  "name": "zig",
+  "ashUiTargets": [
+    "ide"
+  ],
+  "publisher": "marketplace",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "contributes": {
+    "languages": [
+      {
+        "id": "zig",
+        "aliases": [
+          "Zig"
+        ],
+        "extensions": [
+          ".zig"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "treeSitter": [
+      {
+        "language": "zig",
+        "wasm": "./grammars/zig.wasm.gz",
+        "highlights": "./queries/zig.scm",
+        "tags": "./queries/zig.tags.scm",
+        "folds": "./queries/zig.folds.scm"
+      }
+    ]
+  }
+}

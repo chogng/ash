@@ -1,6 +1,7 @@
 [
   {
     "name": "r",
+    "editorBundled": false,
     "highlights": ["queries/r.scm"],
     "tags": ["queries/r.tags.scm"],
     "folds": ["queries/r.folds.scm"],

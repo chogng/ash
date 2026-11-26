@@ -1,6 +1,7 @@
 [
   {
     "name": "clojure",
+    "editorBundled": false,
     "highlights": ["queries/clojure.scm"],
     "tags": ["queries/clojure.tags.scm"],
     "folds": ["queries/clojure.folds.scm"],

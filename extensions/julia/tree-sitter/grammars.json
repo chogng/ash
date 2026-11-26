@@ -1,6 +1,7 @@
 [
   {
     "name": "julia",
+    "editorBundled": false,
     "highlights": ["queries/julia.scm"],
     "tags": ["queries/julia.tags.scm"],
     "folds": ["queries/julia.folds.scm"],

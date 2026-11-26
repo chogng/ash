@@ -1,6 +1,7 @@
 [
   {
     "name": "bash",
+    "editorBundled": false,
     "highlights": ["queries/bash.scm"],
     "tags": ["queries/bash.tags.scm"],
     "injections": [],

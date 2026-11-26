@@ -32,6 +32,15 @@ test('one package declaration generates both runtimes and detects stale registra
 	await assert.rejects(generateTreeSitterRegistry({ root, check: true }), /Stale Tree-sitter registration/);
 	await generateTreeSitterRegistry({ root });
 	await generateTreeSitterRegistry({ root, check: true });
+
+	packages[0]!.grammars[0]!.editorBundled = false;
+	await writeFile(packages[0]!.manifest, JSON.stringify(packages[0]!.grammars));
+	await generateTreeSitterRegistry({ root });
+	const optionalWeb = await readFile(resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'), 'utf8');
+	assert.doesNotMatch(optionalWeb, /\.wasm|shared\/queries/);
+	const optionalMetadata = await readFile(resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts'), 'utf8');
+	assert.match(optionalMetadata, /"editorBundled": false/);
+	assert.match(await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8'), /ash_grammars::language\("demo"\)/);
 });
 
 test('conflicting aliases and uncovered extension languages fail before generation', async t => {

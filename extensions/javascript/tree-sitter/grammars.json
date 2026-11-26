@@ -1,6 +1,7 @@
 [
   {
     "name": "javascript",
+    "editorBundled": false,
     "highlights": ["queries/javascript.scm", "queries/jsx.scm"],
     "tags": ["queries/javascript.tags.scm"],
     "injections": [],

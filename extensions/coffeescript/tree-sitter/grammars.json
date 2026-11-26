@@ -1,6 +1,7 @@
 [
   {
     "name": "coffeescript",
+    "editorBundled": false,
     "highlights": ["queries/coffeescript.scm"],
     "tags": ["queries/coffeescript.tags.scm"],
     "folds": ["queries/coffeescript.folds.scm"],

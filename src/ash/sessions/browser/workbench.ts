@@ -269,9 +269,8 @@ import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/edi
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../workbench/services/treeSitter/browser/treeSitterLibraryService.js';
-import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
+import { CodeHighlightingService, createCodeHighlightingProvider, ICodeHighlightingService } from '../../workbench/services/codeHighlighting/browser/codeHighlightingService.js';
 import { AppServerExtensionService } from '../../workbench/services/extensions/browser/appServerExtensionService.js';
 import { IExtensionService } from '../../workbench/services/extensions/common/extensionService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
@@ -821,9 +820,9 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyBackupService, this._register(docsBackups));
 		services.registerInstance(IDocumentEditorTextModelService, this._register(services.createInstance(DocumentEditorTextModelService)));
 		services.registerInstance(ISyntaxApi, options.api.syntax);
-		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
-		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
-		this._register(new TreeSitterSyntaxProviders(services.get(ILanguageFeaturesService)));
+		services.registerSingleton(ICodeHighlightingService, () => services.createInstance(CodeHighlightingService));
+		const languageFeatures = services.get(ILanguageFeaturesService);
+		this._register(languageFeatures.syntaxProvider.register(createCodeHighlightingProvider(services.get(ICodeHighlightingService))));
 		const extensionService = this._register(services.createInstance(AppServerExtensionService, {
 			api: enabledExtensions, eventApi: options.api.events, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), loadStartupAssetsAfter,
 		}));
@@ -834,15 +833,8 @@ export abstract class Workbench extends Disposable {
 		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services, {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
-			languageFeaturesService: services.get(ILanguageFeaturesService),
-			createSyntaxSession: model => createTreeSitterSyntaxSession(model, configurationService, treeSitterLibrary, themeService),
-			onDidChangeSyntaxBackend: Event.any(
-				treeSitterLibrary.onDidChange,
-				Event.map(themeService.onDidColorThemeChange, () => undefined),
-				(listener, thisArgs, disposables) => configurationService.onDidChangeConfiguration(event => {
-					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
-				}, undefined, disposables),
-			),
+			languageFeaturesService: languageFeatures,
+			onDidChangeLanguageSupport: Event.map(themeService.onDidColorThemeChange, () => undefined),
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerSingleton(ICollabService, () => services.createInstance(CollabService, new AppServerCollabService(options.api.collab, options.api.events)));

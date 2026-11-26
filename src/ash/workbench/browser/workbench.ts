@@ -14,6 +14,7 @@ import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../.
 import { IChannelService } from '../../platform/collab/common/channelService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
+import { CodeHighlightingService, createCodeHighlightingProvider, ICodeHighlightingService } from '../services/codeHighlighting/browser/codeHighlightingService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { NullLoggerService } from '../../platform/log/common/log.js';
@@ -248,7 +249,7 @@ import { ITerminalProcessService } from '../../platform/terminal/common/terminal
 import { ITextFileService } from '../services/textfile/common/textfiles.js';
 import { TextFileService } from '../services/textfile/browser/textFileService.js';
 import { Event } from '../../base/common/event.js';
-import { AppServerExtensionService } from '../services/extensions/browser/appServerExtensionService.js';
+import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../services/extensions/browser/appServerExtensionService.js';
 import { IExtensionService } from '../services/extensions/common/extensionService.js';
 import { ISnippetsService } from '../contrib/snippets/browser/snippets.js';
 import { AppServerRemoteAgentService } from '../services/remote/browser/appServerRemoteAgentService.js';
@@ -870,7 +871,8 @@ export class Workbench extends Disposable {
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
-		this._register(new TreeSitterSyntaxProviders(languageFeaturesService));
+		this._register(new TreeSitterSyntaxProviders(languageFeaturesService, treeSitterLibrary));
+		services.registerSingleton(ICodeHighlightingService, () => services.createInstance(CodeHighlightingService));
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore, services, {
 			languageService,
@@ -910,7 +912,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService, loadStartupAssetsAfter: editorRestoration.p }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, {
+			api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService,
+			loadStartupAssetsAfter: editorRestoration.p,
+			replaceTreeSitterGrammars: grammars => treeSitterLibrary.replaceExtensionGrammars(grammars),
+		} satisfies AppServerExtensionServiceOptions));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
@@ -981,6 +987,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
+		this._register(languageFeaturesService.syntaxProvider.register(createCodeHighlightingProvider(services.get(ICodeHighlightingService))));
 		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const chatAvailable = ViewsRegistry.getDefaultViewContainer(ViewContainerLocation.Chat) !== undefined;

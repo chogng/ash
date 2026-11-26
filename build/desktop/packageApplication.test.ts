@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import test from 'node:test';
-import { ignoreApplicationFile, prepareProductionDependencyWorkspace } from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, pruneWindowsApplication } from './packageApplication.ts';
 
 test('dependency deployment preserves locked inputs and attribution without recursing into build output', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-dependency-workspace-'));
@@ -18,6 +18,22 @@ test('dependency deployment preserves locked inputs and attribution without recu
 	await prepareProductionDependencyWorkspace(root, destination);
 	for (const file of files) assert.equal(await readFile(join(destination, file), 'utf8'), file);
 	for (const file of ['.build', 'src']) await assert.rejects(stat(join(destination, file)), { code: 'ENOENT' });
+});
+
+test('Windows deployment drops npm declarations and retains runtime files and editor resources', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-windows-deployment-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const app = join(root, 'app');
+	const declarations = ['node_modules/runtime/index.d.ts', 'node_modules/runtime/index.d.cts', 'node_modules/runtime/index.d.mts'];
+	const retained = ['node_modules/runtime/index.js', 'node_modules/runtime/worker.ts', 'node_modules/runtime/LICENSE', 'dist/editor/lib.d.ts'];
+	for (const name of [...declarations, ...retained]) {
+		const path = join(app, name);
+		await mkdir(join(path, '..'), { recursive: true });
+		await writeFile(path, name);
+	}
+	await pruneWindowsApplication(app, join(root, 'symbols'));
+	for (const name of declarations) await assert.rejects(stat(join(app, name)), { code: 'ENOENT' });
+	for (const name of retained) assert.equal(await readFile(join(app, name), 'utf8'), name);
 });
 
 test('application copying retains hoisted and nested dependency resolution without the private pnpm store', async t => {

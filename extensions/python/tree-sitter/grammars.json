@@ -1,6 +1,7 @@
 [
   {
     "name": "python",
+    "editorBundled": false,
     "highlights": ["queries/python.scm"],
     "tags": ["queries/python.tags.scm"],
     "injections": [],

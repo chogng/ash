@@ -19,8 +19,11 @@ locked archive and verifies the individual library/module digests on reuse.
 Missing archives are downloaded during preparation; invalid extracted outputs
 fail explicitly. There is no source-compilation fallback.
 
-- `pnpm tree-sitter:prepare` prepares the 48 portable grammar modules.
-- `pnpm tree-sitter:verify` checks generated registration and prepared WASM offline.
+- `pnpm tree-sitter:prepare` verifies the 48 built-in portable grammar modules and produces
+  one gzip file per module for the renderer. The Web Worker decompresses the
+  selected module when it first parses that language.
+- `pnpm tree-sitter:verify` checks generated registration and verifies both the
+  original modules and the decompressed renderer assets offline.
 - `scripts/cargo.py` and the package binary builder prepare the selected target's
   library and pass `ASH_GRAMMARS_LIB_DIR` to Cargo when its graph uses the binding.
 - Direct Cargo users must first run `python -m build.lib.grammars --target <triple>`

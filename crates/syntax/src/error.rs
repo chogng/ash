@@ -5,6 +5,11 @@ use crate::{DocumentRevision, SyntaxLanguage};
 /// Failure produced while opening or incrementally updating a syntax document.
 #[derive(Debug, Error)]
 pub enum SyntaxError {
+    #[error("the {language:?} tree-sitter grammar is unavailable: {reason}")]
+    NativeGrammarUnavailable {
+        language: SyntaxLanguage,
+        reason: String,
+    },
     #[error("failed to load the {language:?} tree-sitter grammar: {source}")]
     Language {
         language: SyntaxLanguage,

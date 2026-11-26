@@ -1,6 +1,7 @@
 [
   {
     "name": "batch",
+    "editorBundled": false,
     "highlights": ["queries/batch.scm"],
     "tags": [],
     "folds": ["queries/batch.folds.scm"],

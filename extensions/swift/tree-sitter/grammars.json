@@ -1,6 +1,7 @@
 [
   {
     "name": "swift",
+    "editorBundled": false,
     "highlights": ["queries/swift.scm"],
     "tags": ["queries/swift.tags.scm"],
     "folds": ["queries/swift.folds.scm"],

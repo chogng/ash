@@ -166,7 +166,7 @@ class V8ArtifactTests(unittest.TestCase):
             self.assertEqual(b"verified-v8", resolved.read_bytes())
 
     def test_explicit_sources_are_resolved_by_upstream(self) -> None:
-        spec = TARGETS["aarch64-apple-darwin"]
+        spec = TARGETS["x86_64-pc-windows-msvc"]
         for environment in (
             {"V8_FROM_SOURCE": "true"},
             {"RUSTY_V8_ARCHIVE": "/artifact-directory"},
@@ -191,7 +191,7 @@ class V8ArtifactTests(unittest.TestCase):
                 self.assertEqual({}, resolve_v8_cargo_env(spec, environ=environment))
 
     def test_environment_uses_the_cargo_mirror_layout(self) -> None:
-        spec = TARGETS["aarch64-apple-darwin"]
+        spec = TARGETS["x86_64-pc-windows-msvc"]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             lock_path = root / "runtime-lock.json"
@@ -210,12 +210,13 @@ class V8ArtifactTests(unittest.TestCase):
                 {},
                 {"V8_FROM_SOURCE": "TRUE", "RUSTY_V8_SKIP_DOWNLOAD": "TRUE"},
             ):
-                environment = resolve_v8_cargo_env(
-                    spec,
-                    environ=overrides,
-                    lock_path=lock_path,
-                    cache_root=cache,
-                )
+                with patch("build.lib.v8.DEFAULT_LOCK", lock_path):
+                    environment = resolve_v8_cargo_env(
+                        spec,
+                        environ=overrides,
+                        lock_path=lock_path,
+                        cache_root=cache,
+                    )
                 self.assertIn("RUSTY_V8_ARCHIVE", environment)
 
             self.assertEqual(
@@ -224,12 +225,17 @@ class V8ArtifactTests(unittest.TestCase):
                         (mirror / entry["archive"]["name"]).resolve()
                     ),
                     "RUSTY_V8_ARCHIVE_SHA256": entry["archive"]["sha256"],
+                    "ASH_V8_EMBEDDED_ICU": "1",
                     "RUSTY_V8_SRC_BINDING_PATH": str(
                         (mirror / entry["binding"]["name"]).resolve()
                     ),
                 },
                 environment,
             )
+            explicit_lock = resolve_v8_cargo_env(
+                spec, environ={}, lock_path=lock_path, cache_root=cache
+            )
+            self.assertNotIn("ASH_V8_EMBEDDED_ICU", explicit_lock)
 
     def test_lock_rejects_a_target_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

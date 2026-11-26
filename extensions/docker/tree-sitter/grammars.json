@@ -1,6 +1,7 @@
 [
   {
     "name": "containerfile",
+    "editorBundled": false,
     "highlights": ["queries/containerfile.scm"],
     "tags": [],
     "folds": ["queries/containerfile.folds.scm"],

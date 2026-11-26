@@ -68,7 +68,7 @@ pub(super) struct Calls {
     executor: OnceLock<tokio::runtime::Runtime>,
     pub sessions: Mutex<BTreeMap<(u64, String), Session>>,
     local: Mutex<Weak<LocalDeployment>>,
-    network_policy: OutboundNetworkPolicy,
+    network_policy: std::sync::RwLock<OutboundNetworkPolicy>,
 }
 
 impl Calls {
@@ -80,12 +80,18 @@ impl Calls {
         })
     }
 
-    pub fn set_network_policy(&mut self, policy: OutboundNetworkPolicy) {
-        self.network_policy = policy;
+    pub fn set_network_policy(&self, policy: OutboundNetworkPolicy) {
+        *self
+            .network_policy
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = policy;
     }
 
     pub fn network_policy(&self) -> OutboundNetworkPolicy {
-        self.network_policy.clone()
+        self.network_policy
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(super) fn executor(&self) -> Result<&tokio::runtime::Runtime, Failure> {
@@ -157,7 +163,7 @@ impl Calls {
                 ash_http_client::Timeout::Disabled,
                 ash_http_client::Timeout::After(Duration::from_secs(300)),
             ));
-        OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+        OutboundNetworkSnapshot::with_policy(config, self.network_policy())
             .map_err(|error| error.to_string())
     }
 
@@ -201,7 +207,7 @@ impl Calls {
         if let CallDeployment::Server { url, .. } | CallDeployment::Invitation { url, .. } =
             &params.deployment
         {
-            self.network_policy
+            self.network_policy()
                 .check_url(url)
                 .map_err(|error| error.to_string())?;
         }
@@ -253,7 +259,7 @@ impl Calls {
                 url.clone()
             }
         };
-        self.network_policy
+        self.network_policy()
             .check_url(&url)
             .map_err(|error| error.to_string())?;
         let credential = match &params.deployment {
@@ -267,7 +273,7 @@ impl Calls {
         } else {
             HttpClientConfig::default()
         };
-        let network = OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+        let network = OutboundNetworkSnapshot::with_policy(config, self.network_policy())
             .map_err(|_| "Call transport unavailable")?;
         let http: Arc<dyn ash_http_client::HttpClient> = Arc::new(
             ReqwestHttpClient::with_network(network).map_err(|_| "Call transport unavailable")?,
@@ -290,9 +296,10 @@ impl Calls {
             CallDeployment::Invitation { .. } => {}
         }
         let joined = client.join(&params.device_id).map_err(|e| e.to_string())?;
-        self.network_policy
+        self.network_policy()
             .check_url(&joined.server_url)
             .map_err(|error| error.to_string())?;
+        let policy = self.network_policy();
         let opened = self.executor()?.block_on(async {
             let connect = async {
                 tokio::time::timeout(Duration::from_secs(20), async {
@@ -326,15 +333,15 @@ impl Calls {
             };
             tokio::select! {
                 result = connect => result,
-                () = self.network_policy.wait_until_denied(&url) => Err("Call target blocked by network policy".into()),
-                () = self.network_policy.wait_until_denied(&joined.server_url) => Err("Media target blocked by network policy".into()),
+                () = policy.wait_until_denied(&url) => Err("Call target blocked by network policy".into()),
+                () = policy.wait_until_denied(&joined.server_url) => Err("Media target blocked by network policy".into()),
             }
         });
         let opened = opened.and_then(|connected| {
-            self.network_policy
+            self.network_policy()
                 .check_url(&url)
                 .map_err(|error| error.to_string())?;
-            self.network_policy
+            self.network_policy()
                 .check_url(&joined.server_url)
                 .map_err(|error| error.to_string())?;
             Ok(connected)
@@ -375,7 +382,7 @@ impl Calls {
         let (commands, receiver) = mpsc::channel(16);
         let worker_state = state.clone();
         let worker_client = client.clone();
-        let worker_policy = self.network_policy.clone();
+        let worker_policy = self.network_policy();
         let room_policy = worker_policy.clone();
         let worker_url = url.clone();
         let media_url = joined.server_url.clone();

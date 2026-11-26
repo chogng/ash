@@ -1,6 +1,7 @@
 [
   {
     "name": "dart",
+    "editorBundled": false,
     "highlights": ["queries/dart.scm"],
     "tags": ["queries/dart.tags.scm"],
     "folds": ["queries/dart.folds.scm"],

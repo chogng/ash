@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from build.desktop.package_runtime import desktop_media_is_bundled
 from build.lib.package import (
     file_sha256,
     package_build_id,
@@ -47,9 +48,8 @@ def accept(bundle: Path, standalone: Path, report_path: Path) -> dict:
     assert not (resources / "bin" / spec.remote_server_name).exists()
     assert not (resources / "ash-remote-runtimes").exists()
     assert metadata["remoteRuntimeCatalog"]["url"].startswith("https://")
-    assert {"livekitClient", "recognizer", "voiceHost"}.issubset(metadata["components"])
+    media_bundled = desktop_media_is_bundled(resources, metadata)
     assert "livekit" not in metadata["components"]
-    assert not (resources / "ash-resources/capabilities/media.json").exists()
     assert not (resources / "ash-resources/node").exists()
     assert not (resources / "ash-resources/licenses/node").exists()
     validate_package_directory(standalone, spec)
@@ -63,7 +63,7 @@ def accept(bundle: Path, standalone: Path, report_path: Path) -> dict:
         "electronVersion": expected["electronVersion"],
         "packageBuildId": metadata["buildId"],
         "backendBuildProfile": metadata["buildProfile"],
-        "mediaBundled": True,
+        "mediaBundled": media_bundled,
         "hostingServerOptional": True,
     }
     # Windows AF_UNIX has a 108-byte address limit, including the profile/run suffix.

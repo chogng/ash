@@ -774,11 +774,11 @@ function decodeNonNegativeSafeInteger(value: unknown, owner: string): number {
 	return value as number;
 }
 
-export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: languages.SyntaxServiceOptions, languageIdCodec?: languages.ILanguageIdCodec): languages.SyntaxWorker {
+export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: languages.SyntaxServiceOptions, languageIdCodec?: languages.ILanguageIdCodec, model?: TextModel): languages.SyntaxWorker {
 	if (options.workerFactory && options.onProviderError) {
 		throw new TypeError('A custom syntax worker owns its provider error policy');
 	}
-	const worker = options.workerFactory ? new SyntaxProviderOverlayWorker(registry, options.workerFactory(), languageIdCodec) : new SyntaxProviderWorker(registry, options.onProviderError, languageIdCodec);
+	const worker = options.workerFactory ? new SyntaxProviderOverlayWorker(registry, options.workerFactory(), languageIdCodec, model) : new SyntaxProviderWorker(registry, options.onProviderError, languageIdCodec, model);
 	return options.workerDecorator ? options.workerDecorator(worker) : worker;
 }
 
@@ -786,8 +786,8 @@ export function createSyntaxWorker(registry: SyntaxProviderRegistry, options: la
 class SyntaxProviderOverlayWorker implements languages.SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
 	private readonly providers: SyntaxProviderWorker;
 
-	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: languages.SyntaxWorker, languageIdCodec?: languages.ILanguageIdCodec) {
-		this.providers = new SyntaxProviderWorker(registry, undefined, languageIdCodec);
+	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: languages.SyntaxWorker, languageIdCodec?: languages.ILanguageIdCodec, model?: TextModel) {
+		this.providers = new SyntaxProviderWorker(registry, undefined, languageIdCodec, model);
 	}
 
 	run(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<languages.SyntaxResult> {

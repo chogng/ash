@@ -1,6 +1,7 @@
 [
   {
     "name": "csharp",
+    "editorBundled": false,
     "highlights": ["queries/csharp.scm"],
     "tags": ["queries/csharp.tags.scm"],
     "folds": ["queries/csharp.folds.scm"],

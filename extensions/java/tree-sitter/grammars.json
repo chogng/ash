@@ -1,6 +1,7 @@
 [
   {
     "name": "java",
+    "editorBundled": false,
     "highlights": ["queries/java.scm"],
     "tags": ["queries/java.tags.scm"],
     "folds": ["queries/java.folds.scm"],

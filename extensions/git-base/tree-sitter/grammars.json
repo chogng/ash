@@ -1,6 +1,7 @@
 [
   {
     "name": "gitcommit",
+    "editorBundled": false,
     "highlights": ["queries/gitcommit.scm"],
     "tags": ["queries/gitcommit.tags.scm"],
     "injections": ["queries/gitcommit.injections.scm"],
@@ -17,6 +18,7 @@
   },
   {
     "name": "git-rebase",
+    "editorBundled": false,
     "highlights": ["queries/git-rebase.scm"],
     "tags": ["queries/git-rebase.tags.scm"],
     "injections": ["queries/git-rebase.injections.scm"],
@@ -33,6 +35,7 @@
   },
   {
     "name": "gitignore",
+    "editorBundled": false,
     "highlights": ["queries/gitignore.scm"],
     "tags": ["queries/gitignore.tags.scm"],
     "injections": [],

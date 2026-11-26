@@ -4,6 +4,7 @@ import * as treeSitterNamespace from '@vscode/tree-sitter-wasm';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { bundledTreeSitterGrammars } from './treeSitterGrammars.generated.js';
+import type { ExtensionTreeSitterWorkerHost } from '../common/extensionTreeSitterGrammar.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
 
@@ -17,9 +18,7 @@ export class TreeSitterWasmLibrary extends Disposable {
 	private readonly folds = new Map<string, Query>();
 	private readonly injections = new Map<string, Query>();
 
-	supportsLanguage(languageId: string): boolean {
-		return !!definition(languageId)?.url;
-	}
+	constructor(private readonly extensionGrammars?: ExtensionTreeSitterWorkerHost) { super(); }
 
 	async getParserClass(): Promise<typeof treeSitterNamespace.Parser> {
 		this.initialization ??= (async () => {
@@ -51,15 +50,28 @@ export class TreeSitterWasmLibrary extends Disposable {
 	getInjectionQueries(languageId: string): Query | undefined { return this.injections.get(languageId); }
 
 	private async loadLanguage(languageId: string): Promise<Language | undefined> {
-		const entry = definition(languageId);
-		if (!entry?.url) return undefined;
+		const extension = await this.extensionGrammars?.getGrammar(languageId);
+		const entry = extension ? undefined : definition(languageId);
+		if (!entry && !extension) return undefined;
 		await this.getParserClass();
-		const language = await runtime.Language.load(await fetchWasm(entry.url));
+		const bytes = entry ? await fetchWasm(entry.url, 'gzip') : await decompressExtensionGrammar(extension!.wasm);
+		const language = await runtime.Language.load(bytes);
 		if (this.isDisposed) return undefined;
-		this.queries.set(languageId, new runtime.Query(language, entry.query));
-		this.tags.set(languageId, new runtime.Query(language, entry.tags));
-		this.folds.set(languageId, new runtime.Query(language, entry.folds));
-		if (entry.injections) this.injections.set(languageId, new runtime.Query(language, entry.injections));
+		const queries: Query[] = [];
+		try {
+			queries.push(new runtime.Query(language, entry?.query ?? extension!.highlights));
+			queries.push(new runtime.Query(language, entry?.tags ?? extension!.tags));
+			queries.push(new runtime.Query(language, entry?.folds ?? extension!.folds));
+			const injections = entry?.injections ?? extension?.injections;
+			if (injections) queries.push(new runtime.Query(language, injections));
+		} catch (error) {
+			for (const query of queries) query.delete();
+			throw error;
+		}
+		this.queries.set(languageId, queries[0]!);
+		this.tags.set(languageId, queries[1]!);
+		this.folds.set(languageId, queries[2]!);
+		if (queries[3]) this.injections.set(languageId, queries[3]);
 		return language;
 	}
 
@@ -77,10 +89,30 @@ export class TreeSitterWasmLibrary extends Disposable {
 	}
 }
 
-async function fetchWasm(url: string): Promise<Uint8Array> {
+async function fetchWasm(url: string, encoding?: 'gzip'): Promise<Uint8Array> {
 	const response = await fetch(url);
 	if (!response.ok) throw new Error(`Unable to load Tree-sitter WASM (${response.status})`);
+	if (encoding === 'gzip') {
+		if (!response.body) throw new Error('Empty Tree-sitter grammar response');
+		// The stored asset is a gzip file, so any Web host can serve it as-is.
+		const decoded = response.body.pipeThrough(new DecompressionStream('gzip'));
+		return new Uint8Array(await new Response(decoded).arrayBuffer());
+	}
 	return new Uint8Array(await response.arrayBuffer());
+}
+
+async function decompressExtensionGrammar(bytes: Uint8Array): Promise<Uint8Array> {
+	if (!(bytes instanceof Uint8Array) || !bytes.length) throw new TypeError('Invalid Tree-sitter grammar bytes');
+	let length = 0;
+	const decoded = new Blob([new Uint8Array(bytes)]).stream().pipeThrough(new DecompressionStream('gzip'))
+		.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+			transform(chunk, controller) {
+				length += chunk.byteLength;
+				if (length > 16 * 1024 * 1024) throw new RangeError('Installed grammar exceeds the maximum Wasm size');
+				controller.enqueue(chunk);
+			},
+		}));
+	return new Uint8Array(await new Response(decoded).arrayBuffer());
 }
 
 function definition(languageId: string) {

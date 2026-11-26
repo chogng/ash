@@ -1,6 +1,7 @@
 [
   {
     "name": "c",
+    "editorBundled": false,
     "highlights": ["queries/c.scm"],
     "tags": ["queries/c.tags.scm"],
     "folds": ["queries/c.folds.scm"],
@@ -17,6 +18,7 @@
   },
   {
     "name": "cpp",
+    "editorBundled": false,
     "highlights": ["queries/c.scm", "queries/cpp.scm"],
     "tags": ["queries/cpp.tags.scm"],
     "folds": ["queries/cpp.folds.scm"],

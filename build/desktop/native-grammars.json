@@ -1,0 +1,10 @@
+{
+  "coffeescript": ["Coffeescript", "tree_sitter_coffeescript"],
+  "cpp": ["Cpp", "tree_sitter_cpp"],
+  "csharp": ["Csharp", "tree_sitter_c_sharp"],
+  "julia": ["Julia", "tree_sitter_julia"],
+  "perl": ["Perl", "tree_sitter_perl"],
+  "ruby": ["Ruby", "tree_sitter_ruby"],
+  "sql": ["Sql", "tree_sitter_sql"],
+  "swift": ["Swift", "tree_sitter_swift"]
+}

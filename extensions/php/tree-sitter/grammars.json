@@ -1,6 +1,7 @@
 [
   {
     "name": "php",
+    "editorBundled": false,
     "highlights": ["queries/php.scm"],
     "tags": ["queries/php.tags.scm"],
     "folds": ["queries/php.folds.scm"],

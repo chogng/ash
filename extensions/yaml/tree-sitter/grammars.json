@@ -1,6 +1,7 @@
 [
   {
     "name": "yaml",
+    "editorBundled": false,
     "highlights": ["queries/yaml.scm"],
     "tags": ["queries/yaml.tags.scm"],
     "injections": [],

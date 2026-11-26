@@ -1,6 +1,7 @@
 import { globSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { resolve } from "node:path";
+import { pathToFileURL } from 'node:url';
 import { defineConfig, normalizePath, type Plugin } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
 import { rendererDependencyAliases } from '../../../build/desktop/vite/rendererDependencies.js';
@@ -26,6 +27,20 @@ function fixtureBaselineSources(): Plugin {
 }
 
 const root = resolve(import.meta.dirname, '../../..');
+let grammarSources: Promise<ReadonlyMap<string, string>> | undefined;
+function fixtureTreeSitterSources(): Plugin {
+	const sourceRoot = normalizePath(root) + '/';
+	const registryBuilder = pathToFileURL(resolve(root, 'build/treeSitterRegistry.ts'));
+	return {
+		name: 'fixture-tree-sitter-sources', enforce: 'pre',
+		async load(id) {
+			if (!id.startsWith(sourceRoot) || !id.endsWith('.generated.ts')) return;
+			if (!['treeSitterGrammars.generated.ts', 'syntaxLanguages.generated.ts'].includes(basename(id))) return;
+			grammarSources ??= import(registryBuilder.href).then(module => module.treeSitterBrowserFixtureSources(root));
+			return (await grammarSources).get(id.slice(sourceRoot.length));
+		},
+	};
+}
 const fixturePages = [
 	...globSync('src/ash/**/test/**/fixtures/*.html', { cwd: root }),
 	...globSync('test/fixtures/browser/*.html', { cwd: root }),
@@ -63,6 +78,7 @@ function fixturePageUrls(): Plugin {
 }
 
 export default defineConfig({
+	worker: { format: 'es', plugins: () => [fixtureTreeSitterSources()] },
 	define: {
 		__ASH_WEB_APP_SERVER__: 'false',
 		'import.meta.env.ASH_BUILTIN_THEME_SOURCES': JSON.stringify({ 'vscode.theme-defaults': 'file:///extension-sources/theme-defaults' }),
@@ -71,7 +87,7 @@ export default defineConfig({
 	css: { postcss: { plugins: [] } },
 	resolve: { alias: rendererDependencyAliases },
 	root,
-	plugins: [fixturePageUrls(), fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
+	plugins: [fixturePageUrls(), fixtureBaselineSources(), fixtureTreeSitterSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
 		url: '/' + basename(path), inputFile: resolve(root, path), sourceFile: resolve(root, path),
 	})), ...themePreviewPages])],
 	server: {

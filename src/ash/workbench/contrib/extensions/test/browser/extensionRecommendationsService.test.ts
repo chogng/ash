@@ -12,7 +12,9 @@ test('recommendations index open language support once and keep it scoped to eac
 	let modelReads = 0;
 	let providerChecks = 0;
 	const searches: string[] = [];
-	const models = Array.from({ length: count }, (_, index) => ({ uri: URI.file(`/workspace/file-${index}.ts`), getLanguageId: () => 'typescript' }));
+	const lookups: string[] = [];
+	const syntaxPackage = 'marketplace.syntax-typescript-basics@ash';
+	const models = Array.from({ length: count }, (_, index) => ({ uri: URI.file(`/workspace/file-${index}.ts`), getLanguageId: () => 'typescript', tokenization: { syntaxTree: undefined } }));
 	const modelEvents = { onModelAdded: Event.None, onModelRemoved: Event.None, onModelLanguageChanged: Event.None };
 	const editorModels = { ...modelEvents, getModels: () => { modelReads++; return models; } };
 	const fileModels = { ...modelEvents, getModels: () => { modelReads++; return []; } };
@@ -30,7 +32,11 @@ test('recommendations index open language support once and keep it scoped to eac
 			searches.push(languageId);
 			return [{ id: 'test.typescript', packageType: 'language', uiTargets: [ExtensionUiTarget.IDE] }];
 		},
-		get: async () => { throw new Error('No product recommendation in this fixture'); },
+		get: async (id: string) => {
+			if (id !== syntaxPackage) throw new Error('No other product recommendation in this fixture');
+			lookups.push(id);
+			return { uiTargets: [ExtensionUiTarget.IDE] };
+		},
 	};
 	const extensions = { onDidChange: Event.None, currentCatalog: { extensions: [] } };
 	const storage = { onDidChangeValue: Event.None, get: (_key: string, _scope: unknown, fallback: string) => fallback, store: () => { } };
@@ -43,8 +49,9 @@ test('recommendations index open language support once and keep it scoped to eac
 		extensions as unknown as Services[11], storage as unknown as Services[12], ignored as unknown as Services[13],
 		{ extUri } as unknown as Services[14], remote as unknown as Services[15]);
 
-	assert.deepEqual((await recommendations.getRecommendations()).recommendations.map(entry => entry.extensionId), ['test.typescript']);
+	assert.deepEqual((await recommendations.getRecommendations()).recommendations.map(entry => entry.extensionId).sort(), [syntaxPackage, 'test.typescript']);
 	assert.deepEqual(searches, ['typescript']);
+	assert.deepEqual(lookups, [syntaxPackage]);
 	assert.equal(modelReads, 2);
 	assert.equal(providerChecks, count);
 });

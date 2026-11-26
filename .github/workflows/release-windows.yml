@@ -393,3 +393,12 @@ jobs:
           path: .build/release-artifacts/${{ matrix.target }}/
           if-no-files-found: error
           compression-level: 0
+
+      - name: Keep Desktop JavaScript source maps for diagnostics
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-js-symbols-${{ matrix.target }}
+          path: dist/desktop-js-symbols/
+          if-no-files-found: error
+          include-hidden-files: true

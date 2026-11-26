@@ -170,6 +170,8 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { CodeHighlightingService, ICodeHighlightingService } from '../../../src/ash/workbench/services/codeHighlighting/browser/codeHighlightingService.js';
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { localize } from '../../../src/ash/nls.js';
 import type { IChatSessionHistoryStatus } from '../../../src/ash/platform/chat/common/chatSessionHistory.js';
 import { decodeAppServerResponse } from '../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
@@ -212,6 +214,9 @@ services.registerSingleton(IImageEditorService, () => new class extends ImageEdi
 	async capture(): Promise<never> { throw new Error('Image capture is outside this transcript fixture'); }
 }());
 const theme = services.get(IThemeService) as TestThemeService;
+if (new URLSearchParams(location.search).has('sessions')) {
+	services.registerInstance(ICodeHighlightingService, resources.add(new CodeHighlightingService(new WebWorkerService(), theme)));
+}
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);

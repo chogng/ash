@@ -25,6 +25,15 @@ pub struct ManagedLanguageServer {
     definition: LanguageServerDefinition,
 }
 
+impl ManagedLanguageServer {
+    /// Keeps the exact acquired language-server generation available to the process.
+    pub fn with_lease(self, lease: impl Send + Sync + 'static) -> Self {
+        Self {
+            definition: self.definition.with_lease(lease),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ManagedLanguageServerError {
     #[error("language server is not runnable at {0}")]

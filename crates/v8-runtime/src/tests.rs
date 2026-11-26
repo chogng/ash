@@ -1,5 +1,5 @@
 #[test]
-fn array_sort_is_safe_with_the_product_initialization_policy() {
+fn product_initialization_loads_icu_and_disables_unsafe_sort_optimizations() {
     // Only the test harness permits intrinsics; production initialization must
     // override the unsafe optimization flags even if a caller enabled them.
     v8::V8::set_flags_from_string("--allow-natives-syntax --maglev --turbolev");
@@ -11,7 +11,9 @@ fn array_sort_is_safe_with_the_product_initialization_policy() {
     let context = v8::Context::new(scope, Default::default());
     let scope = &mut v8::ContextScope::new(scope, context);
     let source = format!(
-        "if (%IsMaglevEnabled()) throw new Error('Maglev must be disabled');\n{}",
+        "if (new Intl.NumberFormat('de-DE').format(12345.5) !== '12.345,5') \
+         throw new Error('German locale data is required');\n\
+         if (%IsMaglevEnabled()) throw new Error('Maglev must be disabled');\n{}",
         include_str!("../../v8-poc/src/array_sort_regression.js")
     );
     let source = v8::String::new(scope, &source).unwrap();

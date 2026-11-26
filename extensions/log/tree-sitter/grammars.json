@@ -1,6 +1,7 @@
 [
   {
     "name": "log",
+    "editorBundled": false,
     "highlights": ["queries/log.scm"],
     "tags": [],
     "folds": [],

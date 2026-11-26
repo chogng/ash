@@ -92,6 +92,7 @@ def build_binaries(
     protocol_prepared: bool = False,
     on_rebuilt_binary: Callable[[str, Path], None] | None = None,
     plan_directory: Path | None = None,
+    environ: Mapping[str, str] | None = None,
 ) -> Dict[str, Path]:
     """Notify rebuilt executables after each successful group, before the next.
 
@@ -135,7 +136,7 @@ def build_binaries(
         plan.packages = packages
     if not protocol_prepared and "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
-    environment = cargo_environment(spec, packages)
+    environment = cargo_environment(spec, packages, environ=environ)
     if cargo_profile == "release" and "apple-darwin" in spec.target:
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
 

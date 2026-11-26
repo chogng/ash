@@ -26,6 +26,13 @@ impl LanguageConfiguration {
         syntax_language: SyntaxLanguage,
         parser: &mut Parser,
     ) -> Result<Arc<Self>, SyntaxError> {
+        #[cfg(ash_desktop_native_grammars)]
+        crate::desktop_grammars::prepare(syntax_language).map_err(|reason| {
+            SyntaxError::NativeGrammarUnavailable {
+                language: syntax_language,
+                reason,
+            }
+        })?;
         let definition = definition(syntax_language);
         let language = definition.language;
         parser

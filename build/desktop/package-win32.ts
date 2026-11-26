@@ -1,12 +1,13 @@
 import { bundleWindowsMain, copyHostOutput } from './host.ts';
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
-import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions, pruneWindowsApplication } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
 import { disableElectronNodeInspector } from './packageFuses.ts';
 import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId, AshWindowsToastActivatorClsid } from '../../src/ash/code/common/application.ts';
 import { writeInstallationManifest } from './installationManifest.ts';
@@ -83,12 +84,10 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	process.env.NODE_GYP_FORCE_PYTHON = python;
 	await prepareElectronAddons(appStage);
 
+	await pruneWindowsApplication(appStage, join(destination, 'desktop-js-symbols'));
 	await writeApplicationChecksums(appStage);
 
 	const sourceBackend = options.get('--backend-package') ?? await buildBackend(stage, electronMetadata.version);
-	const backend = join(stage, 'desktop-backend');
-	await run(python, ['-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'), '--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version, '--remote-release', resolve(remoteRelease)], repositoryRoot);
-	await validateBackend(backend, electronMetadata.version);
 
 	await mkdir(destination, { recursive: true });
 	const packagePaths = await packager({
@@ -107,6 +106,21 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		afterExtract: [pruneElectronLocales, extracted => disableElectronNodeInspector(extracted)],
 	});
 	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath) throw new Error('Electron packager returned an unexpected bundle path');
+	// Keep the complete upstream notices in an archive readable by Windows Explorer.
+	await run(python, ['-B', '-m', 'zipfile', '-c', 'LICENSES.chromium.zip', 'LICENSES.chromium.html'], bundlePath);
+	await unlink(join(bundlePath, 'LICENSES.chromium.html'));
+
+	const backend = join(stage, 'desktop-backend');
+	const electronIcu = join(bundlePath, 'icudtl.dat');
+	const pinnedIcu = (await readFile(join(repositoryRoot, 'third_party/v8/windows-desktop-icu.sha256'), 'utf8')).trim();
+	const sharedIcu = createHash('sha256').update(await readFile(electronIcu)).digest('hex') === pinnedIcu;
+	await run(python, [
+		'-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'),
+		'--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version, '--remote-release', resolve(remoteRelease),
+		...(sharedIcu ? ['--windows-electron-icu', electronIcu] : []),
+		...(options.has('--backend-package') ? [] : ['--capability-archive-dir', join(repositoryRoot, '.build', 'releases')]),
+	], repositoryRoot);
+	await validateBackend(backend, electronMetadata.version);
 
 	const resources = join(bundlePath, 'resources');
 	for (const entry of await readdir(backend)) {
@@ -138,7 +152,8 @@ async function buildBackend(stage: string, electronVersion: string): Promise<str
 		'-B', join(repositoryRoot, 'build', 'app_server.py'),
 		'--target', 'x86_64-pc-windows-msvc',
 		'--javascript-runtime', 'host-provided-node',
-		'--media-distribution', 'bundled',
+		'--media-distribution', 'optional',
+		'--desktop-native-grammars',
 		'--electron-version', electronVersion,
 		'--package-dir', backend,
 		'--capability-archive-dir', join(repositoryRoot, '.build', 'releases'),

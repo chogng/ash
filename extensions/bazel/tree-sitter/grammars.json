@@ -1,6 +1,7 @@
 [
   {
     "name": "starlark",
+    "editorBundled": false,
     "highlights": ["queries/starlark.scm"],
     "tags": ["queries/starlark.tags.scm"],
     "injections": ["queries/starlark.injections.scm"],
@@ -17,6 +18,7 @@
   },
   {
     "name": "bazelrc",
+    "editorBundled": false,
     "highlights": ["queries/bazelrc.scm"],
     "tags": ["queries/bazelrc.tags.scm"],
     "injections": [],

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "ash/zig",
+  "version": "1.0.0",
+  "displayName": "Zig",
+  "compatibility": { "ash": ">=0.1.0" },
+  "uiTargets": ["ide"],
+  "contributions": {
+    "declarativeExtensions": [{ "id": "zig", "path": "extension" }]
+  }
+}

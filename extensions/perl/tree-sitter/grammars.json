@@ -1,6 +1,7 @@
 [
   {
     "name": "perl",
+    "editorBundled": false,
     "highlights": ["queries/perl.scm"],
     "tags": ["queries/perl.tags.scm"],
     "folds": ["queries/perl.folds.scm"],

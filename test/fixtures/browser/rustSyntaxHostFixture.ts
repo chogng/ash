@@ -20,6 +20,11 @@ export async function rustSyntaxFixture(): Promise<ISyntaxApi> {
 	return (await connection).api;
 }
 
+export async function rustSyntaxClientFixture(): Promise<AppServerProtocolClient> {
+	connection ??= connect();
+	return (await connection).client;
+}
+
 async function connect(): Promise<{ api: ISyntaxApi; client: AppServerProtocolClient; }> {
 	const listeners = new Map<string, Set<(payload: unknown) => void>>();
 	window.__rustSyntaxEvent = (event, payload) => {

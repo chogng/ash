@@ -1,6 +1,7 @@
 [
   {
     "name": "markdown",
+    "editorBundled": false,
     "highlights": ["queries/markdown.scm"],
     "tags": ["queries/markdown.tags.scm"],
     "injections": ["queries/markdown.injections.scm"],
@@ -17,6 +18,7 @@
   },
   {
     "name": "markdown-inline",
+    "editorBundled": false,
     "highlights": ["queries/markdown-inline.scm"],
     "tags": [],
     "injections": ["queries/markdown-inline.injections.scm"],

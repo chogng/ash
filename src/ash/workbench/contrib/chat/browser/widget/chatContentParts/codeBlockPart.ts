@@ -18,6 +18,7 @@ import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEd
 import { getChatResultEditorOptions } from '../chatOptions.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
+import { SyntaxProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
 import { PLAINTEXT_LANGUAGE_ID } from '../../../../../../editor/common/languages/modesRegistry.js';
 import { ITreeSitterLibraryService } from '../../../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
@@ -37,6 +38,7 @@ import { CodeEditorConfiguration } from '../../../../codeEditor/common/editorCon
 import { CopyCodeBlockActionId } from '../../actions/chatCodeblockActions.js';
 import { ChatEditorConfiguration } from '../../../common/constants.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
+import { ICodeHighlightingService } from '../../../../../services/codeHighlighting/browser/codeHighlightingService.js';
 
 export interface ICodeBlockActionContext {
 	readonly code: string;
@@ -72,10 +74,12 @@ export class CodeBlockPart extends Disposable {
 	private readonly language: HTMLElement;
 	private readonly pendingActions = new Set<string>();
 	private data: ICodeBlockData | undefined;
+	private fence = '';
 	private languageId = PLAINTEXT_LANGUAGE_ID;
 	private readonly relayout: RunOnceScheduler;
 	private editor: CodeEditorWidget | undefined;
 	private readonly editorLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private readonly highlighter: ICodeHighlightingService | undefined;
 	private layoutWidth: number | undefined;
 	private visible = true;
 	private measuredHeight = false;
@@ -91,11 +95,11 @@ export class CodeBlockPart extends Disposable {
 		@ILanguageService private readonly languages: ILanguageService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
-		@ITreeSitterLibraryService private readonly syntax: ITreeSitterLibraryService,
 		@IThemeService private readonly themes: IThemeService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
+		this.highlighter = instantiationService.getOptional(ICodeHighlightingService);
 		this.element = h(document, 'div');
 		this.element.className = 'ash-chat-code-block';
 		const header = h(document, 'div', { className: 'ash-chat-code-block-toolbar' });
@@ -272,6 +276,8 @@ export class CodeBlockPart extends Disposable {
 	}
 
 	private updateLanguage(info: string): void {
+		const fenceChanged = this.fence !== info;
+		this.fence = info;
 		const resolved = this.languages.getRegisteredLanguageIds().includes(info) ? info : this.languages.getLanguageIdByLanguageName(info);
 		this.languageId = resolved ?? PLAINTEXT_LANGUAGE_ID;
 		let label = info;
@@ -282,6 +288,7 @@ export class CodeBlockPart extends Disposable {
 		if (this.language.textContent !== label) this.language.textContent = label;
 		const model = this.documentModel.value;
 		if (model && model.getLanguageId() !== this.languageId) model.setLanguage(this.languageId);
+		else if (this.highlighter && fenceChanged) model?.tokenization.resetTokenization();
 	}
 
 	public render(data: ICodeBlockData, width?: number): void {
@@ -302,11 +309,23 @@ export class CodeBlockPart extends Disposable {
 		const editor = this.editor ??= this.createEditor();
 		const model = this.documentModel.value;
 		if (!model) {
+			const highlighter = this.highlighter;
+			const syntax = highlighter ? undefined : this.instantiationService.getOptional(ITreeSitterLibraryService);
+			const syntaxProviderRegistry = highlighter ? this.editorLifetime.value!.add(new SyntaxProviderRegistry()) : undefined;
+			if (syntaxProviderRegistry && highlighter) syntaxProviderRegistry.register({
+				id: 'ash.chat.highlight',
+				languageIds: ['*'],
+				tokenPriority: 100,
+				provideTokens: (request, signal) => highlighter.highlight(this.fence, request.snapshot.getText(), signal),
+			});
 			const created = new TextModel(data.text, {
 				languageId: this.languageId,
 				tokenization: {
-					createSyntaxSession: model => createTreeSitterSyntaxSession(model, this.configuration, this.syntax, this.themes),
-					onDidChangeSyntaxBackend: this.syntax.onDidChange,
+					...(syntaxProviderRegistry ? { syntaxProviderRegistry } : {}),
+					...(syntax ? {
+						createSyntaxSession: model => createTreeSitterSyntaxSession(model, this.configuration, syntax, this.themes),
+						onDidChangeSyntaxBackend: syntax.onDidChange,
+					} : {}),
 					onDidChangeLanguageSupport: Event.map(this.themes.onDidColorThemeChange, () => undefined),
 				},
 			});

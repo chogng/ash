@@ -1,6 +1,7 @@
 [
   {
     "name": "powershell",
+    "editorBundled": false,
     "highlights": ["queries/powershell.scm"],
     "tags": ["queries/powershell.tags.scm"],
     "folds": ["queries/powershell.folds.scm"],

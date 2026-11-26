@@ -14,6 +14,7 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { ILanguageServerService } from '../../../../platform/language/common/languageServerService.js';
 import { ExtensionUiTarget, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { optionalSyntaxPackageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { isAcademyExtension } from '../common/academyExtension.js';
 import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -148,6 +149,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		for (const resource of this.requestedResources.values()) { resources.set(this.uriIdentity.extUri.getComparisonKey(resource), { resource }); }
 		for (const input of this.editors.visibleEditors) { resources.set(this.uriIdentity.extUri.getComparisonKey(input.resource), { resource: input.resource, languageId: input.languageId }); }
 		const directResources = new Set(resources.keys());
+		const structuredResources = new Set<string>();
 		const supportedResources = new Map<string, Set<string>>();
 		const supportedFolderLanguages = new Map<string | undefined, Set<string>>();
 		for (const model of [...this.editorModels.getModels(), ...this.models.getModels()]) {
@@ -157,6 +159,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			// an editor or explicit request supplies recommendation context there.
 			if (!model.isForSimpleWidget && (this.target === ExtensionUiTarget.IDE || directResources.has(resourceKey))) {
 				resources.set(resourceKey, { resource: model.uri, languageId });
+				if (optionalSyntaxPackageForEditorLanguage(languageId) && model.tokenization.syntaxTree) structuredResources.add(resourceKey);
 			}
 			if (languageId === 'plaintext' || !this.languageFeatures.hoverProvider.has(model)) { continue; }
 			const languages = supportedResources.get(resourceKey) ?? new Set<string>();
@@ -197,7 +200,17 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				add({ extensionId: tip.id, uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } } : {}) });
 			}
 			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
-			if (language) { work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application, resource)); }
+			if (language) {
+				const name = this.languages.getLanguageName(language) ?? language;
+				work.push(forLanguage(language, name, ExtensionRecommendationReason.Application, resource));
+				const syntaxPackage = this.target === ExtensionUiTarget.IDE ? optionalSyntaxPackageForEditorLanguage(language) : undefined;
+				if (syntaxPackage && !excluded.has(identity(syntaxPackage)) && !structuredResources.has(this.uriIdentity.extUri.getComparisonKey(resource))) {
+					work.push(targetsFor(syntaxPackage).then(uiTargets => {
+						if (!uiTargets?.includes(ExtensionUiTarget.IDE)) return;
+						add({ extensionId: syntaxPackage, uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'contextRecommendationReason' }, 'Recommended for {0}', name) }, context: { source: RecommendationSource.FILE, name, searchValue: syntaxPackage } });
+					}));
+				}
+			}
 			else if (!tip && extension) {
 				// Language packages publish file extensions in their searchable catalog metadata, even before installation.
 				const key = `file:${extension}`;

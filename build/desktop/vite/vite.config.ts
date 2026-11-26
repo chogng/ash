@@ -100,6 +100,8 @@ export default defineConfig(({ mode, command }) => {
 
 	return {
 		base: './',
+		// Module Workers can load language chunks without bundling every grammar at startup.
+		worker: { format: 'es' },
 		root: sourceRoot,
 		publicDir: resolve(repositoryRoot, 'resources/server'),
 		define: {

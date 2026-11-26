@@ -24,9 +24,21 @@ its upstream grammar ships no queries; Log highlights use Ash-authored theme-com
 All built-in languages use the same package declarations. `pnpm tree-sitter:generate`
 produces the Rust language registry, protocol enum and server adapter, plus the Web
 language metadata and WASM/query imports. It includes editor IDs, code-fence aliases,
-embedded-language IDs, and query composition. Rust parsers remain statically linked
-Cargo dependencies; browser parsers remain bundled WASM assets. This registry serves
-the built-in package set and does not introduce per-language processes.
+embedded-language IDs, and query composition. Rust links the backend parsers
+statically. The IDE loads browser parsers from installed declarative extensions
+with a `contributes.treeSitter` entry. Each entry declares a language, a gzip-compressed
+Wasm parser, and queries for highlighting, symbols, folding and optional language
+injections. The editor Worker reads the package resources on first use. See the
+[Zig extension](../language-extensions/zig/extension/README.md).
+
+`pnpm package:syntax <grammar-source-lock> <language-index> <output-directory>` generates separate
+registry submissions from the pinned grammar release and the editor's queries.
+Use the grammar producer's `grammars.lock.json` from the release in
+`third_party/ash-grammars/runtime-lock.json` and the Extensions registry's
+`marketplace/languages/index.json` to retain its existing language display names.
+After the matching syntax package is
+available in the registry, set `editorBundled` to `false` in its grammar
+declaration and regenerate to remove the Wasm and queries from the editor bundle.
 Cargo source directories beneath `tree-sitter/` are build inputs and are excluded from
 runtime extension packages; adjacent WASM, manifests, queries, and licenses remain packaged.
 
@@ -140,10 +152,11 @@ The current declarative pack contains the following package directories:
   `editor.semanticTokenColorCustomizations.rules`. The `editor.action.inspectTMScopes` command
   reports the active parser's captures and resolved syntax style.
 
-Built-in languages use Tree-sitter by default. Rust links the precompiled static
-library through `ash-grammars`; the Web Worker loads all 48 grammar modules from
-the same pinned release. Ash keeps editor queries in `queries/` beside their
-provenance and licenses. Each package's `tree-sitter/grammars.json` declares language
+The IDE and Agent Window use Shiki for default highlighting. Installing a syntax
+extension adds Tree-sitter highlighting, folding and outlines in the IDE. The Worker
+loads the installed gzip-compressed grammar and its queries on demand. Rust links
+the pinned static parsers through `ash-grammars` for backend analysis. Ash keeps editor queries in
+`queries/` beside their provenance and licenses. Each package's `tree-sitter/grammars.json` declares language
 IDs, aliases, queries and optional persisted-snapshot query bindings. It does not
 contain parser sources or compiler settings.
 
@@ -159,14 +172,14 @@ pnpm tree-sitter:generate
 pnpm tree-sitter:verify
 ```
 
-Docker Compose file names select `dockercompose` and reuse the YAML parser and queries.
-The common project language packages provide offline syntax and editing resources; their
-declarations do not install or start C/C++, Java, C#, PowerShell, or other language servers.
+Docker Compose file names select `dockercompose` and use the YAML syntax extension.
+The built-in language declarations provide file associations and editing configuration.
 The built-in `css` and `typescript-basics` packages additionally declare bundled Node
 servers for CSS/LESS/SCSS and TypeScript/JavaScript, respectively. The existing LSP runtime
 starts them on document demand using Ash's managed Node runtime; `tsserver`, its standard
 libraries and server dependencies are shipped with the product, so users need no global npm setup.
-TextMate tokenization, scope-theme rules, and property-list themes are not supported.
+Shiki uses its bundled TextMate grammars. Extension manifests contribute parsers through
+`treeSitter`, and Ash themes style editor tokens through semantic token rules.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
 Rust-validated package resources and projects languages/configuration/snippets/grammars/theme metadata/

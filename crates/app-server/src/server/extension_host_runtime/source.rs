@@ -134,6 +134,7 @@ impl EditorExtensionDeployment {
 pub(super) fn built_in_deployments(
     selection: BuiltInEditorExtensions,
     admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
+    debug: Option<&super::super::desktop_capabilities::DebugAccess>,
 ) -> Result<Vec<EditorExtensionDeployment>, ExtensionHostRuntimeError> {
     if selection == BuiltInEditorExtensions::Omitted {
         return Ok(Vec::new());
@@ -149,9 +150,10 @@ pub(super) fn built_in_deployments(
     ];
     // This optional package only supplies debugger policy. Missing binaries do
     // not make the shared host or non-debugging clients depend on LLDB.
-    if directory
-        .join(format!("ash-debug-lldb{}", std::env::consts::EXE_SUFFIX))
-        .is_file()
+    if debug.is_some()
+        || directory
+            .join(format!("ash-debug-lldb{}", std::env::consts::EXE_SUFFIX))
+            .is_file()
     {
         deployments.push(product_lldb_deployment(directory)?);
     }
@@ -182,13 +184,23 @@ pub(super) fn built_in_deployments(
             ),
         ),
     ] {
-        if directory
-            .join(format!("ash-{name}{}", std::env::consts::EXE_SUFFIX))
-            .is_file()
+        if debug.is_some()
+            || directory
+                .join(format!("ash-{name}{}", std::env::consts::EXE_SUFFIX))
+                .is_file()
         {
-            deployments.push(product_debug_workflow_deployment(
-                directory, name, manifest, sources,
-            )?);
+            let mut deployment =
+                product_debug_workflow_deployment(directory, name, manifest, sources)?;
+            // Startup restores an already available auto-attach provider. A fresh
+            // profile first acquires it through an explicit debug action.
+            if debug.is_some_and(|access| !access.downloaded()) {
+                let keep = |event: &String| event != "onStartupFinished";
+                deployment.params.activation_events.retain(keep);
+                if let Some(plan) = &mut deployment.activation {
+                    plan.events.retain(keep);
+                }
+            }
+            deployments.push(deployment);
         }
     }
     let git_manifest: serde_json::Value =
@@ -204,6 +216,13 @@ pub(super) fn built_in_deployments(
         });
     }
     Ok(deployments)
+}
+
+pub(super) fn is_debugger(id: &str) -> bool {
+    matches!(
+        id,
+        "ash.debug-lldb" | "ash.debug-javascript" | "ash.debug-server-ready"
+    )
 }
 
 fn product_debug_workflow_deployment(

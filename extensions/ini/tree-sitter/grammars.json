@@ -1,6 +1,7 @@
 [
   {
     "name": "ini",
+    "editorBundled": false,
     "highlights": ["queries/ini.scm"],
     "tags": ["queries/ini.tags.scm"],
     "injections": [],
@@ -17,6 +18,7 @@
   },
   {
     "name": "properties",
+    "editorBundled": false,
     "highlights": ["queries/properties.scm"],
     "tags": ["queries/properties.tags.scm"],
     "injections": [],

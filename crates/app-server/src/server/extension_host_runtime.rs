@@ -75,6 +75,7 @@ type CredentialHandler = dyn Fn(
     + Sync;
 
 struct RuntimeInner {
+    debug_access: Option<super::desktop_capabilities::DebugAccess>,
     secrets: Mutex<Option<Arc<dyn ash_secrets::SecretStore>>>,
     storage: Mutex<Option<Arc<ash_state::SqliteExtensionStateStore>>>,
     credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
@@ -241,6 +242,7 @@ impl ExtensionHostRuntime {
             .expect("credential registry lock")
             .insert(provider, handler);
     }
+    #[cfg(test)]
     pub(super) fn start(
         built_in_extensions: source::BuiltInEditorExtensions,
         plugin_authority: Option<PluginActivationAuthority>,
@@ -252,6 +254,34 @@ impl ExtensionHostRuntime {
         updates: Arc<UpdateBroker>,
         client_host: Arc<crate::client_host::ClientHost>,
         environment: Option<BTreeMap<String, Option<String>>>,
+    ) -> Result<Self, ExtensionHostError> {
+        Self::start_with_debug(
+            built_in_extensions,
+            plugin_authority,
+            plugins_manager,
+            extension_packages_admission,
+            launcher,
+            limits,
+            restart_policy,
+            updates,
+            client_host,
+            environment,
+            None,
+        )
+    }
+
+    pub(super) fn start_with_debug(
+        built_in_extensions: source::BuiltInEditorExtensions,
+        plugin_authority: Option<PluginActivationAuthority>,
+        plugins_manager: Option<Arc<ExtensionPackageManager>>,
+        extension_packages_admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
+        launcher: Arc<dyn ExtensionHostLauncher>,
+        limits: ExtensionHostLimits,
+        restart_policy: RestartPolicy,
+        updates: Arc<UpdateBroker>,
+        client_host: Arc<crate::client_host::ClientHost>,
+        environment: Option<BTreeMap<String, Option<String>>>,
+        debug_access: Option<super::desktop_capabilities::DebugAccess>,
     ) -> Result<Self, ExtensionHostError> {
         if let Some(environment) = &environment {
             external_ext_protocol::validate_environment(environment)
@@ -270,6 +300,7 @@ impl ExtensionHostRuntime {
             .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
+            debug_access,
             secrets: Mutex::new(None),
             storage: Mutex::new(None),
             credential_services: Arc::new(Mutex::new(BTreeMap::new())),
@@ -330,7 +361,7 @@ impl ExtensionHostRuntime {
         &self,
         environment: BTreeMap<String, Option<String>>,
     ) -> Result<Self, ExtensionHostError> {
-        let runtime = Self::start(
+        let runtime = Self::start_with_debug(
             self.inner.built_in_extensions,
             self.inner.plugin_authority.clone(),
             self.inner.plugins_manager.clone(),
@@ -341,6 +372,7 @@ impl ExtensionHostRuntime {
             Arc::clone(&self.inner.updates),
             Arc::clone(&self.inner.client_host),
             Some(environment),
+            self.inner.debug_access.clone(),
         )?;
         if let Some(storage) = self
             .inner

@@ -92,6 +92,7 @@ export interface ExtensionManifest {
 		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
 		readonly languages: readonly ExtensionLanguageContribution[];
 		readonly grammars: readonly ExtensionGrammarContribution[];
+		readonly treeSitter: readonly ExtensionTreeSitterContribution[];
 		readonly snippets: readonly ExtensionSnippetContribution[];
 		readonly themes: readonly ExtensionThemeContribution[];
 		readonly iconThemes: readonly ExtensionThemeContribution[];
@@ -171,6 +172,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			keybindings: parseKeybindings(contributes.keybindings, descriptor.id),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
+			treeSitter: Object.freeze(parseTreeSitter(contributes.treeSitter, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
 			themes: Object.freeze(themes),
 			iconThemes: Object.freeze(contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id)),
@@ -344,6 +346,34 @@ function parseExtensions(value: unknown, extensionId: string, index: number): re
 		throw new TypeError(`Extension '${extensionId}' language ${index} extensions must start with a dot`);
 	}
 	return Object.freeze([...new Set(extensions)]);
+}
+
+interface ExtensionTreeSitterContribution {
+	readonly language: string;
+	readonly wasm: string;
+	readonly highlights: string;
+	readonly tags: string;
+	readonly folds: string;
+	readonly injections?: string;
+}
+
+function parseTreeSitter(value: unknown, extensionId: string): readonly ExtensionTreeSitterContribution[] {
+	if (value === undefined) return [];
+	const owner = `Extension '${extensionId}' Tree-sitter grammar`;
+	if (!Array.isArray(value) || value.length > 32) throw new TypeError(`Invalid ${owner} contributions`);
+	return value.map(candidate => {
+		const entry = record(candidate, owner);
+		const wasm = normalizeResourcePath(entry.wasm, owner + ' Wasm');
+		if (!wasm.endsWith('.wasm.gz')) throw new TypeError(`Invalid ${owner} Wasm path`);
+		return Object.freeze({
+			language: languageId(entry.language, owner + ' language'),
+			wasm,
+			highlights: normalizeResourcePath(entry.highlights, owner + ' highlighting query'),
+			tags: normalizeResourcePath(entry.tags, owner + ' symbol query'),
+			folds: normalizeResourcePath(entry.folds, owner + ' folding query'),
+			...(entry.injections === undefined ? {} : { injections: normalizeResourcePath(entry.injections, owner + ' injection query') }),
+		});
+	});
 }
 
 function parseGrammars(value: unknown, extensionId: string): readonly ExtensionGrammarContribution[] {

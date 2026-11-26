@@ -2,6 +2,68 @@ import { test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
 import structures from '../../fixtures/tree-sitter/structure.json' with { type: 'json' };
 import samples from '../../fixtures/tree-sitter/languages.json' with { type: 'json' };
 import { expect } from '@playwright/test';
+import { resolve } from 'node:path';
+
+test('Agent code highlighting loads a Shiki grammar in a dedicated Worker', async ({ page }) => {
+	await page.goto('/treeSitter.html?backend=offline');
+	await expect.poll(() => page.evaluate(() => !!window.treeSitterIntegration)).toBe(true);
+	expect(page.workers().some(worker => worker.url().includes('chatHighlightWorker'))).toBe(false);
+	const result = await page.evaluate(() => window.treeSitterIntegration.highlightChatCode('zig', 'const greeting = "你好🙂";'));
+	expect(result).toEqual(expect.arrayContaining([
+		expect.objectContaining({ type: 'keyword', text: 'const' }),
+		expect.objectContaining({ type: 'string', text: '你好🙂' }),
+	]));
+	expect(page.workers().some(worker => worker.url().includes('chatHighlightWorker'))).toBe(true);
+	const jsx = await page.evaluate(() => window.treeSitterIntegration.highlightChatCode('typescriptreact', 'const view = <div title="example" />;'));
+	expect(jsx).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'attribute', text: 'title' })]));
+	const bazelrc = await page.evaluate(() => window.treeSitterIntegration.highlightChatCode('bazelrc', '# flags\nbuild:ci --keep_going'));
+	expect(bazelrc).toEqual(expect.arrayContaining([
+		expect.objectContaining({ type: 'comment', text: '# flags' }),
+		expect.objectContaining({ type: 'keyword', text: 'build' }),
+		expect.objectContaining({ type: 'property', text: '--keep_going' }),
+	]));
+	const ignore = await page.evaluate(() => window.treeSitterIntegration.highlightChatCode('gitignore', '# generated\n!dist/*.js'));
+	expect(ignore).toEqual(expect.arrayContaining([
+		expect.objectContaining({ type: 'comment', text: '# generated' }),
+		expect.objectContaining({ type: 'operator', text: '!' }),
+		expect.objectContaining({ type: 'operator', text: '*' }),
+	]));
+	expect(await page.evaluate(() => window.treeSitterIntegration.highlightChatCode('unrecognized-grammar', 'example'))).toEqual([]);
+});
+
+test.describe('Zig syntax extension', () => {
+	test.use({ syntaxPlugin: resolve('language-extensions/zig') });
+
+	test('zig install, enable and uninstall update the open IDE file', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/treeSitter.html?zig-extension');
+		await expect.poll(async () => {
+			if (errors.length) throw new Error(errors.join('\n'));
+			return page.evaluate(() => !!window.treeSitterIntegration);
+		}).toBe(true);
+		const original = 'pub fn greet() []const u8 {\n    return "你好🙂";\n}\n';
+		await page.evaluate(text => window.treeSitterIntegration.open('plaintext', text, true), original);
+		const shikiTokens = expect.arrayContaining([expect.objectContaining({ type: 'string', text: expect.stringContaining('你好🙂') })]);
+		await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ language: 'plaintext', shared: false, tokens: shikiTokens });
+
+		const id = await page.evaluate(() => window.treeSitterIntegration.installSyntaxPlugin());
+		expect(id).toBe('ash/zig');
+		await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({
+			language: 'zig', execution: 'worker', tokens: expect.arrayContaining([expect.objectContaining({ type: 'string', text: '\"你好🙂\"' })]),
+		});
+		const facts = await page.evaluate(() => window.treeSitterIntegration.facts());
+		expect(facts.symbols.map(symbol => symbol.name)).toEqual(['greet']);
+		expect(facts.folds).toEqual([expect.objectContaining({ startLineIndex: 0, endLineIndex: 2 })]);
+		await page.evaluate(() => window.treeSitterIntegration.edit());
+
+		expect(await page.evaluate(pluginId => window.treeSitterIntegration.uninstallSyntaxPlugin(pluginId), id)).toBe(false);
+		await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ language: 'plaintext', shared: false, text: expect.stringContaining('updated '), tokens: shikiTokens });
+		await page.evaluate(() => window.treeSitterIntegration.undo());
+		expect(await page.evaluate(() => window.treeSitterIntegration.state().text)).toBe(original);
+		expect(errors).toEqual([]);
+	});
+});
 
 test('Python Rust backend paints syntax and preserves editing and undo', async ({ page }) => {
 	const errors: string[] = [];

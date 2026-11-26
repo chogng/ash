@@ -98,6 +98,7 @@ impl SyntaxRequestProcessor {
             request_cancellations,
         }
     }
+
     pub(super) fn connection_closed(&self, connection_id: u64) {
         if let Ok(mut documents) = self.syntax_documents.lock() {
             documents.retain(|(owner, _), _| *owner != connection_id);
@@ -717,7 +718,8 @@ fn syntax_error(error: SyntaxError) -> RpcError {
         SyntaxError::DocumentTooLarge { .. } => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        SyntaxError::Language { .. }
+        SyntaxError::NativeGrammarUnavailable { .. }
+        | SyntaxError::Language { .. }
         | SyntaxError::Query { .. }
         | SyntaxError::ParseCancelled
         | SyntaxError::NonIncreasingRevision { .. }

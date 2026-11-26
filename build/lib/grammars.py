@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import gzip
+import hashlib
 import json
 import re
 import shutil
 import tarfile
 import tempfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -84,7 +87,51 @@ def _unpack(archive: Path, destination: Path) -> None:
                 shutil.copyfileobj(source, sink)
 
 
-def _validate(directory: Path, lock: dict, target: str, archive: Path) -> None:
+def _prepare_wasm_assets(directory: Path, modules: dict, *, verify_only: bool) -> None:
+    assets = directory / "renderer-wasm"
+    if assets.is_symlink():
+        raise RuntimeError(f"Invalid compressed grammar directory: {assets}")
+    if not assets.exists():
+        if verify_only:
+            raise RuntimeError(
+                f"Missing compressed grammars: {assets}; run pnpm tree-sitter:prepare"
+            )
+        # Derive renderer assets from the verified release. An older cache can
+        # gain the compressed layout without replacing its original modules.
+        with tempfile.TemporaryDirectory(
+            prefix=".renderer-wasm-", dir=directory
+        ) as temporary:
+            staging = Path(temporary) / "assets"
+            staging.mkdir()
+            for name, entry in modules.items():
+                with (
+                    (directory / entry["path"]).open("rb") as source,
+                    (staging / f"{name}.wasm.gz.bin").open("wb") as output,
+                    gzip.GzipFile(
+                        filename="", mode="wb", fileobj=output, mtime=0
+                    ) as sink,
+                ):
+                    shutil.copyfileobj(source, sink)
+            staging.rename(assets)
+        return
+
+    for name, entry in modules.items():
+        asset = assets / f"{name}.wasm.gz.bin"
+        if asset.is_symlink() or not asset.is_file():
+            raise RuntimeError(f"Invalid compressed grammar: {asset}")
+        try:
+            with gzip.open(asset, "rb") as stream:
+                data = stream.read(entry["size"] + 1)
+        except (OSError, EOFError, zlib.error) as error:
+            raise RuntimeError(f"Invalid compressed grammar: {asset}") from error
+        if (
+            len(data) != entry["size"]
+            or hashlib.sha256(data).hexdigest() != entry["sha256"]
+        ):
+            raise RuntimeError(f"Compressed grammar checksum mismatch: {asset}")
+
+
+def _validate(directory: Path, lock: dict, target: str, archive: Path) -> dict | None:
     metadata = "grammars.json" if target == "wasm" else "lib/bundle.json"
     # The extracted manifest is not a trust root. Bind it back to the locked
     # archive before using its individual file digests on subsequent builds.
@@ -98,6 +145,7 @@ def _validate(directory: Path, lock: dict, target: str, archive: Path) -> None:
         for manifest in (ROOT / "extensions").glob("*/tree-sitter/grammars.json")
         for grammar in json.loads(manifest.read_text(encoding="utf-8"))
     }
+    modules = None
     if target == "wasm":
         modules = json.loads(expected_metadata)
         if modules.keys() != expected:
@@ -137,6 +185,7 @@ def _validate(directory: Path, lock: dict, target: str, archive: Path) -> None:
             )
     if not any((directory / "licenses").glob("*.txt")):
         raise RuntimeError("Grammar archive is missing its license notices")
+    return modules
 
 
 def _prepare_grammars(target: str, *, verify_only: bool = False) -> Path:
@@ -154,20 +203,24 @@ def _prepare_grammars(target: str, *, verify_only: bool = False) -> Path:
                 )
             download_and_verify(artifact, archive)
         if directory.exists():
-            _validate(directory, lock, target, archive)
-            return directory
-        if verify_only:
+            modules = _validate(directory, lock, target, archive)
+        elif verify_only:
             raise RuntimeError(
                 f"Missing prepared grammars: {directory}; run pnpm tree-sitter:prepare"
             )
-        # Publish only complete validated outputs; concurrent Cargo and renderer
-        # preparation share the lock, and consumers never see a partial tree.
-        with tempfile.TemporaryDirectory(prefix=f".{target}-", dir=parent) as temporary:
-            staging = Path(temporary) / "bundle"
-            staging.mkdir()
-            _unpack(archive, staging)
-            _validate(staging, lock, target, archive)
-            staging.rename(directory)
+        else:
+            # Publish only complete validated outputs, so parallel build
+            # consumers never see a partially extracted release.
+            with tempfile.TemporaryDirectory(
+                prefix=f".{target}-", dir=parent
+            ) as temporary:
+                staging = Path(temporary) / "bundle"
+                staging.mkdir()
+                _unpack(archive, staging)
+                modules = _validate(staging, lock, target, archive)
+                staging.rename(directory)
+        if modules is not None:
+            _prepare_wasm_assets(directory, modules, verify_only=verify_only)
     return directory
 
 

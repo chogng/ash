@@ -1,26 +1,29 @@
 import { test as base, type Page } from '@playwright/test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-export const test = base.extend<{ rustSyntax: void; }>({
-	rustSyntax: [async ({ page }, use) => {
-		const stop = await attachRustSyntax(page);
+export const test = base.extend<{ rustSyntax: void; syntaxPlugin?: string; }>({
+	syntaxPlugin: [undefined, { option: true }],
+	rustSyntax: [async ({ page, syntaxPlugin }, use) => {
+		const stop = await attachRustSyntax(page, undefined, syntaxPlugin);
 		try { await use(); }
 		finally { await stop(); }
 	}, { auto: true }],
 });
 
-export async function attachRustSyntax(page: Page, startProcess = (profile: string) => {
+export async function attachRustSyntax(page: Page, startProcess = (profile: string, workspace: string) => {
 	const executable = process.env.ASH_TEST_SYNTAX_APP_SERVER;
 	if (!executable) throw new Error('Run Rust syntax browser tests through pnpm test:editor:browser so the matching backend is prepared.');
 	return spawn(executable, ['--listen', 'stdio://'], {
-		stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ASH_HOME: profile, ASH_WORKSPACE_ROOT: profile },
+		stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ASH_HOME: profile, ASH_WORKSPACE_ROOT: workspace },
 	});
-}): Promise<() => Promise<void>> {
+}, pluginSource?: string): Promise<() => Promise<void>> {
 	const profile = await mkdtemp(resolve(tmpdir(), 'ash-browser-syntax-'));
+	// The installation source grant must not include the profile's package store.
+	const workspace = pluginSource ? resolve(profile, 'workspace') : profile;
 	let child: ChildProcessWithoutNullStreams | undefined;
 	let lifecycle = Promise.resolve();
 	let delivery = Promise.resolve();
@@ -48,6 +51,7 @@ export async function attachRustSyntax(page: Page, startProcess = (profile: stri
 		}
 	};
 	try {
+		if (pluginSource) await cp(pluginSource, resolve(workspace, 'syntax-plugin'), { recursive: true });
 		await page.exposeBinding('__rustSyntaxTransport', async (_source, event: string, payload: unknown) => {
 			if (disposed) return;
 			if (event === 'ash:app-server:frame') {
@@ -61,7 +65,7 @@ export async function attachRustSyntax(page: Page, startProcess = (profile: stri
 				await stop();
 				if (disposed || event === 'ash:app-server:disconnect') return;
 				if (event !== 'ash:app-server:connect') throw new Error(`Unexpected syntax transport event: ${event}`);
-				const current = child = startProcess(profile);
+				const current = child = startProcess(profile, workspace);
 				failure = undefined;
 				let stderr = '';
 				const reportFailure = (reason: string): void => {
@@ -71,7 +75,7 @@ export async function attachRustSyntax(page: Page, startProcess = (profile: stri
 					void emit('ash:app-server:closed', { reason }).catch(() => undefined);
 				};
 				current.stderr.setEncoding('utf8');
-				current.stderr.on('data', value => { stderr = (stderr + String(value)).slice(-8192); });
+			current.stderr.on('data', value => { stderr = (stderr + String(value)).slice(-8192); });
 				current.once('exit', async (code, signal) => {
 					if (child !== current || disposed) return;
 					// Final stderr can arrive after exit. A descendant can also hold the pipe open.
@@ -98,7 +102,7 @@ export async function attachRustSyntax(page: Page, startProcess = (profile: stri
 						if (child === current && !page.isClosed()) await emit('ash:app-server:frame', { frame });
 					}).catch(error => { if (child === current) failure = String(error); });
 				});
-				await emit('ash:app-server:connected', { protocolVersion: 1, workspaceId: 'syntax-fixture', workspaceRoot: profile });
+				await emit('ash:app-server:connected', { protocolVersion: 1, workspaceId: 'syntax-fixture', workspaceRoot: workspace });
 			});
 			await lifecycle;
 		});

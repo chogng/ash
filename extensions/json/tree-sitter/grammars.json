@@ -1,6 +1,7 @@
 [
   {
     "name": "json",
+    "editorBundled": false,
     "highlights": ["queries/json.scm"],
     "tags": ["queries/json.tags.scm"],
     "injections": [],

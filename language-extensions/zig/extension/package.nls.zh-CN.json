@@ -1,0 +1,4 @@
+{
+  "displayName": "Zig 语言支持",
+  "description": "为 Zig 文件提供基于 Tree-sitter 的语法高亮、折叠和大纲。"
+}

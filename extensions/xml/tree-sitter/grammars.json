@@ -1,6 +1,7 @@
 [
   {
     "name": "xml",
+    "editorBundled": false,
     "highlights": ["queries/xml.scm"],
     "tags": ["queries/xml.tags.scm"],
     "injections": [],
@@ -17,6 +18,7 @@
   },
   {
     "name": "dtd",
+    "editorBundled": false,
     "highlights": ["queries/dtd.scm"],
     "tags": ["queries/dtd.tags.scm"],
     "injections": [],

@@ -1,6 +1,7 @@
 [
   {
     "name": "dotenv",
+    "editorBundled": false,
     "highlights": ["queries/dotenv.scm"],
     "tags": ["queries/dotenv.tags.scm"],
     "folds": [],

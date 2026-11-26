@@ -1,6 +1,7 @@
 [
   {
     "name": "html",
+    "editorBundled": false,
     "highlights": ["queries/html.scm"],
     "tags": ["queries/html.tags.scm"],
     "injections": ["queries/html.injections.scm"],

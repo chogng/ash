@@ -4,7 +4,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { type IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
 import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
-import { syntaxLanguageForEditorLanguage, syntaxEditorLanguageIds } from '../../../../platform/syntax/common/syntaxApi.js';
+import { bundledEditorSyntaxLanguages, bundledSyntaxEditorLanguageIds, editorLanguageIdsForSyntaxLanguage, syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { ISyntaxApi } from '../../../../platform/syntax/common/syntaxApi.js';
@@ -12,31 +12,58 @@ import { createAppServerTreeSitterSession } from './appServerTreeSitterSession.j
 import { Range } from '../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity, nestDocumentSymbols, type LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import { localize } from '../../../../nls.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { ITreeSitterLibraryService, treeSitterChannel, type TreeSitterSyntaxSession } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { TreeSitterFacts, TreeSitterSyntaxResult } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import { extensionTreeSitterWorkerChannel, type ExtensionTreeSitterGrammar, type ExtensionTreeSitterWorkerHost } from '../common/extensionTreeSitterGrammar.js';
 
-/** Rust owns connected syntax sessions; Web uses a local Worker while the connection is unavailable. */
+/** Installed grammars run in a Worker. Built-ins use Rust when connected. */
 export class TreeSitterLibraryService extends Disposable implements ITreeSitterLibraryService {
 	declare readonly _serviceBrand: undefined;
 	private readonly worker = this._register(new MutableDisposable<IWebWorkerClient<object>>());
 	private readonly workerFailure = this._register(new MutableDisposable<IDisposable>());
 	private readonly changed = this._register(new Emitter<void>());
+	private readonly extensionGrammarsChanged = this._register(new Emitter<void>());
+	private extensionGrammars = new Map<string, ExtensionTreeSitterGrammar>();
 	private canRecover = true;
 	private documentId = 0;
 	private requestId = 0;
 
 	constructor(@ISyntaxApi private readonly syntax: ISyntaxApi, @IWebWorkerService private readonly workers: IWebWorkerService) { super(); }
 	get onDidChange() { return Event.any(this.syntax.onDidChangeConnection, this.changed.event); }
+	readonly onDidChangeExtensionGrammars = this.extensionGrammarsChanged.event;
+	get extensionLanguageIds(): readonly string[] {
+		return [...this.extensionGrammars.keys()].flatMap(id => {
+			const builtin = syntaxLanguageForEditorLanguage(id);
+			if (!builtin) return [id];
+			return bundledEditorSyntaxLanguages.has(builtin) ? [] : editorLanguageIdsForSyntaxLanguage(builtin);
+		});
+	}
+
+	replaceExtensionGrammars(grammars: readonly ExtensionTreeSitterGrammar[]): void {
+		if (this.isDisposed) return;
+		const next = new Map(grammars.map(grammar => [grammar.languageId, grammar]));
+		const changed = next.size !== this.extensionGrammars.size || grammars.some(grammar => this.extensionGrammars.get(grammar.languageId)?.packageDigest !== grammar.packageDigest);
+		this.extensionGrammars = next;
+		if (!changed) return;
+		// Retire old modules and queries together. Models retain their buffers and reopen their sessions.
+		this.workerFailure.clear();
+		this.worker.clear();
+		this.extensionGrammarsChanged.fire();
+		this.changed.fire();
+	}
+
 	supportsLanguage(languageId: string): boolean {
-		return (isWeb || this.syntax.isAvailable) && syntaxLanguageForEditorLanguage(languageId) !== undefined;
+		const builtin = syntaxLanguageForEditorLanguage(languageId);
+		return this.extensionGrammars.has(builtin ?? languageId) || builtin !== undefined && bundledEditorSyntaxLanguages.has(builtin) && (isWeb || this.syntax.isAvailable);
 	}
 	createSession(model: TextModel): TreeSitterSyntaxSession {
 		this.assertNotDisposed();
-		if (!isWeb || this.syntax.isAvailable) return createAppServerTreeSitterSession(this.syntax, model, `shared-tree-${++this.documentId}`);
+		const languageId = model.getLanguageId();
+		if (!this.extensionGrammars.has(syntaxLanguageForEditorLanguage(languageId) ?? languageId) && (!isWeb || this.syntax.isAvailable)) return createAppServerTreeSitterSession(this.syntax, model, `shared-tree-${++this.documentId}`);
 		const worker = this.worker.value ?? this.createWorker(), document = ++this.documentId;
 		worker.send('open', { document, text: model.getValue(), eol: model.getEOL(), revision: model.version, language: model.getLanguageId() });
 		let disposed = false;
@@ -63,6 +90,12 @@ export class TreeSitterLibraryService extends Disposable implements ITreeSitterL
 			label: 'ash-tree-sitter', channel: treeSitterChannel,
 			createWorker: () => new Worker(new URL('./treeSitterWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-tree-sitter' }),
 		}));
+		worker.setChannel<ExtensionTreeSitterWorkerHost>(extensionTreeSitterWorkerChannel, {
+			getGrammar: async languageId => {
+				if (typeof languageId !== 'string') throw new TypeError('Invalid extension grammar language');
+				return this.extensionGrammars.get(languageId)?.load();
+			},
+		});
 		this.worker.value = worker;
 		this.workerFailure.value = worker.onDidFail(() => {
 			this.workerFailure.clear();
@@ -130,10 +163,27 @@ export function createTreeSitterSyntaxSession(model: TextModel, configuration: I
 export class TreeSitterSyntaxProviders extends Disposable {
 	private readonly symbols = new WeakMap<TreeSitterFacts, Promise<readonly LanguageDocumentSymbol[]>>();
 	private readonly symbolItems = new WeakMap<TreeSitterFacts['symbols'][number], LanguageDocumentSymbol>();
-	constructor(features: import('../../../../editor/common/services/languageFeatures.js').ILanguageFeaturesService) {
+	constructor(
+		private readonly features: import('../../../../editor/common/services/languageFeatures.js').ILanguageFeaturesService,
+		library?: TreeSitterLibraryService,
+	) {
 		super();
-		const languages = syntaxEditorLanguageIds;
-		this._register(features.documentSymbolProvider.register(languages, {
+		if (bundledSyntaxEditorLanguageIds.length) this._register(this.registerLanguages(bundledSyntaxEditorLanguageIds, 'ash.treeSitter.syntax'));
+		if (library) {
+			const installed = this._register(new MutableDisposable());
+			const refresh = () => {
+				const languages = library.extensionLanguageIds;
+				installed.clear();
+				if (languages.length) installed.value = this.registerLanguages(languages, 'ash.treeSitter.extensions');
+			};
+			this._register(library.onDidChangeExtensionGrammars(refresh));
+			refresh();
+		}
+	}
+
+	private registerLanguages(languages: readonly string[], id: string): IDisposable {
+		const registration = new DisposableStore();
+		registration.add(this.features.documentSymbolProvider.register(languages, {
 			provideDocumentSymbols: async (request, signal) => {
 				const facts = await request.model.tokenization.syntaxTree?.getFacts(signal);
 				if (!facts) return [];
@@ -146,17 +196,18 @@ export class TreeSitterSyntaxProviders extends Disposable {
 				return raceCancellationError(pending, signal, 'Document symbols cancelled');
 			}
 		}));
-		this._register(features.foldingRangeProvider.register(languages, { id: 'ash.treeSitter.syntax', provideFoldingRanges: async (request, signal) => (await request.model.tokenization.syntaxTree?.getFacts(signal))?.folds ?? [] }));
-		this._register(features.selectionRangeProvider.register(languages, { provideSelectionRanges: async (request, signal) => await request.model.tokenization.syntaxTree?.getSelectionRanges(request.ranges, signal) ?? [] }));
+		registration.add(this.features.foldingRangeProvider.register(languages, { id, provideFoldingRanges: async (request, signal) => (await request.model.tokenization.syntaxTree?.getFacts(signal))?.folds ?? [] }));
+		registration.add(this.features.selectionRangeProvider.register(languages, { provideSelectionRanges: async (request, signal) => await request.model.tokenization.syntaxTree?.getSelectionRanges(request.ranges, signal) ?? [] }));
 		// JSON's grammar also backs JSONC, but rejects its legal trailing commas.
 		// The JSON parser owns validation; the shared tree still supplies structural features.
-		this._register(features.syntaxProvider.register({
-			id: 'ash.treeSitter.syntax', languageIds: languages.filter(language => language !== 'json' && language !== 'jsonc'), diagnosticPriority: 100, provideDiagnostics: async (request, signal) => {
+		registration.add(this.features.syntaxProvider.register({
+			id, languageIds: languages.filter(language => language !== 'json' && language !== 'jsonc'), diagnosticPriority: 100, provideDiagnostics: async (request, signal) => {
 				const tree = request.model?.tokenization.syntaxTree; if (!tree) return undefined;
 				const facts = await tree.getFacts(signal);
 				return { diagnostics: facts.diagnostics.map(diagnostic => ({ range: Range.lift(diagnostic.range), severity: LanguageDiagnosticSeverity.Error, message: diagnostic.missing ? localize('treeSitter.missingSyntax', 'Missing required syntax') : localize('treeSitter.syntaxError', 'Syntax error'), code: diagnostic.missing ? 'syntax-missing' : 'syntax-error', source: 'ash-syntax' })) };
 			}
 		}));
+		return registration;
 	}
 	private async documentSymbols(facts: TreeSitterFacts, model: TextModel, version: number): Promise<readonly LanguageDocumentSymbol[]> {
 		const symbols: LanguageDocumentSymbol[] = [];

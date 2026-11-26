@@ -128,6 +128,23 @@ impl ExtensionLaunchCommand {
         Ok(self)
     }
 
+    /// Rebinds a product command after its separately distributed executable was verified.
+    pub fn with_product_executable(
+        mut self,
+        executable: &Path,
+        working_directory: &Path,
+    ) -> Result<Self, ExtensionHostError> {
+        if !matches!(self.runtime, LaunchRuntime::Executable(_))
+            || !executable.is_absolute()
+            || !working_directory.is_absolute()
+        {
+            return Err(ExtensionHostError::SpawnFailed);
+        }
+        self.runtime = LaunchRuntime::Executable(executable.to_owned());
+        self.working_directory = working_directory.to_owned();
+        Ok(self)
+    }
+
     pub(crate) fn extension_environment(&self) -> &Option<BTreeMap<String, Option<String>>> {
         &self.extension_environment
     }

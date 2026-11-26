@@ -58,6 +58,7 @@ impl RuntimeInner {
             .extend(source::built_in_deployments(
                 self.built_in_extensions,
                 self.extension_packages_admission.clone(),
+                self.debug_access.as_ref(),
             )?);
         source_snapshot
             .deployments
@@ -223,13 +224,20 @@ impl RuntimeInner {
                 // is the launch authority; installed first-party packages additionally retain
                 // exact artifact consent, Manager leases and their source trust fence.
                 limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedProduct;
-                launcher = Arc::new(ash_external_ext::ProductExecutableLauncher::new(
-                    prepared
-                        .command
-                        .executable()
-                        .ok_or(ExtensionHostError::SpawnFailed)?
-                        .to_path_buf(),
-                )?);
+                let executable = prepared
+                    .command
+                    .executable()
+                    .ok_or(ExtensionHostError::SpawnFailed)?
+                    .to_path_buf();
+                launcher = match self.debug_access.as_ref().filter(|_| {
+                    deployment.scope == source::EditorExtensionScope::Product
+                        && source::is_debugger(&deployment.id)
+                }) {
+                    Some(access) => access.launcher(executable),
+                    None => Arc::new(ash_external_ext::ProductExecutableLauncher::new(
+                        executable,
+                    )?),
+                };
             }
             if prepared.command.is_node_host() {
                 // prepare_extension has checked exact artifact consent and the live workspace lease.

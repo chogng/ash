@@ -1742,93 +1742,128 @@ impl AppServerLanguageRuntime {
         let environment = config
             .map(|config| config.environment.clone())
             .unwrap_or_default();
-        let result = server.resolve(
-            dir_root,
-            explicit,
-            &InstallContext::current(),
-            &environment,
-            || {
-                let home = self.home.as_deref().ok_or_else(|| {
-                    ManagedLanguageServerError::Installation("Ash home is unavailable".into())
-                })?;
-                let mut downloading = false;
-                let result = (|| {
-                    use ash_http_client::HttpClientConfig;
-                    use ash_http_client::OutboundNetworkSnapshot;
-                    use ash_http_client::RedirectPolicy;
-                    use ash_http_client::ReqwestHttpClient;
-                    use ash_http_client::ResponseBodyLimit;
-                    let config = HttpClientConfig::default()
-                        .with_response_body_limit(
-                            ResponseBodyLimit::new(
-                                std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
-                            )
-                            .unwrap(),
-                        )
-                        .with_redirect_policy(RedirectPolicy::Follow {
-                            max_hops: std::num::NonZeroU8::new(5).unwrap(),
-                        });
-                    let network =
-                        OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
-                            .map_err(|error| {
-                            ManagedLanguageServerError::Installation(error.to_string())
-                        })?;
-                    let http = ReqwestHttpClient::with_network(network).map_err(|error| {
-                        ManagedLanguageServerError::Installation(error.to_string())
-                    })?;
-                    server.install(home, &http, || {
-                        downloading = true;
-                        self.updates.publish_language_server_progress(
-                            self.connection_id,
-                            LanguageServerProgressNotification {
-                                dir_id: self.dir_state.dir_id.clone(),
-                                server: server.id.clone(),
-                                token: "ash.language-server.download".into(),
-                                title: Some(server.id.clone()),
-                                message: None,
-                                percentage: None,
-                                done: false,
-                            },
-                        );
-                    })
-                })();
-                if downloading {
-                    self.updates.publish_language_server_progress(
-                        self.connection_id,
-                        LanguageServerProgressNotification {
-                            dir_id: self.dir_state.dir_id.clone(),
-                            server: server.id.clone(),
-                            token: "ash.language-server.download".into(),
-                            title: None,
-                            message: None,
-                            percentage: None,
-                            done: true,
-                        },
-                    );
-                }
-                result
-            },
-            || {
-                if explicit.is_none()
-                    && let Some(package) = self
-                        .acquisitions
-                        .get(&server.id)
-                        .and_then(|server| server.package.as_ref())
+        let result = (|| {
+            let package = self
+                .acquisitions
+                .get(&server.id)
+                .and_then(|server| server.package.as_ref());
+            let mut source = server.clone();
+            let mut lease = None;
+            if explicit.is_none()
+                && let Some(package) = package
+            {
+                if server.id == "typescript-language-server"
+                    && super::desktop_capabilities::is_declared(
+                        super::desktop_capabilities::TYPESCRIPT,
+                    )
                 {
+                    let home = self.home.as_deref().ok_or_else(|| {
+                        ManagedLanguageServerError::Installation("Ash home is unavailable".into())
+                    })?;
+                    let root = super::desktop_capabilities::install(
+                        home,
+                        self.network_policy.clone(),
+                        super::desktop_capabilities::TYPESCRIPT,
+                    )
+                    .map_err(ManagedLanguageServerError::Installation)?;
+                    lease = Some(ash_package_store::PackageLease::acquire(&root).map_err(
+                        |error| ManagedLanguageServerError::Installation(error.to_string()),
+                    )?);
+                    let extension = root.join("ash-resources/extensions/typescript-basics");
+                    package
+                        .verify_at(&extension)
+                        .map_err(|_| ManagedLanguageServerError::Unavailable(extension.clone()))?;
+                    source.bind_package(&extension)?;
+                } else {
                     package.verify().map_err(|_| {
-                        log::warn!(
-                            "bundled language server {} failed package verification",
-                            server.id
-                        );
                         ManagedLanguageServerError::Unavailable(package.root().to_path_buf())
                     })?;
                 }
-                ash_lsp_server_provider::ManagedNodeRuntime::from_install_context(
+            }
+            source
+                .resolve(
+                    dir_root,
+                    explicit,
                     &InstallContext::current(),
+                    &environment,
+                    || {
+                        let home = self.home.as_deref().ok_or_else(|| {
+                            ManagedLanguageServerError::Installation(
+                                "Ash home is unavailable".into(),
+                            )
+                        })?;
+                        let mut downloading = false;
+                        let result = (|| {
+                            use ash_http_client::HttpClientConfig;
+                            use ash_http_client::OutboundNetworkSnapshot;
+                            use ash_http_client::RedirectPolicy;
+                            use ash_http_client::ReqwestHttpClient;
+                            use ash_http_client::ResponseBodyLimit;
+                            let config = HttpClientConfig::default()
+                                .with_response_body_limit(
+                                    ResponseBodyLimit::new(
+                                        std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
+                                    )
+                                    .unwrap(),
+                                )
+                                .with_redirect_policy(RedirectPolicy::Follow {
+                                    max_hops: std::num::NonZeroU8::new(5).unwrap(),
+                                });
+                            let network = OutboundNetworkSnapshot::with_policy(
+                                config,
+                                self.network_policy.clone(),
+                            )
+                            .map_err(|error| {
+                                ManagedLanguageServerError::Installation(error.to_string())
+                            })?;
+                            let http =
+                                ReqwestHttpClient::with_network(network).map_err(|error| {
+                                    ManagedLanguageServerError::Installation(error.to_string())
+                                })?;
+                            server.install(home, &http, || {
+                                downloading = true;
+                                self.updates.publish_language_server_progress(
+                                    self.connection_id,
+                                    LanguageServerProgressNotification {
+                                        dir_id: self.dir_state.dir_id.clone(),
+                                        server: server.id.clone(),
+                                        token: "ash.language-server.download".into(),
+                                        title: Some(server.id.clone()),
+                                        message: None,
+                                        percentage: None,
+                                        done: false,
+                                    },
+                                );
+                            })
+                        })();
+                        if downloading {
+                            self.updates.publish_language_server_progress(
+                                self.connection_id,
+                                LanguageServerProgressNotification {
+                                    dir_id: self.dir_state.dir_id.clone(),
+                                    server: server.id.clone(),
+                                    token: "ash.language-server.download".into(),
+                                    title: None,
+                                    message: None,
+                                    percentage: None,
+                                    done: true,
+                                },
+                            );
+                        }
+                        result
+                    },
+                    || {
+                        ash_lsp_server_provider::ManagedNodeRuntime::from_install_context(
+                            &InstallContext::current(),
+                        )
+                        .map_err(Into::into)
+                    },
                 )
-                .map_err(Into::into)
-            },
-        );
+                .map(|runtime| match lease {
+                    Some(lease) => runtime.with_lease(lease),
+                    None => runtime,
+                })
+        })();
         if let Err(error) = &result {
             self.updates.publish_language_server_state(
                 self.connection_id,

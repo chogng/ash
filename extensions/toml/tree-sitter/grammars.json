@@ -1,6 +1,7 @@
 [
   {
     "name": "toml",
+    "editorBundled": false,
     "highlights": ["queries/toml.scm"],
     "tags": ["queries/toml.tags.scm"],
     "injections": [],
