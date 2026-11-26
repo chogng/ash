@@ -9,6 +9,11 @@ import type { IConfigurationService } from '../../../../platform/configuration/c
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import {
+	EditorLabelFormatConfiguration,
+	EditorShowIconsConfiguration,
+	EditorTabSizingConfiguration,
+	EditorTabSizingFixedMaxWidthConfiguration,
+	EditorTabSizingFixedMinWidthConfiguration,
 	EditorTabsModeConfiguration,
 	type EditorTabsMode,
 } from '../../../services/editor/common/editorConfiguration.js';
@@ -25,7 +30,7 @@ import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } 
 import { MultiRowEditorControl } from './multiRowEditorTabsControl.js';
 import { NoEditorTabsControl } from './noEditorTabsControl.js';
 import { SingleEditorTabsControl } from './singleEditorTabsControl.js';
-import { h } from '../../../../base/browser/dom.js';
+import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
@@ -40,11 +45,11 @@ export class EditorTitleControl extends Disposable {
 	static readonly HEIGHT = 35;
 
 	readonly domNode: HTMLDivElement;
-	private readonly tabStrip?: HTMLDivElement;
+	readonly tabStrip?: HTMLDivElement;
 	private readonly headerElement: HTMLDivElement;
 	private readonly headerLabel?: HTMLSpanElement;
-	private readonly heightEmitter = this._register(new Emitter<void>());
-	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
+	private readonly sizeEmitter = this._register(new Emitter<void>());
+	readonly onDidChangeSize: Event<void> = this.sizeEmitter.event;
 	private readonly lockIndicator: HTMLSpanElement;
 	private readonly delegate: EditorTabsDelegate;
 	private readonly tabsSlot = this._register(new MutableDisposable<EditorTabsControl>());
@@ -111,7 +116,7 @@ export class EditorTitleControl extends Disposable {
 		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
 		this.lockIndicator.hidden = true;
 		this.headerElement.append(this.lockIndicator);
-		this._register(this.header.onDidChangeHeight(() => this.heightEmitter.fire()));
+		this._register(this.header.onDidChangeHeight(() => this.sizeEmitter.fire()));
 		if (viewOptions.headerRowHeight) {
 			this._register(autorun(reader => {
 				const height = viewOptions.headerRowHeight!.read(reader);
@@ -119,7 +124,7 @@ export class EditorTitleControl extends Disposable {
 					if (height === undefined) node.style.removeProperty('--ash-pane-titleHeight');
 					else node.style.setProperty('--ash-pane-titleHeight', `${height}px`);
 				}
-				this.heightEmitter.fire();
+				this.sizeEmitter.fire();
 			}));
 		}
 		if (configurationService) {
@@ -129,7 +134,15 @@ export class EditorTitleControl extends Disposable {
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
 					this.updateRows();
-					this.heightEmitter.fire();
+					this.sizeEmitter.fire();
+				} else if (this.tabStrip && (
+					event.affectsConfiguration(EditorTabSizingConfiguration)
+					|| event.affectsConfiguration(EditorTabSizingFixedMinWidthConfiguration)
+					|| event.affectsConfiguration(EditorTabSizingFixedMaxWidthConfiguration)
+					|| event.affectsConfiguration(EditorLabelFormatConfiguration)
+					|| event.affectsConfiguration(EditorShowIconsConfiguration)
+				)) {
+					this.sizeEmitter.fire();
 				}
 			}));
 		}
@@ -162,6 +175,47 @@ export class EditorTitleControl extends Disposable {
 		return true;
 	}
 
+	get singleRowTabStripSize(): IDimension | undefined {
+		const strip = this.tabStrip;
+		if (!strip || strip.hidden || (this.tabs instanceof MultiRowEditorControl && this.tabs.rowCount > 1)) return undefined;
+
+		const ownerWindow = strip.ownerDocument.defaultView!;
+		const activeTab = strip.querySelector<HTMLElement>('.ash-tab.checked');
+		const label = this.headerLabel?.hidden ? undefined : this.headerLabel;
+		const addTab = this.header.addTabElement;
+		const items = [activeTab ?? label, addTab].filter((item): item is HTMLElement => !!item?.getClientRects().length);
+		if (!items.length) return undefined;
+
+		const gap = parseFloat(ownerWindow.getComputedStyle(strip).columnGap) || 0;
+		let width = gap * (items.length - 1);
+		let height = this.tabs.domNode.getBoundingClientRect().height;
+		for (const item of items) {
+			const bounds = item.getBoundingClientRect();
+			if (item === activeTab) {
+				// Shrink and fixed sizing modes already declare their minimum usable tab width.
+				width += parseFloat(ownerWindow.getComputedStyle(item).minWidth) || bounds.width;
+			} else {
+				width += item === label ? Math.max(bounds.width, item.scrollWidth) : bounds.width;
+			}
+			height = Math.max(height, bounds.height);
+		}
+		return { width, height };
+	}
+
+	setTabStripHost(host: HTMLElement | undefined): void {
+		const strip = this.tabStrip;
+		const target = host ?? this.headerElement;
+		if (!strip || strip.parentElement === target) return;
+		const previousHeight = this.height;
+		const focused = strip.ownerDocument.activeElement as HTMLElement | null;
+		const restoreFocus = strip.contains(focused);
+		strip.classList.toggle('ash-editor-tab-strip-hosted', !!host);
+		target.prepend(strip);
+		this.updateVisibility();
+		if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+		if (this.height !== previousHeight) this.sizeEmitter.fire();
+	}
+
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
 		this.header.setEditorTypes(choices, select);
 	}
@@ -188,12 +242,14 @@ export class EditorTitleControl extends Disposable {
 		this.hasTitle = (this.viewOptions.showHeader || this.model.editorLimit === 1 || editors.length > 0)
 			&& !(editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
 		this.updateVisibility();
-		if (this.domNode.hidden !== wasHidden || this.height !== previousHeight) this.heightEmitter.fire();
+		if (this.domNode.hidden !== wasHidden || this.height !== previousHeight) this.sizeEmitter.fire();
 	}
 
 	private updateVisibility(): void {
 		const visible = this.titleVisible && this.hasTitle;
-		this.domNode.hidden = this.headerElement.hidden = !visible;
+		const tabsHosted = this.tabStrip && this.tabStrip.parentElement !== this.headerElement;
+		const showHeader = !tabsHosted || this.viewOptions.showHeaderFor?.(this.activeInput) !== false;
+		this.domNode.hidden = this.headerElement.hidden = !visible || !showHeader;
 		if (this.tabStrip) this.tabStrip.hidden = !visible;
 		this.updateRows();
 	}
@@ -250,7 +306,7 @@ export class EditorTitleControl extends Disposable {
 		this.rowsListener.value = control instanceof MultiRowEditorControl
 			? control.onDidChangeRows(() => {
 				this.updateRows();
-				this.heightEmitter.fire();
+				this.sizeEmitter.fire();
 			})
 			: undefined;
 		if (firstAction) parent.insertBefore(control.domNode, firstAction);

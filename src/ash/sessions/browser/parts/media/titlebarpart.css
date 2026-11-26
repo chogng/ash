@@ -108,6 +108,16 @@
 	-webkit-app-region: drag;
 }
 
+.ash-sessions-titlebar.has-editor-region .ash-sessions-titlebar-editor-region {
+	padding-inline: var(--ash-spacing-size80);
+}
+
+.ash-sessions-titlebar-editor-region > .ash-editor-tab-strip-hosted {
+	box-sizing: border-box;
+	max-width: 100%;
+	-webkit-app-region: no-drag;
+}
+
 .ash-sessions-titlebar:is(.has-editor-region, .has-editor-page-header)
 	.ash-sessions-titlebar-right {
 	padding-right: var(--ash-spacing-size40);
@@ -227,4 +237,9 @@
 /* Keep the trailing controls inside the window when captions or navigation grow. */
 .ash-sessions-titlebar.has-editor-region .ash-sessions-titlebar-editor-region {
 	flex-shrink: 1;
+}
+
+.ash-sessions-titlebar.has-editor-region.conversation-hidden
+	.ash-sessions-titlebar-editor-region {
+	flex: 1 1 0;
 }

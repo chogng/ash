@@ -5,7 +5,7 @@ import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/t
 import './media/titlebarpart.css';
 import './titlebar/media/menubarControl.css';
 import { sessionsConversationBackground } from '../../common/theme.js';
-import { addDisposableListener, h, isEditableElement, isElement } from '../../../base/browser/dom.js';
+import { addDisposableListener, h, isEditableElement, isElement, type IDimension } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Color } from '../../../base/common/color.js';
@@ -21,7 +21,7 @@ import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { autorun, observableFromEvent } from '../../../base/common/observable.js';
-import { Event } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
 import { titleBarBackground } from '../../../workbench/common/theme.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
@@ -63,6 +63,10 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	private readonly sidePaneActions: MenuWorkbenchToolBar;
 	private readonly layoutActions: MenuWorkbenchToolBar;
 	private sidebarMinimumWidth = 0;
+	private hostedTabWidth = 0;
+	private readonly editorRegionSpaceChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeEditorRegionSpace = this.editorRegionSpaceChanged.event;
+	private readonly relayoutActions: AnimationFrameScheduler;
 
 	/** Intrinsic left controls, their gaps and the sidebar-aligned outer insets. */
 	public get minimumSidebarWidth(): number { return this.sidebarMinimumWidth; }
@@ -70,8 +74,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	public override get minimumHeight(): number {
 		return Math.max(super.minimumHeight, SessionsWindowTitlebarHeight);
 	}
-
-	private get minimumEditorRegionWidth(): number { return this.minimumHeight * 2; }
 
 	constructor(
 		container: HTMLElement,
@@ -207,7 +209,9 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
-						const editorRegionWidth = this.editorRegion.getBoundingClientRect().width;
+						// With no conversation, tabs and layout actions share the remaining width.
+						const sharesEditorWidth = !this.editorRegion.hidden && this.domNode.classList.contains('conversation-hidden') && this.domNode.classList.contains('has-editor-region');
+						const editorRegionWidth = sharesEditorWidth ? this.hostedTabWidth : this.editorRegion.getBoundingClientRect().width;
 						const centerWidth = center.getClientRects().length ? Math.max(horizontalPadding(center), pixels(ownerWindow.getComputedStyle(center).minWidth)) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
@@ -234,27 +238,53 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this._register(layoutActions.onDidChangeMenuItems(() => this.updateRightControlsVisibility()));
 		this.updateRightControlsVisibility();
 
-		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.editorRegion, this.sidePaneActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this.relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
+		this._register(observeResize([this.contentDomNode, left, right, this.pageContent, this.sessionContent, this.editorRegion, this.sidePaneActions.element], () => {
+			this.editorRegionSpaceChanged.fire();
+			this.relayoutActions.schedule();
+		}, { box: 'border-box' }));
 	}
 
-	public layoutEditorRegion(left: number | undefined, page: HTMLElement | undefined, conversationVisible: boolean): void {
-		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
+	public layoutEditorRegion(left: number | undefined, page: HTMLElement | undefined, conversationVisible: boolean, tabs: IDimension | undefined, setTabsHost: (host: HTMLElement | undefined) => void): void {
 		const row = this.contentDomNode;
+		const ownerWindow = row.ownerDocument.defaultView!;
+		this.domNode.classList.toggle('conversation-hidden', !conversationVisible);
+		this.domNode.classList.toggle('has-editor-region', left !== undefined && !page);
+
 		const navigationEnd = this.leftControls.getBoundingClientRect().right;
-		const rightActionsWidth = this.activityActions.element.offsetWidth;
-		const canFitBesideConversation = left !== undefined && left - navigationEnd >= this.minimumEditorRegionWidth + rightActionsWidth;
-		const start = left !== undefined && (page || canFitBesideConversation)
-			? Math.max(left, navigationEnd + (page ? this.rightControls.offsetWidth : 0)) : undefined;
-		const availableWidth = start === undefined ? 0 : Math.max(0, row.getBoundingClientRect().right - start);
-		this.domNode.classList.toggle('has-editor-region', availableWidth > 0 && !page);
-		const windowInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight) || 0;
-		const width = Math.max(0, availableWidth - windowInset - this.sidePaneActions.element.offsetWidth);
+		const rightControlsWidth = this.rightControls.getBoundingClientRect().width;
+		const centerMinimum = parseFloat(ownerWindow.getComputedStyle(this.sessionContent).minWidth) || 0;
+		const canFitBesideConversation = left !== undefined && left >= navigationEnd + centerMinimum + rightControlsWidth;
+		const start = left !== undefined && (page || !conversationVisible || canFitBesideConversation)
+			? Math.max(left, navigationEnd + (page ? rightControlsWidth : 0)) : undefined;
+		const rowInset = parseFloat(ownerWindow.getComputedStyle(row).paddingRight) || 0;
+		const trailingWidth = this.sidePaneActions.element.getBoundingClientRect().width;
+		const width = start === undefined ? 0 : Math.max(0, row.getBoundingClientRect().right - start - rowInset - trailingWidth);
+		this.domNode.classList.toggle('has-editor-region', width > 0 && !page);
+		this.editorRegion.style.flexBasis = `${width}px`;
+
+		const showRegion = width > 0 && (conversationVisible || !!page || !!tabs);
+		if (showRegion) this.editorRegion.hidden = false;
+
+		// Flex layout accounts for the actual window controls and any competing actions.
+		const regionStyle = ownerWindow.getComputedStyle(this.editorRegion);
+		const padding = (parseFloat(regionStyle.paddingLeft) || 0) + (parseFloat(regionStyle.paddingRight) || 0);
+		const bounds = this.editorRegion.getBoundingClientRect();
+		const tabWidth = tabs ? tabs.width + padding : 0;
+		const hostTabs = !!tabs && !page && showRegion && tabWidth <= bounds.width && tabs.height <= bounds.height;
+		// Return focused tabs to the group before hiding or replacing their old host.
+		if (!hostTabs) setTabsHost(undefined);
 		if (page && this.editorRegion.firstElementChild !== page) this.editorRegion.replaceChildren(page);
 		else if (!page && this.domNode.classList.contains('has-editor-page-header')) this.editorRegion.firstElementChild?.remove();
-		this.editorRegion.hidden = width === 0;
+		this.editorRegion.hidden = !showRegion || (!conversationVisible && !page && !hostTabs);
 		this.domNode.classList.toggle('has-editor-page-header', !!page);
-		this.editorRegion.style.flexBasis = `${width}px`;
+		if (hostTabs) setTabsHost(this.editorRegion);
+
+		const hostedTabWidth = hostTabs ? tabWidth : 0;
+		if (hostedTabWidth !== this.hostedTabWidth) {
+			this.hostedTabWidth = hostedTabWidth;
+			this.relayoutActions.schedule();
+		}
 	}
 
 	public override updateStyles(): void {

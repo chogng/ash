@@ -1483,7 +1483,7 @@ suite('sessions browser component', () => {
 		await expect(conversation.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
 	});
 
-	test('Files and Changes share an editor tab list with their commands', async function () {
+	test('Files and Changes share a titlebar tab list and keep their commands in the editor', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost');
@@ -1493,7 +1493,7 @@ suite('sessions browser component', () => {
 
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const editor = page.locator('[data-part="editor"]');
-		const strip = editor.locator('.ash-editor-tab-strip');
+		const strip = titlebar.locator('.ash-sessions-titlebar-editor-region');
 		const files = strip.getByRole('tab', { name: 'Files', exact: true });
 		const changes = strip.getByRole('tab', { name: /^Changes\b/u });
 		for (const id of ['togglePanel', 'toggleChanges', 'toggleBrowser', 'toggleFiles']) {
@@ -1992,7 +1992,7 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const sidePanel = titlebar.getByRole('toolbar', { name: 'Side panel', exact: true });
 		const togglePanel = sidePanel.getByRole('button', { name: 'Toggle Side Panel', exact: true });
-		const tab = editor.getByRole('tab', { name: 'report.pdf', exact: true });
+		const tab = titlebar.getByRole('tab', { name: 'report.pdf', exact: true });
 		const tabFrame = tab.locator('..');
 		await project.press('ArrowRight');
 		await expect(file).toBeVisible();
@@ -2011,11 +2011,10 @@ suite('sessions browser component', () => {
 		]).toEqual([8, 8, 8]);
 		await expect(togglePanel).toHaveAttribute('aria-pressed', 'true');
 		await expect(tab).toHaveAttribute('aria-selected', 'true');
-		await expect(titlebar.getByRole('tab')).toHaveCount(0);
 		await expect.poll(async () => {
-			const [tabBounds, editorBounds] = await Promise.all([tabFrame.boundingBox(), editor.boundingBox()]);
-			return !!tabBounds && !!editorBounds && tabBounds.y >= editorBounds.y;
-		}).toBe(true);
+			const [tabBounds, toggleBounds] = await Promise.all([tabFrame.boundingBox(), togglePanel.boundingBox()]);
+			return { topOffset: tabBounds!.y - toggleBounds!.y, heightDifference: tabBounds!.height - toggleBounds!.height };
+		}).toEqual({ topOffset: 0, heightDifference: 0 });
 		await expect(editor.getByText('Page 1 of 1', { exact: true })).toBeVisible();
 		await expect(controls.getByRole('button', { name: 'Add note', exact: true })).toBeEnabled();
 		await expect(conversation).toBeVisible();

@@ -40,6 +40,7 @@ import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { EditorArea } from './parts/editorPart.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import type { IEditorGroupView } from '../../workbench/browser/parts/editor/editor.js';
 import type { EditorParts } from './parts/editorParts.js';
 import { SessionsPart } from './parts/sessionsPart.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
@@ -574,20 +575,38 @@ export class DesktopWorkbenchLayout
 	}
 
 	private registerEditorRegionLayout(titlebar: TitlebarPart, editor: EditorArea, editorParts: EditorParts | undefined): void {
+		let hostedGroup: IEditorGroupView | undefined;
+		let candidate: IEditorGroupView | undefined;
+		const candidateLayout = this._register(new MutableDisposable());
+		const setTabsHost = (group: IEditorGroupView | undefined, host: HTMLElement | undefined): void => {
+			if (hostedGroup && hostedGroup !== group && hostedGroup.domNode.isConnected) hostedGroup.setTabStripHost(undefined);
+			hostedGroup = group;
+			group?.setTabStripHost(host);
+		};
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
 			const editorVisible = this.isPartVisible('editor');
 			const conversationVisible = this.isPartVisible('sessions');
 			const pageHeader = editorVisible && editor.hasProductPage ? editorParts?.filesPart.pageTitlebarContent : undefined;
-			const left = pageHeader || (editorVisible && conversationVisible && !editor.hasProductPage)
+			const toolsVisible = editorVisible && !editor.hasProductPage;
+			const group = toolsVisible ? editorParts?.titlebarTabsGroup : undefined;
+			if (group !== candidate) {
+				candidate = group;
+				candidateLayout.value = group?.onDidChange(() => update.schedule());
+			}
+			const left = pageHeader || group || (toolsVisible && conversationVisible)
 				? editor.domNode.getBoundingClientRect().left : undefined;
-			titlebar.layoutEditorRegion(left, pageHeader, conversationVisible);
+			titlebar.layoutEditorRegion(left, pageHeader, conversationVisible, group?.singleRowTabStripSize,
+				host => setTabsHost(host ? group : undefined, host));
 		}));
 		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
 		this._register(this.onDidChangePartVisibility(() => update.schedule()));
+		this._register(editor.onDidChangeTitlebarTool(() => update.schedule()));
+		this._register(titlebar.onDidChangeEditorRegionSpace(() => update.schedule()));
 		if (editorParts) {
 			this._register(editorParts.onDidChangeEditors(() => update.schedule()));
 			this._register(editorParts.filesPart.onDidLayout(() => update.schedule()));
 		}
+		this._register(toDisposable(() => setTabsHost(undefined, undefined)));
 		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
 		update.schedule();
 	}

@@ -6,6 +6,7 @@ import type { EditorGroupId, EditorIdentifier, EditorInstanceId } from '../../..
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import type { MenuId } from '../../../../platform/actions/common/actions.js';
+import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 
 /** Menu locations supplied by the product hosting an editor group. */
@@ -21,6 +22,8 @@ export interface IEditorGroupViewOptions {
 	/** Primary command for Add Tab when the group supplies a launcher editor. */
 	readonly addTabCommand?: string;
 	readonly showHeader?: boolean;
+	/** Whether to keep the group header below tabs hosted in the window title bar. */
+	readonly showHeaderFor?: (editor: IResourceEditorInput | undefined) => boolean;
 	/** Host the active editor's dedicated toolbar alongside the group actions. */
 	readonly showEditorToolbar?: boolean;
 	/** Label for a visible group header with no editor and no tabs. */
@@ -51,6 +54,10 @@ export interface IEditorGroupView extends IEditorGroup {
 	moveEditorTo(input: IResourceEditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;
 	setTitleVisible(visible: boolean): void;
+	readonly onDidChange: Event<void>;
+	/** Space needed to present the active tab and adjoining controls in one row. */
+	readonly singleRowTabStripSize: IDimension | undefined;
+	setTabStripHost(host: HTMLElement | undefined): void;
 	containsFocus(element: Element | null): boolean;
 	layout(dimension: IDimension): void;
 }

@@ -338,8 +338,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		if (options.onDidActivate) {
 			this._register(addDisposableListener(this.domNode, 'focusin', options.onDidActivate));
+			const strip = this.titleControl.tabStrip;
+			if (strip) this._register(addDisposableListener(strip, 'focusin', () => {
+				if (!this.domNode.contains(strip)) options.onDidActivate?.();
+			}));
 		}
-		this._register(this.titleControl.onDidChangeHeight(() => {
+		this._register(this.titleControl.onDidChangeSize(() => {
 			this.panes.setToolbarHost(this.titleControl.editorToolbarHost);
 			this.layout(this.groupDimension);
 			// Sibling views reserve space below the title and need its new height too.
@@ -516,9 +520,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return;
 		}
 		const previousIndex = this.model.indexOf(input);
-		const focusedTab = this.domNode.ownerDocument.activeElement?.closest('.ash-tab');
+		const tabRoot = this.titleControl.tabStrip ?? this.domNode;
+		const focusedTab = tabRoot.ownerDocument.activeElement?.closest('.ash-tab');
 		// Moving rows replaces the tab's action button; restore focus to its stable tab identity.
-		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>('.ash-tab-label')?.id : undefined;
+		const focusedTabId = focusedTab && tabRoot.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>('.ash-tab-label')?.id : undefined;
 		if (sticky) {
 			this.model.stick(input);
 		} else {
@@ -530,7 +535,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.publishEditorState(entry);
 		if (focusedTabId) {
 			// Pointer activation can retain the old row until click finishes. Focus its visible replacement.
-			const tab = [...this.domNode.querySelectorAll<HTMLElement>('.ash-tab-label')]
+			const tab = [...tabRoot.querySelectorAll<HTMLElement>('.ash-tab-label')]
 				.find(label => label.id === focusedTabId && !label.closest('[hidden]'));
 			tab?.focus();
 		}
@@ -1001,8 +1006,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 	}
 
+	public get singleRowTabStripSize(): IDimension | undefined { return this.titleControl.singleRowTabStripSize; }
+
+	public setTabStripHost(host: HTMLElement | undefined): void { this.titleControl.setTabStripHost(host); }
+
 	public containsFocus(element: Element | null): boolean {
-		return this.domNode.contains(element);
+		return this.domNode.contains(element) || !!this.titleControl.tabStrip?.contains(element);
 	}
 
 	public setContentRightInset(inset: number): void {
