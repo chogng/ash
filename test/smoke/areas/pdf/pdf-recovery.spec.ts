@@ -29,8 +29,9 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 		} finally { database.close(); }
 	});
 	const pdf = () => page.locator('.ash-sessions-pdf-preview:visible');
+	const controls = () => page.locator('.ash-editor-group').filter({ has: pdf() }).locator('.ash-editor-group-header > .ash-editor-pane-toolbar-host > .ash-sessions-pdf-controls');
 	const annotations = () => pdf().locator('.ash-sessions-pdf-annotation');
-	const save = () => pdf().getByRole('button', { name: 'Save changes', exact: true });
+	const save = () => controls().getByRole('button', { name: 'Save changes', exact: true });
 	const openPdf = async (workbench: Workbench): Promise<void> => {
 		const dialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 		try {
@@ -56,8 +57,8 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 	};
 	await expect.poll(isCentered).toBe(true);
 	await testInfo.attach('pdf-centered-desktop', { body: await page.screenshot(), contentType: 'image/png' });
-	const toolbarTop = (await pdf().locator('.ash-sessions-pdf-controls').boundingBox())!.y;
-	await pdf().getByRole('button', { name: 'Fit width', exact: true }).click();
+	const toolbarTop = (await controls().boundingBox())!.y;
+	await controls().getByRole('button', { name: 'Fit width', exact: true }).click();
 	const zoomWindow = await application.browserWindow(page);
 	try {
 		const hostZoom = await zoomWindow.evaluate(window => window.webContents.getZoomFactor());
@@ -73,7 +74,7 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 		const enlarged = (await sheet.boundingBox())!;
 		expect(Math.abs(enlarged.x + enlarged.width * point.x - anchor.x)).toBeLessThan(1.5);
 		expect(Math.abs(enlarged.y + enlarged.height * point.y - anchor.y)).toBeLessThan(1.5);
-		await pdf().getByRole('button', { name: 'Fit page', exact: true }).focus();
+		await controls().getByRole('button', { name: 'Fit page', exact: true }).focus();
 		await page.keyboard.press('ControlOrMeta+0');
 		await expect.poll(async () => (await sheet.boundingBox())!.width).toBeCloseTo(400, 1);
 		await reader.press('ControlOrMeta+=');
@@ -85,16 +86,16 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 
 	await reader.hover(); await page.mouse.wheel(0, 480);
 	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-	expect((await pdf().locator('.ash-sessions-pdf-controls').boundingBox())!.y).toBe(toolbarTop);
+	expect((await controls().boundingBox())!.y).toBe(toolbarTop);
 	await reader.press('End');
 	await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
-	await pdf().getByRole('button', { name: 'Fit page', exact: true }).click();
+	await controls().getByRole('button', { name: 'Fit page', exact: true }).click();
 	await expect.poll(isCentered).toBe(true);
 	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
 
-	const controls = pdf().locator('.ash-sessions-pdf-controls');
-	const annotationToolbar = controls.getByRole('toolbar', { name: 'PDF annotations', exact: true });
+	const annotationToolbar = controls().getByRole('toolbar', { name: 'PDF annotations', exact: true });
 	await expect(annotationToolbar.getByRole('button')).toHaveCount(5);
+	await controls().getByRole('button', { name: 'PDF comments', exact: true }).click();
 	await pdf().getByRole('textbox', { name: 'Annotation text', exact: true }).fill('Save before interruption');
 	await annotationToolbar.getByRole('button', { name: 'Add note', exact: true }).click();
 	await expect(annotations()).toHaveCount(1);
@@ -102,9 +103,9 @@ test('aspdf saves an undo after a renderer crash', { tag: ['@electron-app-server
 	await expect.poll(async () => (await readFile(path)).equals(original)).toBe(false);
 	await expect(save()).toBeDisabled();
 	const annotated = await readFile(path);
-	await expect(controls.locator('.ash-sessions-pdf-page-number')).toHaveValue('1');
-	await expect(controls.locator('.ash-sessions-pdf-pagination')).toHaveText('/1');
-	for (const button of await controls.getByRole('button').all()) { await expect(button.locator('.ash-button-label')).toBeHidden(); }
+	await expect(controls().locator('.ash-sessions-pdf-page-number')).toHaveValue('1');
+	await expect(controls().locator('.ash-sessions-pdf-pagination')).toHaveText('/1');
+	for (const button of await controls().getByRole('button').all()) { await expect(button.locator('.ash-button-label')).toBeHidden(); }
 	await testInfo.attach('pdf-toolbar-desktop', { body: await page.screenshot(), contentType: 'image/png' });
 
 	await pdf().locator('.ash-sessions-pdf-page').press('ControlOrMeta+z');

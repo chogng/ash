@@ -110,7 +110,17 @@ for (const locale of ['en', 'zh-CN']) {
 		const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 		await commands.runCommand('workbench.action.browser.open');
 		await expect(tabs).toHaveCount(1);
-		const blankPage = page.locator('[data-editor-tool="browser"] .ash-browser-welcome');
+		const browser = page.locator('[data-editor-tool="browser"]');
+		const titleTabs = page.locator('[data-part="titlebar"]').getByRole('tab', { name: copy.browser, exact: true });
+		await expect(titleTabs).toHaveCount(1);
+		await expect(browser.getByRole('tab', { name: copy.browser, exact: true })).toHaveCount(0);
+		const toolbar = browser.locator('.ash-editor-group-header > .ash-editor-pane-toolbar-host .ash-browser-toolbar');
+		const address = toolbar.getByRole('textbox', { name: locale === 'zh-CN' ? '浏览器地址' : 'Browser address', exact: true });
+		await expect(address).toBeVisible();
+		await expect(address).toHaveAccessibleDescription(locale === 'zh-CN' ? /打开浏览器帮助/ : /for browser help/);
+		const firstAddress = await address.elementHandle();
+		await expect(browser.locator('.ash-browser-editor .ash-browser-toolbar:visible')).toHaveCount(0);
+		const blankPage = browser.locator('.ash-browser-welcome');
 		const historyButton = blankPage.getByRole('button', { name: copy.history, exact: true });
 		await blankPage.getByRole('button', { name: copy.openAddress, exact: true }).focus();
 		await page.keyboard.press('Tab');
@@ -126,10 +136,18 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.fill(copy.newTab);
 		await search.press('Enter');
 		await expect(tabs).toHaveCount(2);
+		await expect(titleTabs).toHaveCount(2);
+		await expect(address).toHaveCount(1);
+		await expect.poll(() => firstAddress.evaluate(element => ({
+			hosted: !!element.closest('.ash-editor-pane-toolbar-host'),
+			visible: element.getClientRects().length > 0,
+		}))).toEqual({ hosted: true, visible: false });
+		await firstAddress.dispose();
 		const ids = (await readPages()).map(view => view.id).sort();
 		expect(ids).toHaveLength(2);
 		await page.reload();
 		await expect(tabs).toHaveCount(2);
+		await expect(titleTabs).toHaveCount(2);
 		expect((await readPages()).map(view => view.id).sort()).toEqual(ids);
 		await commands.runCommand('workbench.action.browser.quickOpen');
 		await search.fill('about:blank');
@@ -142,6 +160,36 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(async () => (await readPages()).length).toBe(0);
 	});
 }
+
+test('Code Search runs from the editor group toolbar and restores query focus after help', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
+	await writeFile(join(testWorkspace.directory, 'toolbar-search.txt'), 'line before\ncode_search_toolbar_fixture\nline after\n');
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await new QuickAccess(page).runCommand('search.action.openNewEditor');
+	const search = page.locator('[data-editor-tool="search"]');
+	const toolbar = search.locator('.ash-editor-group-header > .ash-editor-pane-toolbar-host');
+	const query = toolbar.getByRole('textbox', { name: 'Search editor query', exact: true });
+	await expect(query).toBeVisible();
+	await expect(search.locator('.ash-search-editor .ash-search-editor-form:visible')).toHaveCount(0);
+	const details = toolbar.getByRole('button', { name: 'Toggle Search Details', exact: true });
+	await expect(details).toHaveAttribute('aria-expanded', 'false');
+	await details.click();
+	await expect(details).toHaveAttribute('aria-expanded', 'true');
+	await toolbar.getByRole('spinbutton', { name: 'Context lines', exact: true }).fill('1');
+	await toolbar.getByRole('textbox', { name: 'Files to include', exact: true }).fill('toolbar-search.txt');
+	await query.fill('code_search_toolbar_fixture');
+	await query.press('ControlOrMeta+Enter');
+	await expect(search.locator('.ash-search-editor-status')).toHaveText(/1 result/);
+	await expect(search.locator('.ash-search-editor-results')).toContainText('toolbar-search.txt');
+	await expect(search.locator('.ash-search-editor-results')).toContainText('line before');
+	await expect(search.locator('.ash-search-editor-results')).toContainText('line after');
+	await expect(search.locator('.ash-search-editor-match')).toHaveText('code_search_toolbar_fixture');
+	await expect(search.locator('.ash-search-editor-results')).not.toContainText('# Search:');
+	await query.press('Alt+F1');
+	await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(/search editor[\s\S]*\.code-search/);
+	await page.keyboard.press('Escape');
+	await expect(query).toBeFocused();
+});
 
 test('Code Sessions runs Quick Diff commands through its editor services', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);

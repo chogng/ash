@@ -29,20 +29,25 @@
 	pointer-events: none;
 }
 
-.ash-sessions-titlebar:not(
-		.has-page-content,
-		.has-editor-page-header,
-		.is-new-session
-	)::before {
-	/* One separator spans the conversation and tools in both Chat and Code. */
-	content: "";
-	position: absolute;
-	right: 0;
-	bottom: 0;
-	left: var(--ash-sessions-sidebar-width, 0px);
-	border-bottom: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, var(--ash-border));
-	pointer-events: none;
+.ash-sessions-titlebar:not(.has-page-content, .has-editor-page-header) {
+	&:is(:not(.is-new-session), .has-editor-region)::before {
+		content: "";
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: var(--ash-sessions-sidebar-width, 0px);
+		border-bottom: var(--ash-strokeThickness) solid
+			var(--ash-contrastBorder, var(--ash-border));
+		pointer-events: none;
+	}
+
+	&.is-new-session.has-editor-region::before {
+		/* A draft only needs the separator above its editor region. */
+		left: var(
+			--ash-sessions-editor-divider-offset,
+			var(--ash-sessions-sidebar-width, 0px)
+		);
+	}
 }
 
 .ash-sessions-titlebar > .ash-workbench-part-content {

@@ -81,6 +81,7 @@ test('A tool PDF restores unsaved annotations after its renderer crashes', async
 	const viewer = page.getByRole('region', { name: 'PDF — tool-report.pdf' });
 	const noteInput = viewer.getByRole('textbox', { name: '批注内容' });
 	const addNote = viewer.getByRole('button', { name: '添加便签', exact: true });
+	await viewer.getByRole('button', { name: 'PDF 评论', exact: true }).click();
 	await noteInput.fill('放弃的批注');
 	await addNote.click();
 	await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('放弃的批注');
@@ -170,8 +171,14 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	expect(thumbnailRequests).toEqual([]);
 
 	const comments = toolbar.getByRole('button', { name: 'PDF 评论', exact: true });
-	await expect(comments).toHaveAttribute('aria-expanded', 'true');
+	const annotations = viewer.getByRole('complementary', { name: 'PDF 批注', exact: true, includeHidden: true });
+	await expect(viewer.getByRole('status')).toHaveText('第 1 页，共 24 页');
+	await expect(comments).toHaveAttribute('aria-expanded', 'false');
+	await expect(annotations).toBeHidden();
 	const collapsedBackground = await toggle.evaluate(button => getComputedStyle(button).backgroundColor);
+	await expect(comments).toHaveCSS('background-color', collapsedBackground);
+	await comments.press('Enter');
+	await expect(annotations).toBeVisible();
 	const expandedBackground = await comments.evaluate(button => getComputedStyle(button).backgroundColor);
 	expect(expandedBackground).not.toBe(collapsedBackground);
 	await toggle.press('Enter');
@@ -253,7 +260,6 @@ test('PDF thumbnails open beside the document and follow page navigation', async
 	await expect(viewer.getByRole('status')).toHaveText('第 1 页，共 24 页');
 	await expect(option(1)).toHaveAttribute('aria-selected', 'true');
 
-	const annotations = viewer.getByRole('complementary', { name: 'PDF 批注', exact: true });
 	const readingArea = viewer.locator('.ash-sessions-pdf-reading-area');
 	await page.evaluate(() => window.aspdfTest.resize(560, 480));
 	const [left, center, right] = await Promise.all([rail.boundingBox(), readingArea.boundingBox(), annotations.boundingBox()]);
@@ -290,6 +296,7 @@ test('PDF sidebar dividers resize independently and restore their default widths
 	const leftDivider = viewer.getByRole('separator', { name: '调整 PDF 页面导航宽度', exact: true });
 	const rightDivider = viewer.getByRole('separator', { name: '调整 PDF 正文和批注宽度', exact: true });
 	await navigation.click();
+	await comments.click();
 	await expect(left).toHaveAttribute('data-part', 'auxiliarybar-left');
 	await expect(right).toHaveAttribute('data-part', 'auxiliarybar-right');
 	await expect(left).toHaveCSS('width', '160px');
@@ -406,7 +413,8 @@ test('PDF thumbnail navigation retains the selected page when the view reaches t
 	await page.goto('/pdfPreview.html');
 	await page.waitForFunction(() => !!window.aspdfTest);
 	await page.evaluate(async () => {
-		window.aspdfTest.resize(440, 1040);
+		// With navigation open, two fitted pages need to overflow without filling the viewport with page two.
+		window.aspdfTest.resize(620, 1040);
 		await window.aspdfTest.open(true);
 	});
 	const viewer = page.locator('.ash-sessions-pdf-preview');
@@ -516,11 +524,13 @@ test('PDF links stay in the document without appearing in the annotation panel',
 	const viewer = page.locator('.ash-sessions-pdf-preview');
 	const panel = viewer.locator('.ash-sessions-pdf-annotation-panel');
 	const annotations = panel.locator('.ash-sessions-pdf-annotation');
+	const comments = viewer.getByRole('button', { name: 'PDF comments', exact: true });
 	await expect(viewer.getByRole('status')).toHaveText('Page 1 of 2');
-	await expect(panel).toBeVisible();
+	await expect(panel).toBeHidden();
 	await expect(annotations).toHaveCount(0);
 
 	await page.evaluate(() => window.aspdfTest.open());
+	await comments.click();
 	await panel.getByRole('textbox', { name: 'Annotation text' }).fill('Review note');
 	await viewer.getByRole('button', { name: 'Add note', exact: true }).click();
 	const note = annotations.getByRole('textbox');
@@ -539,7 +549,8 @@ test('PDF links stay in the document without appearing in the annotation panel',
 		{ kind: 'Link', contents: 'Citation link' },
 		{ kind: 'Text', contents: 'Updated review note' },
 	]);
-	await expect(panel).toBeVisible();
+	await expect(panel).toBeHidden();
+	await comments.click();
 	await expect(annotations).toHaveCount(1);
 	await expect(note).toHaveValue('Updated review note');
 	await expect(note).toBeEditable();
@@ -589,9 +600,12 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.waitForFunction(() => !!window.aspdfTest);
 		await page.evaluate(() => window.aspdfTest.open());
 		const viewer = page.locator('.ash-sessions-pdf-preview');
+		const commentsName = locale === 'zh-CN' ? 'PDF 评论' : 'PDF comments';
+		const comments = viewer.getByRole('button', { name: commentsName, exact: true });
 		await expect(viewer).toHaveAttribute('aria-label', /PDF/);
 		await expect(viewer.locator('img')).toHaveJSProperty('naturalWidth', 1200);
 		await expect(viewer.locator('.ash-sessions-pdf-text')).toContainText('aspdf native review');
+		await comments.click();
 		await viewer.getByRole('textbox', { name: locale === 'zh-CN' ? '批注内容' : 'Annotation text' }).fill('Check this evidence');
 		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true }).click();
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Check this evidence');
@@ -606,6 +620,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.aspdfTest.saved())).toEqual({ changed: true, pdf: true });
 		await page.evaluate(() => window.aspdfTest.open());
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Check this evidence');
+		await comments.click();
 		await viewer.locator('.ash-sessions-pdf-annotations > textarea').fill('Unsaved review');
 		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true }).click();
 		await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(2);
@@ -621,6 +636,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.aspdfTest.highContrast());
 		await testInfo.attach(`aspdf-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		await page.evaluate(() => window.aspdfTest.open(true));
+		await comments.click();
 		await viewer.locator('.ash-sessions-pdf-annotations > textarea').fill('Copy review');
 		await viewer.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true }).click();
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Copy review');
@@ -634,6 +650,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.aspdfTest.split());
 		const first = page.locator('#viewer .ash-sessions-pdf-preview');
 		const second = page.locator('#split .ash-sessions-pdf-preview');
+		await first.getByRole('button', { name: commentsName, exact: true }).click();
 		await first.locator('.ash-sessions-pdf-annotations > textarea').fill('Shared review');
 		await first.getByRole('button', { name: locale === 'zh-CN' ? '添加便签' : 'Add note', exact: true }).click();
 		await expect(second.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Shared review');
@@ -768,6 +785,8 @@ for (const locale of ['en', 'zh-CN']) {
 				&& sheet.y + sheet.height <= frame.y + frame.height - 11;
 		};
 		const panel = viewer.locator('.ash-sessions-pdf-annotation-panel');
+		await expect(panel).toBeHidden();
+		await viewer.getByRole('button', { name: locale === 'zh-CN' ? 'PDF 评论' : 'PDF comments', exact: true }).click();
 		await expect(panel).toBeVisible();
 		await expect.poll(centered).toBe(true);
 		const container = (await content.boundingBox())!;
@@ -937,6 +956,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const width = (await stage.boundingBox())!.width;
 		await continuous.press('ControlOrMeta+=');
 		await expect.poll(async () => (await stage.boundingBox())!.width).toBeGreaterThan(width);
+		await viewer.getByRole('button', { name: locale === 'zh-CN' ? 'PDF 评论' : 'PDF comments', exact: true }).click();
 		await viewer.getByRole('textbox', { name: locale === 'en' ? 'Annotation text' : '批注内容', exact: true }).fill('Continuous review');
 		await viewer.getByRole('button', { name: locale === 'en' ? 'Add note' : '添加便签', exact: true }).click();
 		await expect(viewer.locator('.ash-sessions-pdf-annotation textarea')).toHaveValue('Continuous review');
@@ -1486,6 +1506,7 @@ test('aspdf opens a 42 MiB scanned PDF and saves an annotation', async ({ page }
 	await page.evaluate(() => window.aspdfTest.open());
 	const viewer = page.locator('.ash-sessions-pdf-preview');
 	await expect(viewer.locator('img')).toHaveJSProperty('naturalWidth', 1200);
+	await viewer.getByRole('button', { name: 'PDF comments', exact: true }).click();
 	await viewer.locator('.ash-sessions-pdf-annotations > textarea').fill('Large scan review');
 	await viewer.getByRole('button', { name: 'Add note', exact: true }).click();
 	await expect(viewer.locator('.ash-sessions-pdf-annotation')).toHaveCount(2);

@@ -9,13 +9,12 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
 import { BrowserViewEditorId, type IBrowserViewModel } from '../common/browserView.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IBrowserViewWindowConfiguration } from '../../../../platform/browserView/common/browserView.js';
@@ -66,7 +65,12 @@ export abstract class BrowserEditorContribution extends Disposable {
 	tryFocus(): boolean { return false; }
 }
 
-export const enum BrowserWidgetLocation { Toolbar = 'toolbar', WelcomeActions = 'welcomeActions' }
+export const enum BrowserWidgetLocation {
+	Toolbar = 'toolbar',
+	/** Page messages and controls presented above the native viewport. */
+	ContentArea = 'contentArea',
+	WelcomeActions = 'welcomeActions',
+}
 export interface IBrowserEditorWidget {
 	readonly location: BrowserWidgetLocation;
 	readonly element: HTMLElement;
@@ -100,7 +104,6 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	get browserContainer(): HTMLElement { return this.viewportDomNode; }
 
 	constructor(
-		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
 		@IThemeService private readonly browserThemes: IThemeService,
@@ -127,22 +130,28 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		for (const ctor of BrowserEditor.contributionTypes) {
 			this.contributions.set(ctor, this._register(this.instantiation.createInstance(ctor, this)));
 		}
-		const widgets = [...this.getContributions()].flatMap(contribution => [...contribution.widgets]).sort((a, b) => a.order - b.order);
+		const widgets = [...this.getContributions()].flatMap(contribution => contribution.widgets).sort((a, b) => a.order - b.order);
+		const toolbarWidgets = widgets.filter(widget => widget.location === BrowserWidgetLocation.Toolbar);
+		if (toolbarWidgets.length) {
+			const toolbar = h(document, 'div', { className: 'ash-editor-pane-toolbar ash-browser-toolbar-container' });
+			toolbar.append(...toolbarWidgets.map(widget => widget.element));
+			this.createEditorToolbar(toolbar, this.domNode, this.viewportDomNode);
+		}
 		for (const widget of widgets) {
-			if (widget.location === BrowserWidgetLocation.Toolbar) { this.domNode.insertBefore(widget.element, this.viewportDomNode); }
+			if (widget.location === BrowserWidgetLocation.ContentArea) this.domNode.insertBefore(widget.element, this.viewportDomNode);
 		}
 		for (const contribution of this.getContributions()) { contribution.onContainerCreated(this.viewportDomNode); }
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
+		this.registerEditorKeydown(event => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') { event.preventDefault(); this.focus(); }
-		}));
+		});
 		this._register(AccessibleViewRegistry.register({
 			// Each split owns a provider; focus selects the relevant pane at invocation time.
 			type: AccessibleViewType.Help, priority: 100, name: 'browserHelp:' + crypto.randomUUID(),
 			when: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			getProvider: () => {
 				const focused = document.activeElement;
-				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
+				if (!this.visible || !(focused instanceof HTMLElement) || !this.containsEditorElement(focused)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.Browser, { type: AccessibleViewType.Help },
 					() => this.helpContent(), () => focused.focus(), AccessibilityVerbositySettingId.Browser);
 			},
@@ -211,9 +220,6 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	}
 	public override focus(): void {
 		for (const contribution of this.getContributions()) { if (contribution.tryFocus()) { break; } }
-		if (this.configuration.getValue<boolean>('accessibility.verbosity.browser')) {
-			this.statusChanges.fire(localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.'));
-		}
 	}
 	public ensureBrowserFocus(): void {
 		if (!this.visible || !this.model) { return; }

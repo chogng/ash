@@ -10,6 +10,7 @@ import { ContextScopedFindInput, ContextScopedReplaceInput } from '../../../../p
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ISearchHistoryService } from '../common/searchHistoryService.js';
 import { localize } from '../../../../nls.js';
+import './media/searchWidget.css';
 
 const queryOptionLabels: Readonly<Record<string, string>> = {
 	'search.matchCase': 'Aa',
@@ -17,15 +18,20 @@ const queryOptionLabels: Readonly<Record<string, string>> = {
 	'search.useRegex': '.*',
 };
 
-/** Owns the input values, options, focus and responsive layout; SearchView owns execution and results. */
+interface SearchWidgetOptions {
+	readonly label?: string;
+	readonly showReplace?: boolean;
+}
+
+/** Query controls shared by the Search view and the Search Editor. */
 export class SearchWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	public readonly searchInput: ContextScopedFindInput<true>;
-	public readonly replaceInput: ContextScopedReplaceInput<true>;
-	private readonly replaceRow: HTMLElement;
-	private readonly replaceToggle: Button;
+	public readonly replaceInput?: ContextScopedReplaceInput<true>;
+	private readonly replaceRow?: HTMLElement;
+	private readonly replaceToggle?: Button;
 	private readonly queryOptions: ActionBar;
-	private readonly replaceActions: ActionBar;
+	private readonly replaceActions?: ActionBar;
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly submitted = this._register(new Emitter<void>());
@@ -40,6 +46,7 @@ export class SearchWidget extends Disposable {
 
 	constructor(
 		container: HTMLElement,
+		options: SearchWidgetOptions,
 		@IInstantiationService instantiation: IInstantiationService,
 		@ISearchHistoryService history: ISearchHistoryService,
 	) {
@@ -53,20 +60,21 @@ export class SearchWidget extends Disposable {
 		queryRow.className = 'ash-search-query-row';
 		const queryField = h(document, 'div');
 		queryField.className = 'ash-search-query-field';
-		this.replaceToggle = this._register(new Button(queryRow, {
+		if (options.showReplace !== false) this.replaceToggle = this._register(new Button(queryRow, {
 			...defaultButtonStyles,
 			label: localize('search.toggleReplace', 'Toggle Replace'),
 			title: localize('search.toggleReplace', 'Toggle Replace'),
 			icon: Lxicon.chevronRight,
 			iconOnly: true,
 			size: 'small',
-			onClick: () => this.setReplaceExpanded(!!this.replaceRow.hidden),
+			onClick: () => this.setReplaceExpanded(!!this.replaceRow?.hidden),
 		}));
+		queryRow.classList.toggle('ash-search-query-only', options.showReplace === false);
 		queryRow.append(queryField);
 		// History scopes capture their DOM parent at construction, before later focus events.
 		this.domNode.append(queryRow);
 		this.searchInput = this._register(instantiation.createInstance(ContextScopedFindInput<true>, queryField, {
-			label: localize('search.queryLabel', 'Search workspace'),
+			label: options.label ?? localize('search.queryLabel', 'Search workspace'),
 			placeholder: localize('search.query', 'Search'),
 			presentation: 'compact',
 			flexibleHeight: true,
@@ -83,29 +91,31 @@ export class SearchWidget extends Disposable {
 			}),
 		}));
 		this.queryOptions.domNode.classList.add('ash-search-query-options');
-		this.replaceRow = h(document, 'div');
-		this.replaceRow.className = 'ash-search-replace-row';
-		this.replaceRow.id = `ash-search-replace-${this.searchInput.inputBox.inputElement.id}`;
-		this.replaceToggle.domNode.setAttribute('aria-controls', this.replaceRow.id);
-		const replaceField = h(document, 'div');
-		replaceField.className = 'ash-search-replace-field';
-		this.replaceRow.append(replaceField);
-		this.domNode.append(this.replaceRow);
-		this.replaceInput = this._register(instantiation.createInstance(ContextScopedReplaceInput<true>, replaceField, {
-			label: localize('search.replace', 'Replace'),
-			presentation: 'compact',
-			flexibleHeight: true,
-			flexibleMaxHeight: 134,
-			history: new Set(history.load().replace),
-		}));
-		this.replaceActions = this._register(new ActionBar(replaceField, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize('search.replaceActions', 'Replacement actions'),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => new LabelActionViewItem(action, { label: action.id === 'search.preserveCase' ? 'AB' : '', ariaLabel: action.label }),
-		}));
-		this.setReplaceExpanded(true);
-		for (const input of [this.searchInput, this.replaceInput]) {
+		if (this.replaceToggle) {
+			this.replaceRow = h(document, 'div');
+			this.replaceRow.className = 'ash-search-replace-row';
+			this.replaceRow.id = `ash-search-replace-${this.searchInput.inputBox.inputElement.id}`;
+			this.replaceToggle.domNode.setAttribute('aria-controls', this.replaceRow.id);
+			const replaceField = h(document, 'div');
+			replaceField.className = 'ash-search-replace-field';
+			this.replaceRow.append(replaceField);
+			this.domNode.append(this.replaceRow);
+			this.replaceInput = this._register(instantiation.createInstance(ContextScopedReplaceInput<true>, replaceField, {
+				label: localize('search.replace', 'Replace'),
+				presentation: 'compact',
+				flexibleHeight: true,
+				flexibleMaxHeight: 134,
+				history: new Set(history.load().replace),
+			}));
+			this.replaceActions = this._register(new ActionBar(replaceField, {
+				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+				ariaLabel: localize('search.replaceActions', 'Replacement actions'),
+				highlightToggledItems: true,
+				actionViewItemProvider: action => new LabelActionViewItem(action, { label: action.id === 'search.preserveCase' ? 'AB' : '', ariaLabel: action.label }),
+			}));
+			this.setReplaceExpanded(true);
+		}
+		for (const input of this.replaceInput ? [this.searchInput, this.replaceInput] : [this.searchInput]) {
 			this._register(input.inputBox.onDidChange(() => this.changed.fire()));
 			this._register(input.inputBox.onKeyDown(event => {
 				if (event.key === 'Enter' && !event.isComposing && !event.shiftKey && !event.altKey && input === this.searchInput) {
@@ -117,7 +127,7 @@ export class SearchWidget extends Disposable {
 		}
 		this._register(history.onDidClearHistory(() => {
 			this.searchInput.inputBox.clearHistory();
-			this.replaceInput.inputBox.clearHistory();
+			this.replaceInput?.inputBox.clearHistory();
 		}));
 		this.updateOptions();
 		const targetWindow = document.defaultView!;
@@ -138,10 +148,11 @@ export class SearchWidget extends Disposable {
 		const narrow = this.domNode.clientWidth < 260;
 		this.domNode.classList.toggle('ash-search-widget-narrow', narrow);
 		this.searchInput.inputBox.layout();
-		this.replaceInput.inputBox.layout();
+		this.replaceInput?.inputBox.layout();
 	}
 
 	public setReplaceExpanded(expanded: boolean): void {
+		if (!this.replaceRow || !this.replaceToggle) return;
 		if (!expanded && this.replaceRow.contains(this.domNode.ownerDocument.activeElement)) {
 			this.focus();
 		}
@@ -149,7 +160,7 @@ export class SearchWidget extends Disposable {
 		this.replaceRow.classList.toggle('expanded', expanded);
 		this.replaceToggle.domNode.setAttribute('aria-expanded', String(expanded));
 		this.replaceToggle.domNode.classList.toggle('expanded', expanded);
-		this.replaceInput.inputBox.layout();
+		this.replaceInput?.inputBox.layout();
 	}
 
 	public focus(): void {
@@ -162,7 +173,9 @@ export class SearchWidget extends Disposable {
 		this.updateOptions();
 	}
 
-	public setQueryOptions(matchCase: boolean, useRegex: boolean): void {
+	public setQueryOptions(matchCase: boolean, useRegex: boolean, wholeWord = this.wholeWord): void {
+		if (this.matchCase === matchCase && this.useRegex === useRegex && this.wholeWord === wholeWord) return;
+		this.wholeWord = wholeWord;
 		this.matchCase = matchCase;
 		this.useRegex = useRegex;
 		this.updateOptions();
@@ -207,7 +220,7 @@ export class SearchWidget extends Disposable {
 				},
 			},
 		]);
-		this.replaceActions.setActions([
+		this.replaceActions?.setActions([
 			{
 				id: 'search.preserveCase',
 				label: localize('search.preserveCase', 'Preserve Case'),

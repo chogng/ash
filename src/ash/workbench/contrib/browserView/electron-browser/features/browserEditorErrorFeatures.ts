@@ -45,9 +45,9 @@ export class BrowserEditorErrorFeatures extends BrowserEditorContribution {
 	}
 	override get widgets(): readonly IBrowserEditorWidget[] {
 		return [
-			{ location: BrowserWidgetLocation.Toolbar, element: this.status, order: 1 },
-			{ location: BrowserWidgetLocation.Toolbar, element: this.downloads, order: 2 },
-			{ location: BrowserWidgetLocation.Toolbar, element: this.userControl, order: 3 },
+			{ location: BrowserWidgetLocation.ContentArea, element: this.status, order: 0 },
+			{ location: BrowserWidgetLocation.ContentArea, element: this.downloads, order: 1 },
+			{ location: BrowserWidgetLocation.ContentArea, element: this.userControl, order: 2 },
 		];
 	}
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {

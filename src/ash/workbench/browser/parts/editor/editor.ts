@@ -21,6 +21,8 @@ export interface IEditorGroupViewOptions {
 	readonly showHeader?: boolean;
 	/** Whether to keep the group header below tabs hosted in the window title bar. */
 	readonly showHeaderFor?: (editor: IResourceEditorInput | undefined) => boolean;
+	/** Host the active editor's dedicated toolbar alongside the group actions. */
+	readonly showEditorToolbar?: boolean;
 	/** Label for a visible group header with no editor and no tabs. */
 	readonly emptyHeaderLabel?: string;
 	readonly headerRowHeight?: IObservable<number | undefined>;

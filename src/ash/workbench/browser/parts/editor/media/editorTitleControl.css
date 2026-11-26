@@ -14,11 +14,51 @@
 	);
 }
 
+.ash-editor-title-control:has(
+	> .ash-editor-tabs-and-actions
+		> .ash-editor-pane-toolbar-host
+		> :not([hidden])
+) {
+	height: auto;
+	flex-basis: auto;
+}
+
 .ash-editor-tabs-and-actions {
 	position: relative;
 	display: flex;
 	min-width: 0;
 	height: calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1));
+}
+
+.ash-editor-tabs-and-actions:has(
+	> .ash-editor-pane-toolbar-host > :not([hidden])
+) {
+	height: auto;
+	min-height: calc(
+		var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1)
+	);
+}
+
+.ash-editor-pane-toolbar-host {
+	flex: 1 1 50%;
+	min-inline-size: 0;
+	align-self: end;
+}
+
+.ash-editor-pane-toolbar-host:not(:has(> :not([hidden]))),
+.ash-editor-tabs-and-actions > .ash-editor-pane-toolbar-host > [hidden] {
+	display: none;
+}
+
+.ash-editor-pane-toolbar-host > .ash-editor-pane-toolbar {
+	min-block-size: var(--ash-pane-titleHeight);
+}
+
+.ash-editor-tabs-and-actions:has(
+		> .ash-editor-pane-toolbar-host > :not([hidden])
+	)
+	> .ash-editor-title-actions:not(:has(> :not([hidden]))) {
+	display: none;
 }
 
 .ash-editor-tabs-and-actions.multiple {

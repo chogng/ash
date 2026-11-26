@@ -552,7 +552,8 @@ test('Search Editor opens from its command and provides keyboard help', async ({
 	await expect(query).toBeVisible();
 	await expect(pane.locator('.stanza-editor')).toBeVisible();
 	await query.fill('first\nsecond');
-	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('first\\nsecond'));
+	await expect(query).toHaveValue('first\nsecond');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === '');
 	await query.press('Alt+F1');
 	const help = workbench.page.getByRole('dialog');
 	await expect(help.getByRole('textbox')).toHaveValue(/search editor[\s\S]*\.code-search/);
@@ -731,17 +732,16 @@ test.describe('Search with a granted browser folder', () => {
 		const query = pane.getByRole('textbox', { name: 'Search editor query', exact: true });
 		await expect(query).toHaveValue('needle');
 		const editor = workbench.editors.groupAt(0).editor;
-		await editor.waitForEditorContents(text => text.includes('3:8-3:14: needle'));
-		await editor.waitForEditorFocus();
-		await page.keyboard.press('ControlOrMeta+End');
-		await page.keyboard.press('ArrowUp');
-		await page.keyboard.press('ControlOrMeta+Enter');
+		await editor.waitForEditorContents(text => text.includes('3: ') && text.includes('needle needle'));
+		const matches = pane.locator('.ash-search-editor-match');
+		await expect(matches).toHaveCount(2);
+		await matches.last().dblclick();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 3, Col 14');
 		await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Search Editor' }).click();
 		await query.fill('first\nsecond');
 		await query.press('ControlOrMeta+Enter');
 		await expect(pane.getByRole('status')).toHaveText('1 results');
-		await editor.waitForEditorContents(text => text.includes('1:6-2:7: first ↵ second'));
+		await editor.waitForEditorContents(text => text.includes('1: ') && text.includes('2: ') && text.includes('second'));
 		await workbench.quickaccess.runCommand('workbench.action.files.save');
 		const save = page.getByRole('dialog');
 		await save.getByRole('textbox').fill('results.code-search');
@@ -753,7 +753,7 @@ test.describe('Search with a granted browser folder', () => {
 		await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'results.code-search', exact: true }).dblclick();
 		await expect(query).toHaveValue('first\nsecond');
-		await editor.waitForEditorContents(text => text.includes('first ↵ second'));
+		await editor.waitForEditorContents(text => text.includes('first') && text.includes('second'));
 
 		// Hold the filesystem boundary to switch documents while the old search is still running.
 		await page.evaluate(() => {

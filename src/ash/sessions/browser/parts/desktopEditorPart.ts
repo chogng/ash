@@ -27,7 +27,6 @@ const MINIMUM_NARROW_EDITOR_WIDTH = 160;
 
 /** Owns the main editor groups and the geometry of their docked details. */
 export class DesktopMainEditorPart extends EditorPart {
-	private hostedTabsGroup: IEditorGroupView | undefined;
 	private readonly auxiliary = this._register(new MutableDisposable<DesktopAuxiliaryBarPart>());
 	private inWorkingSet: (groupId: number) => boolean = () => true;
 	private supportsFilesDetails: () => boolean = () => true;
@@ -152,19 +151,6 @@ export class DesktopMainEditorPart extends EditorPart {
 		return this.groups.filter(group => this.inWorkingSet(group.id) && group.id !== this.pageGroupId);
 	}
 
-	public get fileTabsGroup(): IEditorGroupView | undefined {
-		const groups = this.fileGroups.filter(group => this.isGroupVisible(group.id));
-		return groups.length === 1 ? groups[0] : undefined;
-	}
-
-	public setFileTabsHost(host: HTMLElement | undefined): void {
-		const group = host ? this.fileTabsGroup : undefined;
-		const previous = this.hostedTabsGroup;
-		if (previous && previous !== group && this.groups.includes(previous)) previous.setTabStripHost(undefined);
-		this.hostedTabsGroup = group;
-		group?.setTabStripHost(host);
-	}
-
 	public setGroupScope(contains: (groupId: number) => boolean, supportsFilesDetails: () => boolean): IDisposable {
 		this.inWorkingSet = contains;
 		this.supportsFilesDetails = supportsFilesDetails;
@@ -252,6 +238,7 @@ export class DesktopMainEditorPart extends EditorPart {
 		return {
 			showHeader: true,
 			showHeaderFor: editor => !(editor instanceof EmptyFileEditorInput),
+			showEditorToolbar: true,
 			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,

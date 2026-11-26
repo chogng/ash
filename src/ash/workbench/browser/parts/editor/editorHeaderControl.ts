@@ -1,5 +1,6 @@
 import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import { h } from '../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { SubmenuAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
@@ -61,6 +62,7 @@ export class EditorHeaderControl extends Disposable {
 	private readonly symbolListeners = this._register(new DisposableStore());
 	private readonly symbolRequest = this._register(new MutableDisposable<IDisposable>());
 	private readonly paneActionsListener = this._register(new MutableDisposable<IDisposable>());
+	readonly editorToolbarHost: HTMLElement | undefined;
 	private readonly toolbar: WorkbenchToolBar;
 	private editorTypes: readonly IEditorPaneDescriptor[] = [];
 	private selectEditorType: ((id: string) => Promise<unknown>) | undefined;
@@ -127,6 +129,20 @@ export class EditorHeaderControl extends Disposable {
 				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 				contextKeyService: actions.contextKeyService,
 				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+			}));
+		}
+		if (this.headerRow && viewOptions.showEditorToolbar) {
+			const row = this.headerRow;
+			const host = this.editorToolbarHost = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-pane-toolbar-host' });
+			row.append(host);
+			this._register(toDisposable(() => host.remove()));
+			// Deliver after ResizeObserver because the group may resize this header during layout.
+			const notifyHeightChange = this._register(new RunOnceScheduler(() => this.heightEmitter.fire(), 0));
+			let height = 0;
+			this._register(observeElementSize(host, size => {
+				if (height === size.height) return;
+				height = size.height;
+				notifyHeightChange.schedule();
 			}));
 		}
 		const actionsContainer = h(titleContainer.ownerDocument, 'div');
@@ -206,6 +222,10 @@ export class EditorHeaderControl extends Disposable {
 
 	get height(): number {
 		return this.breadcrumbs.domNode.hidden ? 0 : 22;
+	}
+
+	get toolbarRowHeight(): number {
+		return this.editorToolbarHost?.offsetHeight ? this.headerRow?.offsetHeight ?? 0 : 0;
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {

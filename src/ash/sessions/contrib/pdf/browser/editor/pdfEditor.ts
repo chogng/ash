@@ -1,4 +1,5 @@
 import { getActiveElement, getWindow, h, addDisposableListener, isHTMLElement, type IDimension } from '../../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { ZoomAnchor } from '../../../../../base/browser/ui/zoom/zoomAnchor.js';
@@ -136,6 +137,7 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		this.element = h(document, 'section', { className: 'ash-sessions-pdf-preview' });
 		this._register(toDisposable(() => this.element.remove()));
 		const controls = h(document, 'div', { className: 'ash-editor-pane-toolbar ash-sessions-pdf-controls', attributes: { role: 'group', 'aria-label': localize('sessions.pdfPreview.controls', 'PDF controls') } });
+		this._register(observeElementSize(controls, ({ width }) => controls.classList.toggle('narrow', width < 640)));
 		const navigationLabel = localize('sessions.pdfPreview.pageNavigation', 'PDF page navigation');
 		const content = h(document, 'div', { className: 'ash-sessions-pdf-content' });
 		this.readingArea = h(document, 'div', { className: 'ash-sessions-pdf-reading-area' });
@@ -224,7 +226,6 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		}));
 		controls.append(documentActions);
 		this.progress = h(document, 'span', { className: 'ash-sessions-pdf-status', attributes: { role: 'status' } });
-		controls.append(this.progress);
 		this.pageScroll = this._register(new ScrollableElement(this.readingArea, {
 			direction: 'both', vertical: 'auto', horizontal: 'auto',
 			ariaLabel: localize('sessions.pdfPreview.documentPage', 'PDF page'),
@@ -232,7 +233,6 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		}));
 		this.surface = this.pageScroll.element;
 		this.surface.classList.add('ash-sessions-pdf-page');
-		pdfEditorFocus.bindTo(this._register(this.contextKeys.createScoped(this.element))).set(true);
 		for (const key of [KeyCode.Equal, KeyMod.Shift | KeyCode.Equal, KeyCode.Minus, KeyCode.NumpadAdd, KeyCode.NumpadSubtract, KeyCode.Digit0]) {
 			for (const modifier of [KeyMod.CtrlCmd, KeyMod.WinCtrl]) {
 				this._register(KeybindingsRegistry.registerKeybindingPassThrough({ keybinding: modifier | key, when: pdfEditorFocus.isEqualTo(true), priority: KeybindingWeight.WorkbenchContrib + 10 }));
@@ -267,24 +267,26 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		this.annotations = this._register(new PdfAnnotations(annotationSidebar.contentElement,
 			edit => { void this.perform(() => this.edit(edit)); },
 		));
-		this.element.append(controls, content);
+		this.element.append(content, this.progress);
 		parent.append(this.element);
 		super.create(this.element);
+		this.createEditorToolbar(controls, this.element, content);
+		this.bindEditorContextKey(this.contextKeys, pdfEditorFocus, true);
 		this._register(registerResourceEditorAccessibility(this.element, this.configuration,
 			() => this.accessibleContent(), () => localize('sessions.pdfPreview.help', 'The page opens centered and fitted to the reading area. Use the arrow keys, Page Up and Page Down to scroll. Use Scroll mode to choose Continuous scrolling or Page scrolling. New PDFs use the last selected mode. Continuous scrolling places pages in one scrollable document. In Page scrolling, scroll the mouse wheel or press Page Up or Page Down at a page boundary to turn pages. Hold Control or Command and use the mouse wheel to zoom around the pointer. With the page focused, Control or Command plus + or - zooms in or out; Control or Command plus 0 restores 100 percent. Enter a page number and press Enter to navigate, or use Previous page and Next page. Select text and choose Highlight selection. Enter annotation text and choose Add note. Choose Draw and drag on the page; with the page focused, press Space to start a stroke, use arrow keys to draw and press Enter to finish. Choose Erase highlights and drawings, then click a mark or focus its erase button and press Enter. Choose Add text box, then click the page or press Enter with the page focused; enter text and press Control+Enter or Command+Enter to apply. Escape cancels the current tool or text box. Fit page and Fit width switch the page size. Save changes writes annotations into the PDF file. Save a copy lets you choose where to write a PDF with your annotations when the source is read-only. Control+Z or Command+Z undoes an edit; add Shift to redo. Existing annotations have Update and Delete controls.')
 				+ '\n\n' + localize('sessions.pdfPreview.thumbnailsHelp', 'PDF page navigation opens the sidebar to the left of the document. Use Left and Right to focus Thumbnails or Outline, then Enter to switch tabs. In Thumbnails, use Up and Down to change pages, or Home and End to go to the first and last page. Outline is blank when the PDF has no bookmarks. Use the arrow keys to browse bookmarks and Enter to open a chapter. Escape closes the sidebar and returns focus to PDF page navigation.')
 				+ '\n\n' + localize('sessions.pdfPreview.commentsHelp', 'The PDF comments button shows or hides the annotation pane. Press Escape in the pane to close it and return focus to the button.')
 				+ '\n\n' + localize('sessions.pdfPreview.resizeSidebarsHelp', 'Drag a divider beside the PDF to resize its sidebar. With the divider focused, use Left or Right to resize. Double-click the divider to restore the default width.')
-				+ '\n\n' + localize('sessions.pdfPreview.selectionHelp', 'Selecting text opens the selection toolbar. Press Shift+F10 to focus it, use arrow keys to choose an action, and press Escape to return to the page. Copy copies the selected text. Translate with Ash opens a translation request in the chat draft. Add comment creates a note at the selection and Highlight marks the selected text.')));
+				+ '\n\n' + localize('sessions.pdfPreview.selectionHelp', 'Selecting text opens the selection toolbar. Press Shift+F10 to focus it, use arrow keys to choose an action, and press Escape to return to the page. Copy copies the selected text. Translate with Ash opens a translation request in the chat draft. Add comment creates a note at the selection and Highlight marks the selected text.'), element => this.containsEditorElement(element)));
 		// Workbench dispatches edit commands before bubbling DOM key events.
 		for (const [command, operation] of [[UndoCommand, 'undo'], [RedoCommand, 'redo']] as const) {
 			this._register(command.addImplementation(120, 'pdf-editor', () => {
 				const target = getActiveElement(document);
-				if (!this.model || !target || !this.element.contains(target) || ['INPUT', 'TEXTAREA'].includes(target.tagName)) { return false; }
+				if (!this.model || !target || !this.containsEditorElement(target) || ['INPUT', 'TEXTAREA'].includes(target.tagName)) { return false; }
 				return this.perform(async () => { await this.model?.[operation](); await this.paint(); });
 			}));
 		}
-		this._register(addDisposableListener(this.element, 'keydown', event => {
+		this.registerEditorKeydown(event => {
 			if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key)) {
 				event.preventDefault(); event.stopImmediatePropagation();
 				if (!this.busy && !this.stroke && this.displayedPage) {
@@ -301,7 +303,7 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 				void this.perform(async () => { if (event.shiftKey) { await this.model?.redo(); } else { await this.model?.undo(); } await this.paint(); });
 			}
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void this.perform(() => this.save()); }
-		}));
+		});
 		this._register(toDisposable(() => this.clearInput()));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(pdfScrollModeSetting)) { return; }
@@ -729,7 +731,6 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 	private activatePage(view: PdfPageView): void {
 		const page = view.page;
 		if (!page || (this.activeView === view && this.displayedPage === page)) { return; }
-		const firstPage = !this.displayedPage;
 		if (this.displayedPage?.page !== page.page) {
 			this.zoomRefinement.cancel();
 			if (this.pageRender?.refinement) { this.pageRender.controller.abort(); }
@@ -750,8 +751,7 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		this.pageCount.textContent = `/${page.pageCount}`;
 		const progress = localize('sessions.pdfPreview.page', 'Page {0} of {1}', page.page, page.pageCount);
 		if (this.progress.textContent !== progress) { this.progress.textContent = progress; }
-		if (firstPage) { this.editorLayout.setSideVisible('right', true); }
-		else if (this.editorLayout.annotationSidebar.visible) { this.annotations.layout(); }
+		if (this.editorLayout.annotationSidebar.visible) { this.annotations.layout(); }
 		if (this.continuous) { this.updateFitAction(); }
 		else { this.updateZoom(); }
 		this.updateControls();
@@ -1160,9 +1160,8 @@ export class PdfEditor extends EditorPane implements IEditorPaneWithViewState {
 		super.setVisible(visible);
 		if (visible) this.continuous?.layout(this.zoom);
 	}
-	public override layout(dimension: IDimension): void {
+	public override layout(_dimension: IDimension): void {
 		this.flushWheelZoom();
-		this.element.classList.toggle('narrow', dimension.width < 640);
 		this.editorLayout.layout();
 		this.updateZoom();
 		this.restorePendingViewState();

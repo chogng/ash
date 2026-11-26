@@ -1,6 +1,6 @@
 .ash-sessions-pdf-preview {
 	display: grid;
-	grid-template-rows: auto minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
 	block-size: 100%;
 	min-block-size: 0;
 	overflow: hidden;
@@ -9,12 +9,19 @@
 	color: var(--ash-editor-foreground);
 }
 
+.ash-sessions-pdf-preview:has(> .ash-sessions-pdf-controls) {
+	grid-template-rows: auto minmax(0, 1fr);
+}
+
 .ash-sessions-pdf-controls {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding-block: var(--ash-spacing-size20);
+}
+
+.ash-sessions-pdf-preview > .ash-sessions-pdf-controls {
 	border-block-end: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
@@ -32,10 +39,11 @@
 	margin-inline-start: auto;
 }
 
-.ash-sessions-pdf-preview.narrow .ash-sessions-pdf-controls {
+.ash-sessions-pdf-controls.narrow {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: space-between;
+	overflow-x: auto;
 }
 
 .ash-sessions-pdf-navigation,

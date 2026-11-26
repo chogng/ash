@@ -41,6 +41,7 @@ import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js'
 import { EditorArea } from './parts/editorPart.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
 import type { EditorParts } from './parts/editorParts.js';
+import type { IEditorGroupView } from '../../workbench/browser/parts/editor/editor.js';
 import { SessionsPart } from './parts/sessionsPart.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
@@ -569,28 +570,35 @@ export class DesktopWorkbenchLayout
 		const titlebar = this.view('titlebar').part;
 		const editor = this.view('editor').part;
 		if (titlebar instanceof TitlebarPart && editor instanceof EditorArea) {
-			this.registerEditorRegionLayout(titlebar, editor, this.mainEditor);
+			this.registerEditorRegionLayout(titlebar, editor, editorParts);
 		}
 	}
 
-	private registerEditorRegionLayout(titlebar: TitlebarPart, editor: EditorArea, mainEditor: DesktopMainEditorPart | undefined): void {
+	private registerEditorRegionLayout(titlebar: TitlebarPart, editor: EditorArea, editorParts: EditorParts | undefined): void {
+		let hostedGroup: IEditorGroupView | undefined;
+		const setTabsHost = (group: IEditorGroupView | undefined, host: HTMLElement | undefined): void => {
+			if (hostedGroup && hostedGroup !== group && hostedGroup.domNode.isConnected) hostedGroup.setTabStripHost(undefined);
+			hostedGroup = group;
+			group?.setTabStripHost(host);
+		};
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
 			const editorVisible = this.isPartVisible('editor');
 			const conversationVisible = this.isPartVisible('sessions');
-			const pageHeader = editorVisible && editor.hasProductPage ? mainEditor?.pageTitlebarContent : undefined;
+			const pageHeader = editorVisible && editor.hasProductPage ? editorParts?.filesPart.pageTitlebarContent : undefined;
 			const toolsVisible = editorVisible && !editor.hasProductPage;
-			const hostFileTabs = toolsVisible && editor.isFullWidthTopTool('files') && !!mainEditor?.fileTabsGroup;
-			const left = pageHeader || hostFileTabs || (toolsVisible && conversationVisible)
+			const group = toolsVisible ? editorParts?.titlebarTabsGroup : undefined;
+			const left = pageHeader || group || (toolsVisible && conversationVisible)
 				? editor.domNode.getBoundingClientRect().left : undefined;
-			titlebar.layoutEditorRegion(left, pageHeader, conversationVisible, host => mainEditor?.setFileTabsHost(hostFileTabs ? host : undefined));
+			titlebar.layoutEditorRegion(left, pageHeader, conversationVisible, host => setTabsHost(host ? group : undefined, host));
 		}));
 		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
 		this._register(this.onDidChangePartVisibility(() => update.schedule()));
-		if (mainEditor) {
-			this._register(mainEditor.onDidChangeEditors(() => update.schedule()));
-			this._register(mainEditor.onDidLayout(() => update.schedule()));
-			this._register(toDisposable(() => mainEditor.setFileTabsHost(undefined)));
+		this._register(editor.onDidChangeTitlebarTool(() => update.schedule()));
+		if (editorParts) {
+			this._register(editorParts.onDidChangeEditors(() => update.schedule()));
+			this._register(editorParts.filesPart.onDidLayout(() => update.schedule()));
 		}
+		this._register(toDisposable(() => setTabsHost(undefined, undefined)));
 		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
 		update.schedule();
 	}

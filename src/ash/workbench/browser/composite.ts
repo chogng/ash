@@ -27,7 +27,8 @@ export abstract class Composite<MementoType extends object = object> extends Com
 	public readonly onDidFocus = this.focused.event;
 	public readonly onDidBlur = this.blurred.event;
 	private compositeContainer: HTMLElement | undefined;
-	private compositeFocusTracker: IFocusTracker | undefined;
+	private readonly compositeFocusTrackers: IFocusTracker[] = [];
+	private compositeHasFocus = false;
 
 	/** Subclasses attach their own root before registering it here exactly once. */
 	public create(parent: HTMLElement): void {
@@ -35,14 +36,28 @@ export abstract class Composite<MementoType extends object = object> extends Com
 			throw new ReferenceError('Composite has already been created');
 		}
 		this.compositeContainer = parent;
-		const tracker = this._register(trackFocus(parent));
-		this.compositeFocusTracker = tracker;
-		this._register(tracker.onDidFocus(() => this.focused.fire()));
-		this._register(tracker.onDidBlur(() => this.blurred.fire()));
+		this.trackCompositeFocus(parent);
 		this._register(toDisposable(() => {
-			this.compositeFocusTracker = undefined;
+			this.compositeFocusTrackers.length = 0;
+			this.compositeHasFocus = false;
 			this.compositeContainer = undefined;
 		}));
+	}
+
+	/** Additional roots participate in a single focus boundary with the content. */
+	protected trackCompositeFocus(root: HTMLElement): void {
+		const tracker = this._register(trackFocus(root));
+		this.compositeFocusTrackers.push(tracker);
+		this.compositeHasFocus ||= tracker.hasFocus;
+		const update = () => {
+			const focused = this.compositeFocusTrackers.some(tracker => tracker.hasFocus);
+			if (focused === this.compositeHasFocus) return;
+			this.compositeHasFocus = focused;
+			if (focused) this.focused.fire();
+			else this.blurred.fire();
+		};
+		this._register(tracker.onDidFocus(update));
+		this._register(tracker.onDidBlur(update));
 	}
 
 	public getContainer(): HTMLElement | undefined {
@@ -67,7 +82,7 @@ export abstract class Composite<MementoType extends object = object> extends Com
 	}
 
 	public hasFocus(): boolean {
-		return this.compositeFocusTracker?.hasFocus === true;
+		return this.compositeHasFocus;
 	}
 
 	public isVisible(): boolean {

@@ -14,8 +14,19 @@
 	align-items: center;
 	flex-wrap: wrap;
 	flex: 0 0 auto;
+	box-sizing: border-box;
+	min-block-size: inherit;
 	gap: 4px;
 	padding-block: var(--ash-spacing-size20);
+}
+
+.ash-browser-toolbar-container {
+	flex: 0 0 auto;
+	container-type: inline-size;
+	container-name: ash-browser-toolbar;
+}
+
+.ash-browser-editor > .ash-browser-toolbar-container > .ash-browser-toolbar {
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 .ash-browser-navigation,
@@ -30,9 +41,11 @@
 	flex: 1 1 120px;
 	min-width: 120px;
 }
-.ash-browser-toolbar.compact > .ash-browser-address {
-	order: -1;
-	flex-basis: 100%;
+@container ash-browser-toolbar (width < 320px) {
+	.ash-browser-toolbar > .ash-browser-address {
+		order: -1;
+		flex-basis: 100%;
+	}
 }
 .ash-browser-status {
 	flex: 0 0 auto;
@@ -41,10 +54,6 @@
 	text-overflow: ellipsis;
 	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
-}
-.ash-browser-toolbar > .ash-browser-status {
-	flex: 0 1 auto;
-	min-width: 0;
 }
 /* Keep ordinary navigation announcements out of the toolbar layout. */
 .ash-browser-status.announcement-only {

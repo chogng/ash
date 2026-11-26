@@ -15,6 +15,7 @@ import { IEditorService, type EditorOpenTarget } from '../../../../services/edit
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { splitGlobPatterns } from '../../../../services/search/common/queryBuilder.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { EditorPanes } from '../../../../browser/editor.js';
@@ -29,9 +30,12 @@ import { IFileTextModelService, ITextModelResourceService, type ITextResourceSto
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { SearchResultImpl } from '../../../search/browser/searchTreeModel/searchResult.js';
-import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from '../../browser/searchEditorSerialization.js';
+import { parseSearchEditor, serializeSearchResultForEditor } from '../../browser/searchEditorSerialization.js';
 import { OpenNewEditorCommandId, SearchEditorID } from '../../browser/constants.js';
 import { SearchEditor } from '../../browser/searchEditor.js';
+import { SearchEditorModel } from '../../browser/searchEditorModel.js';
+import { ISearchHistoryService, SearchHistoryService } from '../../../search/common/searchHistoryService.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import '../../browser/searchEditor.contribution.js';
 
 test('the Search Editor command scopes folder search to its workspace root and literal path', async () => {
@@ -100,6 +104,9 @@ test('generated Search Editor content stays clean, while manual edits and saved 
 	} as IFileDialogService;
 	services.registerInstance(IFileDialogService, fileDialogs);
 	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(ITextFileService, { resolve: async () => { throw new Error('Unexpected context read'); } } as unknown as ITextFileService);
+	using history = services.createInstance(SearchHistoryService);
+	services.registerInstance(ISearchHistoryService, history);
 	services.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Unexpected provider registration'); },
 		fileSearch: async () => { throw new Error('Unexpected file search'); },
@@ -140,7 +147,8 @@ test('generated Search Editor content stays clean, while manual edits and saved 
 		const results = new Promise<void>(resolve => Event.once(pane.getControl()!.onDidChangeModelContent)(() => resolve()));
 		pane.domNode.querySelector('form')!.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 		await results;
-		assert.match(pane.getControl()!.getValue(), /example\.txt/);
+		assert.match(pane.getControl()!.getValue(), /example\.txt:\n  1: /);
+		assert.doesNotMatch(pane.getControl()!.getValue(), /# Search:|file:\/\//);
 	};
 
 	let pane = await openSearch();
@@ -178,20 +186,30 @@ test('saved search documents restore multiline queries, filters and exact source
 	]);
 	const text = serializeSearchResultForEditor(query, results);
 	assert.deepEqual(parseSearchEditor(text), query);
-	assert.deepEqual(searchEditorLocation(text, 4), { resource: URI.file('/workspace/src/main.ts'), range: new Range(4, 6, 5, 7) });
-	assert.deepEqual(searchEditorLocation(text, 7), { resource: URI.parse('ssh://server/workspace/src/main.ts'), range: new Range(2, 1, 3, 7) });
-	assert.equal(searchEditorLocation(text, 1), undefined);
-	assert.match(text, /first ↵ second/);
+	using backing = new TextModel(text);
+	const model = SearchEditorModel.resolve(backing, resource => resource.path);
+	assert.deepEqual(model.location(2, 1), { resource: URI.file('/workspace/src/main.ts'), range: new Range(4, 6, 5, 7) });
+	assert.deepEqual(model.location(6, 1), { resource: URI.parse('ssh://server/workspace/src/main.ts'), range: new Range(2, 1, 3, 7) });
+	assert.match(model.results.getText(), /one\/src\/main\.ts:\n  4: 中文😀 first\n  5: second end/);
+	assert.doesNotMatch(model.results.getText(), /# Search:|file:\/\//);
 });
 
-test('edited search documents reject invalid headers and read edited source positions', () => {
+test('Search Editor opens legacy documents and preserves their editable content and source ranges', () => {
 	assert.throws(() => parseSearchEditor('results without a header'), TypeError);
 	assert.throws(() => parseSearchEditor('# Search: {"version":1,"query":{"text":4}}'), TypeError);
-	const text = '# File: file:///workspace/main.ts\n  8:2-9:4: edited\n  9:4-8:2: invalid';
-	assert.deepEqual(searchEditorLocation(text, 2), { resource: URI.file('/workspace/main.ts'), range: new Range(8, 2, 9, 4) });
-	assert.equal(searchEditorLocation(text, 3), undefined);
+	const query = { text: 'edited', patternKind: 'literal', caseSensitivity: 'insensitive', includePatterns: [], excludePatterns: [] };
+	const original = `# Search: ${JSON.stringify({ version: 1, query })}\n\n# File: file:///workspace/main.ts\n  8:2-9:4: edited\n  9:4-8:2: invalid\nManual note`;
+	using backing = new TextModel(original);
+	const model = SearchEditorModel.resolve(backing, () => 'main.ts');
+	assert.equal(SearchEditorModel.resolve(backing, resource => resource.path), model);
+	assert.equal(backing.getText(), original);
+	assert.equal(model.results.getText(), 'main.ts:\n  8: edited\n  9:4-8:2: invalid\nManual note');
+	assert.deepEqual(model.location(2, 1), { resource: URI.file('/workspace/main.ts'), range: new Range(8, 2, 9, 4) });
+	assert.equal(model.location(3, 1), undefined);
+	model.results.applyOperations([{ range: new Range(4, 1, 4, 12), text: 'Updated note' }]);
+	assert.equal(parseSearchEditor(backing.getText()).text, 'edited');
+	assert.match(backing.getText(), /Updated note$/);
 });
-
 
 test('search documents retain untitled and outside-workspace URI identity and UTF-16 positions', () => {
 	const query = { text: 'needle', patternKind: 'literal' as const, caseSensitivity: 'sensitive' as const, includePatterns: [], excludePatterns: [], maxResults: 100, freshness: 'current' as const };
@@ -200,6 +218,10 @@ test('search documents retain untitled and outside-workspace URI identity and UT
 		results.addFileMatch({ resource, results: [{ previewText: '中文😀 needle', rangeLocations: [{ source: { startLineNumber: 3, startColumn: 5, endLineNumber: 3, endColumn: 11 }, preview: { startLineNumber: 0, startColumn: 5, endLineNumber: 0, endColumn: 11 } }] }] });
 	}
 	const text = serializeSearchResultForEditor(query, results);
-	assert.deepEqual(searchEditorLocation(text, 4), { resource: URI.parse('untitled:/Untitled-1'), range: new Range(4, 6, 4, 12) });
-	assert.deepEqual(searchEditorLocation(text, 7), { resource: URI.file('/outside/main.ts'), range: new Range(4, 6, 4, 12) });
+	using backing = new TextModel(text);
+	const model = SearchEditorModel.resolve(backing, resource => resource.path);
+	const first = [...model.rows].find(row => !row.header && row.file.resource.startsWith('untitled:'))!;
+	const second = [...model.rows].find(row => !row.header && row.file.resource.startsWith('file:'))!;
+	assert.deepEqual(model.location(first.line, 1), { resource: URI.parse('untitled:/Untitled-1'), range: new Range(4, 6, 4, 12) });
+	assert.deepEqual(model.location(second.line, 1), { resource: URI.file('/outside/main.ts'), range: new Range(4, 6, 4, 12) });
 });

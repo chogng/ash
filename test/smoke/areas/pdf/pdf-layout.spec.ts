@@ -5,6 +5,7 @@ test.use({ electronArgs: ['--agents-window'], electronUserSettings: { 'sessions.
 
 test('PDF sidebar widths survive closing the tab and restarting Ash', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, runningApplication }) => {
 	const preview = () => workbench.page.locator('.ash-sessions-pdf-preview:visible');
+	const controls = () => workbench.page.locator('.ash-editor-group').filter({ has: preview() }).locator('.ash-editor-group-header > .ash-editor-pane-toolbar-host > .ash-sessions-pdf-controls');
 	const left = () => preview().getByRole('complementary', { name: 'PDF page navigation', exact: true });
 	const right = () => preview().getByRole('complementary', { name: 'PDF annotations', exact: true });
 	const leftDivider = () => preview().getByRole('separator', { name: 'Resize PDF page navigation', exact: true });
@@ -20,8 +21,17 @@ test('PDF sidebar widths survive closing the tab and restarting Ash', { tag: ['@
 			await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, dialog);
 			await dialog.dispose();
 		}
-		await preview().getByRole('button', { name: 'PDF page navigation', exact: true }).click();
+		const navigation = controls().getByRole('button', { name: 'PDF page navigation', exact: true });
+		const comments = controls().getByRole('button', { name: 'PDF comments', exact: true });
+		await expect(navigation).toHaveAttribute('aria-expanded', 'false');
+		await expect(comments).toHaveAttribute('aria-expanded', 'false');
+		await expect(left()).toBeHidden();
+		await expect(right()).toBeHidden();
+		await navigation.click();
 		await expect(left()).toBeVisible();
+		await expect(right()).toBeHidden();
+		await comments.click();
+		await expect(right()).toBeVisible();
 	};
 	const closePdf = async () => {
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');

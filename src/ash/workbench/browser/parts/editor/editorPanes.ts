@@ -9,7 +9,7 @@ export class EditorPanes extends Disposable {
 	private activeInstance: EditorPaneInstance | undefined;
 	private pendingInstance: EditorPaneInstance | undefined;
 
-	constructor(private readonly container: HTMLElement) {
+	constructor(private readonly container: HTMLElement, private toolbarHost?: HTMLElement) {
 		super();
 	}
 
@@ -25,6 +25,7 @@ export class EditorPanes extends Disposable {
 		const instance = new EditorPaneInstance(this.container, pane);
 		this.instances.set(instance, instance);
 		try {
+			pane.setEditorToolbarHost(this.toolbarHost);
 			pane.create(instance.domNode);
 			instance.setVisible(false);
 		} catch (error) {
@@ -32,6 +33,12 @@ export class EditorPanes extends Disposable {
 			throw error;
 		}
 		return instance;
+	}
+
+	setToolbarHost(host: HTMLElement | undefined): void {
+		if (this.toolbarHost === host) return;
+		this.toolbarHost = host;
+		for (const [, instance] of this.instances) instance.pane.setEditorToolbarHost(host);
 	}
 
 	setPending(instance: EditorPaneInstance): void {

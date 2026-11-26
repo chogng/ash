@@ -81,7 +81,7 @@ export class EditorTitleControl extends Disposable {
 		this.headerElement = h(ownerDocument, 'div');
 		this.headerElement.className = 'ash-editor-tabs-and-actions';
 		this.domNode.append(this.headerElement);
-		if (viewOptions.menuIds?.tabsBarAddTab) {
+		if (viewOptions.showHeader || viewOptions.menuIds?.tabsBarAddTab) {
 			this.tabStrip = h(ownerDocument, 'div', { className: 'ash-editor-tab-strip' });
 			this.headerElement.append(this.tabStrip);
 			const context = titleActions?.contextKeyService?.createScoped(this.tabStrip);
@@ -143,12 +143,16 @@ export class EditorTitleControl extends Disposable {
 		return this.tabsHeight + this.header.height;
 	}
 
+	get editorToolbarHost(): HTMLElement | undefined {
+		return this.domNode.hidden ? undefined : this.header.editorToolbarHost;
+	}
+
 	get tabsHeight(): number {
 		if (this.domNode.hidden) return 0;
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		const rowHeight = this.viewOptions.headerRowHeight?.get()
 			?? (this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT);
-		return rowHeight * rows;
+		return Math.max(rowHeight * rows, this.header.toolbarRowHeight);
 	}
 
 	setVisible(visible: boolean): boolean {

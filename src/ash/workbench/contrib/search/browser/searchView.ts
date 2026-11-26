@@ -38,7 +38,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { SearchEditorID } from '../../searchEditor/browser/constants.js';
-import { serializeSearchResultForEditor } from '../../searchEditor/browser/searchEditorSerialization.js';
+import { serializeSearchContextSnapshot, serializeSearchResultForEditor } from '../../searchEditor/browser/searchEditorSerialization.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { SearchStateKey, SearchUIState } from '../common/search.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -47,9 +47,10 @@ import type { IAction } from '../../../../base/common/actions.js';
 export class SearchView extends ViewPane {
 	private readonly searchService: ISearchService;
 	private readonly searchWidget: SearchWidget;
+	private readonly replaceBox: HistoryInputBox<true>;
 	private readonly historyInputs = new Map<keyof ISearchHistoryValues, HistoryInputBox<boolean>>();
 	private get queryInput(): HTMLTextAreaElement { return this.searchWidget.searchInput.inputBox.inputElement; }
-	private get replaceInput(): HTMLTextAreaElement { return this.searchWidget.replaceInput.inputBox.inputElement; }
+	private get replaceInput(): HTMLTextAreaElement { return this.replaceBox.inputElement; }
 	private resultQuery: IContentSearchQuery | undefined;
 	private replaceController: AbortController | undefined;
 	private undoReplacement: (() => Promise<void>) | undefined;
@@ -128,9 +129,10 @@ export class SearchView extends ViewPane {
 		form.className = 'ash-search-form';
 		// Attach before creating scoped inputs so keyboard commands inherit this pane's context.
 		this.contentElement.append(form);
-		this.searchWidget = this._register(instantiation.createInstance(SearchWidget, form));
+		this.searchWidget = this._register(instantiation.createInstance(SearchWidget, form, {}));
+		this.replaceBox = this.searchWidget.replaceInput!.inputBox;
 		this.historyInputs.set('search', this.searchWidget.searchInput.inputBox);
-		this.historyInputs.set('replace', this.searchWidget.replaceInput.inputBox);
+		this.historyInputs.set('replace', this.replaceBox);
 		const detailsRow = h(document, 'div');
 		detailsRow.className = 'ash-search-details-row';
 		this.detailsButton = this._register(new Button(detailsRow, {
@@ -503,8 +505,8 @@ export class SearchView extends ViewPane {
 		this.statusElement.textContent = '';
 		if (clearInput) {
 			// Repeated clear removes filters only after the query and replacement are already empty.
-			const fields = this.searchWidget.searchInput.inputBox.value || this.searchWidget.replaceInput.inputBox.value
-				? [this.searchWidget.searchInput.inputBox, this.searchWidget.replaceInput.inputBox]
+			const fields = this.searchWidget.searchInput.inputBox.value || this.replaceBox.value
+				? [this.searchWidget.searchInput.inputBox, this.replaceBox]
 				: [...this.historyInputs.values()];
 			for (const field of fields) {
 				field.value = '';
@@ -520,7 +522,7 @@ export class SearchView extends ViewPane {
 
 	public getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number; } | undefined {
 		if (this.isDisposed || !this.resultQuery || !this.result.count || this.searchController || this.replaceController) { return undefined; }
-		return { query: this.resultQuery.text, content: serializeSearchResultForEditor(this.resultQuery, this.result), matchCount: this.result.count };
+		return { query: this.resultQuery.text, content: serializeSearchContextSnapshot(this.resultQuery, this.result), matchCount: this.result.count };
 	}
 
 	public get searchResult(): SearchResultImpl { return this.result; }
@@ -557,7 +559,7 @@ export class SearchView extends ViewPane {
 		this.hasSearchResultsKey.set(hasResults);
 		this.hasSomeCollapsibleKey.set(hasSomeCollapsible);
 		this.hasSearchPatternKey.set(this.searchWidget.searchInput.inputBox.value.length > 0);
-		this.hasReplacePatternKey.set(this.searchWidget.replaceInput.inputBox.value.length > 0);
+		this.hasReplacePatternKey.set(this.replaceBox.value.length > 0);
 		this.hasFilePatternKey.set(this.includeInput.value.length > 0 || this.excludeInput.value.length > 0);
 		const slowSearch = this.searchStateKey.get() === SearchUIState.SlowSearch;
 		const showExpandAll = hasResults && !hasSomeCollapsible;
@@ -739,7 +741,7 @@ export class SearchView extends ViewPane {
 		else if (focused?.kind === 'file') { matches = focused.matches; }
 		if (!matches.length) { return; }
 		const query = this.resultQuery;
-		const replacement = this.searchWidget.replaceInput.inputBox.value;
+		const replacement = this.replaceBox.value;
 		const controller = new AbortController();
 		this.replaceController = controller;
 		this.updateResultActions();

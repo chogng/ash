@@ -306,7 +306,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		));
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
-		this.panes = this._register(new EditorPanes(this.contentDomNode));
+		this.panes = this._register(new EditorPanes(this.contentDomNode, this.titleControl.editorToolbarHost));
 		if (options.keybindingService) {
 			this.watermark = this._register(instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
@@ -344,6 +344,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			}));
 		}
 		this._register(this.titleControl.onDidChangeHeight(() => {
+			this.panes.setToolbarHost(this.titleControl.editorToolbarHost);
 			this.layout(this.groupDimension);
 			// Sibling views reserve space below the title and need its new height too.
 			this.sizeChangeEmitter.fire();
@@ -998,7 +999,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	public setTitleVisible(visible: boolean): void {
-		if (this.titleControl.setVisible(visible)) this.layout(this.groupDimension);
+		if (this.titleControl.setVisible(visible)) {
+			this.panes.setToolbarHost(this.titleControl.editorToolbarHost);
+			this.layout(this.groupDimension);
+		}
 	}
 
 	public setTabStripHost(host: HTMLElement | undefined): void { this.titleControl.setTabStripHost(host); }

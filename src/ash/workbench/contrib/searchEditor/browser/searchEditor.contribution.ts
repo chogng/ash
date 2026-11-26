@@ -16,6 +16,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { InSearchEditor, isSearchEditorInput, OpenNewEditorCommandId, SearchEditorID } from './constants.js';
 import { SearchEditor } from './searchEditor.js';
+import '../../search/browser/searchHistory.contribution.js';
 import { serializeSearchResultForEditor } from './searchEditorSerialization.js';
 
 registerEditorPane({
@@ -79,7 +80,7 @@ AccessibleViewRegistry.register({
 		if (!(pane instanceof SearchEditor)) { return undefined; }
 		const focused = pane.domNode.ownerDocument.activeElement as HTMLElement | null;
 		return new AccessibleContentProvider(AccessibleViewProviderId.SearchEditorHelp, { type: AccessibleViewType.Help },
-			() => localize('searchEditor.help', 'You are in a search editor. Use Tab to move between the query, search options, file filters, and editable results. Ctrl or Command+Enter in the query runs the search; in a result row it opens the source match. Escape stops a running search. The Search header stores the query and options. Use Save to keep a temporary query and its results in a .code-search file. Reopen the file to restore the search editor. Press Escape to close this help and return to the previous control.'),
+			() => localize('searchEditor.help', 'You are in a search editor. Press Enter in the query to search, or Shift+Enter to add a line. Use Toggle Search Details to show file filters and context lines. Double-click a result or press Ctrl or Command+Enter on it to open its source. Escape stops a running search. Use Save to keep your query and editable results in a .code-search file. Press Escape to close this help and return to the previous control.'),
 			() => { if (focused?.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.Find);
 	},
 });

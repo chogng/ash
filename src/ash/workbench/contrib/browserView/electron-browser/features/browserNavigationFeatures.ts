@@ -1,7 +1,8 @@
 import { IBrowserDownloadsView } from './browserDownloadsFeature.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
-import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
+import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { BrowserEditor, BrowserEditorContribution, BrowserWidgetLocation, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL, type IBrowserEditorWidget } from '../browserEditor.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserHistoryFeature } from './browserHistoryFeature.js';
@@ -81,7 +82,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 			showContextMenu: delegate => menus.showContextMenu({ ...delegate, useNativeWindow: true }),
 		};
 		const container = this.container = h(editor.browserContainer.ownerDocument, 'div');
-		container.className = 'ash-editor-pane-toolbar ash-browser-toolbar';
+		container.className = 'ash-browser-toolbar';
 		const navigation = h(container.ownerDocument, 'div');
 		navigation.className = 'ash-browser-navigation';
 		container.append(navigation);
@@ -90,6 +91,9 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		}));
 		this.search = instantiation.createInstance(BrowserSearchFeatures);
 		this.address = this._register(instantiation.createInstance(BrowserUrlBarWidget, this.host, container, (value: string) => { this.address.inputElement.value = value; return this.navigate(); }, this.report));
+		const updateAddressHint = () => this.address.inputElement.setAttribute('aria-description', configuration.getValue<boolean>(AccessibilityVerbositySettingId.Browser)
+			? localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.') : '');
+		updateAddressHint();
 		this._register(addDisposableListener<KeyboardEvent>(this.address.inputElement, 'keydown', event => {
 			if (!event.isComposing && event.key === 'Enter') { event.preventDefault(); void this.navigate().catch(this.report); }
 		}));
@@ -121,18 +125,12 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.sharingToolbar = this._register(new WorkbenchToolBar(sharing, pageMenus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions') }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('workbench.browser.searchEngine')) { this.address.refreshUrl(); }
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Browser)) updateAddressHint();
 		}));
 		this.setPageActions();
 		this.update();
 	}
 	override get widgets(): readonly IBrowserEditorWidget[] { return [{ location: BrowserWidgetLocation.Toolbar, element: this.container, order: 0 }]; }
-	override onContainerCreated(): void {
-		const root = this.editor.getContainer()!;
-		const observer = new root.ownerDocument.defaultView!.ResizeObserver(() => this.onPaneResized(root.clientWidth));
-		observer.observe(root);
-		this._register(toDisposable(() => observer.disconnect()));
-	}
-	override onPaneResized(_width: number): void { this.container.classList.toggle('compact', this.container.clientWidth < 320); }
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		this.devToolsContext.set(model.isDevToolsOpen);
 		store.add(model.onDidChangeDevToolsState(event => this.devToolsContext.set(event.isDevToolsOpen)));

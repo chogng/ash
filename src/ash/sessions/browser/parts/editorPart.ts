@@ -157,6 +157,9 @@ export class EditorArea extends Part {
 	private readonly gridConstraints = this._register(new MutableDisposable());
 	private reportedMinimum = new Dimension(EDITOR_PART_MINIMUM_WIDTH, 120);
 	private readonly views = new Map<DesktopEditorTool, ToolPartView>();
+	private readonly titlebarToolChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeTitlebarTool = this.titlebarToolChanged.event;
+	private topTool: DesktopEditorTool | undefined;
 	private dimension: IDimension = new Dimension(0, 0);
 	private desired = new Set<DesktopEditorTool>();
 	private contentAvailable = false;
@@ -185,6 +188,12 @@ export class EditorArea extends Part {
 		this._register(toDisposable(() => this.multipleToolsContext.reset()));
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
+		this._register(addDisposableListener(container.ownerDocument, 'keydown', event => {
+			const target = event.target;
+			if (!(target instanceof container.ownerDocument.defaultView!.Element) || !target.closest('.ash-editor-tab-strip-hosted')) return;
+			const view = this.topTool && this.views.get(this.topTool);
+			if (view) this.moveToolFromHeader(event, view);
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(SessionsConfiguration.layoutStyle)) return;
 			for (const [tool, view] of this.views) {
@@ -233,16 +242,6 @@ export class EditorArea extends Part {
 			this.grid.value.addView(view, Sizing.Invisible(300), [...this.views.values()][this.views.size - 2]!, Direction.Down);
 		}
 		const isHeader = (target: Element) => !!target.closest('.ash-editor-title-control, .ash-editor-group-header');
-		const moveToolFromHeader = (event: KeyboardEvent) => {
-			if (event.defaultPrevented || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
-				!(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !isHeader(event.target)) { return; }
-			const direction = ({ ArrowLeft: Direction.Left, ArrowRight: Direction.Right, ArrowUp: Direction.Up, ArrowDown: Direction.Down } as Record<string, Direction | undefined>)[event.key];
-			if (direction === undefined) { return; }
-			const neighbor = this.grid.value!.getNeighborViews(view, direction).find(candidate => this.desired.has(candidate.partId));
-			if (!neighbor) { return; }
-			event.preventDefault();
-			this.moveTool(tool, neighbor.partId, direction);
-		};
 		this._register(addDisposableListener(view.element, 'dragstart', event => {
 			if (!event.altKey || !(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !isHeader(event.target) || event.target.closest('[role="tab"], button, input, a')) { return; }
 			this.dragging = tool;
@@ -250,7 +249,9 @@ export class EditorArea extends Part {
 			event.dataTransfer?.setData('application/vnd.ash.editor-tool', tool);
 		}, true));
 		this._register(addDisposableListener(view.element, 'dragend', () => { this.dragging = undefined; }));
-		this._register(addDisposableListener(view.element, 'keydown', moveToolFromHeader));
+		this._register(addDisposableListener(view.element, 'keydown', event => {
+			if (event.target instanceof view.element.ownerDocument.defaultView!.Element && isHeader(event.target)) this.moveToolFromHeader(event, view);
+		}));
 		this._register(addDisposableListener(view.element, 'dragover', event => {
 			if (this.dragging && this.dragging !== tool) { event.preventDefault(); event.stopPropagation(); }
 		}));
@@ -292,11 +293,15 @@ export class EditorArea extends Part {
 	public get hasProductPage(): boolean { return this.domNode.classList.contains('has-product-page'); }
 
 	/** A strip can use the titlebar region when its tool owns the full top edge. */
-	public isFullWidthTopTool(tool: DesktopEditorTool): boolean {
-		const view = this.views.get(tool);
+	public get titlebarTool(): DesktopEditorTool | undefined { return this.topTool; }
+
+	private updateTitlebarTool(): void {
 		const grid = this.grid.value;
-		return !!view && !!grid && this.isToolVisible(tool)
-			&& [Direction.Up, Direction.Left, Direction.Right].every(direction => !grid.getNeighborViews(view, direction).length);
+		const tool = grid && [...this.views.values()].find(view => this.isToolVisible(view.partId)
+			&& [Direction.Up, Direction.Left, Direction.Right].every(direction => !grid.getNeighborViews(view, direction).length))?.partId;
+		if (this.topTool === tool) return;
+		this.topTool = tool;
+		this.titlebarToolChanged.fire();
 	}
 
 	private get currentTool(): DesktopEditorTool | undefined {
@@ -562,6 +567,7 @@ export class EditorArea extends Part {
 			this.updatingVisibility = false;
 		}
 		this.publishMinimumSize();
+		this.updateTitlebarTool();
 	}
 
 	private withDesiredVisibility(node: SerializedGridDescriptor): SerializedGridDescriptor {
@@ -638,7 +644,18 @@ export class EditorArea extends Part {
 		this.manuallyArranged = true;
 		const focused = this.domNode.ownerDocument.activeElement;
 		this.grid.value!.moveView(this.views.get(tool)!, Sizing.Split, this.views.get(target)!, direction);
+		this.updateTitlebarTool();
 		if (focused instanceof this.domNode.ownerDocument.defaultView!.HTMLElement && focused.isConnected) { focused.focus(); }
+	}
+
+	private moveToolFromHeader(event: KeyboardEvent, view: ToolPartView): void {
+		if (event.defaultPrevented || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+		const direction = ({ ArrowLeft: Direction.Left, ArrowRight: Direction.Right, ArrowUp: Direction.Up, ArrowDown: Direction.Down } as Record<string, Direction | undefined>)[event.key];
+		if (direction === undefined) return;
+		const neighbor = this.grid.value?.getNeighborViews(view, direction).find(candidate => this.desired.has(candidate.partId));
+		if (!neighbor) return;
+		event.preventDefault();
+		this.moveTool(view.partId, neighbor.partId, direction);
 	}
 
 	public saveLayout(): SerializedGridDescriptor { return this.compactLayout ? this.withDesiredVisibility(this.compactLayout) : this.grid.value!.serialize(); }
@@ -725,5 +742,6 @@ export class EditorArea extends Part {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.grid.value?.layout(dimension.width, dimension.height);
+		this.updateTitlebarTool();
 	}
 }

@@ -7,51 +7,75 @@
 
 .ash-search-editor-form {
 	display: grid;
-	gap: 6px;
-	padding: 8px 12px;
+	box-sizing: border-box;
+	gap: var(--ash-spacing-size40);
+	min-inline-size: 0;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	flex: 0 0 auto;
 }
 
-.ash-search-editor-query-field {
+.ash-editor-pane-toolbar-host > .ash-search-editor-form {
+	align-content: center;
+	min-block-size: var(--ash-pane-titleHeight);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
+}
+
+.ash-search-editor-main {
 	display: flex;
-	min-width: 0;
+	flex-wrap: wrap;
 	align-items: start;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-input-background);
-	color: var(--ash-input-foreground);
+	gap: var(--ash-spacing-size40);
 }
 
-.ash-search-editor-query-field:focus-within {
-	border-color: var(--ash-focusBorder);
-}
-
-.ash-search-editor-query {
-	flex: 1;
-	min-width: 0;
-	resize: none;
-	padding: 4px 6px;
-	border: 0;
-	outline: none;
-	background: transparent;
-	color: inherit;
-	font: inherit;
+.ash-search-editor-main > .ash-search-widget {
+	flex: 1 1 13rem;
 }
 
 .ash-search-editor-buttons {
 	display: flex;
-	gap: 8px;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-search-editor-details:not([hidden]) {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-search-editor-filter {
+	display: grid;
+	gap: var(--ash-spacing-size20);
+	min-inline-size: 0;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-search-editor-status {
-	padding: 0 12px 4px;
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
 	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
+}
+
+.ash-search-editor-status:empty {
+	padding-block-end: 0;
 }
 
 .ash-search-editor-results {
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
-	position: relative;
+}
+
+.ash-search-editor-file {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-search-editor-context {
+	color: var(--ash-description-foreground);
+}
+
+.ash-search-editor-match {
+	background: var(--ash-search-matchBackground);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }

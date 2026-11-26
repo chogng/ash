@@ -12,7 +12,7 @@ import './media/search.css';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { SearchAccessibilityHelp } from './searchAccessibilityHelp.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { ISearchHistoryService, SearchHistoryService } from '../common/searchHistoryService.js';
+import './searchHistory.contribution.js';
 import { IReplaceService } from './replace.js';
 import { ReplaceService } from './replaceService.js';
 import '../../searchEditor/browser/searchEditor.contribution.js';
@@ -21,7 +21,6 @@ import './searchActionsCopy.js';
 import './searchActionsTopBar.js';
 
 AccessibleViewRegistry.register(new SearchAccessibilityHelp());
-registerSingleton(ISearchHistoryService, SearchHistoryService, InstantiationType.Delayed);
 registerSingleton(IReplaceService, ReplaceService, InstantiationType.Delayed);
 
 registerAction2(class FocusSearchAction extends Action2 {

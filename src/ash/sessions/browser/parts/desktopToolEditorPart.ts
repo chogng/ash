@@ -34,6 +34,7 @@ export class DesktopToolEditorPart extends EditorPart {
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
 			showHeader: true,
+			showEditorToolbar: true,
 			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,

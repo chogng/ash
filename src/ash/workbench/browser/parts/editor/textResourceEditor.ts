@@ -32,7 +32,7 @@ import { type ILanguageDiagnosticsService } from '../../../services/language/com
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
-import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
+import type { IEditorMouseEvent, IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
 import type { ICursorSelectionChangedEvent } from '../../../../editor/common/cursorEvents.js';
 
 import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -48,6 +48,7 @@ export { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
+	readonly onMouseUp?: Event<IEditorMouseEvent>;
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
 	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
@@ -300,7 +301,10 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		}));
 	}
 
-	public override async setInput(input: IResourceEditorInput & TextModelInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput & TextModelInput & {
+		/** Supplies the editable view while the resolved file model retains its working copy. */
+		readonly resolveEditorModel?: (model: TextModel) => TextModel;
+	}, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		throwIfCancelled(signal, 'Code editor input loading was cancelled');
 		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
@@ -319,7 +323,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			const model = providedInput ? (await providedInput.resolve()).textEditorModel : modelReference!.model;
 			throwIfCancelled(signal, 'Code editor input loading was cancelled');
 			if (!(model instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
-			resolvedModel = model;
+			resolvedModel = input.resolveEditorModel?.(model) ?? model;
 			const fontOverrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
 			part = this.createPart({
 				container,

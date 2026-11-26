@@ -23,7 +23,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 /** The host owns help presentation and focus; the resource editor supplies its own text. */
-export function registerResourceEditorAccessibility(container: HTMLElement, configuration: IConfigurationService, content: () => string, help: () => string): DisposableStore {
+export function registerResourceEditorAccessibility(container: HTMLElement, configuration: IConfigurationService, content: () => string, help: () => string, containsFocus: (element: HTMLElement) => boolean = element => container.contains(element)): DisposableStore {
 	const lifetime = new DisposableStore();
 	const name = `resource-editor-${createUuid()}`;
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -31,7 +31,7 @@ export function registerResourceEditorAccessibility(container: HTMLElement, conf
 			name, type, priority: 115,
 			getProvider() {
 				const active = getActiveElement(container.ownerDocument);
-				if (!isHTMLElement(active) || !container.contains(active)) return undefined;
+				if (!isHTMLElement(active) || !containsFocus(active)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.ResourceEditor, { type }, type === AccessibleViewType.Help ? help : content,
 					() => { if (active.isConnected) active.focus(); else if (container.isConnected) container.focus(); }, AccessibilityVerbositySettingId.ResourceEditor);
 			},

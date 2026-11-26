@@ -299,6 +299,48 @@ test('inactive editor opens keep the selected tab and its content visible', asyn
 	dom.window.close();
 });
 
+test('EditorPart keeps toolbar and content in one focus boundary when the title changes', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Outside</button></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	const pane = new class extends TestEditorPane {
+		readonly toolbar = h(dom.window.document, 'button');
+		public override create(parent: HTMLElement): void {
+			super.create(parent);
+			const content = this.getContainer()!;
+			content.tabIndex = -1;
+			this.createEditorToolbar(this.toolbar, content);
+		}
+	}('test.editorToolbar');
+	using registration = registry.registerEditorPane(descriptor(pane.id, '.ts', () => pane));
+	class ToolbarEditorPart extends EditorPart {
+		protected override getGroupViewOptions() { return { showHeader: true, showEditorToolbar: true }; }
+	}
+	const services = registerTestComponentServices(editorTestServices.add(createTestEditorServices(undefined)));
+	using editor = services.createInstance(ToolbarEditorPart, dom.window.document.body, { registry });
+	await editor.openEditor(input('/project/toolbar.ts'));
+	const slot = editor.activeGroup.domNode.querySelector('.ash-editor-pane-toolbar-host');
+	assert.equal(pane.toolbar.parentElement, slot);
+	assert.equal(pane.hasFocus(), false);
+	let focusCount = 0;
+	using focusListener = pane.onDidFocus(() => focusCount++);
+	pane.toolbar.focus();
+	assert.equal(pane.hasFocus(), true);
+	const content = pane.getContainer()!;
+	content.focus();
+	assert.equal(pane.hasFocus(), true);
+	const blurred = new Promise<void>(resolve => Event.once(pane.onDidBlur)(resolve));
+	dom.window.document.body.querySelector('button')!.focus();
+	await blurred;
+	assert.equal(pane.hasFocus(), false);
+	assert.equal(focusCount, 1);
+
+	editor.activeGroup.setTitleVisible(false);
+	assert.equal(pane.toolbar.parentElement, content);
+	editor.activeGroup.setTitleVisible(true);
+	assert.equal(pane.toolbar.parentElement, slot);
+});
+
 test('forceReload replaces the resolved pane while retaining one editor tab', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using browserOwner = toDisposable(() => dom.window.close());
