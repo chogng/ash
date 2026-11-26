@@ -756,9 +756,9 @@ export abstract class Workbench extends Disposable {
 			},
 		} satisfies AppServerSessionsProviderHost));
 		this._register(services.get(ISessionsProvidersService).registerProvider(provider));
-		const sessions = this._register(services.createInstance(SessionsManagementService, provider.id));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
+		const sessions = this._register(services.createInstance(SessionsManagementService, provider.id));
 		services.registerInstance(ISessionsManagementService, sessions);
 		services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 		const view = this._register(services.createInstance(SessionsService));

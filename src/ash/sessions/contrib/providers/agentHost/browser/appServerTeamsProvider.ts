@@ -11,6 +11,8 @@ export class AppServerTeamsProvider implements ITeamsProvider {
 		return (await this.api.list()).teams.map(team);
 	}
 
+	async read(teamId: string): Promise<Team> { return team((await this.api.read({ teamId })).team); }
+
 	async apply(commandId: string, teamId: string, expectedRevision: number, command: TeamCommand): Promise<Team> {
 		const result = await this.api.command({ commandId, teamId, expectedRevision, command: command as TeamCommandDto });
 		return team(result.team);

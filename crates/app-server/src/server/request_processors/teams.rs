@@ -4,6 +4,8 @@ use super::operations::{
 use super::{ConnectionState, RpcError, core_error, decode, result};
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::teams::*;
+use ash_protocol::AgentRoleSelection;
+use ash_protocol::AgentRoleSource;
 use ash_protocol::CommandId;
 use ash_teams::{
     Team, TeamCommand, TeamCommandRequest, TeamCoordinator, TeamError, TeamMember, TeamMessage,
@@ -16,6 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Coordinates the existing owners needed by the teams adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait TeamRequestProcessorContext: Send + Sync {
+    fn user_role_exists(&self, name: &str) -> bool;
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn bind_session_runtime(
         &self,
@@ -134,10 +137,25 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
                 TeamCommandDto::Restore => TeamCommand::Restore,
             },
         };
-        let (team, replayed) = self
-            .team_coordinator(connection)?
-            .apply(&request)
-            .map_err(team_error)?;
+        let teams = self.team_coordinator(connection)?;
+        let declared_members = match &request.command {
+            TeamCommand::Create { members, .. } => members.as_slice(),
+            TeamCommand::AddMember { member } | TeamCommand::UpdateMember { member } => {
+                std::slice::from_ref(member)
+            }
+            TeamCommand::UpdateDetails { .. }
+            | TeamCommand::RemoveMember { .. }
+            | TeamCommand::RemoveMembersWithFallback { .. }
+            | TeamCommand::SetCoordinator { .. }
+            | TeamCommand::Archive
+            | TeamCommand::Restore => &[],
+        };
+        // A picker opened before deletion must never restore a removed personal role.
+        if declared_members.iter().any(|member| matches!(&member.role,
+            AgentRoleSelection::Exact { source: AgentRoleSource::User, name } if !self.context.user_role_exists(name))) {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotFound));
+        }
+        let (team, replayed) = teams.apply(&request).map_err(team_error)?;
         result(&TeamCommandResult {
             team: team_dto(&team),
             replayed,
@@ -475,7 +493,7 @@ fn message_dto(message: &TeamMessage) -> TeamMessageDto {
     }
 }
 
-fn team_error(error: TeamError) -> RpcError {
+pub(super) fn team_error(error: TeamError) -> RpcError {
     let (code, name) = match error {
         TeamError::NotFound(_) => (-32101, AppServerErrorName::TeamNotFound),
         TeamError::RevisionConflict => (-32102, AppServerErrorName::TeamRevisionConflict),

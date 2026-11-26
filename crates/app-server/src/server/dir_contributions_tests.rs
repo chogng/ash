@@ -301,7 +301,9 @@ fn root_agent_can_explicitly_reference_on_demand_user_instruction() {
     let roles = contributions.agent_snapshot();
     let id = match roles.entries()[0].source() {
         agent_roles::AgentRoleSource::Directory { id } => id.clone(),
-        agent_roles::AgentRoleSource::BuiltIn => unreachable!(),
+        agent_roles::AgentRoleSource::BuiltIn | agent_roles::AgentRoleSource::User => {
+            unreachable!()
+        }
     };
     let selected = agent::resolve_root_agent(
         &ash_protocol::AgentRoleSelection::Exact {

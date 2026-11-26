@@ -242,6 +242,7 @@ enum ForkDestination {
     CurrentSession,
     NewSession,
     Comparison(core_api::ComparisonFork),
+    TeamMember(core_api::TeamMemberFork),
 }
 
 pub struct CreateRewoundThreadRequest {
@@ -872,6 +873,15 @@ impl ThreadController {
         self.fork_into(binder, request, ForkDestination::CurrentSession)
     }
 
+    pub fn fork_team_member(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+        member: core_api::TeamMemberFork,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        self.fork_into(binder, request, ForkDestination::TeamMember(member))
+    }
+
     /// Pins context at the selected Turn; importing history never transfers active execution.
     /// Pins history through the selected Turn in a new Thread while execution stays in the source.
     pub fn create_side_chat(
@@ -996,26 +1006,41 @@ impl ThreadController {
             ForkDestination::CurrentSession => "fork",
             ForkDestination::NewSession => "session-fork",
             ForkDestination::Comparison(_) => "comparison-fork",
+            ForkDestination::TeamMember(_) => "team-member-fork",
         };
         let comparison = match &destination {
             ForkDestination::Comparison(comparison) => Some(comparison),
             _ => None,
         };
+        let member = match &destination {
+            ForkDestination::TeamMember(member) => Some(member),
+            _ => None,
+        };
         let thread_id = command_thread_id(prefix, &request.command_id)?;
         if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
-            let matches_source = match (&binding.origin, comparison) {
+            let matches_source = match (&binding.origin, &destination) {
                 (
                     ThreadOrigin::Fork {
                         parent_thread_id, ..
                     },
-                    None,
+                    ForkDestination::CurrentSession | ForkDestination::NewSession,
                 ) => parent_thread_id == &request.source_thread_id,
+                (
+                    ThreadOrigin::TeamMember {
+                        parent_thread_id,
+                        parent_sequence,
+                    },
+                    ForkDestination::TeamMember(member),
+                ) => {
+                    parent_thread_id == &request.source_thread_id
+                        && *parent_sequence == member.source_sequence
+                }
                 (
                     ThreadOrigin::Comparison {
                         parent_thread_id,
                         parent_sequence,
                     },
-                    Some(options),
+                    ForkDestination::Comparison(options),
                 ) => {
                     parent_thread_id == &request.source_thread_id
                         && *parent_sequence == options.source_sequence
@@ -1024,10 +1049,15 @@ impl ThreadController {
             };
             if matches_source {
                 let snapshot = self.read_thread(&thread_id)?;
-                if snapshot.title == request.title
+                if (if member.is_some() {
+                    &snapshot.creation_title
+                } else {
+                    &snapshot.title
+                }) == &request.title
                     && comparison.is_none_or(|options| {
                         snapshot.agent_configuration() == Some(&options.agent)
                     })
+                    && member.is_none_or(|member| snapshot.agent_id == member.agent_id)
                 {
                     if let Some(options) = comparison {
                         binder.provision(&ThreadWorktreeBindingRequest {
@@ -1043,25 +1073,38 @@ impl ThreadController {
             }
             return Err(CoreError::CommandConflict);
         }
-        let source = match comparison {
-            Some(options) => {
-                self.load_snapshot_at_sequence(&request.source_thread_id, options.source_sequence)?
+        let source = match comparison
+            .map(|options| options.source_sequence)
+            .or_else(|| member.map(|member| member.source_sequence))
+        {
+            Some(sequence) => {
+                self.load_snapshot_at_sequence(&request.source_thread_id, sequence)?
             }
             None => self.read_thread(&request.source_thread_id)?,
         };
         let session_id = match &destination {
-            ForkDestination::CurrentSession => source.session_id.clone(),
+            ForkDestination::CurrentSession | ForkDestination::TeamMember(_) => {
+                source.session_id.clone()
+            }
             ForkDestination::NewSession | ForkDestination::Comparison(_) => {
                 SessionId::new(thread_id.as_str())
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?
             }
+        };
+        let origin = if member.is_some() {
+            ThreadOrigin::TeamMember {
+                parent_thread_id: source.thread_id.clone(),
+                parent_sequence: source.sequence,
+            }
+        } else {
+            fork_origin(&source.thread_id, source.sequence, comparison.is_some())
         };
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             branch_name: comparison.map(|options| options.branch_name.clone()),
             worktree_start: None,
-            origin: fork_origin(&source.thread_id, source.sequence, comparison.is_some()),
+            origin: origin.clone(),
         })?;
         self.create_forked_thread_with_agent(
             CreateForkedThreadRequest {
@@ -1071,7 +1114,9 @@ impl ThreadController {
                 source_thread_id: source.thread_id,
                 source_sequence: source.sequence,
             },
+            origin,
             comparison.map(|options| &options.agent),
+            member,
         )
     }
 
@@ -1190,13 +1235,16 @@ impl ThreadController {
         &self,
         request: CreateForkedThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
-        self.create_forked_thread_with_agent(request, None)
+        let origin = fork_origin(&request.source_thread_id, request.source_sequence, false);
+        self.create_forked_thread_with_agent(request, origin, None, None)
     }
 
     fn create_forked_thread_with_agent(
         &self,
         request: CreateForkedThreadRequest,
+        origin: ThreadOrigin,
         agent: Option<&ash_protocol::AgentConfiguration>,
+        member: Option<&core_api::TeamMemberFork>,
     ) -> Result<ThreadSnapshot, CoreError> {
         let source =
             self.load_snapshot_at_sequence(&request.source_thread_id, request.source_sequence)?;
@@ -1218,13 +1266,18 @@ impl ThreadController {
         let reference = prefix.reference().map_err(CoreError::Journal)?;
         self.create_thread_with_history(
             CreateThreadRequest {
-                agent_id: if agent.is_some() {
+                agent_id: if let Some(member) = member {
+                    self.select_agent_id(Some(&member.agent_id), &request.thread_id)?
+                } else if agent.is_some() {
                     self.select_agent_id(None, &request.thread_id)?
                 } else {
                     source.agent_id.clone()
                 },
-                origin: fork_origin(&source.thread_id, request.source_sequence, agent.is_some()),
-                agent: agent.or_else(|| source.agent_configuration()).cloned(),
+                origin,
+                agent: match member {
+                    Some(member) => member.agent.clone(),
+                    None => agent.or_else(|| source.agent_configuration()).cloned(),
+                },
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,

@@ -25,6 +25,7 @@ const sidebarProjectActions = [
 	{ key: 'pin', group: '1_edit', order: 0, icon: Lxicon.pin, title: localize('sessions.list.pinProject', 'Pin') },
 	{ key: 'unpin', group: '1_edit', order: 0, icon: Lxicon.pinFilled, title: localize('sessions.list.unpinProject', 'Unpin') },
 	{ key: 'edit', group: '2_appearance', order: 1, icon: Lxicon.gear, title: localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit') },
+	{ key: 'manageBots', group: '2_bots', order: 1, icon: Lxicon.bot, title: localize('sessions.projectBots.manage', 'Manage Bots') },
 	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
 	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete'), destructive: true },
 ] as const;
@@ -45,7 +46,7 @@ CommandsRegistry.registerMany(sidebarProjectActions.map(({ key }) => ({
 })));
 
 function registerSidebarProjectActions(menuId: MenuId, editTitle: string): void {
-	MenusRegistry.appendMenuItems(sidebarProjectActions.map(({ key, group, order, title, ...appearance }) => ({
+	MenusRegistry.appendMenuItems(sidebarProjectActions.filter(({ key }) => key !== 'manageBots' || menuId === Menus.SidebarCodeProjectContext).map(({ key, group, order, title, ...appearance }) => ({
 		id: menuId,
 		item: { command: { id: `sessions.sidebarProject.${key}`, title: key === 'edit' ? editTitle : title, ...appearance }, group, order, when: ContextKeyExpr.has(`sidebarProject.${key}`) },
 	})));

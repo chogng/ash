@@ -84,6 +84,7 @@ pub fn resolve_launched_agent(
         name: definition.name().into(),
         source: match definition.source() {
             agent_roles::AgentRoleSource::BuiltIn => AgentRoleSource::BuiltIn,
+            agent_roles::AgentRoleSource::User => AgentRoleSource::User,
             agent_roles::AgentRoleSource::Directory { id } => {
                 AgentRoleSource::Directory { id: id.clone() }
             }
@@ -412,9 +413,8 @@ fn select_definition<'a>(
                 .filter(|role| {
                     role.name() == name
                         && match (role.source(), source) {
-                            (agent_roles::AgentRoleSource::BuiltIn, AgentRoleSource::BuiltIn) => {
-                                true
-                            }
+                            (agent_roles::AgentRoleSource::BuiltIn, AgentRoleSource::BuiltIn)
+                            | (agent_roles::AgentRoleSource::User, AgentRoleSource::User) => true,
                             (
                                 agent_roles::AgentRoleSource::Directory { id: left },
                                 AgentRoleSource::Directory { id: right },

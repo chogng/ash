@@ -12,6 +12,7 @@ name = "ash_home"
 path = "src/lib.rs"
 
 [dependencies]
+agent-roles = { workspace = true }
 ash-instructions = { workspace = true }
 ash-utils-absolute-path = { workspace = true }
 

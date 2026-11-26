@@ -318,7 +318,7 @@ export class ChatService extends Disposable implements IChatService {
 	async startReview(options: StartReviewOptions): Promise<void> {
 		this.assertAIEnabled();
 		const epoch = this.connectionEpoch;
-		await this.turnApi.startReview({ ...options, commandId: commandId('review') });
+		await this.turnApi.startReview({ ...options, commandId: options.commandId ?? commandId('review') });
 		if (!this.isDisposed && epoch === this.connectionEpoch) {
 			this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: true, requestSequence: options.expectedSequence });
 		}

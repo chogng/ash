@@ -1035,6 +1035,7 @@ impl AppServer {
             &self.agent_extensions,
             &self.dir_services,
             &self.env_runtime,
+            self.home.as_deref(),
             &self.git_turn_changes,
             &self.message_board,
             &self.notes,
@@ -1189,6 +1190,7 @@ impl AppServer {
         project_operations::ProjectRequestProcessor::new(
             &self.env_runtime,
             &self.projects,
+            &self.teams,
             &self.threads,
             &self.updates,
         )
@@ -3952,6 +3954,15 @@ impl AppServer {
             Some(ClientMethod::AgentRead) => self.session_processor().agent_read(&request.params),
             Some(ClientMethod::AgentRoleList) => self.session_processor().agent_roles_list(),
             Some(ClientMethod::AgentRoleCatalog) => self.session_processor().agent_role_catalog(),
+            Some(ClientMethod::AgentRoleUserCreate) => self
+                .session_processor()
+                .agent_role_user_create(connection, &request.params),
+            Some(ClientMethod::AgentRoleUserUpdate) => self
+                .session_processor()
+                .agent_role_user_update(connection, &request.params),
+            Some(ClientMethod::AgentRoleUserDelete) => {
+                self.agent_role_user_delete(connection, &request.params)
+            }
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }
@@ -4218,6 +4229,12 @@ impl AppServer {
             Some(ClientMethod::ProjectDetailsUpdate) => self
                 .project_processor()
                 .project_details_update(connection, &request.params),
+            Some(ClientMethod::ProjectTeamEnsure) => self
+                .project_processor()
+                .project_team_ensure(connection, &request.params),
+            Some(ClientMethod::ProjectBotRemove) => self
+                .project_processor()
+                .project_bot_remove(connection, &request.params),
             Some(ClientMethod::ProjectAppearanceUpdate) => self
                 .project_processor()
                 .project_appearance_update(connection, &request.params),

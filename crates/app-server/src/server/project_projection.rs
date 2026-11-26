@@ -36,6 +36,7 @@ pub(super) fn project(project: &Project) -> ProjectDto {
             })
             .collect(),
         session_ids: project.session_ids.iter().cloned().collect(),
+        default_team_id: project.default_team_id.clone(),
         external_conversation_ids: (!project.external_conversation_ids.is_empty())
             .then(|| project.external_conversation_ids.iter().cloned().collect()),
         materials: project
@@ -84,6 +85,7 @@ pub(super) fn summary(project: &Project) -> ProjectSummaryDto {
         color: project.color.clone(),
         root_count: project.roots.len() as u64,
         session_count: (project.session_ids.len() + project.external_conversation_ids.len()) as u64,
+        default_team_id: project.default_team_id.clone(),
     }
 }
 

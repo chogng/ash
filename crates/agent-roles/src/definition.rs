@@ -5,53 +5,57 @@ use crate::AgentRoleSource;
 use crate::RoleLaunch;
 use crate::model::AgentRoleFields;
 use serde::Deserialize;
+use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct Frontmatter {
     name: String,
     description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<u64>,
     #[serde(default)]
     launch: RoleLaunch,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     callers: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     delegates: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     optional_tools: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tool_sets: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     disallowed_tools: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     required_tools: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     delegation_tools: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     disallowed_delegation_tools: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     required_delegation_tools: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     skills: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     required_skills: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     instructions: Vec<String>,
 }
 
-/// Parses both packaged and directory definitions, with source authority supplied by the loader.
-pub(crate) fn parse(
-    source: &AgentRoleSource,
+fn read_frontmatter<'a>(
     path: &Path,
-    text: &str,
-) -> Result<AgentRole, AgentRoleDiagnostic> {
+    normalized: &'a str,
+) -> Result<(Frontmatter, &'a str), AgentRoleDiagnostic> {
     let error =
         |code, message: &str| AgentRoleDiagnostic::new(Some(path.to_path_buf()), code, message);
-    let normalized = text.replace("\r\n", "\n");
     let (frontmatter, body) = normalized
         .strip_prefix("---\n")
         .and_then(|rest| rest.split_once("\n---\n"))
@@ -61,12 +65,49 @@ pub(crate) fn parse(
                 "Agent definition must start with YAML frontmatter",
             )
         })?;
-    let data: Frontmatter = serde_saphyr::from_str(frontmatter).map_err(|_| {
+    let data = serde_saphyr::from_str(frontmatter).map_err(|_| {
         error(
             AgentRoleDiagnosticCode::InvalidFrontmatter,
             "Agent definition frontmatter is invalid",
         )
     })?;
+    Ok((data, body))
+}
+
+/// Rewrites editable fields while retaining the other declared Agent options.
+pub(crate) fn edit_user_text(
+    path: &Path,
+    text: &str,
+    description: &str,
+    prompt: &str,
+) -> Result<String, AgentRoleDiagnostic> {
+    let normalized = text.replace("\r\n", "\n");
+    let (mut data, _) = read_frontmatter(path, &normalized)?;
+    data.description = description.to_owned();
+    let header = serde_saphyr::to_string_with_options(&data, Default::default()).map_err(|_| {
+        AgentRoleDiagnostic::new(
+            Some(path.to_path_buf()),
+            AgentRoleDiagnosticCode::InvalidFrontmatter,
+            "Agent frontmatter could not be encoded",
+        )
+    })?;
+    Ok(format!(
+        "---\n{}\n---\n{}\n",
+        header.trim_end(),
+        prompt.trim()
+    ))
+}
+
+/// Parses packaged, user and directory definitions with source authority supplied by the loader.
+pub(crate) fn parse(
+    source: &AgentRoleSource,
+    path: &Path,
+    text: &str,
+) -> Result<AgentRole, AgentRoleDiagnostic> {
+    let error =
+        |code, message: &str| AgentRoleDiagnostic::new(Some(path.to_path_buf()), code, message);
+    let normalized = text.replace("\r\n", "\n");
+    let (data, body) = read_frontmatter(path, &normalized)?;
     if !valid_name(&data.name)
         || path.file_stem().and_then(|stem| stem.to_str()) != Some(&data.name)
     {
@@ -92,7 +133,7 @@ pub(crate) fn parse(
             }
             name
         }
-        AgentRoleSource::Directory { .. } => {
+        AgentRoleSource::User | AgentRoleSource::Directory { .. } => {
             if data.version.is_some()
                 || data.launch != RoleLaunch::Any
                 || !data.callers.is_empty()
@@ -199,7 +240,7 @@ fn available(required: &[String], allowed: Option<&[String]>, denied: &[String])
         .all(|item| !denied.contains(item) && allowed.is_none_or(|values| values.contains(item)))
 }
 
-fn valid_name(name: &str) -> bool {
+pub(crate) fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
         && !name.starts_with('-')

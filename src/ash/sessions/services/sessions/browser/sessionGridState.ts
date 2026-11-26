@@ -188,7 +188,10 @@ export function isUntitledSession(value: unknown): value is IUntitledChatSession
 			&& (value.modelDefaults.effort === undefined || isModelReasoningEffort(value.modelDefaults.effort)))
 		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')
 		&& (value.branchName === undefined || typeof value.branchName === 'string' && value.branchName.trim().length > 0 && value.branchName.length <= 1024)
-		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))
+		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string'
+			&& (value.agent.sourceId === undefined
+				? value.agent.builtIn === true && value.agent.userDefined === undefined || value.agent.userDefined === true && value.agent.builtIn === undefined
+				: nonEmptyString(value.agent.sourceId) && value.agent.builtIn === undefined && value.agent.userDefined === undefined))
 		&& (value.environment === undefined || isSessionEnvironmentSelection(value.environment))
 		&& isWorkspaceSelection(value.workspace);
 }

@@ -84,6 +84,9 @@ pub struct Project {
     pub color: Option<String>,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
+    /// The Team whose members and coordinator are available in this project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_team_id: Option<ash_protocol::TeamId>,
     /// Opaque references to conversations owned by an external provider.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub external_conversation_ids: BTreeSet<String>,

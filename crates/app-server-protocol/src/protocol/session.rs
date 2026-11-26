@@ -355,6 +355,15 @@ pub enum SessionRequest {
         parent_thread_id: ThreadId,
         title: String,
     },
+    /// Invokes a project Team member in a separate Thread in this Session.
+    ForkProjectBot {
+        parent_thread_id: ThreadId,
+        project_id: ash_protocol::ProjectId,
+        member_id: ash_protocol::AgentId,
+        #[ts(type = "number")]
+        source_sequence: u64,
+        title: String,
+    },
     CreateSideChat {
         parent_thread_id: ThreadId,
         source_turn_id: TurnId,

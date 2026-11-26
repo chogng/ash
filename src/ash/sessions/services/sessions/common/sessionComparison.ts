@@ -1,4 +1,4 @@
-import type { ChatAgent, StartTurnOptions } from '../../../../workbench/services/chat/common/chatService.js';
+import type { DirectoryChatAgent, StartTurnOptions } from '../../../../workbench/services/chat/common/chatService.js';
 
 export const OPEN_SESSION_COMPARISON_COMMAND_ID = 'sessions.openComparison';
 export const COMPARE_AGENTS_TOOLS_ENABLED_SETTING = 'sessions.chat.compareAgents.tools.enabled';
@@ -45,9 +45,9 @@ export interface SessionComparison {
 	readonly workspace?: string;
 	readonly attempts: readonly ComparisonAttempt[];
 	readonly failedAttempts?: readonly ComparisonAttemptConfiguration[];
-	readonly judgeAgent?: ChatAgent;
+	readonly judgeAgent?: DirectoryChatAgent;
 	readonly judgeSettings?: ComparisonParticipantSettings;
-	readonly synthesisAgent?: ChatAgent;
+	readonly synthesisAgent?: DirectoryChatAgent;
 	readonly synthesisSettings?: ComparisonParticipantSettings;
 	readonly judgeFailed?: boolean;
 	readonly judge?: ComparisonThread;

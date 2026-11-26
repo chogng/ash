@@ -8,6 +8,7 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -20,11 +21,13 @@ import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
-import { BotsEditor, BotsNavigationView, botsFocusContext, botsNavigationId, botsResource } from './botsViews.js';
+import { BotsEditor, BotsNavigationView, BotsViewState, IBotsViewState, botsFocusContext, botsNavigationId, botsResource } from './botsViews.js';
 
 const title = localize2('sessions.bots.title', 'Bots');
 const selectedContext = 'sessions.activity.botsSelected';
 const viewId = botsNavigationId + '.view';
+
+registerSingleton(IBotsViewState, BotsViewState, InstantiationType.Delayed);
 
 SessionsViewRegistry.registerViewContainer({
 	id: botsNavigationId, title: title.value, location: ViewContainerLocation.Sidebar, order: 6,
@@ -82,7 +85,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const sidebar = view?.hasFocus() ? view : undefined;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Bots, { type }, () => {
 				if (type === AccessibleViewType.Help) {
-					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back in the sidebar title to return to Code. Use Search to filter bots and threads. Use Up or Down Arrow to move through the tree. On Code Review, use Left and Right Arrow to collapse and expand, or press Enter or Space to toggle. Press Enter or Space on a thread to open its conversation. Choose Review Changes to review the active Code conversation. Save comments on lines and choose Send to Code Review to create a new thread. Activate a file reference in a message to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. <keybinding:editor.action.accessibleView> reads the current region.');
+					return localize('sessions.bots.help', 'Bots groups conversations by assistant. Use Back in the sidebar to return to Code. When the Activity Bar is on the left or right, its Code navigation stays available. Use Search to filter bots and review threads. Use Up and Down Arrow to move through the tree, then Enter or Space to open a bot or thread. Use Left and Right Arrow to collapse or expand bot groups. In My Bots, choose Create Bot and enter a name, description and instructions. Select your Bot in the sidebar and choose New Conversation to chat on this page. Choose Edit Bot to update its description and instructions for future conversations and mentions. Choose Delete Bot to remove its definition and project memberships. Existing conversations remain available in Code. Choose Find Issues to review saved changes or Review Changes to leave line comments. Choose Send to Code Review to create a thread with those comments. Open a file reference to read the saved comparison. Press Escape or choose Close Comparison to return to the conversation. In Advisor, choose Ask Advisor to get a second opinion on the active Code conversation. Start an Issue task or choose a workspace agent to open a Code draft. <keybinding:editor.action.accessibleView> reads the current region.');
 				}
 				return sidebar?.getAccessibleContent() ?? (pane instanceof BotsEditor ? pane.getAccessibleContent(focused) : '');
 			}, () => {

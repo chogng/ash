@@ -223,6 +223,11 @@ pub trait AgentRuntime {
     fn start_thread(&self, request: StartThreadRequest) -> Result<ThreadView, CoreError>;
     fn create_branch(&self, request: CreateBranchRequest) -> Result<ThreadView, CoreError>;
     fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
+    fn fork_team_member(
+        &self,
+        request: ForkThreadRequest,
+        member: crate::TeamMemberFork,
+    ) -> Result<ThreadView, CoreError>;
     fn create_side_chat(&self, request: CreateSideChatRequest) -> Result<ThreadView, CoreError>;
     fn fork_session(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
     fn move_thread_to_session(

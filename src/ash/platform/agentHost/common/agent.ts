@@ -108,7 +108,10 @@ export interface SessionWorktreeStart {
 
 export type SessionKind = 'chat' | 'code';
 
+export type AgentRoleSource = { readonly type: 'builtIn'; } | { readonly type: 'user'; } | { readonly type: 'directory'; readonly id: string; };
+
 export interface SessionCreateParams {
+	readonly agentId?: string;
 	readonly kind: SessionKind;
 	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
@@ -126,7 +129,7 @@ export interface SessionCreateParams {
 	| { readonly type: 'default'; }
 	| {
 		readonly type: 'exact';
-		readonly source: { readonly type: 'builtIn'; } | { readonly type: 'directory'; readonly id: string; };
+		readonly source: AgentRoleSource;
 		readonly name: string;
 	};
 }
@@ -214,7 +217,7 @@ export interface AgentRoleListResult {
 	readonly agents: readonly {
 		readonly name: string;
 		readonly description: string;
-		readonly source: { readonly type: 'builtIn'; } | { readonly type: 'directory'; readonly id: string; };
+		readonly source: AgentRoleSource;
 	}[];
 }
 
@@ -615,6 +618,7 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: 'teamMember'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| { readonly type: 'comparison'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| {
 		readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number;

@@ -46,6 +46,7 @@ pub(crate) fn apply(
                 color: color.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
+                default_team_id: None,
                 external_conversation_ids: BTreeSet::new(),
                 materials: materials.clone(),
             }
@@ -93,6 +94,7 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
             project.status = ProjectStatus::Deleted;
             project.roots.clear();
             project.session_ids.clear();
+            project.default_team_id = None;
             project.external_conversation_ids.clear();
             project.materials.clear();
             return Ok(());
@@ -125,6 +127,14 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
         }
         ProjectCommand::SetIcon { icon } => project.icon.clone_from(icon),
         ProjectCommand::SetColor { color } => project.color.clone_from(color),
+        ProjectCommand::SetDefaultTeam { team_id } => {
+            if project.scope() != crate::ProjectScope::Code || project.default_team_id.is_some() {
+                return Err(ProjectError::InvalidTransition(
+                    "only a Code Project without a Team can assign its default Team".into(),
+                ));
+            }
+            project.default_team_id = Some(team_id.clone());
+        }
         ProjectCommand::AddRoot { root } => {
             root.validate()?;
             if project

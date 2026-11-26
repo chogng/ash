@@ -11,6 +11,7 @@ mod model;
 
 pub use assets::built_in_roles;
 pub use catalog::AgentRoleCatalog;
+pub use catalog::UserRoleMutationError;
 pub use model::AgentRole;
 pub use model::AgentRoleCatalogSnapshot;
 pub use model::AgentRoleDiagnostic;

@@ -4,7 +4,7 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { ModelCatalogEntry } from '../../../../platform/models/common/agentModels.js';
-import { IChatService, type ChatAgent, type ThreadRead } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type DirectoryChatAgent, type ThreadRead } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { sessionWorkspaceUri, type ISession } from '../../../../workbench/services/sessions/common/session.js';
@@ -95,7 +95,7 @@ export class ModelEvaluationToolContribution implements IModelEvaluationTools {
 		caller: ModelEvaluationCaller,
 		session: ISession,
 		snapshot: ThreadRead,
-		agents: readonly ChatAgent[],
+		agents: readonly DirectoryChatAgent[],
 		models: readonly ModelCatalogEntry[],
 		operation: Extract<ModelEvaluationOperation, { type: 'createModelComparison'; }>,
 		signal: AbortSignal,

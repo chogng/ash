@@ -2,7 +2,7 @@ import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../services/sessions/common/session.js';
-import type { ChatAgent } from '../../../services/chat/common/chatService.js';
+import type { ChatAgent, DirectoryChatAgent } from '../../../services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../chat/common/automations/automationService.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { SessionKind, SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
@@ -20,6 +20,7 @@ export interface ISessionWorktreeQueryOptions {
 
 export interface ISessionCreateOptions {
 	readonly kind?: SessionKind;
+	readonly agentId?: string;
 	/** The caller binds directly to the new thread and needs only its catalog record. */
 	readonly catalogOnly?: true;
 	readonly automaticTitle?: true;
@@ -51,7 +52,7 @@ export interface ISessionsProvider extends IDisposable {
 	readonly onDidChangeCatalog: Event<void>;
 	readonly onDidChangeSession: Event<{ sessionId: SessionId; detailChanged: boolean; }>;
 	list(): Promise<readonly ISession[]>;
-	listAgents(): Promise<readonly ChatAgent[]>;
+	listAgents(): Promise<readonly DirectoryChatAgent[]>;
 	readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined>;
 	/** Acquires one detail lease per Session; concurrent callers share the in-flight acquisition. */
 	subscribe(session: ISession): Promise<ISession>;

@@ -87,12 +87,17 @@ export interface RestoreChatCheckpointOptions {
 	readonly title: string;
 }
 
-/** An authorized directory Agent that can start a new Chat Session. */
-export interface ChatAgent {
+/** An Agent role that can start a new Code conversation. */
+export type ChatAgent = {
 	readonly name: string;
 	readonly description: string;
-	readonly sourceId: string;
-}
+} & ChatAgentSource;
+
+type ChatAgentSource =
+	| { readonly sourceId: string; readonly builtIn?: never; readonly userDefined?: never; }
+	| { readonly sourceId?: never; readonly builtIn: true; readonly userDefined?: never; }
+	| { readonly sourceId?: never; readonly builtIn?: never; readonly userDefined: true; };
+export type DirectoryChatAgent = Extract<ChatAgent, { readonly sourceId: string; }>;
 
 export type { ApprovalMode } from '../../../../platform/agentHost/common/approvalModes.js';
 
@@ -198,6 +203,7 @@ export interface StartReviewOptions {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
+	readonly commandId?: string;
 	readonly target: AgentReviewTarget;
 }
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }

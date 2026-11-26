@@ -1,4 +1,5 @@
-.ash-workbench-sidebar:has(
+/* The dedicated left or right Activity Bar keeps its Code navigation. */
+.ash-workbench-sidebar:not([data-activity-bar-side]):has(
 		> .ash-workbench-part-content
 			> .ash-pane-composite:not([hidden])
 			.ash-bots-sidebar
@@ -19,6 +20,30 @@
 .ash-bots-sidebar > .ash-input-box {
 	min-height: var(--ash-spacing-size360);
 	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-user-bot-form,
+.ash-user-bot-field {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-user-bot-form p {
+	margin: 0;
+	color: var(--ash-descriptionForeground);
+}
+
+.ash-user-bot-form .ash-input-box-scrollable textarea {
+	min-block-size: 3lh;
+}
+
+.ash-user-bot-form [role="alert"]:not(:empty) {
+	color: var(--ash-errorForeground);
+}
+
+.ash-user-bot-form [role="alert"]:empty {
+	display: none;
 }
 
 .ash-bots-tree {
@@ -43,6 +68,8 @@
 }
 
 .ash-bots-sidebar [hidden],
+.ash-bots-header > [hidden],
+.ash-bots-advisor-results[hidden],
 .ash-bots-page [hidden].ash-bots-welcome,
 .ash-bots-detail[hidden] {
 	display: none;
@@ -191,6 +218,26 @@
 	padding: var(--ash-spacing-size240);
 	color: var(--ash-description-foreground);
 	text-align: center;
+}
+
+.ash-bots-advisor-results {
+	min-height: 0;
+	overflow: auto;
+	padding: var(--ash-spacing-size160);
+}
+
+.ash-bots-advisor-results h2 {
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-bots-advisor-results:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-bots-advice {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .ash-bots-detail {

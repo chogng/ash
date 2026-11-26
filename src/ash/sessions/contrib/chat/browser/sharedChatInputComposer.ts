@@ -25,6 +25,14 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { readNewChatDraftState, writeNewChatDraftState } from '../../../../workbench/contrib/sessions/common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { createUuid } from '../../../../base/common/uuid.js';
+import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { LanguageCompletionItemKind } from '../../../../editor/common/languages.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import { CHAT_INPUT_LANGUAGE_ID } from '../../../../workbench/contrib/chat/browser/widget/input/editor/chatInputCompletions.js';
+import { computeCompletionRanges, getCompletionRangeWord } from '../../../../workbench/contrib/chat/browser/widget/input/editor/chatInputCompletionUtils.js';
+import { projectBotHandle } from '../../../services/teams/common/team.js';
 
 /** Composes Sessions policy around the input owned by the Chat widget. */
 export class SharedChatInputComposer extends Disposable {
@@ -47,6 +55,7 @@ export class SharedChatInputComposer extends Disposable {
 		@IConfigurationService configuration: IConfigurationService,
 		@ICommandService commands: ICommandService,
 		@IGitHubService github: IGitHubService,
+		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
 		const permissionPicker: ChatInputPartOptions['primaryPermissionPicker'] = {
@@ -73,13 +82,17 @@ export class SharedChatInputComposer extends Disposable {
 			},
 		};
 		const input = this.input = instantiationService.createInstance(ChatInputPart, container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
-			create: options => instantiationService.createInstance(ChatInputEditor, {
-				...options,
-				placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
-				tabFocusMode: true,
-				// Let the row center the actual text height beside its 28px controls.
-				height: options.height ?? SESSIONS_COMPACT_INPUT_HEIGHT,
-			}),
+			create: options => {
+				const editor = instantiationService.createInstance(ChatInputEditor, {
+					...options,
+					placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
+					tabFocusMode: true,
+					// Let the row center the actual text height beside its 28px controls.
+					height: options.height ?? SESSIONS_COMPACT_INPUT_HEIGHT,
+				});
+				this.registerProjectBotCompletions(editor, model, languageFeatures);
+				return editor;
+			},
 		} satisfies Pick<IChatInputEditorProvider, 'create'>, [], {
 			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			stageImages: true,
@@ -94,6 +107,9 @@ export class SharedChatInputComposer extends Disposable {
 				if (!status && state.phase === 'ready' && !state.inputBlocked && model.threadId
 					&& contexts.some(context => context.kind === 'transcriptContext' && context.id === 'initial-pr:' + model.threadId)) {
 					return localize({ bundle: 'ash.sessions', key: 'sessions.github.pullRequestDraftReady' }, 'The pull request worktree is ready. Its snapshot is attached to your first message.');
+				}
+				if (!status && !state.aiDisabled && state.selectedAgent) {
+					return localize('sessions.chat.selectedAgent', 'Agent: {0}', state.selectedAgent.name);
 				}
 				return status;
 			},
@@ -127,5 +143,39 @@ export class SharedChatInputComposer extends Disposable {
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
+	}
+
+	private registerProjectBotCompletions(editor: ChatInputEditor, model: ChatWidgetModel, languageFeatures: ILanguageFeaturesService): void {
+		const text = editor.getModel();
+		if (!text) return;
+		this._register(languageFeatures.completionProvider.register({
+			id: `ash.chat.projectBots.${createUuid()}`, languageIds: [CHAT_INPUT_LANGUAGE_ID], triggerCharacters: ['@'],
+			provideCompletions: async (request, signal) => {
+				const isCurrent = () => !signal.aborted && !this.isDisposed && !text.isDisposed()
+					&& request.resource?.toString() === text.uri.toString() && request.snapshot.version === text.getVersionId()
+					&& !editor.codeEditor.getOption(EditorOption.readOnly);
+				if (!isCurrent() || request.position.lineNumber !== 1) return undefined;
+				const ranges = computeCompletionRanges(text, request.position, /@[^\s@]*/u, true);
+				const token = ranges && getCompletionRangeWord(ranges);
+				if (!ranges || !token || text.getValueInRange(new Range(1, 1, 1, ranges.replace.startColumn)).trim()) return undefined;
+				const generation = model.composerGeneration;
+				const bots = await model.listProjectBots();
+				if (!isCurrent() || generation !== model.composerGeneration) return undefined;
+				const handles = bots.map(bot => projectBotHandle(bot.member.role));
+				return {
+					isIncomplete: true, items: bots.flatMap((bot, index) => {
+						const handle = handles[index]!;
+						if (!`@${handle}`.toLowerCase().startsWith(token.toLowerCase())) return [];
+						const ambiguous = handles.filter(other => other.toLowerCase() === handle.toLowerCase()).length > 1;
+						const mention = ambiguous ? `@${handle}:${encodeURIComponent(bot.projectId)}` : `@${handle}`;
+						return [{
+							id: JSON.stringify([bot.projectId, bot.member.agentId]), label: `@${handle}`,
+							insertText: `${mention} `, range: ranges.replace, filterText: `@${handle}`, detail: bot.projectName,
+							kind: LanguageCompletionItemKind.Reference, group: { order: -1, label: localize('sessions.projectBots.completions', 'Project Bots') }
+						}];
+					})
+				};
+			},
+		}));
 	}
 }

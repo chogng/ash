@@ -30,6 +30,16 @@ use core_api::StartThreadRequest;
 use serde_json::Value;
 use std::path::PathBuf;
 
+fn role_source(source: &agent_roles::AgentRoleSource) -> ash_protocol::AgentRoleSource {
+    match source {
+        agent_roles::AgentRoleSource::BuiltIn => ash_protocol::AgentRoleSource::BuiltIn,
+        agent_roles::AgentRoleSource::User => ash_protocol::AgentRoleSource::User,
+        agent_roles::AgentRoleSource::Directory { id } => {
+            ash_protocol::AgentRoleSource::Directory { id: id.clone() }
+        }
+    }
+}
+
 pub(super) enum SessionDirectoryChange {
     Bind(PathBuf),
     Replace(PathBuf),
@@ -105,6 +115,7 @@ pub(super) struct SessionRequestProcessor<'ctx, C: SessionRequestProcessorContex
     agent_extensions: &'ctx super::Arc<super::ExtensionRegistry>,
     dir_services: &'ctx Option<super::Arc<super::thread_dirs::ThreadDirs>>,
     env_runtime: &'ctx super::Arc<super::RwLock<super::EnvRuntime>>,
+    home: Option<&'ctx ash_home::AshHome>,
     git_turn_changes:
         &'ctx Option<super::Arc<super::git_turn_changes_runtime::GitTurnChangesRuntime>>,
     message_board: &'ctx Option<MessageBoard>,
@@ -268,6 +279,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         agent_extensions: &'ctx super::Arc<super::ExtensionRegistry>,
         dir_services: &'ctx Option<super::Arc<super::thread_dirs::ThreadDirs>>,
         env_runtime: &'ctx super::Arc<super::RwLock<super::EnvRuntime>>,
+        home: Option<&'ctx ash_home::AshHome>,
         git_turn_changes: &'ctx Option<
             super::Arc<super::git_turn_changes_runtime::GitTurnChangesRuntime>,
         >,
@@ -283,6 +295,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             agent_extensions,
             dir_services,
             env_runtime,
+            home,
             git_turn_changes,
             message_board,
             notes,
@@ -367,12 +380,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             .map(|role| AgentRoleEntry {
                 name: role.name().to_owned(),
                 description: role.description().to_owned(),
-                source: match role.source() {
-                    agent_roles::AgentRoleSource::BuiltIn => ash_protocol::AgentRoleSource::BuiltIn,
-                    agent_roles::AgentRoleSource::Directory { id } => {
-                        ash_protocol::AgentRoleSource::Directory { id: id.clone() }
-                    }
-                },
+                source: role_source(role.source()),
             })
             .collect();
         result(&AgentRoleListResult { agents })
@@ -396,6 +404,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         let custom = contributions
             .as_ref()
             .map(|catalog| catalog.refresh_root_agents());
+        let user = self.home.map(ash_home::AshHome::agents);
         let directory = contributions
             .as_ref()
             .and_then(|catalog| catalog.root_agents_directory());
@@ -403,6 +412,11 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         let agents = built_in
             .entries()
             .iter()
+            .chain(
+                user.as_ref()
+                    .map(|catalog| catalog.entries())
+                    .unwrap_or_default(),
+            )
             .chain(
                 custom
                     .as_ref()
@@ -412,12 +426,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             .map(|role| AgentRoleDefinition {
                 name: role.name().to_owned(),
                 description: role.description().to_owned(),
-                source: match role.source() {
-                    agent_roles::AgentRoleSource::BuiltIn => ash_protocol::AgentRoleSource::BuiltIn,
-                    agent_roles::AgentRoleSource::Directory { id } => {
-                        ash_protocol::AgentRoleSource::Directory { id: id.clone() }
-                    }
-                },
+                source: role_source(role.source()),
                 launch: match role.launch() {
                     agent_roles::RoleLaunch::Any => AgentRoleLaunch::Any,
                     agent_roles::RoleLaunch::Workflow => AgentRoleLaunch::Workflow,
@@ -427,7 +436,9 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 callers: role.callers().to_vec(),
                 delegates: role.delegates().map(<[String]>::to_vec),
                 path: match role.source() {
-                    agent_roles::AgentRoleSource::BuiltIn => None,
+                    agent_roles::AgentRoleSource::BuiltIn | agent_roles::AgentRoleSource::User => {
+                        None
+                    }
                     agent_roles::AgentRoleSource::Directory { .. } => {
                         directory.as_ref().map(|directory| {
                             directory
@@ -452,22 +463,74 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             })
             .collect();
         let diagnostics = custom
-            .as_ref()
-            .map(|catalog| {
-                catalog
-                    .diagnostics()
-                    .iter()
-                    .map(|diagnostic| match diagnostic.relative_path() {
-                        Some(path) => format!("{}: {}", path.display(), diagnostic.message()),
-                        None => diagnostic.message().to_owned(),
-                    })
-                    .collect()
+            .iter()
+            .chain(user.iter())
+            .flat_map(|catalog| catalog.diagnostics())
+            .map(|diagnostic| match diagnostic.relative_path() {
+                Some(path) => format!("{}: {}", path.display(), diagnostic.message()),
+                None => diagnostic.message().to_owned(),
             })
-            .unwrap_or_default();
+            .collect();
         result(&AgentRoleCatalogResult {
             agents,
             diagnostics,
         })
+    }
+
+    pub(super) fn agent_role_user_create(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::agent::AgentRoleUserCreateParams;
+        use ash_app_server_protocol::protocol::error::AppServerErrorName;
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: AgentRoleUserCreateParams = decode(params)?;
+        let home = self
+            .home
+            .ok_or_else(|| RpcError::new(-32010, AppServerErrorName::CoreOperationFailed))?;
+        home.create_agent(&params.name, &params.description, &params.prompt)
+            .map_err(|error| match error.kind() {
+                std::io::ErrorKind::InvalidInput => {
+                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                }
+                std::io::ErrorKind::AlreadyExists => {
+                    RpcError::new(-32004, AppServerErrorName::CommandConflict)
+                }
+                _ => core_error(core_api::CoreError::Execution(error.to_string())),
+            })?;
+        result(&())
+    }
+
+    pub(super) fn agent_role_user_update(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::agent::AgentRoleUserUpdateParams;
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: AgentRoleUserUpdateParams = decode(params)?;
+        let home = self
+            .home
+            .ok_or_else(|| RpcError::new(-32010, AppServerErrorName::CoreOperationFailed))?;
+        home.update_agent(
+            &params.name,
+            params.expected_content_digest.as_str(),
+            &params.description,
+            &params.prompt,
+        )
+        .map_err(super::agent_selection::user_role_mutation_error)?;
+        result(&())
     }
 
     pub(super) fn agent_read(&self, params: &Value) -> Result<Value, RpcError> {

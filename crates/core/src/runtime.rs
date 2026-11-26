@@ -926,6 +926,15 @@ impl AgentRuntime for Runtime<'_> {
             .fork_thread(self.binder, request)
             .map(Into::into)
     }
+    fn fork_team_member(
+        &self,
+        request: ForkThreadRequest,
+        member: core_api::TeamMemberFork,
+    ) -> Result<ThreadView, CoreError> {
+        self.threads
+            .fork_team_member(self.binder, request, member)
+            .map(Into::into)
+    }
     fn create_side_chat(&self, request: CreateSideChatRequest) -> Result<ThreadView, CoreError> {
         self.threads
             .create_side_chat(self.binder, request)

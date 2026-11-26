@@ -32,6 +32,9 @@ impl ThreadBinding {
             ThreadOrigin::Fork {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::TeamMember {
+                parent_thread_id, ..
+            }
             | ThreadOrigin::Comparison {
                 parent_thread_id, ..
             }
@@ -81,7 +84,11 @@ impl ThreadBinding {
                     .into(),
             ));
         }
-        if !comparison && self.spawn_parent().is_none() && self.agent_id != source.agent_id {
+        if !comparison
+            && !matches!(self.origin, ThreadOrigin::TeamMember { .. })
+            && self.spawn_parent().is_none()
+            && self.agent_id != source.agent_id
+        {
             return Err(AgentGraphStoreError(
                 "fork, rewind and replacement must preserve Agent identity".into(),
             ));

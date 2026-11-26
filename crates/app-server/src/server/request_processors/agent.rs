@@ -251,6 +251,12 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         title: String,
         comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>;
+    fn resolve_project_bot(
+        &self,
+        project_id: &ash_protocol::ProjectId,
+        session_id: &ash_protocol::SessionId,
+        member_id: &ash_protocol::AgentId,
+    ) -> Result<Option<ash_protocol::AgentConfiguration>, RpcError>;
     fn local_env_tool_ports(
         &self,
     ) -> Option<std::sync::Arc<super::environment_runtime::EnvToolPorts>>;
@@ -804,6 +810,53 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     title,
                 )?),
             ),
+            SessionRequest::ForkProjectBot {
+                parent_thread_id,
+                project_id,
+                member_id,
+                source_sequence,
+                title,
+            } => {
+                if !connection.allows_team_capabilities()
+                    || !connection.allows_product_host_capabilities()
+                {
+                    return Err(RpcError::new(
+                        -32073,
+                        AppServerErrorName::PermissionRequired,
+                    ));
+                }
+                let parent = self.read_session_thread_snapshot(&session_id, &parent_thread_id)?;
+                if parent.status != ThreadStatus::Active
+                    || !session
+                        .is_some_and(|session| session.kind == ash_protocol::SessionKind::Code)
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let agent =
+                    self.context
+                        .resolve_project_bot(&project_id, &session_id, &member_id)?;
+                let fork = self
+                    .context
+                    .agent_runtime()
+                    .fork_team_member(
+                        ForkThreadRequest {
+                            command_id,
+                            source_thread_id: parent_thread_id,
+                            title,
+                        },
+                        core_api::TeamMemberFork {
+                            agent_id: member_id,
+                            source_sequence,
+                            agent,
+                        },
+                    )
+                    .map_err(core_error)?;
+                self.updates.publish_session_changed(&session_id);
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&session_id)?,
+                    thread_id: fork.thread_id,
+                }))
+            }
             SessionRequest::ReplaceThread {
                 source_thread_id,
                 title,

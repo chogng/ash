@@ -3735,6 +3735,7 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             .unwrap()
     };
     let project = ProjectDto {
+        default_team_id: None,
         created_at_ms: Some(1),
         updated_at_ms: Some(1),
         materials: Vec::new(),
@@ -3814,6 +3815,7 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
             .unwrap()
     };
     let project = ProjectDto {
+        default_team_id: None,
         created_at_ms: Some(1),
         updated_at_ms: Some(1),
         materials: Vec::new(),

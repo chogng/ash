@@ -21,8 +21,9 @@ import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { PlaceholderTextContribution } from '../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
 import { localize } from '../../../../nls.js';
+import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IMemoriesService } from '../../../../platform/memories/common/memoriesService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -33,10 +34,12 @@ import { OPEN_MEMORIES_COMMAND_ID } from '../../../../workbench/contrib/memories
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { ISessionFolderAuthorizationService } from '../../../services/workspace/common/sessionFolderAuthorizationService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ITeamsManagementService } from '../../../services/teams/common/teamsManagement.js';
 import type { SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 import { IChatListCatalog, type CatalogProjectDetails } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
+import { showProjectBotsDialog } from './projectBotsDialog.js';
 import { ProjectMemoryDialog } from './projectMemoryDialog.js';
 import { ProjectTextInput } from './projectTextInput.js';
 import { IProjectsService, type CatalogProjectAppearance } from './projectsService.js';
@@ -109,6 +112,7 @@ export interface IProjectDialogService {
 	showAddTextDialog(owner: HTMLElement, restoreFocus: () => void, save: (title: string, content: string) => Promise<void>): void;
 	showTextPreview(owner: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void;
 	showCodeProjectDialog(owner: HTMLElement, edit?: CodeProjectEdit): Promise<void>;
+	showCodeProjectBotsDialog(owner: HTMLElement, target: CodeProjectEdit): Promise<void>;
 	close(owner: HTMLElement): void;
 }
 
@@ -142,6 +146,19 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 
 	close(owner: HTMLElement): void {
 		if (this.active.value?.owner === owner) this.active.clear();
+	}
+
+	async showCodeProjectBotsDialog(owner: HTMLElement, { id, restoreFocus }: CodeProjectEdit): Promise<void> {
+		const active = this.begin(owner);
+		if (!active) return;
+		try {
+			await this.instantiation.invokeFunction(accessor => {
+				restoreFocus();
+				return showProjectBotsDialog(owner, active.store, id, this.projects, accessor.get(ITeamsManagementService), accessor.get(IAgentConnection).session, accessor.get(IDialogService));
+			});
+		} finally {
+			if (this.active.value === active) this.active.clear();
+		}
 	}
 
 	showProjectMemories(owner: HTMLElement, target: ProjectMemoryTarget, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void {

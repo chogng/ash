@@ -84,6 +84,9 @@ pub struct ProjectDto {
     pub session_ids: Vec<SessionId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub default_team_id: Option<ash_protocol::TeamId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub external_conversation_ids: Option<Vec<String>>,
     pub materials: Vec<ProjectMaterialDto>,
 }
@@ -112,6 +115,9 @@ pub struct ProjectSummaryDto {
     pub root_count: u64,
     #[ts(type = "number")]
     pub session_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default_team_id: Option<ash_protocol::TeamId>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -194,6 +200,25 @@ pub struct ProjectAppearanceUpdateParams {
     pub field: ProjectAppearanceFieldDto,
     #[ts(type = "string | null")]
     pub value: Option<String>,
+}
+
+/// Returns the existing Team or creates the project's default Team with Ash as coordinator.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectTeamEnsureParams {
+    pub project_id: ProjectId,
+    pub coordinator_responsibility: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectBotRemoveParams {
+    pub command_id: CommandId,
+    pub project_id: ProjectId,
+    pub member_id: ash_protocol::AgentId,
+    #[ts(type = "number")]
+    pub expected_team_revision: u64,
+    pub coordinator_responsibility: String,
 }
 
 /// Adds only a root already known to the exact Session directory scope.

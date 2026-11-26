@@ -29,6 +29,12 @@ pub enum ThreadOrigin {
         #[ts(type = "number")]
         parent_sequence: u64,
     },
+    /// A selected Team member uses the source context in a separate branch of the same Session.
+    TeamMember {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+    },
     /// A separate Session and Agent using the same immutable source history and code checkpoint.
     Comparison {
         parent_thread_id: ThreadId,

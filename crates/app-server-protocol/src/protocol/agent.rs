@@ -90,6 +90,33 @@ pub struct AgentRoleCatalogResult {
     pub diagnostics: Vec<String>,
 }
 
+/// Creates a personal Agent definition in the connected Ash profile.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentRoleUserCreateParams {
+    pub name: String,
+    pub description: String,
+    pub prompt: String,
+}
+
+/// Updates editable text on a personal Agent definition while keeping its name and source.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentRoleUserUpdateParams {
+    pub name: String,
+    pub expected_content_digest: ash_protocol::ContentDigest,
+    pub description: String,
+    pub prompt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentRoleUserDeleteParams {
+    pub name: String,
+    pub expected_content_digest: ash_protocol::ContentDigest,
+    pub coordinator_responsibility: String,
+}
+
 /// Describes the authority a tool may request; the decision is made for each call.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

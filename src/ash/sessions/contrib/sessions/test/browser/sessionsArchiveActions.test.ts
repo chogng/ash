@@ -27,7 +27,7 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { IChatService, type ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -58,7 +58,7 @@ class Provider extends Disposable implements ISessionsProvider {
 	readonly archived: string[] = [];
 	readonly restored: string[] = [];
 	async list() { return this.items; }
-	async listAgents(): Promise<readonly ChatAgent[]> { return []; }
+	async listAgents(): ReturnType<ISessionsProvider['listAgents']> { return []; }
 	async readCatalog(id: string) { return this.items.find(session => session.sessionId === id); }
 	async subscribe(value: ISession) { return { ...value, agentTree: [] }; }
 	async unsubscribe() { }

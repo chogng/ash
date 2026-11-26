@@ -1,0 +1,122 @@
+.ash-project-bots-dialog.ash-dialog {
+	inline-size: 520px;
+}
+
+.ash-project-bots-body {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-project-bots-body h2 {
+	margin: 0;
+	font-size: inherit;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-project-bots-project,
+.ash-project-bots-note,
+.ash-project-bots-error {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-project-bots-project,
+.ash-project-bots-detail,
+.ash-project-bots-note {
+	color: var(--ash-description-foreground);
+}
+
+.ash-project-bots-error {
+	color: var(--ash-error-foreground);
+}
+
+:is(
+	.ash-project-bots-project,
+	.ash-project-bots-note,
+	.ash-project-bots-error
+):empty {
+	display: none;
+}
+
+.ash-project-bots-header,
+.ash-project-bots-row,
+.ash-project-bots-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-project-bots-header {
+	justify-content: space-between;
+}
+
+.ash-project-bots-body ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.ash-project-bots-catalog:not([hidden]) {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-project-bots-row {
+	min-block-size: var(--ash-spacing-size360);
+	padding-block: var(--ash-spacing-size60);
+}
+
+.ash-project-bots-row + .ash-project-bots-row {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+}
+
+.ash-project-bots-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	inline-size: var(--ash-spacing-size280);
+	block-size: var(--ash-spacing-size280);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-toolbar-hoverBackground);
+	color: var(--ash-description-foreground);
+}
+
+.ash-project-bots-labels {
+	flex: 1;
+	min-inline-size: 0;
+}
+
+.ash-project-bots-name,
+.ash-project-bots-detail {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-project-bots-name {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-project-bots-actions {
+	flex: none;
+}
+
+.ash-project-bots-default {
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size60);
+	background: var(--ash-badge-background);
+	color: var(--ash-badge-foreground);
+}
+
+@media (max-width: 360px) {
+	.ash-project-bots-actions {
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		max-inline-size: 50%;
+	}
+}

@@ -1,5 +1,8 @@
-//! User-scoped Ash Instructions from the selected Ash home.
+//! User-scoped Instructions and Agent definitions from the selected Ash home.
 
+use agent_roles::AgentRoleCatalog;
+use agent_roles::AgentRoleCatalogSnapshot;
+use agent_roles::UserRoleMutationError;
 use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
 use ash_utils_absolute_path::AbsolutePathBuf;
@@ -7,10 +10,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// Refreshes Ash-owned user Instructions under one absolute home directory.
+/// Owns user-scoped Agent and Instruction catalogs under one absolute home directory.
 pub struct AshHome {
     root: AbsolutePathBuf,
     instructions: Mutex<InstructionCatalog>,
+    agents: Mutex<AgentRoleCatalog>,
 }
 
 impl AshHome {
@@ -18,6 +22,7 @@ impl AshHome {
     pub fn new(home: AbsolutePathBuf) -> Self {
         Self {
             instructions: Mutex::new(InstructionCatalog::discover_user(home.as_path())),
+            agents: Mutex::new(AgentRoleCatalog::discover_user(home.as_path())),
             root: home,
         }
     }
@@ -33,6 +38,44 @@ impl AshHome {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .refresh()
+    }
+
+    pub fn agents(&self) -> Arc<AgentRoleCatalogSnapshot> {
+        self.agents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .refresh()
+    }
+
+    pub fn create_agent(&self, name: &str, description: &str, prompt: &str) -> std::io::Result<()> {
+        self.agents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .create_user_role(name, description, prompt)
+    }
+
+    pub fn update_agent(
+        &self,
+        name: &str,
+        expected_content_digest: &str,
+        description: &str,
+        prompt: &str,
+    ) -> Result<(), UserRoleMutationError> {
+        self.agents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .update_user_role(name, expected_content_digest, description, prompt)
+    }
+
+    pub fn delete_agent(
+        &self,
+        name: &str,
+        expected_content_digest: &str,
+    ) -> Result<(), UserRoleMutationError> {
+        self.agents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .delete_user_role(name, expected_content_digest)
     }
 }
 

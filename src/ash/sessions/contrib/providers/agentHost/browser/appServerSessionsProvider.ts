@@ -16,7 +16,7 @@ import { IArtifactCatalogService } from '../../../../services/artifactCatalog/co
 import { agentHostSessionArtifacts } from '../../../../../workbench/contrib/sessions/providers/agentHost/browser/agentHostSessionArtifacts.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { ChatAgent, DirectoryChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
 import { getSessionApplication } from '../../../../../workbench/services/sessions/common/sessionApplication.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -148,7 +148,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return result.sessions.map(session => toSession(session, this.sessionArtifacts(session.sessionId)));
 	}
 
-	async listAgents(): Promise<readonly ChatAgent[]> {
+	async listAgents(): Promise<readonly DirectoryChatAgent[]> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
@@ -372,7 +372,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (additional.length && (!this.sessionApi.addWorkspaceFolder || additional.some(folder => !this.ownsSourceAuthority(buildAgentHostSessionWorkspace(folder)!.authorityId)))) {
 			throw new Error(localize('sessions.environment.foldersUnavailable', 'The selected host cannot access every environment folder.'));
 		}
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title: options?.automaticTitle ? '' : title, executionTarget, kind: options?.kind ?? 'code', branchName: options?.branchName, worktreeStart: options?.worktreeStart, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const selection = agent ? {
+			type: 'exact' as const, name: agent.name,
+			source: agent.builtIn ? { type: 'builtIn' as const }
+				: agent.userDefined ? { type: 'user' as const } : { type: 'directory' as const, id: agent.sourceId },
+		} : { type: 'default' as const };
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title: options?.automaticTitle ? '' : title, executionTarget, kind: options?.kind ?? 'code', branchName: options?.branchName, worktreeStart: options?.worktreeStart, environmentVariables: options?.environmentVariables, agentId: options?.agentId, agent: selection });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });

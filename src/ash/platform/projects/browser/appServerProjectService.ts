@@ -26,12 +26,23 @@ export class AppServerProjectService implements IProjectService {
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
 				createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
 				icon: project.icon, color: project.color,
+				defaultTeamId: project.defaultTeamId,
 			}));
 		} catch (error) { throw projectError(error); }
 	}
 
 	public async read(id: string, scope?: ProjectScope): Promise<Project> {
 		try { return fromDto((await appServerRequest(this.connection, 'project/read', { projectId: id, scope })).project); }
+		catch (error) { throw projectError(error); }
+	}
+
+	public async ensureDefaultTeam(projectId: string, coordinatorResponsibility: string): Promise<Project> {
+		try { return fromDto((await appServerRequest(this.connection, 'project/team/ensure', { projectId, coordinatorResponsibility })).project); }
+		catch (error) { throw projectError(error); }
+	}
+
+	public async removeBot(projectId: string, memberId: string, expectedTeamRevision: number, coordinatorResponsibility: string): Promise<void> {
+		try { await appServerRequest(this.connection, 'project/bots/remove', { commandId: generateUuid(), projectId, memberId, expectedTeamRevision, coordinatorResponsibility }); }
 		catch (error) { throw projectError(error); }
 	}
 
@@ -133,6 +144,7 @@ function fromDto(project: ProjectDto): Project {
 		createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
 		icon: project.icon, color: project.color,
 		description: project.description, sessionIds: project.sessionIds, externalConversationIds: project.externalConversationIds,
+		defaultTeamId: project.defaultTeamId,
 		sessionCount: project.sessionIds.length + (project.externalConversationIds?.length ?? 0),
 		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => {
@@ -160,7 +172,7 @@ function toMaterials(materials: readonly ProjectMaterial[]) {
 }
 
 function projectError(error: unknown): Error {
-	if (error instanceof AppServerRemoteError && error.errorName === 'ProjectRevisionConflict') {
+	if (error instanceof AppServerRemoteError && (error.errorName === 'ProjectRevisionConflict' || error.errorName === 'TeamRevisionConflict')) {
 		return new Error(localize('projects.conflict', 'This project changed in another window. Refresh and try again.'), { cause: error });
 	}
 	return new Error(localize('projects.requestFailed', 'Could not access projects. Check the connection and try again.'), { cause: error });

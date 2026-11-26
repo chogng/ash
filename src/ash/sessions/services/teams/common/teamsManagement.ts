@@ -5,6 +5,7 @@ import type { Team, TeamMember, TeamMessage, TeamRole, TeamRun } from './team.js
 export interface ITeamsManagementService {
 	readonly teams: IObservable<readonly Team[]>;
 	refresh(): Promise<void>;
+	read(teamId: string): Promise<Team>;
 	create(name: string, description: string, coordinatorName: string, responsibility: string, role?: TeamRole): Promise<Team>;
 	addMember(team: Team, name: string, responsibility: string, role?: TeamRole): Promise<Team>;
 	updateMember(team: Team, member: TeamMember): Promise<Team>;

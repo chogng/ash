@@ -18,7 +18,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { modelPickerEffortLabel } from '../../../../workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerModelConfig.js';
-import { IChatService, type ChatAgent, type ThreadRead, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type DirectoryChatAgent, type ThreadRead, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../workbench/contrib/sessions/common/agentHostSessionsProvider.js';
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
@@ -96,7 +96,7 @@ registerAction2(class CompareAgentsAction extends Action2 {
 			{ label: localize('sessions.compare.configure', 'Configure participants…'), configure: true },
 		], localize('sessions.compare.setup', 'Choose participant settings')))?.[0];
 		if (!setup || !isCurrent()) return;
-		let synthesisAgent: ChatAgent | undefined;
+		let synthesisAgent: DirectoryChatAgent | undefined;
 		let judgeSettings: ComparisonParticipantSettings | undefined;
 		let synthesisSettings: ComparisonParticipantSettings | undefined;
 		const attemptSettings: ComparisonParticipantSettings[] = [];
@@ -187,7 +187,7 @@ interface ComparisonLaunchOptions {
 }
 
 interface ComparisonParticipant {
-	readonly agent: ChatAgent;
+	readonly agent: DirectoryChatAgent;
 	readonly settings?: ComparisonParticipantSettings;
 }
 
@@ -415,7 +415,7 @@ interface ComparisonDependencies {
 	readonly groups: ISessionGroupsService;
 }
 
-async function submitComparisonParticipant(dependencies: ComparisonDependencies, comparison: SessionComparison, role: 'judge' | 'synthesis', agent: ChatAgent, prompt: string, evidence: Evidence): Promise<ComparisonThread> {
+async function submitComparisonParticipant(dependencies: ComparisonDependencies, comparison: SessionComparison, role: 'judge' | 'synthesis', agent: DirectoryChatAgent, prompt: string, evidence: Evidence): Promise<ComparisonThread> {
 	const { sessions, scopes, chat, comparisons, groups } = dependencies;
 	const participant = await createComparisonParticipant(sessions, scopes, comparison, role, agent);
 	const { thread } = await chat.readThread(participant.sessionId, participant.threadId);
@@ -525,7 +525,7 @@ export async function readComparisonEvidence(chat: IChatService, comparison: Ses
 	}));
 }
 
-async function createComparisonParticipant(sessions: ISessionsManagementService, scopes: ISessionProviderScopeService, comparison: SessionComparison, role: 'judge' | 'synthesis', agent: ChatAgent): Promise<ComparisonThread> {
+async function createComparisonParticipant(sessions: ISessionsManagementService, scopes: ISessionProviderScopeService, comparison: SessionComparison, role: 'judge' | 'synthesis', agent: DirectoryChatAgent): Promise<ComparisonThread> {
 	const title = role === 'judge' ? localize('sessions.compare.judgeTitle', 'Judge · {0}', agent.name) : localize('sessions.compare.synthesisTitle', 'Synthesis · {0}', agent.name);
 	if (role === 'synthesis' && comparison.isolated) {
 		const commandId = `compare-synthesis-${createUuid()}`;
@@ -684,7 +684,7 @@ export class SessionComparisonControls extends Disposable {
 		});
 	}
 
-	private async startJudge(comparison: SessionComparison, agent: ChatAgent, evidence: Evidence): Promise<void> {
+	private async startJudge(comparison: SessionComparison, agent: DirectoryChatAgent, evidence: Evidence): Promise<void> {
 		if (this.isDisposed || this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) return;
 		this.progress.set(comparison.id, localize('sessions.compare.judgeStarting', 'Starting the comparison Judge…'));
 		this.render();
@@ -817,7 +817,7 @@ export class SessionComparisonControls extends Disposable {
 		});
 	}
 
-	private async pickAgent(comparison: SessionComparison, role: 'judge' | 'synthesis'): Promise<ChatAgent | undefined> {
+	private async pickAgent(comparison: SessionComparison, role: 'judge' | 'synthesis'): Promise<DirectoryChatAgent | undefined> {
 		const provider = this.providers.getProvider(comparison.providerId);
 		const agents = await provider?.listAgents();
 		if (!agents?.length || this.providers.getProvider(comparison.providerId) !== provider || this.current?.id !== comparison.id || this.isDisposed) return undefined;

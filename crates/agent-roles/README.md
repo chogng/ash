@@ -2,7 +2,7 @@
 
 `ash-agent-roles` 隔离角色定义、来源加载与校验依赖。
 
-- `assets/**/*.md` 是随产品发布的角色，`.ash/agents/*.md` 是自定义角色；共用 Markdown 正文与 YAML frontmatter 解析、校验和摘要。
+- `assets/**/*.md` 是随产品发布的角色，项目中的 `.ash/agents/*.md` 是工作区角色，Ash 用户目录中的 `agents/*.md` 是个人角色。三种来源共用 Markdown 正文与 YAML frontmatter 的解析、校验和摘要。个人角色可以独立启动 Session，也可以被 Team 按准确来源和名称引用。
 - `assets/team`、`assets/develop` 按命令组织角色，文件名只写职责；准确 ID 使用相对路径，如 `team/implementer`。
 - `issue.md`、`advisor.md`、`reviewer.md` 保存独立职责；`Default` 使用共享规则。
 - Role 声明自身与下放 Tool、Skill、模型及职责指令，声明不能授予超出当前授权的能力。

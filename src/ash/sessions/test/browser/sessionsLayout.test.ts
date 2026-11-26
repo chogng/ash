@@ -1047,6 +1047,7 @@ suite('sessions browser component', () => {
 		const back = sidebarPart.locator('.ash-pane-composite-title-actions').getByRole('button', { name: chinese ? '后退' : 'Back', exact: true });
 		const tree = sidebar.getByRole('tree');
 		const group = tree.getByRole('treeitem', { name: chinese ? '代码审查' : 'Code Review', exact: true });
+		await expect(tree.getByRole('treeitem', { name: chinese ? '顾问' : 'Advisor', exact: true })).toBeVisible();
 		const thread = tree.getByRole('treeitem', { name: /^Follow-up chat/ });
 		const search = sidebar.getByRole('searchbox', { name: chinese ? '搜索机器人和线程' : 'Search Bots and Threads' });
 		const searchIcon = sidebar.locator('.ash-input-box [data-ash-icon-id="search"]');
@@ -1086,7 +1087,7 @@ suite('sessions browser component', () => {
 		await expect(group).toHaveAttribute('aria-expanded', 'true');
 		await expect(thread).toHaveAttribute('aria-selected', 'true');
 		await tree.press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /按左、右方向键收起或展开/ : /use Left and Right Arrow to collapse and expand/);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /按左、右方向键收起或展开/ : /Use Left and Right Arrow to collapse or expand Code Review/);
 		await page.keyboard.press('Escape');
 		await expect(tree).toBeFocused();
 		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));

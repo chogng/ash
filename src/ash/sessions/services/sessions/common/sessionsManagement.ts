@@ -5,6 +5,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { ChatCreationKind, IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from '../../../../workbench/services/sessions/common/session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ISessionCreateOptions } from '../../../../workbench/contrib/sessions/common/sessionsProvider.js';
+import type { ProjectBot } from '../../teams/common/team.js';
 
 export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
 
@@ -30,6 +31,8 @@ export interface ISessionsManagementService {
 	/** Hydrates current catalog directories without changing foreground selection. */
 	whenDirectoriesReady(signal?: AbortSignal): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
+	listProjectBots?(target: { readonly projectId?: string; readonly sessionId?: string; }): Promise<readonly ProjectBot[]>;
+	forkProjectBot?(source: IActiveSessionThread, bot: ProjectBot, sourceSequence: number, commandId: string): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	/** Hydrates a thread. The Agents window commits its own foreground choice after hydration. */
 	prepareThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
@@ -54,7 +57,7 @@ export interface ISessionsManagementService {
 	/** Publishes the sent Session and re-arms the same composer for a different Session. */
 	completeBackgroundSend(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
-	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
+	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; readonly agent?: ChatAgent; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	/** A pending archive can hide the list row while the durable Session stays active. */
 	readonly pendingArchives: IObservable<ReadonlySet<SessionId>>;

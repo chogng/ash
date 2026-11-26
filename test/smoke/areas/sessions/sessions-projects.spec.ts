@@ -628,7 +628,9 @@ test.describe('Code folder projects in Simplified Chinese', () => {
 			expect((await client.request(APP_SERVER_METHODS['project/list'], { scope: 'chat' })).projects).toEqual([]);
 
 			const header = () => page.locator(`[data-project-id="${project.projectId}"]`).getByRole('button', { name: project.name, exact: true });
-			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['置顶', '编辑', '归档', '删除']);
+			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText([
+				'在此项目中新建对话', '置顶', '编辑', '机器人管理', '归档', '删除',
+			]);
 			await header().click({ button: 'right' });
 			await expectProjectMenu();
 			await page.keyboard.press('Escape');

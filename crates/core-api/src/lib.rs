@@ -52,6 +52,7 @@ pub use commands::SetGoalResult;
 pub use commands::ShellTurnInvocation;
 pub use commands::StartThreadRequest;
 pub use commands::SteerTurnRequest;
+pub use commands::TeamMemberFork;
 pub use diagnostics::ExecutionDiagnostics;
 pub use diagnostics::InferenceContext;
 pub use diagnostics::InferencePurpose;

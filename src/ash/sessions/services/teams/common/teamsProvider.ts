@@ -2,6 +2,7 @@ import type { Team, TeamCommand, TeamMessage, TeamRun } from './team.js';
 
 export interface ITeamsProvider {
 	list(): Promise<readonly Team[]>;
+	read(teamId: string): Promise<Team>;
 	apply(commandId: string, teamId: string, expectedRevision: number, command: TeamCommand): Promise<Team>;
 	startRun(commandId: string, runId: string, teamId: string, expectedRevision: number, objective: string): Promise<TeamRun>;
 	listRuns(teamId: string): Promise<readonly TeamRun[]>;

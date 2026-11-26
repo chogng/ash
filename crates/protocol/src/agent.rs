@@ -25,6 +25,7 @@ pub enum AgentDefinitionSelectionReason {
 )]
 pub enum AgentRoleSource {
     BuiltIn,
+    User,
     Directory { id: String },
 }
 

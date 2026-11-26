@@ -6,6 +6,7 @@ import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 import { FileKind } from '../../../../src/ash/platform/files/common/files.js';
 import { getSingleFolderWorkspaceIdentifier } from '../../../../src/ash/platform/workspaces/node/workspaces.js';
@@ -126,6 +127,41 @@ test('Bots keeps Code navigation and search separate', async ({ target, workbenc
 	await expect(navigation.getByRole('button', { name: 'Bots', exact: true })).toBeVisible();
 	await expect(code).toBeVisible();
 	await expect(code).toHaveAttribute('aria-pressed', 'true');
+});
+
+test.describe('Bots with a side Activity Bar', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN', 'sessions.activityBar.location': 'left' } });
+
+	test('opening Bots preserves the side Activity Bar and its Code actions', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const rail = sidebar.locator('.ash-sessions-activity-host.side');
+		const navigation = rail.locator('.ash-sessions-activity-content');
+		const actions = () => navigation.getByRole('button').evaluateAll(buttons => buttons.map(button => button.closest<HTMLElement>('[data-action-id]')?.dataset.actionId));
+		const bots = navigation.getByRole('button', { name: '机器人', exact: true });
+		const newConversation = navigation.locator('[data-action-id="sessions.newSession"]').getByRole('button');
+		const botsPage = page.locator('.ash-bots-page');
+		for (const side of ['left', 'right'] as const) {
+			if (side === 'right') {
+				const settings = await readUserSettings(page);
+				await writeUserSettings(page, JSON.stringify({ ...JSON.parse(settings.content), 'sessions.activityBar.location': side }), settings.revision);
+			}
+			await expect(sidebar).toHaveAttribute('data-activity-bar-side', side);
+			await expect(bots).toBeVisible();
+			const order = await actions();
+			await bots.press('Enter');
+			await expect(botsPage).toBeVisible();
+			await expect(sidebar).toHaveAttribute('data-activity-bar-side', side);
+			await expect(bots).toHaveAttribute('aria-current', 'page');
+			await expect.poll(actions).toEqual(order);
+			await expect(rail.getByRole('button', { name: '账户', exact: true })).toBeVisible();
+			await testInfo.attach(`bots-activity-bar-${side}`, { body: await sidebar.screenshot(), contentType: 'image/png' });
+			await newConversation.press('Enter');
+			await expect(botsPage).toBeHidden();
+			await expect(sidebar).toHaveAttribute('data-activity-bar-side', side);
+		}
+	});
 });
 
 test('Sessions discards an unavailable saved entry and completes restoration without losing the draft', async ({ application, target, workbench }) => {

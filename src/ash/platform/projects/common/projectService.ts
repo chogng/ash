@@ -22,6 +22,7 @@ export interface ProjectSummary extends ProjectAppearance {
 	readonly name: string;
 	readonly archived: boolean;
 	readonly sessionCount: number;
+	readonly defaultTeamId?: string;
 }
 
 export interface Project extends ProjectSummary {
@@ -39,6 +40,8 @@ export interface IProjectService {
 	readonly onDidChange: Event<void>;
 	list(scope?: ProjectScope): Promise<readonly ProjectSummary[]>;
 	read(id: string, scope?: ProjectScope): Promise<Project>;
+	ensureDefaultTeam?(projectId: string, coordinatorResponsibility: string): Promise<Project>;
+	removeBot?(projectId: string, memberId: string, expectedTeamRevision: number, coordinatorResponsibility: string): Promise<void>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope, appearance?: ProjectAppearance): Promise<Project>;
 	/** Adds a saved Session using the current project revision. */
 	addSession(project: Project, sessionId: string): Promise<Project>;

@@ -83,6 +83,11 @@ pub enum TeamCommand {
     RemoveMember {
         agent_id: AgentId,
     },
+    /// Project roster cleanup updates the coordinator in the same revision as removal.
+    RemoveMembersWithFallback {
+        agent_ids: Vec<AgentId>,
+        fallback: TeamMember,
+    },
     SetCoordinator {
         agent_id: AgentId,
     },
@@ -300,7 +305,10 @@ impl TeamCoordinator {
         }
         if !matches!(request.command, TeamCommand::Create { .. }) {
             if team.status == TeamStatus::Archived
-                && !matches!(request.command, TeamCommand::Restore)
+                && !matches!(
+                    request.command,
+                    TeamCommand::Restore | TeamCommand::RemoveMembersWithFallback { .. }
+                )
             {
                 return Err(TeamError::InvalidInput(
                     "Archived Team must be restored before editing".into(),
@@ -327,6 +335,22 @@ impl TeamCoordinator {
                     team.members
                         .remove(agent_id)
                         .ok_or_else(|| TeamError::NotFound(agent_id.to_string()))?;
+                }
+                TeamCommand::RemoveMembersWithFallback {
+                    agent_ids,
+                    fallback,
+                } => {
+                    let coordinator_removed = agent_ids.contains(&team.coordinator_id);
+                    for agent_id in agent_ids {
+                        team.members
+                            .remove(agent_id)
+                            .ok_or_else(|| TeamError::NotFound(agent_id.to_string()))?;
+                    }
+                    if coordinator_removed {
+                        team.coordinator_id = fallback.agent_id.clone();
+                        team.members
+                            .insert(fallback.agent_id.clone(), fallback.clone());
+                    }
                 }
                 TeamCommand::SetCoordinator { agent_id } => team.coordinator_id = agent_id.clone(),
                 TeamCommand::Archive => team.status = TeamStatus::Archived,

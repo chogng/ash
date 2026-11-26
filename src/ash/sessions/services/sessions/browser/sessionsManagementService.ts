@@ -1,8 +1,11 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { SessionsRecentWorkspacesService } from './sessionsRecentWorkspacesService.js';
 import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
+import { ITeamsManagementService } from '../../teams/common/teamsManagement.js';
+import { projectBotKind, type ProjectBot, type TeamMember } from '../../teams/common/team.js';
 import { parseSessionEnvironment } from '../common/sessionEnvironment.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -63,6 +66,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		@IAgentConnection private readonly localHost?: IAgentConnection,
 		@ISecretStorageService private readonly windowSecrets?: ISecretStorageService,
 		@IProjectService private readonly projects?: IProjectService,
+		@ITeamsManagementService private readonly teams?: ITeamsManagementService,
 	) {
 		super();
 		this.recentWorkspaces = storage && new SessionsRecentWorkspacesService(storage);
@@ -220,6 +224,35 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	listAgents(): Promise<readonly ChatAgent[]> {
 		return this.creationProvider().listAgents();
+	}
+
+	async listProjectBots(target: { readonly projectId?: string; readonly sessionId?: string; }): Promise<readonly ProjectBot[]> {
+		if (!this.projects || !this.teams || (!target.projectId && !target.sessionId)) return [];
+		if (target.sessionId && parseSessionIdentity(target.sessionId, this.defaultProviderId).providerId !== this.defaultProviderId) return [];
+		const candidates = await (target.projectId ? this.projects.read(target.projectId, 'code').then(project => [project])
+			: this.projects.list('code').then(projects => Promise.all(projects.filter(project => !project.archived && project.defaultTeamId && project.sessionCount)
+				.map(project => this.projects!.read(project.id, 'code'))))).catch(error => {
+					// Some renderer connections can run Code tasks without access to the Project catalog.
+					if (error instanceof Error && error.cause instanceof AppServerRemoteError && error.cause.errorName === 'PermissionRequired') return [];
+					throw error;
+				});
+		const rosters = await Promise.all(candidates.map(async project => {
+			if (project.archived || !project.defaultTeamId || target.sessionId && !project.sessionIds.includes(target.sessionId)) return [];
+			const team = await this.teams!.read(project.defaultTeamId);
+			return team.status === 'active' ? team.members.map(member => ({ projectId: project.id, projectName: project.name, member })) : [];
+		}));
+		return rosters.flat();
+	}
+
+	async forkProjectBot(source: IActiveSessionThread, bot: ProjectBot, sourceSequence: number, commandId: string): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+		const { sessionId } = source.session;
+		if (!this.localHost || parseSessionIdentity(sessionId, this.defaultProviderId).providerId !== this.defaultProviderId) {
+			throw new Error(localize('sessions.projectBots.hostUnavailable', 'This task belongs to another Agent host.'));
+		}
+		return this.localHost.thread.fork({
+			sessionId, threadId: source.threadId, target: 'projectBot', projectId: bot.projectId,
+			memberId: bot.member.agentId, sourceSequence, commandId, title: bot.member.name,
+		});
 	}
 
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
@@ -433,7 +466,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		// The fork always inherits the source conversation's Agent.
 		if (current.forkSource) return;
-		if (current.agent?.name === agent?.name && current.agent?.sourceId === agent?.sourceId) return;
+		if (current.agent?.name === agent?.name && current.agent?.sourceId === agent?.sourceId
+			&& current.agent?.builtIn === agent?.builtIn && current.agent?.userDefined === agent?.userDefined) return;
 		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, agent } : session);
 		this._onDidChange.fire();
 	}
@@ -452,7 +486,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				projectId: options?.projectId ?? (!changedHost && selection === current.workspace ? current.projectId : undefined),
 				environment: options?.environment ?? (changedHost || options?.clearEnvironment ? undefined : current.environment),
 				devContainer: options?.devContainer === true, branchName: options?.branchName,
-				...(changedHost ? { model: undefined, modelSelectionKind: undefined, modelDefaults: undefined, agent: undefined } : {}),
+				...(changedHost ? { model: undefined, modelSelectionKind: undefined, modelDefaults: undefined, agent: current.agent?.builtIn ? current.agent : undefined } : {}),
 			} : session);
 		this._onDidChange.fire();
 	}
@@ -476,6 +510,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				if (session.projectId && (!project || project.archived)) {
 					throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
 				}
+				let coordinator: TeamMember | undefined;
+				if (project && project.defaultTeamId && session.kind !== 'chat' && !session.agent && !session.forkSource) {
+					const team = await this.teams?.read(project.defaultTeamId);
+					coordinator = team?.status === 'active' ? team.members.find(member => member.agentId === team.coordinatorId) : undefined;
+					if (!coordinator || projectBotKind(coordinator.role) !== 'agent') {
+						throw new Error(localize('sessions.projectBots.defaultUnavailable', 'Choose an available default Bot in this project.'));
+					}
+				}
 				let environmentVariables: Readonly<Record<string, string>> | undefined;
 				if (session.environment?.hasVariables) {
 					const id = session.environment.id;
@@ -498,8 +540,15 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const workspace = session.workspace;
 				const additionalFolders = session.environment?.folders.filter(folder =>
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
-				const active = await this.createSession(session.title, workspace, session.agent, session.creationId ?? untitledSessionId, session.providerId, {
+				const role = coordinator?.role;
+				const agent: ChatAgent | undefined = session.agent ?? (role?.type === 'exact' ? {
+					name: role.name, description: coordinator!.responsibility,
+					...(role.source.type === 'builtIn' ? { builtIn: true as const }
+						: role.source.type === 'user' ? { userDefined: true as const } : { sourceId: role.source.id }),
+				} : undefined);
+				const active = await this.createSession(session.title, workspace, agent, session.creationId ?? untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
+					agentId: coordinator?.agentId,
 					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, kind: session.kind,
 					catalogOnly: session.kind === 'chat' ? true : undefined,
 				}, session.forkSource);
@@ -584,7 +633,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	async startNewSession(title = 'New Chat', background?: Parameters<ISessionsManagementService['startNewSession']>[1]): Promise<IActiveSessionThread> {
 		const revision = background ? undefined : ++this.selectionRevision;
-		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, background?.creationId ?? createUuid(), background?.providerId, background?.creation);
+		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), background?.agent, background?.creationId ?? createUuid(), background?.providerId, background?.creation);
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		if (revision === this.selectionRevision) {
 			this._active = active;

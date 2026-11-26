@@ -53,6 +53,12 @@ use crate::protocol::agent::AgentRoleEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentRoleListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleUserCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleUserDeleteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleUserUpdateParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentThread;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentToolCapabilityDto;
@@ -2247,6 +2253,8 @@ use crate::protocol::plugins::PluginsChanged;
 use crate::protocol::projects::ProjectAppearanceFieldDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectAppearanceUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectBotRemoveParams;
 use crate::protocol::projects::ProjectChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectCommandDispositionDto;
@@ -2291,6 +2299,8 @@ use crate::protocol::projects::ProjectSessionMutationParams;
 use crate::protocol::projects::ProjectStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSummaryDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectTeamEnsureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
@@ -4261,6 +4271,21 @@ client_methods! {
         response: AgentRoleCatalogResult,
         serialization: GlobalSharedRead,
     },
+    AgentRoleUserCreate => "agent/roles/createUser" {
+        params: AgentRoleUserCreateParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    AgentRoleUserUpdate => "agent/roles/updateUser" {
+        params: AgentRoleUserUpdateParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    AgentRoleUserDelete => "agent/roles/deleteUser" {
+        params: AgentRoleUserDeleteParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
     AgentCapabilitiesRead => "agent/capabilities/read" {
         params: EmptyParams,
         response: AgentCapabilitiesReadResult,
@@ -4464,6 +4489,16 @@ client_methods! {
     ProjectDetailsUpdate => "project/details/update" {
         params: ProjectDetailsUpdateParams,
         response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
+    ProjectTeamEnsure => "project/team/ensure" {
+        params: ProjectTeamEnsureParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
+    ProjectBotRemove => "project/bots/remove" {
+        params: ProjectBotRemoveParams,
+        response: (),
         serialization: GlobalExclusive,
     },
     ProjectAppearanceUpdate => "project/appearance/update" {
@@ -7286,6 +7321,9 @@ typescript_bindings! {
     AgentRoleEntry,
     AgentRoleListResult,
     AgentRoleCatalogResult,
+    AgentRoleUserCreateParams,
+    AgentRoleUserUpdateParams,
+    AgentRoleUserDeleteParams,
     crate::protocol::agent::AgentRoleDefinition,
     crate::protocol::agent::AgentRoleLaunch,
     AgentCapabilitiesReadResult,
@@ -7947,6 +7985,8 @@ typescript_bindings! {
     ProjectReadResult,
     ProjectCreateParams,
     ProjectDetailsUpdateParams,
+    ProjectTeamEnsureParams,
+    ProjectBotRemoveParams,
     ProjectAppearanceFieldDto,
     ProjectAppearanceUpdateParams,
     ProjectRootAddParams,

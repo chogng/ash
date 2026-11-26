@@ -30,7 +30,7 @@ class Provider extends Disposable implements ISessionsProvider {
 	createCount = 0;
 	subscribeCount = 0;
 	async list(): Promise<readonly ISession[]> { return this.items; }
-	async listAgents(): Promise<readonly ChatAgent[]> { return []; }
+	async listAgents(): ReturnType<ISessionsProvider['listAgents']> { return []; }
 	async readCatalog(id: string): Promise<ISession | undefined> { return this.items.find(session => session.sessionId === id); }
 	async subscribe(value: ISession): Promise<ISession> { this.subscribeCount++; return { ...value, agentTree: [] }; }
 	async unsubscribe(): Promise<void> { }

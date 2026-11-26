@@ -96,6 +96,7 @@ export class SessionsView extends ViewPane {
 			presentation = {
 				createProject: () => this.projectDialogs.showCodeProjectDialog(this.element),
 				editProject: (id: string, restoreFocus: () => void) => this.projectDialogs.showCodeProjectDialog(this.element, { id, restoreFocus }),
+				manageProjectBots: (id: string, restoreFocus: () => void) => this.projectDialogs.showCodeProjectBotsDialog(this.element, { id, restoreFocus }),
 			};
 			this._register(toDisposable(() => this.projectDialogs.close(this.element)));
 		}

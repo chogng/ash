@@ -6,6 +6,7 @@ use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::projects::ProjectAppearanceFieldDto;
 use ash_app_server_protocol::protocol::projects::ProjectAppearanceUpdateParams;
+use ash_app_server_protocol::protocol::projects::ProjectBotRemoveParams;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
 use ash_app_server_protocol::protocol::projects::ProjectCommandDispositionDto;
 use ash_app_server_protocol::protocol::projects::ProjectConversationMembership;
@@ -24,6 +25,7 @@ use ash_app_server_protocol::protocol::projects::ProjectRootRemoveParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootUpdateParams;
 use ash_app_server_protocol::protocol::projects::ProjectScopeDto;
 use ash_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
+use ash_app_server_protocol::protocol::projects::ProjectTeamEnsureParams;
 use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
 use ash_projects::ProjectCommandRequest;
@@ -33,7 +35,22 @@ use ash_projects::ProjectError;
 use ash_projects::ProjectMaterial;
 use ash_projects::ProjectRoot;
 use ash_projects::ProjectScope;
+use ash_protocol::AgentId;
+use ash_protocol::AgentRoleSelection;
+use ash_protocol::AgentRoleSource;
+use ash_protocol::CommandId;
+use ash_protocol::ProjectId;
+use ash_protocol::TeamId;
+use ash_teams::Team;
+use ash_teams::TeamCommand;
+use ash_teams::TeamCommandRequest;
+use ash_teams::TeamCoordinator;
+use ash_teams::TeamError;
+use ash_teams::TeamMember;
+use ash_teams::TeamStatus;
 use serde_json::Value;
+use sha2::Digest;
+use sha2::Sha256;
 use std::path::PathBuf;
 
 /// Borrows only the projects domain services for one request.
@@ -41,6 +58,7 @@ use std::path::PathBuf;
 pub(super) struct ProjectRequestProcessor<'a> {
     env_runtime: &'a super::Arc<super::RwLock<super::EnvRuntime>>,
     projects: &'a Option<super::Arc<ash_projects::ProjectCoordinator>>,
+    teams: &'a Option<super::Arc<TeamCoordinator>>,
     threads: &'a super::Arc<super::ThreadController>,
     updates: &'a super::Arc<super::UpdateBroker>,
 }
@@ -49,12 +67,14 @@ impl<'a> ProjectRequestProcessor<'a> {
     pub(super) fn new(
         env_runtime: &'a super::Arc<super::RwLock<super::EnvRuntime>>,
         projects: &'a Option<super::Arc<ash_projects::ProjectCoordinator>>,
+        teams: &'a Option<super::Arc<TeamCoordinator>>,
         threads: &'a super::Arc<super::ThreadController>,
         updates: &'a super::Arc<super::UpdateBroker>,
     ) -> Self {
         Self {
             env_runtime,
             projects,
+            teams,
             threads,
             updates,
         }
@@ -62,6 +82,169 @@ impl<'a> ProjectRequestProcessor<'a> {
 }
 
 impl<'a> ProjectRequestProcessor<'a> {
+    pub(super) fn project_team_ensure(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ProjectTeamEnsureParams = decode(params)?;
+        let project = self
+            .project_coordinator(connection)?
+            .read(&params.project_id)
+            .map_err(project_error)?;
+        if !connection.allows_team_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        if !project.is_active() || project.scope() != ProjectScope::Code {
+            return Err(project_error(ProjectError::InvalidTransition(
+                "an active Code Project is required".into(),
+            )));
+        }
+        if project.default_team_id.is_some() {
+            return result(&ProjectMutationResult {
+                disposition: ProjectCommandDispositionDto::Replayed,
+                project: project_projection::project(&project),
+            });
+        }
+        let teams = self
+            .teams
+            .as_deref()
+            .ok_or_else(|| RpcError::new(-32100, AppServerErrorName::TeamsUnavailable))?;
+        // A stable creation identity recovers a Team committed before the Project link.
+        let digest = project_team_digest(&params.project_id);
+        let team_id = TeamId::new(format!("project-team:{digest}")).expect("valid Project Team ID");
+        match teams.read(&team_id) {
+            Ok(_) => {}
+            Err(TeamError::NotFound(_)) => {
+                let ash = project_ash_member(&digest, params.coordinator_responsibility);
+                teams
+                    .apply(&TeamCommandRequest {
+                        command_id: CommandId::new(format!("project-team-create:{digest}"))
+                            .expect("valid command ID"),
+                        team_id: team_id.clone(),
+                        expected_revision: 0,
+                        command: TeamCommand::Create {
+                            name: project.name,
+                            description: String::new(),
+                            coordinator_id: ash.agent_id.clone(),
+                            members: vec![ash],
+                        },
+                    })
+                    .map_err(super::team_operations::team_error)?;
+            }
+            Err(error) => return Err(super::team_operations::team_error(error)),
+        }
+        self.apply_project(
+            connection,
+            ProjectCommandRequest {
+                command_id: CommandId::new(format!("project-team-link:{digest}"))
+                    .expect("valid command ID"),
+                project_id: params.project_id,
+                expected_revision: project.revision,
+                command: ProjectCommand::SetDefaultTeam { team_id },
+            },
+        )
+    }
+
+    pub(super) fn project_bot_remove(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ProjectBotRemoveParams = decode(params)?;
+        let project = self
+            .project_coordinator(connection)?
+            .read(&params.project_id)
+            .map_err(project_error)?;
+        if !connection.allows_team_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        if !project.is_active() || project.scope() != ProjectScope::Code {
+            return Err(invalid_project_reference());
+        }
+        let Some(team_id) = project.default_team_id else {
+            return result(&());
+        };
+        let teams = self.teams.as_deref().ok_or_else(teams_unavailable)?;
+        let team = teams
+            .read(&team_id)
+            .map_err(super::team_operations::team_error)?;
+        if team.revision != params.expected_team_revision {
+            return Err(super::team_operations::team_error(
+                TeamError::RevisionConflict,
+            ));
+        }
+        let Some(member) = team.members.get(&params.member_id) else {
+            return result(&());
+        };
+        if team.status != TeamStatus::Active || member.role == AgentRoleSelection::Default {
+            return Err(invalid_project_reference());
+        }
+        remove_project_bots(
+            teams,
+            team,
+            vec![params.member_id],
+            params.command_id,
+            &project_team_digest(&params.project_id),
+            &params.coordinator_responsibility,
+        )?;
+        result(&())
+    }
+
+    /// Removes a definition from every Project roster before its profile file is deleted.
+    pub(super) fn remove_user_bot_from_projects(
+        &self,
+        name: &str,
+        coordinator_responsibility: &str,
+    ) -> Result<(), RpcError> {
+        let Some(projects) = self.projects.as_deref() else {
+            return Ok(());
+        };
+        let role = AgentRoleSelection::Exact {
+            source: AgentRoleSource::User,
+            name: name.to_owned(),
+        };
+        for project in projects.list().map_err(project_error)? {
+            let Some(team_id) = project.default_team_id.as_ref() else {
+                continue;
+            };
+            let teams = self.teams.as_deref().ok_or_else(teams_unavailable)?;
+            let team = match teams.read(team_id) {
+                Ok(team) => team,
+                Err(TeamError::NotFound(_)) => continue,
+                Err(error) => return Err(super::team_operations::team_error(error)),
+            };
+            let member_ids = team
+                .members
+                .values()
+                .filter(|member| member.role == role)
+                .map(|member| member.agent_id.clone())
+                .collect::<Vec<_>>();
+            if member_ids.is_empty() {
+                continue;
+            }
+            let digest = project_team_digest(&project.project_id);
+            let command_id =
+                CommandId::new(format!("project-bot-delete:{digest}:{}", team.revision))
+                    .expect("valid project roster cleanup command ID");
+            remove_project_bots(
+                teams,
+                team,
+                member_ids,
+                command_id,
+                &digest,
+                coordinator_responsibility,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(super) fn project_list(
         &self,
         connection: &ConnectionState,
@@ -416,6 +599,53 @@ fn mutation_result(command: &ProjectCommandResult) -> ProjectMutationResult {
 
 fn projects_unavailable() -> RpcError {
     RpcError::new(-32094, AppServerErrorName::ProjectsUnavailable)
+}
+
+fn teams_unavailable() -> RpcError {
+    RpcError::new(-32100, AppServerErrorName::TeamsUnavailable)
+}
+
+fn project_team_digest(project_id: &ProjectId) -> String {
+    format!("{:x}", Sha256::digest(project_id.as_str()))
+}
+
+fn project_ash_member(digest: &str, responsibility: String) -> TeamMember {
+    TeamMember {
+        agent_id: AgentId::new(format!("project-coordinator:{digest}"))
+            .expect("valid Project coordinator ID"),
+        name: "Ash".into(),
+        responsibility,
+        role: AgentRoleSelection::Default,
+    }
+}
+
+fn remove_project_bots(
+    teams: &TeamCoordinator,
+    team: Team,
+    agent_ids: Vec<AgentId>,
+    command_id: CommandId,
+    project_digest: &str,
+    coordinator_responsibility: &str,
+) -> Result<(), RpcError> {
+    let ash = project_ash_member(project_digest, coordinator_responsibility.to_owned());
+    let fallback = team
+        .members
+        .get(&ash.agent_id)
+        .filter(|member| member.role == AgentRoleSelection::Default)
+        .cloned()
+        .unwrap_or(ash);
+    teams
+        .apply(&TeamCommandRequest {
+            command_id,
+            team_id: team.team_id,
+            expected_revision: team.revision,
+            command: TeamCommand::RemoveMembersWithFallback {
+                agent_ids,
+                fallback,
+            },
+        })
+        .map_err(super::team_operations::team_error)?;
+    Ok(())
 }
 
 fn invalid_project_reference() -> RpcError {

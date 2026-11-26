@@ -178,6 +178,9 @@ export interface IAgentSessionService {
 	listAgents(): Promise<Agent.AgentRoleListResult>;
 	/** Includes packaged workflow roles for Settings, without changing selectable root definitions. */
 	readRoleCatalog(): Promise<Agent.AgentRoleCatalog>;
+	createUserRole?(role: { readonly name: string; readonly description: string; readonly prompt: string; }): Promise<void>;
+	updateUserRole?(role: { readonly name: string; readonly expectedContentDigest: string; readonly description: string; readonly prompt: string; }): Promise<void>;
+	deleteUserRole?(role: { readonly name: string; readonly expectedContentDigest: string; readonly coordinatorResponsibility: string; }): Promise<void>;
 	read(params: Agent.SessionReadParams): Promise<Agent.SessionResult>;
 	readCatalog(params: Agent.SessionReadParams): Promise<Agent.SessionCatalogReadResult>;
 	list(): Promise<Agent.SessionListResult>;
@@ -207,6 +210,8 @@ export interface IAgentThreadService {
 		readonly threadId: string;
 		readonly title: string;
 	} & ({ readonly target: 'thread'; } | {
+		readonly target: 'projectBot'; readonly projectId: string; readonly memberId: string; readonly sourceSequence: number;
+	} | {
 		readonly target: 'session';
 		readonly comparison?: { readonly sourceSequence: number; readonly agent: { readonly sourceId: string; readonly name: string; }; readonly branchName: string; };
 	})): Promise<{ readonly sessionId: string; readonly threadId: string; }>;

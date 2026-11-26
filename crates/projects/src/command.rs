@@ -35,6 +35,9 @@ pub enum ProjectCommand {
     SetColor {
         color: Option<String>,
     },
+    SetDefaultTeam {
+        team_id: ash_protocol::TeamId,
+    },
     AddRoot {
         root: ProjectRoot,
     },

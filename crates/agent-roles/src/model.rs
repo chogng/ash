@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Product entry points allowed to launch a packaged role.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RoleLaunch {
     #[default]
@@ -17,6 +17,7 @@ pub enum RoleLaunch {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AgentRoleSource {
     BuiltIn,
+    User,
     Directory { id: String },
 }
 

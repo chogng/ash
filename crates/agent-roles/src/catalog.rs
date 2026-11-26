@@ -3,7 +3,9 @@ use crate::model::AgentRoleCatalogSnapshot;
 use crate::model::AgentRoleDiagnostic;
 use crate::model::AgentRoleDiagnosticCode;
 use crate::model::AgentRoleSource;
+use serde::Serialize;
 use std::fs;
+use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
@@ -12,10 +14,22 @@ use std::sync::Arc;
 const AGENT_DIRECTORY: &str = ".ash/agents";
 const MAX_ENTRIES: usize = 64;
 const MAX_FILE_BYTES: usize = 32 * 1024;
+
+#[derive(Debug)]
+pub enum UserRoleMutationError {
+    RevisionConflict,
+    Io(io::Error),
+}
+
+impl From<io::Error> for UserRoleMutationError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
 /// Refreshable catalog for one directory's Agent definitions.
 pub struct AgentRoleCatalog {
     source: AgentRoleSource,
-    dir_root: PathBuf,
+    source_root: PathBuf,
     snapshot: Arc<AgentRoleCatalogSnapshot>,
 }
 
@@ -24,11 +38,18 @@ impl AgentRoleCatalog {
         let source = AgentRoleSource::Directory {
             id: source_id.into(),
         };
-        let dir_root = dir_root.as_ref().to_path_buf();
-        let (entries, diagnostics) = scan(&source, &dir_root);
+        Self::from_source(source, dir_root.as_ref().join(AGENT_DIRECTORY))
+    }
+
+    pub fn discover_user(home: &Path) -> Self {
+        Self::from_source(AgentRoleSource::User, home.join("agents"))
+    }
+
+    fn from_source(source: AgentRoleSource, source_root: PathBuf) -> Self {
+        let (entries, diagnostics) = scan(&source, &source_root);
         Self {
             source,
-            dir_root,
+            source_root,
             snapshot: Arc::new(AgentRoleCatalogSnapshot::new(1, entries, diagnostics)),
         }
     }
@@ -38,7 +59,7 @@ impl AgentRoleCatalog {
     }
 
     pub fn refresh(&mut self) -> Arc<AgentRoleCatalogSnapshot> {
-        let (entries, diagnostics) = scan(&self.source, &self.dir_root);
+        let (entries, diagnostics) = scan(&self.source, &self.source_root);
         if self.snapshot.entries() == entries && self.snapshot.diagnostics() == diagnostics {
             return Arc::clone(&self.snapshot);
         }
@@ -52,11 +73,155 @@ impl AgentRoleCatalog {
         ));
         Arc::clone(&self.snapshot)
     }
+
+    /// Creates a user role atomically. An identical retry returns the existing definition.
+    pub fn create_user_role(
+        &mut self,
+        name: &str,
+        description: &str,
+        prompt: &str,
+    ) -> io::Result<()> {
+        if self.source != AgentRoleSource::User
+            || !crate::definition::valid_name(name)
+            || matches!(name, "ash" | "advisor" | "codereview" | "issue")
+        {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "Invalid or reserved Agent name",
+            ));
+        }
+        #[derive(Serialize)]
+        struct Header<'a> {
+            name: &'a str,
+            description: &'a str,
+        }
+        validate_user_text_size(description, prompt)?;
+        let header =
+            serde_saphyr::to_string_with_options(&Header { name, description }, Default::default())
+                .map_err(io::Error::other)?;
+        let definition = format!("---\n{}\n---\n{}\n", header.trim_end(), prompt.trim());
+        let file_name = PathBuf::from(format!("{name}.md"));
+        if definition.len() > MAX_FILE_BYTES {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "Agent definition exceeds its size limit",
+            ));
+        }
+        let expected = crate::definition::parse(&self.source, &file_name, &definition)
+            .map_err(invalid_definition)?;
+        fs::create_dir_all(&self.source_root)?;
+        if !fs::symlink_metadata(&self.source_root)?.is_dir() {
+            return Err(io::Error::other(
+                "User Agent directory must be a real directory",
+            ));
+        }
+        let path = self.source_root.join(file_name);
+        if !path.exists()
+            && fs::read_dir(&self.source_root)?.take(MAX_ENTRIES).count() >= MAX_ENTRIES
+        {
+            return Err(io::Error::other("User Agent directory is full"));
+        }
+        ash_utils_path::ensure_file_atomically(&path, definition.as_bytes())?;
+        let catalog = self.refresh();
+        if catalog.get(name) != Some(&expected) {
+            return Err(io::Error::new(
+                ErrorKind::AlreadyExists,
+                "An Agent with this name already exists",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Replaces only editable text in an existing user definition, using its catalog digest as a revision.
+    pub fn update_user_role(
+        &mut self,
+        name: &str,
+        expected_content_digest: &str,
+        description: &str,
+        prompt: &str,
+    ) -> Result<(), UserRoleMutationError> {
+        validate_user_text_size(description, prompt)?;
+        let (path, text, role) = self.read_user_definition(name)?;
+        if role.description() == description.trim() && role.role_instructions() == prompt.trim() {
+            return Ok(());
+        }
+        if role.content_digest() != expected_content_digest {
+            return Err(UserRoleMutationError::RevisionConflict);
+        }
+        let updated =
+            crate::definition::edit_user_text(role.relative_path(), &text, description, prompt)
+                .map_err(invalid_definition)?;
+        if updated.len() > MAX_FILE_BYTES {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "Agent definition exceeds its size limit",
+            )
+            .into());
+        }
+        crate::definition::parse(&self.source, role.relative_path(), &updated)
+            .map_err(invalid_definition)?;
+        ash_utils_path::write_atomically(&path, updated.as_bytes())?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Deletes an existing user definition only when its revision still matches.
+    pub fn delete_user_role(
+        &mut self,
+        name: &str,
+        expected_content_digest: &str,
+    ) -> Result<(), UserRoleMutationError> {
+        let (path, _, role) = self.read_user_definition(name)?;
+        if role.content_digest() != expected_content_digest {
+            return Err(UserRoleMutationError::RevisionConflict);
+        }
+        fs::remove_file(path)?;
+        self.refresh();
+        Ok(())
+    }
+
+    fn read_user_definition(
+        &self,
+        name: &str,
+    ) -> Result<(PathBuf, String, AgentRole), UserRoleMutationError> {
+        if self.source != AgentRoleSource::User || !crate::definition::valid_name(name) {
+            return Err(io::Error::new(ErrorKind::InvalidInput, "Invalid Agent name").into());
+        }
+        if !fs::symlink_metadata(&self.source_root)?.is_dir() {
+            return Err(io::Error::other("User Agent directory must be a real directory").into());
+        }
+        let file_name = PathBuf::from(format!("{name}.md"));
+        let path = self.source_root.join(&file_name);
+        let metadata = fs::symlink_metadata(&path)?;
+        if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES as u64 {
+            return Err(UserRoleMutationError::RevisionConflict);
+        }
+        let text = fs::read_to_string(&path)?;
+        let role = crate::definition::parse(&self.source, &file_name, &text)
+            .map_err(|_| UserRoleMutationError::RevisionConflict)?;
+        Ok((path, text, role))
+    }
 }
 
-fn scan(source: &AgentRoleSource, dir_root: &Path) -> (Vec<AgentRole>, Vec<AgentRoleDiagnostic>) {
-    let source_root = dir_root.join(AGENT_DIRECTORY);
-    let metadata = match fs::symlink_metadata(&source_root) {
+fn validate_user_text_size(description: &str, prompt: &str) -> io::Result<()> {
+    if description.len() > 1024 || prompt.len() > MAX_FILE_BYTES {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "Agent definition exceeds its size limit",
+        ));
+    }
+    Ok(())
+}
+
+fn invalid_definition(error: AgentRoleDiagnostic) -> io::Error {
+    io::Error::new(ErrorKind::InvalidInput, error.message().to_owned())
+}
+
+fn scan(
+    source: &AgentRoleSource,
+    source_root: &Path,
+) -> (Vec<AgentRole>, Vec<AgentRoleDiagnostic>) {
+    let metadata = match fs::symlink_metadata(source_root) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), Vec::new()),
         Err(_) => {
@@ -80,7 +245,7 @@ fn scan(source: &AgentRoleSource, dir_root: &Path) -> (Vec<AgentRole>, Vec<Agent
             )],
         );
     }
-    let mut paths = match fs::read_dir(&source_root) {
+    let mut paths = match fs::read_dir(source_root) {
         Ok(entries) => entries
             .filter_map(Result::ok)
             .map(|entry| entry.path())
@@ -108,7 +273,7 @@ fn scan(source: &AgentRoleSource, dir_root: &Path) -> (Vec<AgentRole>, Vec<Agent
     }
     let mut entries = paths
         .into_iter()
-        .filter_map(|path| load_entry(source, &source_root, &path, &mut diagnostics))
+        .filter_map(|path| load_entry(source, source_root, &path, &mut diagnostics))
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name().cmp(right.name()));
     diagnostics.sort_by(|left, right| {

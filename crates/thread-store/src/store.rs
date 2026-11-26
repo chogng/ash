@@ -589,6 +589,9 @@ pub fn validate_binding_source(
         ash_protocol::ThreadOrigin::Fork {
             parent_sequence, ..
         }
+        | ash_protocol::ThreadOrigin::TeamMember {
+            parent_sequence, ..
+        }
         | ash_protocol::ThreadOrigin::Comparison {
             parent_sequence, ..
         }

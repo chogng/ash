@@ -48,6 +48,8 @@ import { readPendingCreationKind, writePendingCreationKind } from '../services/s
 import { SessionArtifactType } from '../../platform/agentHost/common/sessionArtifacts.js';
 import { agentHostResponseArtifactId } from '../../platform/agentHost/common/sessionArtifacts.js';
 import { IsSessionsWindowContext } from '../../workbench/common/contextkeys.js';
+import { createUuid } from '../../base/common/uuid.js';
+import { projectBotHandle, projectBotKind, type ProjectBot } from '../services/teams/common/team.js';
 
 const historyPageTurns = 20;
 
@@ -775,9 +777,17 @@ export class ChatWidgetModel extends Disposable {
 		return this.sessionService.listAgents();
 	}
 
+	async listProjectBots(): Promise<readonly ProjectBot[]> {
+		if (!this.isCodeConversation || this.commandInterpretation === 'literal') return [];
+		const target = this.selection.kind === 'untitled' ? { projectId: this.selection.session.projectId } : { sessionId: this.selection.active.session.sessionId };
+		return this.sessionService.listProjectBots?.(target) ?? [];
+	}
+
 	selectAgent(agent: ChatAgent | undefined): void {
 		if (this.selection.kind !== 'untitled') throw new Error('Start a new Chat to select an Agent');
-		if (this.selection.session.agent?.name === agent?.name && this.selection.session.agent?.sourceId === agent?.sourceId) return;
+		const current = this.selection.session.agent;
+		if (current?.name === agent?.name && current?.sourceId === agent?.sourceId
+			&& current?.builtIn === agent?.builtIn && current?.userDefined === agent?.userDefined) return;
 		const untitledSessionId = this.selection.session.untitledSessionId;
 		this.sessionService.setUntitledSessionAgent(untitledSessionId, agent);
 		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId)!;
@@ -813,6 +823,19 @@ export class ChatWidgetModel extends Disposable {
 				throw new Error(localize('chatReadOnlyBanner.archivedMessage', 'This conversation is archived.'));
 			}
 			this.assertAIEnabled();
+			const mention = /^\s*@([^\s@]+)(?:\s+([\s\S]*))?$/u.exec(text);
+			const projectBots = mention ? await this.awaitOperationPreparation(this.listProjectBots(), operation) : [];
+			const mentioned = mention && projectBots.filter(bot => {
+				const handle = projectBotHandle(bot.member.role).toLowerCase();
+				return mention[1]!.toLowerCase() === handle || mention[1] === `${projectBotHandle(bot.member.role)}:${encodeURIComponent(bot.projectId)}`;
+			});
+			if (mentioned && mentioned.length > 1) {
+				throw new Error(localize('sessions.projectBots.ambiguous', 'Several projects have this Bot. Select a project Bot from the suggestions after typing @.'));
+			}
+			const projectBot = mentioned ? mentioned[0] : undefined;
+			if (projectBot && !mention?.[2]?.trim() && !contexts?.length) {
+				throw new Error(localize('sessions.projectBots.messageRequired', 'Enter a message after the Bot name.'));
+			}
 			const automatic = this.isAutomaticModel;
 			const model = automatic ? undefined : this.selectedModel;
 			await this.awaitOperationPreparation(this.refreshModelAvailability(true), operation);
@@ -870,6 +893,17 @@ export class ChatWidgetModel extends Disposable {
 				...(!taskCommand && this.commandInterpretation && { commandInterpretation: this.commandInterpretation }),
 				skills,
 			};
+			if (projectBot) {
+				await this.submitToProjectBot(projectBot, active, thread, mention?.[2] ?? '', submission, () => this.requireCurrentOperation(operation));
+				if (backgroundDraftId) {
+					this.sessionService.completeBackgroundSend(backgroundDraftId, active);
+					if (this.isCurrentTarget(operation)) this.setState('ready');
+					return active;
+				}
+				if (this.isCurrentOperation(operation)) await this.refreshThread();
+				else this.recoverCancelledSubmission(operation, stateRequest);
+				return;
+			}
 			if (backgroundDraftId) {
 				await this.chatService.startTurn(submission);
 				this.sessionService.completeBackgroundSend(backgroundDraftId, active);
@@ -912,6 +946,44 @@ export class ChatWidgetModel extends Disposable {
 			this.setError(error);
 			throw error;
 		}
+	}
+
+	private async submitToProjectBot(bot: ProjectBot, source: IActiveSessionThread, thread: Thread, message: string,
+		submission: Parameters<IChatService['startTurn']>[0], requireCurrent: () => void): Promise<void> {
+		const kind = projectBotKind(bot.member.role);
+		if (kind !== 'agent' && (submission.contexts?.length || submission.skills?.length)) {
+			throw new Error(localize('sessions.projectBots.textOnly', 'Send this Bot a text message. It uses the context already in the task.'));
+		}
+		if (kind === 'advisor') {
+			if (activeTurn(thread)) throw new Error(localize('sessions.projectBots.advisorBusy', 'Wait for the current turn to finish before asking Advisor.'));
+			await this.chatService.consultAdvisor({ sessionId: source.session.sessionId, threadId: source.threadId, expectedSequence: thread.sequence, question: message.trim() });
+			return;
+		}
+		const fork = this.sessionService.forkProjectBot;
+		if (!fork) throw new Error(localize('sessions.projectBots.forkUnavailable', 'Project Bots are unavailable in this task.'));
+		const commandId = submission.commandId ?? `project-bot-${createUuid()}`;
+		const destination = await fork.call(this.sessionService, source, bot, thread.sequence, `${commandId}-bot`);
+		requireCurrent();
+		const { thread: next } = await this.chatService.readThread(destination.sessionId, destination.threadId, { type: 'latest', turnLimit: 1 });
+		requireCurrent();
+		if (kind === 'reviewer') {
+			await this.chatService.startReview({
+				...destination, commandId, expectedSequence: next.sequence, target: {
+					type: 'custom', instructions: localize('sessions.projectBots.reviewRequest', 'Review the saved changes in this task. Focus on: {0}', message.trim()),
+				}
+			});
+			return;
+		}
+		const prefixLength = submission.text.length - message.length;
+		const contexts = submission.contexts?.map(context => {
+			if (!context.reference) return context;
+			const { start, end } = context.reference;
+			return { ...context, reference: start < prefixLength ? undefined : { start: start - prefixLength, end: end - prefixLength } };
+		});
+		await this.chatService.startTurn({
+			...submission, ...destination, text: message, contexts, commandId, source: undefined,
+			expectedSequence: next.sequence, isNewSession: false, commandInterpretation: 'literal'
+		});
 	}
 
 

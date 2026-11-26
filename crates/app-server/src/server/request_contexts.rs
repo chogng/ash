@@ -740,6 +740,12 @@ impl super::terminal_operations::TerminalRequestProcessorContext for AppServer {
 }
 
 impl super::team_operations::TeamRequestProcessorContext for AppServer {
+    fn user_role_exists(&self, name: &str) -> bool {
+        self.home
+            .as_ref()
+            .is_some_and(|home| home.agents().get(name).is_some())
+    }
+
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
@@ -784,6 +790,52 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn resolve_project_bot(
+        &self,
+        project_id: &ash_protocol::ProjectId,
+        session_id: &ash_protocol::SessionId,
+        member_id: &ash_protocol::AgentId,
+    ) -> Result<Option<ash_protocol::AgentConfiguration>, super::RpcError> {
+        use ash_app_server_protocol::protocol::error::AppServerErrorName;
+        let unauthorized = || super::RpcError::new(-32073, AppServerErrorName::PermissionRequired);
+        let project = self
+            .projects
+            .as_ref()
+            .ok_or_else(unauthorized)?
+            .read(project_id)
+            .map_err(|_| unauthorized())?;
+        if !project.is_active()
+            || project.scope() != ash_projects::ProjectScope::Code
+            || !project.session_ids.contains(session_id)
+        {
+            return Err(unauthorized());
+        }
+        let team_id = project.default_team_id.ok_or_else(unauthorized)?;
+        let team = self
+            .teams
+            .as_ref()
+            .ok_or_else(unauthorized)?
+            .read(&team_id)
+            .map_err(super::team_operations::team_error)?;
+        if team.status != ash_teams::TeamStatus::Active {
+            return Err(unauthorized());
+        }
+        let member = team.members.get(member_id).ok_or_else(unauthorized)?;
+        let role = match &member.role {
+            ash_protocol::AgentRoleSelection::Exact {
+                source: ash_protocol::AgentRoleSource::BuiltIn,
+                name,
+            } if name == "reviewer" => &ash_protocol::AgentRoleSelection::Default,
+            role => role,
+        };
+        self.resolve_root_agent(role).map_err(|error| {
+            let mut response = super::core_error(error.clone());
+            if let core_api::CoreError::InvalidInput(detail) = error {
+                response.detail = Some(detail);
+            }
+            response
+        })
+    }
     fn resolve_turn_approval_mode(
         &self,
         session_id: &ash_protocol::SessionId,

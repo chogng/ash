@@ -15,6 +15,8 @@ export class TeamsManagementService implements ITeamsManagementService {
 		this.currentTeams.set(await this.provider.list());
 	}
 
+	read(teamId: string): Promise<Team> { return this.provider.read(teamId); }
+
 	async create(name: string, description: string, coordinatorName: string, responsibility: string, role: TeamRole = { type: 'default' }): Promise<Team> {
 		const coordinator: TeamMember = { agentId: `agent:${createUuid()}`, name: coordinatorName, responsibility, role };
 		const team = await this.provider.apply(`team-command:${createUuid()}`, `team:${createUuid()}`, 0, {

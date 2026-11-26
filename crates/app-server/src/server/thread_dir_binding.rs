@@ -403,6 +403,9 @@ impl GitTurnChangesRuntime {
             ThreadOrigin::Fork {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::TeamMember {
+                parent_thread_id, ..
+            }
             | ThreadOrigin::Comparison {
                 parent_thread_id, ..
             }
@@ -444,6 +447,7 @@ impl GitTurnChangesRuntime {
                 ));
             }
             (ThreadOrigin::Fork { .. }, ManagedDirKind::Directory)
+            | (ThreadOrigin::TeamMember { .. }, ManagedDirKind::Directory)
             | (ThreadOrigin::SideChat { .. }, ManagedDirKind::Directory)
             | (ThreadOrigin::Replacement { .. }, ManagedDirKind::Directory)
             | (ThreadOrigin::AgentSpawn { .. }, ManagedDirKind::Directory) => {
@@ -477,6 +481,12 @@ impl GitTurnChangesRuntime {
             }
             (
                 ThreadOrigin::Fork {
+                    parent_sequence, ..
+                },
+                ManagedDirKind::Git,
+            )
+            | (
+                ThreadOrigin::TeamMember {
                     parent_sequence, ..
                 },
                 ManagedDirKind::Git,

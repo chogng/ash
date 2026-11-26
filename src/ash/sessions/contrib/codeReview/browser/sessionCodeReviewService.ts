@@ -5,6 +5,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
+import type { AgentReviewTarget } from '../../../../platform/agentHost/common/agent.js';
 import { IAgentThreadService } from '../../../../platform/agentHost/common/agentService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -67,10 +68,21 @@ interface CodeReviewEntry extends CodeReviewConversation {
 	readonly detail: string;
 }
 
+interface ReviewerRun {
+	readonly id: string;
+	readonly title: string;
+	readonly focus: string;
+	readonly createdAt: number;
+	readonly threadId?: string;
+	readonly expectedSequence?: number;
+	readonly submitted?: true;
+}
+
 interface ReviewState {
 	readonly draft: CodeReviewDraft;
 	readonly batches: readonly CodeReviewBatch[];
 	readonly seen: readonly string[];
+	readonly reviewerRuns?: readonly ReviewerRun[];
 }
 
 const emptyDraft: CodeReviewDraft = { files: [], comments: [] };
@@ -98,6 +110,14 @@ function isBatch(value: unknown): value is CodeReviewBatch {
 		&& (value.pending === undefined || isRecord(value.pending)
 			&& (Number.isSafeInteger(value.pending.expectedSequence) || value.pending.expectedSequence === undefined && typeof value.title === 'string'))
 		&& isDraft(value) && value.comments.length > 0;
+}
+
+function isReviewerRun(value: unknown): value is ReviewerRun {
+	return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string'
+		&& typeof value.focus === 'string' && Number.isSafeInteger(value.createdAt)
+		&& (value.threadId === undefined || typeof value.threadId === 'string')
+		&& (value.expectedSequence === undefined || Number.isSafeInteger(value.expectedSequence))
+		&& (value.submitted === undefined || value.submitted === true && typeof value.threadId === 'string');
 }
 
 function storageKey(target: CodeReviewTarget): string {
@@ -195,6 +215,7 @@ export class SessionCodeReviewService extends Disposable {
 			draft: isDraft(value.draft) ? value.draft : emptyDraft,
 			batches: Array.isArray(value.batches) ? value.batches.filter(isBatch) : [],
 			seen: Array.isArray(value.seen) ? value.seen.filter((key): key is string => typeof key === 'string') : [],
+			reviewerRuns: Array.isArray(value.reviewerRuns) ? value.reviewerRuns.filter(isReviewerRun) : undefined,
 		} : emptyState;
 		this.stateCache = { key, state };
 		return state;
@@ -220,8 +241,10 @@ export class SessionCodeReviewService extends Disposable {
 			try { identity = JSON.parse(key.slice(storagePrefix.length)); } catch { return []; }
 			if (!Array.isArray(identity) || identity.length !== 2 || typeof identity[0] !== 'string' || typeof identity[1] !== 'string') return [];
 			const source = { sessionId: identity[0], threadId: identity[1] };
-			const conversations: CodeReviewConversation[] = [];
-			for (const batch of this.batches(source)) {
+			const state = this.read(source);
+			const conversations: CodeReviewConversation[] = (state.reviewerRuns ?? []).flatMap(run =>
+				run.submitted && run.threadId ? [{ source, threadId: run.threadId, title: run.title, createdAt: run.createdAt, firstRequestClientId: run.id }] : []);
+			for (const batch of state.batches) {
 				if (batch.pending) continue;
 				if (batch.threadId) {
 					conversations.push({
@@ -250,6 +273,55 @@ export class SessionCodeReviewService extends Disposable {
 	}
 	public isSending(target: CodeReviewTarget): boolean { return this.sending.has(storageKey(target)); }
 	public seenFiles(target: CodeReviewTarget): readonly string[] { return this.read(target).seen; }
+	public getReviewFocus(): string { return this.storage.get('sessions.bots.reviewFocus', StorageScope.WORKSPACE, ''); }
+
+	public async runReviewer(target: CodeReviewTarget, title: string, focus: string, isCurrent: () => boolean): Promise<void> {
+		const key = storageKey(target);
+		if (this.sending.has(key) || !isCurrent()) return;
+		this.sending.add(key);
+		this.changed.fire(key);
+		const save = (run: ReviewerRun) => {
+			const state = this.read(target);
+			const runs = state.reviewerRuns ?? [];
+			this.write(target, { ...state, reviewerRuns: [...runs.filter(previous => previous.id !== run.id), run] });
+			return this.storage.flush();
+		};
+		try {
+			const current = this.read(target).reviewerRuns?.find(run => !run.submitted);
+			let run: ReviewerRun = current ?? { id: `ash-reviewer-${generateUuid()}`, title, focus, createdAt: Date.now() };
+			if (!current) {
+				this.storage.store('sessions.bots.reviewFocus', focus, StorageScope.WORKSPACE, StorageTarget.USER);
+				await save(run);
+			}
+			if (!isCurrent()) return;
+			// Fork and first Turn reuse their persisted identities when the connection drops mid-request.
+			if (!run.threadId) {
+				const created = await this.threads.fork({ ...target, target: 'thread', title: run.title, commandId: `${run.id}-thread` });
+				run = { ...run, threadId: created.threadId };
+				await save(run);
+			}
+			if (!isCurrent()) return;
+			const destination = { sessionId: target.sessionId, threadId: run.threadId! };
+			const { thread } = await this.chat.readThread(destination.sessionId, destination.threadId, { type: 'latest', turnLimit: 1 });
+			if (!isCurrent()) return;
+			if (!thread.turns.some(turn => turn.items.some(item => item.type === 'userMessage' && item.clientId === run.id))) {
+				if (run.expectedSequence === undefined) {
+					run = { ...run, expectedSequence: thread.sequence };
+					await save(run);
+				}
+				if (!isCurrent()) return;
+				const reviewTarget: AgentReviewTarget = run.focus ? {
+					type: 'custom', instructions: localize('sessions.bots.reviewInstructions', 'Review all staged, unstaged and untracked changes in the current repository. Additional review focus: {0}', run.focus),
+				} : { type: 'uncommittedChanges' };
+				await this.chat.startReview({ ...destination, commandId: run.id, expectedSequence: run.expectedSequence!, target: reviewTarget });
+			}
+			await save({ ...run, submitted: true });
+			if (isCurrent()) this.select(destination);
+		} finally {
+			this.sending.delete(key);
+			this.changed.fire(key);
+		}
+	}
 
 	public setFileSeen(target: CodeReviewTarget, key: string, seen: boolean): void {
 		const state = this.read(target);

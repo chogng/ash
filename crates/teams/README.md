@@ -17,6 +17,10 @@ Team 回答“哪些 Agent 长期作为一组成员协作”；Team 任务记录
 
 Team 是 profile 范围的持久实体，可以被多个 Project 的任务使用。Team 与 Project、Session 的关联都是明确引用；关联不复制它们的状态，也不授予目录或工具权限。新增成员可以分配新的持久 `AgentId`，也可以明确选择已有身份；Team 创建与成员关系必须原子保存，不能留下只有名字、没有 Agent 身份的成员。成员关系保存职责名称、Agent 定义选择及成员状态。协调者必须是当前成员。成员的角色定义可以更新，但每个新 Thread 仍按启动时解析并冻结自己的模型、提示词、工具和 Skill；旧 Thread 不随成员表变化。
 
+Code Project 可保存一个默认 `TeamId`。添加第一个项目 Bot 时，App Server 确保 Team 存在，再保存 Project 引用。Team 的协调者是新建 Code 任务的默认 Bot，成员仍由 Team 管理。已存在的 Thread 保留启动时的 Agent 配置。
+
+在项目任务里显式 `@` 调用时，Advisor 使用当前 Thread 的咨询 Turn。其他 Bot 在同一个 Session 下，从用户提交时选定的上下文位置建立成员 Thread。App Server 校验项目、Session 和 Team 成员关系，执行继续使用 Session 的目录与授权。
+
 创建或修改 Team 使用命令身份和预期修订号，避免重复提交及覆盖并发编辑。归档 Team 阻止新任务，保留成员、讨论和任务历史。移除成员只影响后续任务；已启动任务使用启动时固定的成员表和授权范围，取消仍由所属 Session 的运行时处理。删除 Session 不删除 Team 或成员身份；Team 任务保留可解释的历史引用与原有结果摘要，不把已删除的 Thread 当成仍可读取的执行记录。
 
 ## 一次任务如何使用 Team

@@ -39,6 +39,13 @@ pub struct ForkThreadRequest {
     pub title: String,
 }
 
+/// Starts a distinct Team member in the source Session at an explicit history boundary.
+pub struct TeamMemberFork {
+    pub source_sequence: u64,
+    pub agent_id: ash_protocol::AgentId,
+    pub agent: Option<ash_protocol::AgentConfiguration>,
+}
+
 /// Pins a comparison fork to the source history and gives it an independent Agent and branch.
 pub struct ComparisonFork {
     pub source_sequence: u64,

@@ -12,8 +12,9 @@ name = "agent_roles"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-path = { workspace = true }
 serde = { workspace = true }
-serde-saphyr = { workspace = true }
+serde-saphyr = { workspace = true, features = ["serialize"] }
 sha2 = { workspace = true }
 
 [dev-dependencies]

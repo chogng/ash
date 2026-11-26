@@ -2,6 +2,125 @@ use super::*;
 use std::fs;
 
 #[test]
+fn creates_a_user_definition_without_replacing_an_existing_role() {
+    let home = tempfile::tempdir().unwrap();
+    let mut catalog = AgentRoleCatalog::discover_user(home.path());
+    for _ in 0..2 {
+        catalog
+            .create_user_role(
+                "release-helper",
+                "Helps with releases",
+                "Check release notes.",
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        catalog
+            .create_user_role("release-helper", "Other details", "Other instructions.")
+            .unwrap_err()
+            .kind(),
+        ErrorKind::AlreadyExists
+    );
+    assert_eq!(
+        catalog
+            .create_user_role("../escaped", "Description", "Instructions")
+            .unwrap_err()
+            .kind(),
+        ErrorKind::InvalidInput
+    );
+
+    let reopened = AgentRoleCatalog::discover_user(home.path()).snapshot();
+    let role = reopened.get("release-helper").unwrap();
+    assert_eq!(role.source(), &AgentRoleSource::User);
+    assert_eq!(role.role_instructions(), "Check release notes.");
+    assert!(reopened.diagnostics().is_empty());
+}
+
+#[test]
+fn edits_user_text_without_replacing_role_options_or_overwriting_a_newer_edit() {
+    let home = tempfile::tempdir().unwrap();
+    let directory = home.path().join("agents");
+    fs::create_dir(&directory).unwrap();
+    fs::write(directory.join("review-helper.md"), "---\nname: review-helper\ndescription: Initial description\nmodel: openai/gpt-5\ntools:\n  - read_file\nrequiredTools:\n  - read_file\n---\nInitial instructions\n").unwrap();
+    let mut catalog = AgentRoleCatalog::discover_user(home.path());
+    let initial = catalog.snapshot();
+    let digest = initial.get("review-helper").unwrap().content_digest();
+
+    for _ in 0..2 {
+        catalog
+            .update_user_role(
+                "review-helper",
+                digest,
+                "Revised description",
+                "Revised instructions\nSecond line",
+            )
+            .unwrap();
+    }
+    assert!(matches!(
+        catalog.update_user_role(
+            "review-helper",
+            digest,
+            "Stale description",
+            "Stale instructions"
+        ),
+        Err(UserRoleMutationError::RevisionConflict)
+    ));
+
+    let reopened = AgentRoleCatalog::discover_user(home.path()).snapshot();
+    let role = reopened.get("review-helper").unwrap();
+    assert_eq!(role.source(), &AgentRoleSource::User);
+    assert_eq!(role.description(), "Revised description");
+    assert_eq!(
+        role.role_instructions(),
+        "Revised instructions\nSecond line"
+    );
+    assert_ne!(role.content_digest(), digest);
+    assert_eq!(role.model(), Some("openai/gpt-5"));
+    assert_eq!(role.tools().unwrap(), ["read_file"]);
+    assert_eq!(role.required_tools(), ["read_file"]);
+}
+
+#[test]
+fn deletes_only_the_confirmed_user_role_revision() {
+    let home = tempfile::tempdir().unwrap();
+    let mut catalog = AgentRoleCatalog::discover_user(home.path());
+    catalog
+        .create_user_role(
+            "release-helper",
+            "Helps with releases",
+            "Check release notes.",
+        )
+        .unwrap();
+    let initial = catalog.snapshot();
+    let digest = initial.get("release-helper").unwrap().content_digest();
+    catalog
+        .update_user_role(
+            "release-helper",
+            digest,
+            "New release instructions",
+            "Check the changelog.",
+        )
+        .unwrap();
+    assert!(matches!(
+        catalog.delete_user_role("release-helper", digest),
+        Err(UserRoleMutationError::RevisionConflict)
+    ));
+    let current = catalog.snapshot();
+    catalog
+        .delete_user_role(
+            "release-helper",
+            current.get("release-helper").unwrap().content_digest(),
+        )
+        .unwrap();
+    assert!(
+        AgentRoleCatalog::discover_user(home.path())
+            .snapshot()
+            .get("release-helper")
+            .is_none()
+    );
+}
+
+#[test]
 fn discovers_a_typed_agent_role() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join(".ash/agents");

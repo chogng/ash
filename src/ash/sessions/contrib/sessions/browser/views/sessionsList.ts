@@ -115,7 +115,11 @@ const codeManagementIcons: typeof managementIcons = {
 };
 
 export type SessionsListPresentation = 'chat' | 'code'
-	| { readonly createProject: () => Promise<void>; readonly editProject: (id: string, restoreFocus: () => void) => Promise<void>; }
+	| {
+		readonly createProject: () => Promise<void>;
+		readonly editProject: (id: string, restoreFocus: () => void) => Promise<void>;
+		readonly manageProjectBots: (id: string, restoreFocus: () => void) => Promise<void>;
+	}
 	| { readonly createChatProject: () => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| {
@@ -230,6 +234,7 @@ export class SessionsList extends DomWidget {
 	private readonly entry: Extract<SessionsListPresentation, { openCommand: string; }> | undefined;
 	private readonly editCatalogProject: Extract<SessionsListPresentation, { catalog: SessionsCatalogListInput; }>['editProject'];
 	private readonly editCodeProject: Extract<SessionsListPresentation, { createProject: unknown; }>['editProject'] | undefined;
+	private readonly manageProjectBots: Extract<SessionsListPresentation, { createProject: unknown; }>['manageProjectBots'] | undefined;
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
@@ -322,6 +327,7 @@ export class SessionsList extends DomWidget {
 		this.editCatalogProject = contributed?.editProject;
 		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
 		this.editCodeProject = code?.editProject;
+		this.manageProjectBots = code?.manageProjectBots;
 		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
 		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
@@ -892,6 +898,7 @@ export class SessionsList extends DomWidget {
 	private showLocalProjectMenu(title: string, project: ProjectSummary, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
 		const editCode = this.editCodeProject;
 		const editChat = this.editCatalogProject;
+		const manageBots = this.manageProjectBots;
 		const edit = editCode ? (restoreFocus: () => void) => editCode(project.id, restoreFocus)
 			: editChat && ((restoreFocus: () => void) => editChat(async () => ({
 				project: await this.projectService.read(project.id, 'chat'),
@@ -899,14 +906,20 @@ export class SessionsList extends DomWidget {
 		this.showProjectMenu(project.id, title, {
 			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
 			remove: { removesContents: false, run: () => this.projectService.remove(project) },
-		}, row, anchor, edit);
+		}, row, anchor, edit, manageBots && (restoreFocus => manageBots(project.id, restoreFocus)));
 	}
 
 	private showProjectMenu(projectId: string, title: string, operations: SessionsCatalogProjectOperations,
-		row: ProjectMenuRow, anchor: ContextMenuAnchor, edit?: (restoreFocus: () => void) => Promise<void>): void {
+		row: ProjectMenuRow, anchor: ContextMenuAnchor, edit?: (restoreFocus: () => void) => Promise<void>,
+		manageBots?: (restoreFocus: () => void) => Promise<void>): void {
 		if (!this.menuContext) return;
 		const { archive, remove } = operations;
 		const trigger = row.getMenuTrigger(anchor);
+		const restoreFocus = () => {
+			const target = trigger ?? row.button;
+			if (target.isConnected) target.focus({ preventScroll: true });
+			else this.focus();
+		};
 		const pinned = this.projectPreferences.isPinned(projectId);
 		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
 			if (this.isDisposed) return;
@@ -918,11 +931,8 @@ export class SessionsList extends DomWidget {
 			actions: {
 				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
 				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
-				edit: edit && (() => edit(() => {
-					const target = trigger ?? row.button;
-					if (target.isConnected) target.focus({ preventScroll: true });
-					else this.focus();
-				})),
+				edit: edit && (() => edit(restoreFocus)),
+				manageBots: manageBots && (() => manageBots(restoreFocus)),
 				archive: archive && (() => runRemoval(archive)),
 				remove: remove && (async () => {
 					if (!await confirmProjectDelete(this.dialogs, title, remove.removesContents)) return;
