@@ -1,5 +1,7 @@
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../contrib/layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from '../contrib/editor/browser/addTabActions.js';
+import { NewTabCommandId } from '../contrib/editor/browser/newTabEditorInput.js';
+import { EditorReplacementTarget } from '../../workbench/services/editor/common/editorService.js';
 import { isRecord } from '../../base/common/types.js';
 import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
@@ -27,10 +29,8 @@ import { EditorHasMultipleToolsContext, Menus, SessionActivityBarVisibleContext 
 import { CanGoBackContext, CanGoForwardContext } from '../../workbench/contrib/sessions/common/contextkeys.js';
 import { ChatConversationPageContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext, SessionsEditorToolContext } from '../common/contextkeys.js';
 
-const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 const sessionsPartHidden = new RawContextKey<boolean>('sessions.sessionPartHidden', false);
 const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
-const showSessionTools = ContextKeyExpr.and(sessionTools.isEqualTo(true), ContextKeyExpr.not(IsNewSessionContext.key));
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
 export function registerLayoutActions(
@@ -45,7 +45,7 @@ export function registerLayoutActions(
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
 	const backEnabled = CanGoBackContext.bindTo(contextKeys);
 	const forwardEnabled = CanGoForwardContext.bindTo(contextKeys);
-	const codeAvailable = sessionTools.bindTo(contextKeys);
+	const codeTools = SessionsCodeEditorContext.isEqualTo(true);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const covered = conversationCovered.bindTo(contextKeys);
 	const sessionsHidden = sessionsPartHidden.bindTo(contextKeys);
@@ -58,9 +58,9 @@ export function registerLayoutActions(
 			sessionsHidden.set(!layout.isPartAvailable('sessions'));
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
-			codeAvailable.set(contextKeys.getValue(SessionsCodeEditorContext.key) === true);
 			panelVisible.set(layout.isPartVisible('panel'));
-			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
+			covered.set(contextKeys.getValue(SessionsCodeEditorContext.key) === true
+				&& layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
 			const selection = sessions.activeSelection;
 			isNewSession.set(!hasDesktopChatSource.get() && layout.isPartVisible('sessions') && selection?.kind === 'untitled' && !selection.session.forkSource);
 			hasUsableWorkspace.set(selection?.kind === 'untitled' && hasSelectedCodeWorkspace(selection.session)
@@ -82,7 +82,6 @@ export function registerLayoutActions(
 				sessionsHidden.reset();
 				backEnabled.reset();
 				forwardEnabled.reset();
-				codeAvailable.reset();
 				panelVisible.reset();
 				covered.reset();
 				isNewSession.reset();
@@ -195,26 +194,23 @@ export function registerLayoutActions(
 				id: 'ash.sessions.openSideChat',
 				title: localize2({ bundle: 'ash', key: 'sessions.layout.sideChat' }, 'Side Chat'),
 				icon: Lxicon.chat,
-				precondition: sessionTools.isEqualTo(true),
-				menu: [
-					{ id: Menus.TitleBarRightLayout, when: showSessionTools, group: '1_tools', order: 1 },
-					{ id: Menus.EmptyFileEditorActions, when: sessionTools.isEqualTo(true), group: 'navigation', order: 3 },
-				],
+				precondition: codeTools,
+				menu: { id: Menus.SessionsEmptyEditorGroupAddTab, when: codeTools, group: 'navigation', order: 3 },
 			});
 		}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			if (!layout.isPartAvailable('sessions') || layout.isPartVisible('customview') || !codeAvailable.get()) return;
+		override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+			if (contextKeys.getValue(SessionsCodeEditorContext.key) !== true) return;
 			const management = accessor.get(ISessionsManagementService);
 			const title = localize('chat.title.new', 'New Chat');
 			// The tool Part chooses its active group. A fresh draft gives each tab its own identity
 			// without changing the main Sessions selection.
 			const draft = management.createUntitledSession(title, undefined, undefined, false);
 			const input = new SessionSideChatEditorInput(draft.untitledSessionId, title, { draft });
-			await editor.openEditor(input, { pinned: true });
+			await editor.openEditor(input, { pinned: true }, target instanceof EditorReplacementTarget ? target : undefined);
 		}
 	}));
-	disposables.add(MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
+	disposables.add(MenusRegistry.appendMenuItem(Menus.SessionsEmptyEditorGroupAddTab, {
 		// Keep this entry disabled until a simulator host can open and own its view.
 		command: {
 			id: 'ash.sessions.openIOSSimulator',
@@ -222,9 +218,9 @@ export function registerLayoutActions(
 			icon: Lxicon.deviceMobile,
 			precondition: ContextKeyExpr.false(),
 		},
-		when: showSessionTools,
-		group: '1_tools',
-		order: 2,
+		when: codeTools,
+		group: 'navigation',
+		order: 5,
 	}));
 	for (const [id, title, icon, precondition, order] of [
 		[
@@ -271,7 +267,8 @@ export function registerDesktopEditorLayoutActions(
 	contextKeys: IContextKeyService,
 	layout: IAgentWorkbenchLayoutService,
 	editor: EditorParts,
-	openChatFiles: () => Promise<void>,
+	openChatFiles: (target?: EditorReplacementTarget) => Promise<void>,
+	openNewTab: (groupId?: number) => Promise<void>,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const editorVisible = editorVisibleContext.bindTo(contextKeys);
@@ -316,6 +313,8 @@ export function registerDesktopEditorLayoutActions(
 	const codeWhen = SessionsCodeEditorContext.isEqualTo(true);
 	const multipleTools = EditorHasMultipleToolsContext.isEqualTo(true);
 	const hideToolWhen = ContextKeyExpr.and(ContextKeyExpr.or(codeWhen, chatTools), multipleTools);
+	disposables.add(CommandsRegistry.register(NewTabCommandId, (_accessor, arg) =>
+		context.runOperation(() => openNewTab(isRecord(arg) && typeof arg.groupId === 'number' && Number.isSafeInteger(arg.groupId) ? arg.groupId : undefined))));
 	disposables.add(CommandsRegistry.register(hideToolId, (_accessor, arg) => {
 		const code = context.isDocumentContent;
 		if (!code && !contextKeys.contextMatchesRules(hideToolWhen)) return;
@@ -350,10 +349,10 @@ export function registerDesktopEditorLayoutActions(
 	}
 	disposables.add(
 		registerAddTabActions(
-			() => context.isDocumentContent
-				? run(() => controller.openFiles())
-				: contextKeys.contextMatchesRules(chatTools) && context.runOperation(openChatFiles),
-			() => run(() => controller.openChanges()),
+			target => context.isDocumentContent
+				? run(() => controller.openFiles(target))
+				: contextKeys.contextMatchesRules(chatTools) && context.runOperation(() => openChatFiles(target)),
+			target => run(() => controller.openChanges(target)),
 			ContextKeyExpr.or(codeWhen, chatTools)!,
 			codeWhen,
 		),

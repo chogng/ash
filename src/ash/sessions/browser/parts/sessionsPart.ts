@@ -57,6 +57,9 @@ export interface SessionsPartOptions {
 
 type AgentSessionView = SessionView<SessionsViewSelection, ISessionsConversationPane>;
 
+const sessionInfoAvailable = new RawContextKey<boolean>('sessions.infoAvailable', false);
+const sessionInfoVisible = new RawContextKey<boolean>('sessions.infoVisible', false);
+
 /** Hosts the shared session grid and its visible SessionViews. */
 export class SessionsPart extends Part implements ISessionsConversationService {
 	get newDraftVisible(): IObservable<boolean> { return this.options.newDraftVisible; }
@@ -73,6 +76,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private readonly entries = new Map<string, AgentSessionView>();
 	private activeAgentView: AgentSessionView | undefined;
 	private readonly splitActive: IContextKey<boolean>;
+	private readonly infoAvailable: IContextKey<boolean>;
 	private readonly infoVisible: IContextKey<boolean>;
 	private mainKeys: readonly string[] = [];
 	private kind: SessionsConversationKind = 'code';
@@ -92,42 +96,39 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IChatWindowService private readonly chatWindows: IChatWindowService,
-		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IChatViewFactory private readonly chatViewsFactory: IChatViewFactory,
 	) {
 		super(container, 'sessions', themeService, storageService);
-		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
-		this._register(toDisposable(() => this.infoVisible.reset()));
+		this.infoAvailable = sessionInfoAvailable.bindTo(contextKeys);
+		this.infoVisible = sessionInfoVisible.bindTo(contextKeys);
+		this._register(toDisposable(() => contextKeys.bufferChangeEvents(() => {
+			this.infoAvailable.reset();
+			this.infoVisible.reset();
+		})));
 		this._register(
-			CommandsRegistry.register('ash.sessions.toggleInfo', () => {
-				const pane = this.activeAgentView?.activeChat;
-				if (pane instanceof NewChatView) pane.toggleInfo();
-			}),
+			CommandsRegistry.register('ash.sessions.toggleInfo', () => this.activeInfoPane?.toggleInfo()),
 		);
 		const infoCommand = {
 			id: 'ash.sessions.toggleInfo',
 			title: localize2({ bundle: 'ash', key: 'sessions.info.toggle' }, 'Toggle session information'),
 			icon: Lxicon.railSession,
-			toggled: ContextKeyExpr.equals('sessions.infoVisible', true),
+			toggled: sessionInfoVisible.isEqualTo(true),
 		};
-		this._register(
-			MenusRegistry.appendMenuItems(
-				[Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
-					id,
-					item: {
-						command: infoCommand,
-						when: ContextKeyExpr.and(
-							ContextKeyExpr.equals('sessions.toolsAvailable', true),
-							id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
-						),
-						group: 'navigation',
-						order: -1,
-					},
-				})),
-			),
-		);
+		this._register(MenusRegistry.appendMenuItems([
+			{
+				id: Menus.SessionTitleBar,
+				item: {
+					command: infoCommand,
+					when: ContextKeyExpr.and(sessionInfoAvailable.isEqualTo(true), ContextKeyExpr.not(IsNewSessionContext.key)),
+					group: 'navigation',
+					order: -1,
+				},
+			},
+			{ id: MenuId.CommandPalette, item: { command: infoCommand, when: sessionInfoAvailable.isEqualTo(true) } },
+		]));
 		this.splitActive = new RawContextKey('sessions.splitActive', false).bindTo(contextKeys);
 		this._register(toDisposable(() => this.splitActive.reset()));
 		const splitCommands = [
@@ -231,7 +232,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.domNode.classList.toggle('desktop-chat-source', sourceId !== undefined);
 		this.reconcileGrid();
 		this.updateContentVisibility();
-		this.updateInfoContext();
 	}
 
 	setConversationKind(kind: SessionsConversationKind): Promise<void> {
@@ -241,6 +241,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			for (const view of this.entries.values()) {
 				if (!this.detachedViews.has(view)) view.setConversationKind(kind);
 			}
+			this.updateInfoContext();
 		};
 		// Entry commands may overlap while a composer flushes its pending edits.
 		this.switching = this.switching.then(switchKind, switchKind);
@@ -371,6 +372,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.splitActive.set(this.agentViewsVisible && entries.length > 1 && this.activeGridId !== undefined);
 		this.content.classList.toggle('single-chat', entries.length === 1);
 		this.grid.reconcile(entries.length ? entries : [{ id: 'empty', view: this.empty }], active, desktopChat === undefined);
+		this.updateInfoContext();
 	}
 
 	focusDraftPicker(picker: 'workspace' | 'environment'): void {
@@ -505,7 +507,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}
 		this.activeAgentView = active ? this.entries.get(sessionViewSelectionKey(active)) : undefined;
-		this.updateInfoContext();
 		this.reconcileGrid();
 		for (const view of removed) {
 			this.detachedViews.get(view)?.mount.close();
@@ -545,6 +546,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		for (const view of this.entries.values()) {
 			if (!this.detachedViews.has(view)) view.setVisible(this.agentViewsVisible);
 		}
+		this.updateInfoContext();
 	}
 
 	override layout(dimension: Dimension): void {
@@ -552,9 +554,19 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.grid.layout(bounds.width || dimension.width, bounds.height || dimension.height);
 	}
 
+	private get activeInfoPane(): NewChatView | undefined {
+		const view = this.activeAgentView;
+		if (!this.agentViewsVisible || !view || this.detachedViews.has(view)) return undefined;
+		const pane = view.activeChat;
+		return pane instanceof NewChatView ? pane : undefined;
+	}
+
 	private updateInfoContext(): void {
-		const pane = this.activeAgentView?.activeChat;
-		this.infoVisible.set(!this.desktopChatView && pane instanceof NewChatView && pane.infoVisible);
+		const pane = this.activeInfoPane;
+		this.contextKeys.bufferChangeEvents(() => {
+			this.infoAvailable.set(pane !== undefined);
+			this.infoVisible.set(pane?.infoVisible ?? false);
+		});
 	}
 
 	private createPane(

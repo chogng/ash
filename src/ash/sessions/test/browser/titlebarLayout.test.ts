@@ -85,20 +85,18 @@ suite('Sessions native titlebar layout', () => {
 		const conversation = page.locator('[data-part="sessions"]');
 		const editor = page.locator('[data-part="editor"]');
 		const editorRegion = titlebar.locator('.ash-sessions-titlebar-editor-region');
-		const emptyFileTab = editorRegion.getByRole('tab', { name: '文件', exact: true });
+		const newTabLabel = page.locator('.ash-editor-tab-strip:visible').getByRole('tab', { name: '新标签页', exact: true });
 		const emptyFileSearch = editor.getByRole('textbox', { name: '搜索文件或输入 URL', exact: true });
-		const emptyFiles = editor.locator('.ash-empty-file-editor:visible');
-		const files = editor.locator('[data-editor-tool="files"] .ash-editor-group')
-			.filter({ has: page.locator('.ash-empty-file-editor:visible') }).locator('.ash-editor-group-header');
-		const expectHostedTab = async (tabTop: number): Promise<void> => {
-			await expect(emptyFileTab).toHaveAttribute('aria-selected', 'true');
-			await expect.poll(async () => (await emptyFileTab.boundingBox())!.y).toBe(tabTop);
-			await expect(editorRegion.getByRole('button', { name: '添加标签页', exact: true })).toBeVisible();
-			await expect(files).toBeHidden();
+		const addTab = page.locator('.ash-editor-tab-strip:visible').getByRole('button', { name: '添加标签页', exact: true });
+		const expectEditorTab = async (): Promise<void> => {
+			await expect(newTabLabel).toBeVisible();
+			await expect(newTabLabel).toHaveAttribute('aria-selected', 'true');
+			await expect(page.locator('.ash-editor-tab-strip:visible').getByRole('tab')).toHaveCount(1);
+			await expect(addTab).toBeVisible();
 			await expect.poll(async () => {
-				const [content, pane] = await Promise.all([emptyFiles.boundingBox(), editor.boundingBox()]);
-				return content && pane ? Math.round(content.y - pane.y) : undefined;
-			}).toBe(0);
+				const [tab, pane] = await Promise.all([newTabLabel.boundingBox(), editor.boundingBox()]);
+				return !!tab && !!pane && tab.x >= pane.x;
+			}).toBe(true);
 		};
 		await expectCenteredTitlebarIcon(toggle);
 		await expect(toggle).toHaveCSS('border-radius', '8px');
@@ -109,7 +107,7 @@ suite('Sessions native titlebar layout', () => {
 		await expect(maximize).toHaveCount(0);
 		await toggle.press('Enter');
 		await expect(editor).toBeVisible();
-		await expect(emptyFileTab).toHaveAttribute('aria-selected', 'true');
+		await expectEditorTab();
 		await expect(emptyFileSearch).toBeFocused();
 		await expect(editor.getByRole('button', { name: '新建文件', exact: true })).toHaveCount(0);
 		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toHaveCount(0);
@@ -122,19 +120,17 @@ suite('Sessions native titlebar layout', () => {
 		expect(maxBounds.x + maxBounds.width).toBeLessThanOrEqual(chatBounds.x);
 		expect(maxBounds.y).toBe(chatBounds.y);
 		await expect(editor.locator('[data-action-id="sessions.toggleSessionPart"]')).toHaveCount(0);
-		const chatTabTop = (await emptyFileTab.boundingBox())!.y;
 		await toggle.press('ArrowLeft');
 		await expect(maximize).toBeFocused();
 		await maximize.press('Enter');
 		await expect(conversation).toBeHidden();
-		await expectHostedTab(chatTabTop);
-		await expect.poll(async () => (await editorRegion.boundingBox())!.x - (await editor.boundingBox())!.x).toBeCloseTo(0, 0);
+		await expectEditorTab();
 		await expect(restore).toBeFocused();
 		await expect(restore).toHaveAttribute('aria-pressed', 'true');
 		await expect.poll(() => restore.boundingBox()).toEqual(maxBounds);
 		await restore.press('Enter');
 		await expect(conversation).toBeVisible();
-		await expectHostedTab(chatTabTop);
+		await expectEditorTab();
 		await expect(maximize).toBeFocused();
 		await mode.getByRole('button', { name: '代码', exact: true }).click();
 		await expect(editor).toBeHidden();
@@ -153,53 +149,35 @@ suite('Sessions native titlebar layout', () => {
 		await page.mouse.move(16, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(editor).toBeVisible();
-		await expect(files).toBeHidden();
 		await expect(titlebar.locator('.ash-editor-group-header')).toHaveCount(0);
-		await expect(emptyFileTab).toHaveAttribute('aria-selected', 'true');
+		await expectEditorTab();
 		await expect(emptyFileSearch).toBeFocused();
 		await expect(editor.getByRole('button', { name: '新建文件', exact: true })).toBeVisible();
 		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toBeVisible();
-		const addTabName = { name: '添加标签页', exact: true };
-		const addTab = editorRegion.getByRole('button', addTabName);
-		const inlineAddTab = files.getByRole('button', addTabName);
-		const codeTabTop = (await emptyFileTab.boundingBox())!.y;
-		await expectHostedTab(codeTabTop);
-		await expect(inlineAddTab).toHaveCount(0);
 		await expect(editor.locator('[data-action-id="ash.sessions.maximizeTool"]')).toHaveCount(0);
-		await addTab.press('Enter');
+		await addTab.press('Shift+F10');
 		await expect(page.getByRole('menuitem', { name: '打开文件', exact: true })).toBeVisible();
 		await expect(page.getByRole('menuitem', { name: '打开更改', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(addTab).toBeFocused();
-		await expect(files.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
+		await expect(editor.locator('[data-action-id="ash.sessions.hideTool"]')).toHaveCount(0);
 		const originalWidth = (await editor.boundingBox())!.width;
 		await expectCenteredTitlebarIcon(maximize);
 		await maximize.press('Enter');
 		await expect(conversation).toBeHidden();
 		await expect(editor).toBeVisible();
-		await expectHostedTab(codeTabTop);
+		await expectEditorTab();
 		await expect.poll(async () => (await editor.boundingBox())!.width).toBeGreaterThan(originalWidth);
 		await restore.press('Enter');
 		await expect(conversation).toBeVisible();
-		await expectHostedTab(codeTabTop);
+		await expectEditorTab();
 		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);
 		await addTab.focus();
-		for (const width of [1440, 1060]) {
+		for (const width of [1440, 1060, 480, 1440]) {
 			await page.setViewportSize({ width, height: 900 });
-			await expect.poll(async () => {
-				const [content, body, button, windowBar] = await Promise.all([
-					emptyFiles.boundingBox(), editor.boundingBox(), toggle.boundingBox(), titlebar.boundingBox(),
-				]);
-				return [content!.x >= body!.x, Math.round(content!.y - body!.y), Math.round(windowBar!.x + windowBar!.width - button!.x - button!.width)];
-			}).toEqual([true, 0, 8]);
+			await expectEditorTab();
+			await expect(addTab).toBeFocused();
 		}
-		await page.setViewportSize({ width: 480, height: 900 });
-		await expect(files).toBeVisible();
-		await expect(inlineAddTab).toBeFocused();
-		await expect(addTab).toHaveCount(0);
-		await page.setViewportSize({ width: 1440, height: 900 });
-		await expect(addTab).toBeFocused();
-		await expectHostedTab(codeTabTop);
 		await expect(panel).toHaveCSS('-webkit-app-region', 'no-drag');
 		await expect(toggle).toBeInViewport({ ratio: 1 });
 		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
@@ -208,14 +186,14 @@ suite('Sessions native titlebar layout', () => {
 		await expect(editorRegion).toBeHidden();
 		await expect.poll(() => toggle.boundingBox()).toEqual(closedBounds);
 		await toggle.press('Enter');
-		await expectHostedTab(codeTabTop);
+		await expectEditorTab();
 		await expect.poll(async () => (await editor.boundingBox())!.width).toBeCloseTo(originalWidth, 0);
 
 		const chat = mode.getByRole('button', { name: '聊天 / Agents', exact: true });
 		const code = mode.getByRole('button', { name: '代码', exact: true });
 		await chat.click();
 		await expect(chat).toHaveAttribute('aria-pressed', 'true');
-		await expect(emptyFileTab).toHaveAttribute('aria-selected', 'true');
+		await expectEditorTab();
 		await expect(editor.getByRole('button', { name: '打开更改', exact: true })).toHaveCount(0);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await maximize.click();
@@ -225,7 +203,7 @@ suite('Sessions native titlebar layout', () => {
 		await expect(conversation).toBeVisible();
 		await expect(restore).toHaveCount(0);
 		await code.click();
-		await expectHostedTab(codeTabTop);
+		await expectEditorTab();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await chat.click();
 		await expect(editor).toBeHidden();
@@ -233,7 +211,7 @@ suite('Sessions native titlebar layout', () => {
 		await expect.poll(() => toggle.boundingBox()).toEqual(chatBounds);
 	});
 
-	test('Code New offers Search in Add Tab when a workspace folder is available', async () => {
+	test('The empty Code editor area offers tools and commits only the chosen editor', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -241,55 +219,106 @@ suite('Sessions native titlebar layout', () => {
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const more = titlebar.locator('.ash-sessions-titlebar-right').getByRole('button', { name: '更多操作', exact: true });
 		const sidePanel = titlebar.getByRole('button', { name: '切换侧面板', exact: true });
+		const editor = page.locator('[data-part="editor"]');
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(0));
+		await sidePanel.press('Enter');
+		const open = page.locator('.ash-sessions-new-tab:visible').getByRole('region', { name: '打开', exact: true });
+		const searchButton = open.getByRole('button', { name: '搜索', exact: true });
+		await expect(open.getByRole('button', { name: '侧边聊天', exact: true })).toBeEnabled();
+		await expect(open.getByRole('button', { name: 'iOS 模拟器', exact: true })).toBeDisabled();
+		await expect(searchButton).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: '新标签页', exact: true })).toHaveAttribute('aria-selected', 'true');
 		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
-		await more.press('Enter');
-		await expect(page.getByRole('menuitem', { name: '搜索', exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
+		await expect(more).toHaveCount(0);
+		await searchButton.click();
+		await expect(page.locator('[data-editor-tool="search"] .ash-search-editor:visible')).toBeVisible();
+		await expect(open).toBeHidden();
+		await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: '搜索编辑器', exact: true })).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('Code Add Tab replaces the selected launcher in place beside existing tabs', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
 		await newSession.click();
 		await expect(newSession).toHaveAttribute('aria-current', 'page');
 		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
-		await expect(sidePanel).toBeVisible();
-		await expect(more).toHaveCount(0);
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const sidePanel = titlebar.getByRole('button', { name: '切换侧面板', exact: true });
+		await expect(sidePanel).toHaveAttribute('aria-pressed', 'false');
 		await sidePanel.press('Enter');
-		await titlebar.getByRole('button', { name: '添加标签页', exact: true }).press('Enter');
-		const search = page.getByRole('menuitem', { name: '搜索', exact: true });
-		await expect(search).toBeVisible();
-		await search.click();
-		await expect(page.locator('[data-editor-tool="search"] .ash-search-editor:visible')).toBeVisible();
+		const editor = page.locator('[data-part="editor"]');
+		const filePicker = editor.getByRole('textbox', { name: '搜索文件或输入 URL', exact: true });
+		await expect(filePicker).toBeFocused();
+		await filePicker.click({ trial: true });
+		const tabs = page.locator('.ash-editor-tab-strip:visible').getByRole('tab');
+		await expect(tabs).toHaveText(['新标签页']);
+		await editor.getByRole('button', { name: '新建文件', exact: true }).click();
+		await expect(tabs).toHaveText(['Untitled-1']);
+		const addTab = page.locator('.ash-editor-tab-strip:visible').getByRole('button', { name: '添加标签页', exact: true });
+		await addTab.press('Enter');
+		await expect(tabs).toHaveText(['Untitled-1', '新标签页']);
+		await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+		await expect(filePicker).toBeFocused();
+		await editor.getByRole('button', { name: '搜索', exact: true }).click();
+		await expect(tabs).toHaveText(['Untitled-1', '搜索编辑器']);
+		await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+		await expect(editor.locator('.ash-search-editor:visible')).toBeVisible();
+		await addTab.click();
+		await addTab.click();
+		await expect(tabs).toHaveText(['Untitled-1', '搜索编辑器', '新标签页', '新标签页']);
+		await expect(filePicker).toBeFocused();
+		const launcher = tabs.last();
+		await launcher.locator('..').locator('.ash-tab-close-action button').press('Enter');
+		await expect(tabs).toHaveText(['Untitled-1', '搜索编辑器', '新标签页']);
+		await expect(filePicker).toBeVisible();
+		await launcher.locator('..').locator('.ash-tab-close-action button').press('Enter');
+		await expect(tabs).toHaveText(['Untitled-1', '搜索编辑器']);
 	});
 
-	test('Code session information moves into More Actions when narrow and returns when widened', async () => {
+	test('Session Rail follows the Code conversation while the tool area is maximized', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
-		const tools = page.getByRole('toolbar', { name: 'Code layout', exact: true });
-		const info = tools.getByRole('button', { name: 'Toggle session information', exact: true });
-		const more = tools.getByRole('button', { name: 'More Actions', exact: true });
-		await expect(info).toBeInViewport({ ratio: 1 });
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const conversation = page.locator('[data-part="sessions"]');
+		const infoName = { name: 'Toggle session information', exact: true };
+		const info = titlebar.getByRole('toolbar', { name: 'Conversation actions', exact: true }).getByRole('button', infoName);
+		await expect(titlebar.locator('.ash-sessions-titlebar-right').getByRole('button', infoName)).toHaveCount(0);
 		await expectCenteredTitlebarIcon(info);
-		await info.focus();
-		const viewport = page.viewportSize()!;
-		await page.setViewportSize({ width: 200, height: viewport.height });
-		await expect(info).toHaveCount(0);
-		await expect(more).toBeInViewport({ ratio: 1 });
-		await expectCenteredTitlebarIcon(more);
-		await expect(more).toBeFocused();
-		await more.press('Enter');
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle session information', exact: true })).toBeVisible();
-		await expect(page.getByRole('menuitem', { name: 'Side Chat', exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(more).toBeFocused();
-		await page.setViewportSize(viewport);
-		await expect(info).toBeInViewport({ ratio: 1 });
+		await info.press('Enter');
+		const rail = conversation.getByRole('complementary', { name: 'Session information', exact: true });
+		await expect(rail).toBeVisible();
+		const close = rail.getByRole('button', { name: 'Close session information', exact: true });
+		await expect(close).toBeFocused();
+		await close.press('Enter');
+		await expect(rail).toBeHidden();
+		await expect(info).toBeFocused();
+		await titlebar.getByRole('button', { name: 'Toggle Side Panel', exact: true }).press('Enter');
+		await expect(info).toBeVisible();
+		const maximize = titlebar.getByRole('button', { name: 'Maximize Side Panel', exact: true });
+		const restore = titlebar.getByRole('button', { name: 'Restore Side Panel Size', exact: true });
+		await maximize.press('Enter');
+		await expect(conversation).toBeHidden();
+		await expect(titlebar.getByRole('button', infoName)).toHaveCount(0);
+		await restore.press('Enter');
+		await expect(conversation).toBeVisible();
+		await expect(info).toBeVisible();
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
 		const account = page.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Accounts', exact: true });
 		await expectCenteredTitlebarIcon(account);
 		await account.hover();
 		await expectCenteredTitlebarIcon(account);
+		await maximize.press('Enter');
+		await page.locator('.ash-empty-file-editor:visible').getByRole('button', { name: 'Side Chat', exact: true }).press('Enter');
+		await expect(page.locator('.ash-session-side-chat-editor:visible').getByRole('textbox')).toBeFocused();
+		await expect(conversation).toBeHidden();
 	});
 
 	test('mouse side buttons traverse the Sessions navigation history', async () => {

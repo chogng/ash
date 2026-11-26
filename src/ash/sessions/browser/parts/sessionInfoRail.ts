@@ -141,7 +141,7 @@ export class SessionInfoRail extends Disposable {
 								type === AccessibleViewType.Help
 									? localize(
 										'sessions.info.help',
-										"The Code toolbar toggles Terminal, Files and session information. Tool editors share one editor group layout. Drag a tab or group title to arrange tools; separators resize groups. With a header action focused, Alt+Shift+Arrow moves the group. Hiding a terminal retains its process. Enter or Space expands Environment and Context. In Environment, Git branch actions includes Sync changes and Publish branch. Create pull request opens the form for this conversation. Escape closes floating information and returns focus. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.",
+										'Toggle session information beside the conversation title opens or closes this rail. Press Enter or Space to expand Environment and Context. In Environment, Git branch actions includes Sync changes and Publish branch. Create pull request opens the form for this conversation. Escape closes floating information and returns focus. Context shows estimated input against the automatic compaction budget, excluding the unsent draft.',
 									) + '\n' + this.environmentActions.getAccessibleHelp()
 									: [this.environment.textContent, this.environmentActions.getAccessibleContent(), this.summary.textContent].filter(Boolean).join('\n'),
 							() => (focused.isConnected ? focused.focus() : this.focusChat()),

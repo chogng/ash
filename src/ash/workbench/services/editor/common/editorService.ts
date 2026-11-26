@@ -20,6 +20,11 @@ export interface EditorOpenOptions extends IMultiDiffEditorOptions {
 /** The editor group selected by a resource-navigation request. */
 export type EditorOpenTarget = 'activeGroup' | 'sideGroup' | 'modalGroup' | { readonly groupId: number; };
 
+/** Identifies the tab that an explicit editor launch is allowed to replace. */
+export class EditorReplacementTarget {
+	constructor(readonly groupId: number, readonly input: IResourceEditorInput, readonly destinationGroupId?: number) { }
+}
+
 export interface ISaveEditorsOptions extends ISaveOptions {
 	readonly saveAs?: boolean;
 }

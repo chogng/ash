@@ -13,7 +13,10 @@ import { EmptyFileEditorInput, EmptyFileEditorSerializer } from '../../../../wor
 import { EditorInputSerializers } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../../../browser/menus.js';
-import { EmptyFileEditor, EmptyFileEditorFocusedContext } from './emptyFileEditor.js';
+import { EmptyFileEditor } from './emptyFileEditor.js';
+import { EditorFilePickerFocusedContext } from './editorFilePicker.js';
+import { NewTabEditor } from './newTabEditor.js';
+import { NewTabEditorInput, newTabEditorSerializer } from './newTabEditorInput.js';
 import './emptyFileEditorAccessibility.js';
 
 registerEditorPane({
@@ -25,12 +28,12 @@ registerEditorPane({
 
 const serializer = new EmptyFileEditorSerializer();
 EditorInputSerializers.registerStatic(serializer);
-// Saved working sets may contain the former New Tab input. Save it as Files after restoration.
-EditorInputSerializers.registerStatic({
-	typeId: 'sessions.editorInput.newTab',
-	canSerialize: () => false,
-	serialize: () => undefined,
-	deserialize: value => serializer.deserialize(value),
+EditorInputSerializers.registerStatic(newTabEditorSerializer);
+registerEditorPane({
+	id: NewTabEditorInput.EDITOR_ID,
+	get name() { return localize('sessions.editorStart.newTab', 'New Tab'); },
+	canOpen: input => input instanceof NewTabEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => options.instantiationService!.createInstance(NewTabEditor),
 });
 
 registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
@@ -42,20 +45,19 @@ registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 			keybinding: {
 				weight: KeybindingWeight.SessionsContrib,
 				primary: Keybinding.single(logicalKey('p', { primaryKey: true })),
-				when: EmptyFileEditorFocusedContext.isEqualTo(true),
+				when: EditorFilePickerFocusedContext.isEqualTo(true),
 			},
-			menu: { id: Menus.EmptyFileEditorActions, group: 'navigation', order: 0 },
 		});
 	}
 
 	override run(accessor: ServicesAccessor, target?: unknown): void {
 		const editor = target instanceof EmptyFileEditor ? target : accessor.get(IEditorService).activeEditorPane;
-		if (editor instanceof EmptyFileEditor && editor.isVisible()) editor.openFile();
+		if ((editor instanceof EmptyFileEditor || editor instanceof NewTabEditor) && editor.isVisible()) editor.openFile();
 	}
 });
 
 const code = SessionsCodeEditorContext.isEqualTo(true);
-MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
+MenusRegistry.appendMenuItem(Menus.SessionsEmptyEditorGroupAddTab, {
 	command: {
 		id: NEW_UNTITLED_FILE_COMMAND_ID,
 		title: localize2('sessions.emptyFileEditor.newFile', 'New File'),
@@ -69,6 +71,6 @@ MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
 KeybindingsRegistry.registerKeybindingRule({
 	command: NEW_UNTITLED_FILE_COMMAND_ID,
 	keybinding: Keybinding.single(logicalKey('n', { primaryKey: true })),
-	when: ContextKeyExpr.and(code, EmptyFileEditorFocusedContext.isEqualTo(true)),
+	when: ContextKeyExpr.and(code, EditorFilePickerFocusedContext.isEqualTo(true)),
 	priority: KeybindingWeight.SessionsContrib,
 });

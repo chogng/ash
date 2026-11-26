@@ -32,7 +32,7 @@ import { registerSessionsTerminalContribution } from '../../contrib/terminal/bro
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../../../workbench/contrib/sessions/common/contextkeys.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { PanelMaximizedContext, PanelPositionContext, SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
@@ -111,13 +111,16 @@ test('Sessions layout commands update menu state from their owners and release w
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
+	using emptyFileMenu = new MenuService(commands, contextKeys).createMenu(Menus.SessionsEmptyEditorGroupAddTab);
+	const fileTools = () => emptyFileMenu.getActions().flatMap(([, actions]) => actions)
+		.filter(action => action.id === 'ash.sessions.openSideChat' || action.id === 'ash.sessions.openIOSSimulator');
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	using palette = new MenuService(commands, contextKeys).createMenu(MenuId.CommandPalette);
 	const terminalAction = () => palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel');
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
-		const tools = layoutMenu.getActions().find(([group]) => group === '1_tools')?.[1];
-		assert.deepEqual(tools?.map(action => [action.id, action.icon, action.enabled]), [
+		assert.deepEqual(layoutMenu.getActions(), []);
+		assert.deepEqual(fileTools().map(action => [action.id, action.icon, action.enabled]), [
 			['ash.sessions.openSideChat', Lxicon.chat, true],
 			['ash.sessions.openIOSSimulator', Lxicon.deviceMobile, false],
 		]);
@@ -128,14 +131,16 @@ test('Sessions layout commands update menu state from their owners and release w
 		};
 		changed.fire();
 		assert.deepEqual(layoutMenu.getActions(), []);
+		assert.equal(contextKeys.getValue(IsNewSessionContext.key), true);
+		assert.equal(fileTools().length, 2);
 		assert.equal(terminalAction()?.enabled, true);
 		hasDesktopChatSource.set(true, undefined);
-		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
+		assert.equal(contextKeys.getValue(IsNewSessionContext.key), false);
 		hasDesktopChatSource.set(false, undefined);
-		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), false);
+		assert.equal(contextKeys.getValue(IsNewSessionContext.key), true);
 		activeSelection = undefined;
 		changed.fire();
-		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
+		assert.equal(contextKeys.getValue(IsNewSessionContext.key), false);
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.equal(terminalAction()?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
@@ -194,6 +199,8 @@ test('Sessions layout commands update menu state from their owners and release w
 		const browserGroup = hosts.editor.createRetainedGroup('browser');
 		await hosts.editor.openEditor(browserInput, { pinned: true }, { groupId: browserGroup.id });
 		SessionsCodeEditorContext.bindTo(contextKeys).set(false);
+		assert.deepEqual(fileTools(), []);
+		await commands.executeCommand('ash.sessions.openSideChat');
 		using toolMenu = new MenuService(commands, contextKeys).createMenu(Menus.SessionsEditorHeaderLayout);
 		assert.deepEqual(toolMenu.getActions(), []);
 		await commands.executeCommand('sessions.closeEditorPart', { groupId: browserGroup.id });
@@ -209,7 +216,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(menu.getActions(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.toggleSidebar'), undefined);
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.openSideChat'), undefined);
-		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), false);
+		assert.deepEqual(fileTools(), []);
 		assert.equal(changed.hasListeners(), false);
 	} finally {
 		actions.dispose();

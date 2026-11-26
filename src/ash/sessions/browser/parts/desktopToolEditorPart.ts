@@ -8,6 +8,7 @@ import type { IEditorGroupViewOptions } from '../../../workbench/browser/parts/e
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../menus.js';
+import { NewTabCommandId } from '../../contrib/editor/browser/newTabEditorInput.js';
 
 /** A normal editor host reused for independent tool workspaces; tool models stay in their services. */
 export class DesktopToolEditorPart extends EditorPart {
@@ -35,10 +36,12 @@ export class DesktopToolEditorPart extends EditorPart {
 		return {
 			showHeader: true,
 			showEditorToolbar: true,
+			addTabCommand: NewTabCommandId,
 			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,
 				editorActions: Menus.SessionsEditorTitle,
+				tabsBarAddTab: Menus.SessionsEditorTabsBarAddTab,
 			},
 		};
 	}

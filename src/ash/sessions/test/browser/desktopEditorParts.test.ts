@@ -18,17 +18,19 @@ import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EmptyFileEditorInput, EmptyFileEditorSerializer } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { EditorReplacementTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { EditorParts } from '../../browser/parts/editorParts.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
+import { NewTabEditorInput, newTabEditorSerializer } from '../../contrib/editor/browser/newTabEditorInput.js';
 
 function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
 	const registry = resources.add(new EditorPaneRegistry());
-	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID, EmptyFileEditorInput.EDITOR_ID]) {
+	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID, EmptyFileEditorInput.EDITOR_ID, NewTabEditorInput.EDITOR_ID]) {
 		resources.add(registry.registerEditorPane({
 			id, name: 'Tool fixture', canOpen: () => EditorPaneMatch.Optional,
 			create: () => new class extends EditorPane {
@@ -53,12 +55,38 @@ function fixture() {
 		}));
 	}
 	resources.add(inputSerializers.register(new EmptyFileEditorSerializer()));
+	resources.add(inputSerializers.register(newTabEditorSerializer));
 	const hosts = resources.add(createDesktopEditorTestServices(services, { registry, inputSerializers }, browserEnvironment.window.document));
 	return Object.assign(resources, { editor: hosts.editor, files: hosts.files, tools: hosts.tools, area: hosts.area, configuration: services.get(IConfigurationService) });
 }
 
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('replaces only the targeted launcher and restores its editor at the same index', async () => {
+		using hosts = fixture();
+		const { editor } = hosts;
+		const first = { resource: URI.file('/first.txt') };
+		const last = { resource: URI.file('/last.txt') };
+		await editor.openEditor(first, { pinned: true });
+		const group = editor.activeGroup;
+		await editor.openNewTab(group.id);
+		const launcher = group.activeInput!;
+		await editor.openEditor(last, { pinned: true });
+		const search = { resource: URI.parse('untitled:/test.code-search'), editorId: SearchEditorID };
+		const target = new EditorReplacementTarget(group.id, launcher);
+		await editor.openEditor(search, {}, target);
+		assert.deepEqual(group.inputs, [first, search, last]);
+		assert.equal(group.activeInput, last);
+		await assert.rejects(editor.openEditor(search, {}, target), { name: 'CancellationError' });
+		await editor.openNewTab(group.id);
+		const retainedLauncher = group.activeInput!;
+
+		using restored = fixture();
+		await restored.editor.applyWorkingSet(editor.saveWorkingSet('launcher-placement'));
+		const restoredGroup = restored.files.groups.find(group => group.inputs.length > 0)!;
+		assert.deepEqual(restoredGroup.inputs.map(input => input.resource.toString()), [first, search, last, retainedLauncher].map(input => input.resource.toString()));
+		assert.ok(restoredGroup.activeInput instanceof NewTabEditorInput);
+	});
 	test('retains separate Chat and Code browser groups in the existing browser Part', async () => {
 		using hosts = fixture();
 		const code = { resource: URI.parse('ash-browser:/code') };
@@ -334,11 +362,11 @@ suite('Desktop tool EditorParts', () => {
 		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'search');
 		const legacy = {
 			...saved, groups: saved.groups.filter(group => !emptySearch.groups.includes(group.id!)),
-			toolParts: { ...saved.toolParts, parts, layout: { ...layout, children } },
+			toolParts: { ...saved.toolParts, version: 1, parts, layout: { ...layout, children } },
 		};
 		await hosts.editor.applyWorkingSet(legacy);
 		const searchPart = hosts.tools.get('search')!;
-		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(hosts.editor.activeGroup.id, searchPart.activeGroup.id);
 		assert.equal(searchPart.activeInput?.resource.toString(), search.resource.toString());
 		assert.equal(searchPart.activeInput?.initialText, search.initialText);
 		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === file.toString()), true);
@@ -357,10 +385,11 @@ suite('Desktop tool EditorParts', () => {
 		const filesGroup = hosts.editor.activeGroup;
 		await hosts.files.openEditor(misplaced, { pinned: true }, { groupId: filesGroup.id });
 		const saved = hosts.editor.saveWorkingSet('mixed-search');
+		const legacy = { ...saved, toolParts: { ...saved.toolParts!, version: 1 } };
 
-		await hosts.editor.applyWorkingSet(saved);
+		await hosts.editor.applyWorkingSet(legacy);
 
-		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(hosts.editor.activeGroup.id, searchPart.activeGroup.id);
 		assert.equal(searchPart.activeInput?.resource.toString(), misplaced.resource.toString());
 		assert.deepEqual(searchPart.activeGroup.inputs.map(input => input.resource.toString()), [existing.resource.toString(), misplaced.resource.toString()]);
 		assert.deepEqual(hosts.files.fileGroups.flatMap(group => group.inputs.map(input => input.resource.toString())), [file.resource.toString()]);
@@ -379,7 +408,7 @@ suite('Desktop tool EditorParts', () => {
 			...saved, activeGroupIndex: 1,
 			groups: [{ id: filesId, size: 1, editors: [], activeEditorIndex: -1 }, changes, ...saved.groups.filter(group => group !== changes)],
 			toolParts: {
-				...saved.toolParts!,
+				...saved.toolParts!, version: 1,
 				layout: {
 					type: 'branch', orientation: Orientation.HORIZONTAL, size: 1200, priority: 0, children: [
 						...leaves(saved.toolParts!.layout).map(leaf => leaf.type === 'leaf' && leaf.data === 'files' ? { ...leaf, visible: filesVisible } : leaf),

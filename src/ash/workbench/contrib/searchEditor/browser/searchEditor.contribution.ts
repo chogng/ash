@@ -13,7 +13,7 @@ import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService } from '../../../services/editor/common/editorService.js';
 import { InSearchEditor, isSearchEditorInput, OpenNewEditorCommandId, SearchEditorID } from './constants.js';
 import { SearchEditor } from './searchEditor.js';
 import '../../search/browser/searchHistory.contribution.js';
@@ -66,7 +66,7 @@ registerAction2(class extends Action2 {
 			initialText: serializeSearchResultForEditor({
 				text: '', patternKind: 'literal', caseSensitivity: 'insensitive', includePatterns, excludePatterns: [], workspaceRoot,
 			}),
-		}, { pinned: true }, groupId === undefined ? undefined : { groupId });
+		}, { pinned: true }, argument instanceof EditorReplacementTarget ? argument : groupId === undefined ? undefined : { groupId });
 	}
 });
 

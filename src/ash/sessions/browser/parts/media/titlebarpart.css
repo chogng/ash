@@ -132,7 +132,7 @@
 .ash-sessions-titlebar-editor-region > .ash-editor-tab-strip-hosted {
 	box-sizing: border-box;
 	max-width: 100%;
-	padding-inline: var(--ash-spacing-size40);
+	padding-inline: var(--ash-spacing-size80);
 	-webkit-app-region: no-drag;
 }
 

@@ -20,7 +20,7 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
@@ -109,20 +109,37 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		return group;
 	}
 
-	private async openEmptyFileEditor(): Promise<void> {
+	public async openToolFile(resource: URI, replace: EditorReplacementTarget): Promise<void> {
 		if (this.isDocumentContent) {
-			await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true });
-		} else {
-			await this.openChatFiles();
+			await this.editors.openEditor({ resource }, { pinned: true }, replace);
+		} else if (this.chatConversation.get()) {
+			await this.openConversationEditor('files', target => this.editors.openEditor({ resource }, { pinned: true }, target), undefined, replace);
 		}
 	}
 
-	private async openChatFiles(): Promise<void> {
+	private async openNewTab(groupId?: number): Promise<void> {
+		const editor = this.editor as EditorParts;
+		if (this.isDocumentContent) {
+			if (groupId !== undefined && (this.isConversationEditorGroup(groupId) || !editor.mainWindowGroups.some(group => group.id === groupId && editor.isGroupVisible(group.id)))) return;
+		} else if (this.chatConversation.get()) {
+			const key = this.conversationGroupKey('files');
+			if (!key || groupId !== undefined && !this.isActiveConversationEditorGroup(groupId)) return;
+			groupId ??= this.getOrCreateConversationGroup('files', key).id;
+		} else {
+			return;
+		}
+		this.layout.showPart('editor');
+		await editor.openNewTab(groupId);
+		editor.focus();
+	}
+
+	private async openChatFiles(replace?: EditorReplacementTarget): Promise<void> {
 		if (!this.chatConversation.get()) return;
 		const key = this.conversationGroupKey('files');
 		if (!key) return;
 		const group = this.getOrCreateConversationGroup('files', key);
-		await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, { groupId: group.id });
+		await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, replace
+			? new EditorReplacementTarget(replace.groupId, replace.input, group.id) : { groupId: group.id });
 	}
 	private get hasConversationEditors(): boolean {
 		return this.conversationEditors.length > 0 || !!this.getConversationGroup('files')?.inputs.length;
@@ -137,8 +154,8 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		return groups.some(group => group.inputs.some(input => extUri.isEqual(input.resource, resource)));
 	}
 
-	public openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>): Promise<void> {
-		return this.openConversationEditor('browser', open);
+	public openConversationBrowser(open: (target: EditorOpenTarget) => Promise<void>, replace?: EditorReplacementTarget): Promise<void> {
+		return this.openConversationEditor('browser', open, undefined, replace);
 	}
 
 	public async openConversationFile(input: IResourceEditorInput, restoreFocus: () => void, signal: AbortSignal): Promise<void> {
@@ -158,7 +175,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 		}, signal);
 	}
 
-	private openConversationEditor(tool: 'browser' | 'files', open: (target: EditorOpenTarget) => Promise<void>, signal?: AbortSignal): Promise<void> {
+	private openConversationEditor(tool: 'browser' | 'files', open: (target: EditorOpenTarget) => Promise<void>, signal?: AbortSignal, replace?: EditorReplacementTarget): Promise<void> {
 		const source = this.activeEntry.get();
 		return this.runOperation(async () => {
 			const key = this.conversationGroupKey(tool);
@@ -166,7 +183,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			this.isChangingContent = true;
 			try {
 				const group = this.getOrCreateConversationGroup(tool, key);
-				await open({ groupId: group.id });
+				await open(replace ? new EditorReplacementTarget(replace.groupId, replace.input, group.id) : { groupId: group.id });
 				if (!this.isDisposed && (tool === 'browser' || group.inputs.length)) {
 					if (tool === 'files') this.layout.setPartAvailable('sessions', true);
 					this.layout.showPart('editor');
@@ -248,7 +265,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!this.isDocumentContent) await this.openEntry(documentEntry);
 			await this.controller.whenSettled();
 		}));
-		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts, () => this.openChatFiles()));
+		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts, target => this.openChatFiles(target), groupId => this.openNewTab(groupId)));
 		this._register(registerChangesEditorTitleActions(editor));
 		this._register(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
 		this._register(registerSessionsModalEditorActions(editor as EditorParts, () => this.isDocumentContent));
@@ -257,7 +274,8 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!this.isDocumentContent && !this.chatConversation.get()) return;
 			return this.runOperation(async () => {
 				if (this.activeEntry.get() !== entry || (!this.isDocumentContent && !this.chatConversation.get())) return;
-				const visible = await layout.toggleSidePane(() => this.openEmptyFileEditor());
+				const visible = await layout.toggleSidePane();
+				if (visible && !(editor as EditorParts).area.hasContent) await this.openNewTab();
 				status(visible
 					? localize('sessions.layout.sidePaneShown', 'Side panel shown')
 					: localize('sessions.layout.sidePaneHidden', 'Side panel hidden'));

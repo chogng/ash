@@ -1,7 +1,7 @@
 import { URI } from '../../../../../base/common/uri.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenTarget } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import { DockedEditorInput } from '../../../../../workbench/browser/parts/editor/dockedEditorInput.js';
@@ -47,11 +47,11 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 	}
 
-	public async openChanges(): Promise<void> {
+	public async openChanges(target?: EditorOpenTarget): Promise<void> {
 		if (this.isDisposed) { return; }
 		const selection = this.sessions.activeSelection;
 		const resource = selection ? new SessionChangesEditorInput(selection).sessionResource : URI.parse('ash-session:/draft/empty');
-		await this.changes.openChangesEditor(resource, { changesetSelection: { kind: 'id', id: undefined } });
+		await this.changes.openChangesEditor(resource, { changesetSelection: { kind: 'id', id: undefined } }, target);
 	}
 
 	public isManaged(input: IResourceEditorInput): boolean {

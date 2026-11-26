@@ -25,7 +25,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID, SAVE_FILE_AS_COMMAND_ID } from './fileConstants.js';
 import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplorer } from './fileCommands.js';
@@ -146,9 +146,10 @@ registerEditorToolAction(class NewUntitledTextEditorAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
+	override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
 		const untitled = await accessor.get(IUntitledTextEditorService).resolve();
-		await accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled));
+		await accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled), undefined,
+			target instanceof EditorReplacementTarget ? target : undefined);
 	}
 });
 

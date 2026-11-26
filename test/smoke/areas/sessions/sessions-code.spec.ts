@@ -297,6 +297,7 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	const commands = new QuickAccess(page);
 	await page.getByRole('button', { name: 'Toggle Side Panel', exact: true, pressed: false }).click();
 	await expect(editor).toBeVisible();
+	await editor.getByRole('button', { name: 'Open Files', exact: true }).click();
 	await expect(files).toBeVisible();
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
@@ -354,7 +355,8 @@ test('Code keeps Files open until its tab closes', async ({ application, target,
 	await expect(files()).toBeHidden();
 	const toggle = page.getByRole('button', { name: 'Toggle Side Panel', exact: true, pressed: false });
 	await toggle.click();
-	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-sessions-new-tab')).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(0);
 	await expect(files()).toBeHidden();
 });
 
@@ -568,7 +570,7 @@ test('Dragging onto Add Tab moves an editor to the end of the Code tab strip', {
 	await expect(tabs).toHaveText(['Untitled-2', 'Untitled-1']);
 	expect(marker).toBe('""');
 	await expect(addTabToolbar).not.toHaveClass(/ash-dnd-drop-before/u);
-	await addTab.click();
+	await addTab.click({ button: 'right' });
 	await expect(page.getByRole('menuitem', { name: 'Open Files', exact: true })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await addTab.drop({ files: { name: 'dropped.txt', mimeType: 'text/plain', buffer: Buffer.from('Dropped editor contents') } });
@@ -576,27 +578,40 @@ test('Dragging onto Add Tab moves an editor to the end of the Code tab strip', {
 	await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
 });
 
-test('Files searches files in its group and opens a URL', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }, testInfo) => {
+test('The empty Code editor area opens a picked file or a URL', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.getByRole('button', { name: 'Toggle Side Panel', exact: true }).press('Enter');
-	const tab = page.getByRole('tab', { name: 'Files', exact: true });
-	const search = page.getByRole('textbox', { name: 'Search files or enter a URL', exact: true });
-	await expect(tab).toHaveAttribute('aria-selected', 'true');
+	const toggle = page.getByRole('button', { name: 'Toggle Side Panel', exact: true });
+	await toggle.press('Enter');
+	const empty = page.locator('.ash-sessions-new-tab');
+	const files = page.getByRole('tab', { name: 'Files', exact: true });
+	const search = empty.getByRole('textbox', { name: 'Search files or enter a URL', exact: true });
+	const newTab = page.getByRole('tab', { name: 'New Tab', exact: true });
+	await expect(newTab).toHaveAttribute('aria-selected', 'true');
+	await expect(files).toHaveCount(0);
 	await expect(search).toBeFocused();
 	await expect(page.getByRole('button', { name: 'Open Changes', exact: true })).toBeVisible();
-	await page.screenshot({ path: testInfo.outputPath('empty-file-editor.png') });
+	await page.screenshot({ path: testInfo.outputPath('empty-editor-area.png') });
 	await search.fill(testWorkspace.file);
 	await search.press('Enter');
 	const picker = new QuickAccess(page);
-	await expect(picker.element.locator('.ash-quick-pick-row-label', { hasText: /^main\.ts$/u })).toBeVisible();
+	const file = picker.element.locator('.ash-quick-pick-row-label', { hasText: /^main\.ts$/u });
+	await expect(file).toBeVisible();
+	await picker.close();
+	await expect(newTab).toHaveAttribute('aria-selected', 'true');
+	await search.press('Enter');
+	await expect(file).toBeVisible();
 	await picker.input.press('Enter');
-	const tabList = page.getByRole('tablist').filter({ has: tab });
-	await expect(tabList.getByRole('tab', { name: 'main.ts', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await tab.press('Enter');
+	await expect(page.getByRole('tab', { name: 'main.ts', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(empty).toBeHidden();
+	await expect(files).toHaveCount(0);
+	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
+	await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+	await toggle.press('Enter');
 	await search.fill('about:blank');
 	await search.press('Enter');
 	await expect(page.locator('[data-editor-tool="browser"] .ash-browser-welcome')).toBeVisible();
+	await expect(files).toHaveCount(0);
 });
 
 test('Files, Changes and a document share one editor group', async ({ target, workbench }, testInfo) => {

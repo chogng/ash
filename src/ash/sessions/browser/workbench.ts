@@ -284,7 +284,7 @@ import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntrySer
 import { URI } from '../../base/common/uri.js';
 import { SessionsEditorService } from './sessionsEditorService.js';
 import { isImageResource } from '../../workbench/contrib/mediaPreview/common/mediaPreview.js';
-import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { IHistoryService } from '../../workbench/services/history/common/history.js';
 import { HistoryService } from '../../workbench/services/history/browser/historyService.js';
@@ -1562,10 +1562,11 @@ export abstract class Workbench extends Disposable {
 			}
 			updateBrowserContext();
 		}));
-		this._register(CommandsRegistry.register(NEW_BROWSER_TAB_COMMAND_ID, async (_accessor, address?: unknown) => {
+		this._register(CommandsRegistry.register(NEW_BROWSER_TAB_COMMAND_ID, async (_accessor, address?: unknown, replacement?: unknown) => {
 			const initialUrl = typeof address === 'string' ? address : 'about:blank';
+			const replace = address instanceof EditorReplacementTarget ? address : replacement instanceof EditorReplacementTarget ? replacement : undefined;
 			if (contextKeys.getValue(SessionsCodeEditorContext.key) === true) {
-				await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } });
+				await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } }, undefined, { target: replace });
 				return true;
 			}
 			let opened = false;
@@ -1573,7 +1574,7 @@ export abstract class Workbench extends Disposable {
 				await services.get(ISessionsEntryService).openConversationBrowser(async target => {
 					await browsers.createBrowserView({ initialUrl, owner: { type: 'user' } }, undefined, { target });
 					opened = true;
-				});
+				}, replace);
 			}
 			return opened;
 		}));
@@ -1582,7 +1583,7 @@ export abstract class Workbench extends Disposable {
 				id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
 				icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
 			},
-			when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
+			when: SessionsCodeEditorContext.isEqualTo(true),
 			group: 'navigation', order: 4.5,
 		};
 		const newBrowser = {
@@ -1600,7 +1601,7 @@ export abstract class Workbench extends Disposable {
 				},
 			},
 			{
-				id: Menus.EmptyFileEditorActions,
+				id: Menus.SessionsEmptyEditorGroupAddTab,
 				item: {
 					...browserTool, command: newBrowser,
 					when: ContextKeyExpr.or(browserTool.when, ContextKeyExpr.and(ChatConversationPageContext.isEqualTo(true), SessionBrowserTabsAvailableContext.isEqualTo(true))),
@@ -1816,7 +1817,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	isPartVisible(partId: SessionsPartId): boolean;
 	isSidePaneVisible(): boolean;
 	/** Toggles the active conversation's editor area and returns its effective visibility. */
-	toggleSidePane(openEmpty: () => Promise<void>): boolean | Promise<boolean>;
+	toggleSidePane(): boolean | Promise<boolean>;
 	isPartAvailable(partId: SessionsPartId): boolean;
 	isPartRequested(partId: 'sidebar' | 'editor' | 'auxiliarybar'): boolean;
 	/** Keep programmatic editor changes from changing the EditorPart's visibility. Calls can nest. */

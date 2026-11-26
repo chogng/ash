@@ -143,6 +143,7 @@ export type ITerminalLocationOptions = TerminalLocation | TerminalEditorLocation
 export interface TerminalEditorLocation {
 	readonly viewColumn?: EditorGroupId;
 	readonly preserveFocus?: boolean;
+	readonly editorTarget?: import('../../../services/editor/common/editorService.js').EditorReplacementTarget;
 }
 
 /** A failed destination returns its rotated lease without placing credentials in diagnostics. */

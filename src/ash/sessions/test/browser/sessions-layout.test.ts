@@ -418,6 +418,8 @@ test('An empty companion editor releases its split and restores the retained Bro
 			editor.setGroupVisible(browserGroup.id, false);
 			editor.setGroupVisible(emptyFiles.id, true);
 		});
+		assert.equal(area.hasTools, false);
+		assert.equal(area.isToolVisible('files'), false);
 		assert.equal(layout.isPartRequested('editor'), true);
 		assert.equal(layout.isPartVisible('editor'), false);
 		assert.equal(layout.getPartSize('sessions').width, wide.width - layout.getPartSize('sidebar').width);

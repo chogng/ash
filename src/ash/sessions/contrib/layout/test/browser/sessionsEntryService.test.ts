@@ -625,6 +625,7 @@ suite('SessionsEntryService lifecycle and focus', () => {
 		await fixture.service.openEntry(documentEntry);
 		fixture.groupVisibility.set('documents', false);
 		fixture.activeInput = { resource: URI.parse('session-canvas:/live') };
+		fixture.documentInputs.push(fixture.activeInput);
 		fixture.revealActiveEditor.fire();
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.visible.get('editor'), true);
@@ -959,6 +960,12 @@ class EntryFixture extends Disposable {
 			get filesDetailsOpen() { return fixture.filesDetailsOpen; },
 			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
 			get fileEditorsVisible() { return true; },
+			area: { get hasContent() { return groups.some(group => group.id !== pageGroup.id && (fixture.groupVisibility.get(group.id) ?? true) && group.inputs.length > 0); } },
+			openNewTab: async (id = documentGroup.id) => {
+				const group = groups.find(group => group.id === id)!;
+				group.inputs.push({ resource: URI.parse('ash-sessions-new-tab:/fixture') });
+				fixture.groupVisibility.set(id, true);
+			},
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },

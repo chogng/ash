@@ -213,6 +213,7 @@ export class EditorArea extends Part {
 	}
 
 	private setGrid(grid: SerializableGrid<ToolPartView>): void {
+		grid.element.hidden = !this.contentAvailable;
 		this.gridConstraints.clear();
 		this.grid.value = grid;
 		this.gridConstraints.value = grid.onDidChange(() => this.publishMinimumSize());
@@ -412,6 +413,7 @@ export class EditorArea extends Part {
 		// Keep individual close actions available when a narrow layout shows a subset of the tools.
 		this.multipleToolsContext.set(place && this.desired.size > 1);
 		this.contentAvailable = hasContent;
+		this.grid.value!.element.hidden = !hasContent;
 		if (!tools.length) {
 			this.firstTool = undefined;
 			this.toolWidthWeight = undefined;

@@ -2,7 +2,7 @@ import { localize, localize2 } from '../../../../nls.js';
 import '../../../../workbench/contrib/searchEditor/browser/searchEditor.contribution.js';
 import { isSearchEditorInput, OpenNewEditorCommandId } from '../../../../workbench/contrib/searchEditor/browser/constants.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ExplorerFolderContext, VIEW_ID } from '../../../../workbench/contrib/files/common/files.js';
 import { ResourceSchemeContext, SessionsCodeEditorContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -27,7 +27,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { IsNewSessionContext, SessionsEditorToolContext } from '../../../common/contextkeys.js';
+import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
@@ -52,16 +52,21 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 					order: 3,
 				},
 				{
-					id: Menus.TitleBarRightLayout,
-					when: ContextKeyExpr.and(canSearchFiles, ContextKeyExpr.not(IsNewSessionContext.key)),
-					group: '1_tools',
+					id: Menus.SessionsEmptyEditorGroupAddTab,
+					when: canSearchFiles,
+					group: 'navigation',
+					order: 2.5,
 				},
 			],
 		});
 	}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
+	override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
 		if (!accessor.get(IContextKeyService).contextMatchesRules(canSearchFiles)) return;
+		if (target instanceof EditorReplacementTarget) {
+			await accessor.get(ICommandService).executeCommand(OpenNewEditorCommandId, target);
+			return;
+		}
 		const editor = accessor.get(IEditorPart) as EditorParts;
 		const groups = editor.getToolGroups(isSearchEditorInput);
 		const group = groups.find(group => group.id === editor.activeGroup.id) ?? groups[0];

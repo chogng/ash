@@ -2,6 +2,7 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import type { EditorParts } from '../../../../browser/parts/editorParts.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
+import type { EditorReplacementTarget } from '../../../../../workbench/services/editor/common/editorService.js';
 
 /** Opens the Files tab or reveals Details beside the active document. */
 export class DesktopDetailPanelCoordinator {
@@ -19,8 +20,8 @@ export class DesktopDetailPanelCoordinator {
 		this.layout.showPart('editor');
 	}
 
-	public async openFiles(): Promise<void> {
-		await (this.editor as EditorParts).openFiles();
+	public async openFiles(target?: EditorReplacementTarget): Promise<void> {
+		await (this.editor as EditorParts).openFiles(target);
 		this.layout.showPart('editor');
 	}
 

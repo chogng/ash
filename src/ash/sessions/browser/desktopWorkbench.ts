@@ -40,8 +40,8 @@ import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { EditorArea } from './parts/editorPart.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
-import type { EditorParts } from './parts/editorParts.js';
 import type { IEditorGroupView } from '../../workbench/browser/parts/editor/editor.js';
+import type { EditorParts } from './parts/editorParts.js';
 import { SessionsPart } from './parts/sessionsPart.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
@@ -795,11 +795,10 @@ export class DesktopWorkbenchLayout
 		const details = !this.auxiliaryBarDocked && wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
 		const conversationView = this.view('sessions');
 		const workspaceWidth = dimension.width;
-		// Chat can explicitly show its container before opening a tab, when both Parts fit.
-		const emptyChatPane = this.contextKeys.getValue(ChatConversationPageContext.key) === true
-			&& workspaceWidth >= conversationView.part.minimumWidth + editorView.minimumWidth;
-		const showEditor = wanted('editor') && (area.hasContent || emptyChatPane || this.primaryPart === 'editor' || !wanted('sessions'));
-		const eligible = !this.customViewVisible && showEditor && area.hasTools;
+		const toolPane = this.contextKeys.getValue(ChatConversationPageContext.key) === true
+			|| this.contextKeys.getValue(SessionsCodeEditorContext.key) === true;
+		const showEditor = wanted('editor') && (area.hasContent || toolPane || this.primaryPart === 'editor' || !wanted('sessions'));
+		const eligible = !this.customViewVisible && showEditor && (area.hasTools || toolPane);
 		// Product editors also borrow width from their companion conversation so
 		// opening navigation does not immediately hide it again beside a document.
 		const overflow = showEditor && (this.primaryPart === 'editor' || eligible && conversationView.part instanceof SessionsPart);
@@ -923,7 +922,7 @@ export class DesktopWorkbenchLayout
 		return this.isPartVisible('editor');
 	}
 
-	public async toggleSidePane(openEmpty: () => Promise<void>): Promise<boolean> {
+	public toggleSidePane(): boolean {
 		const editors = this.editorParts;
 		const code = this.contextKeys.getValue(SessionsCodeEditorContext.key) === true;
 		const chat = this.contextKeys.getValue(ChatConversationPageContext.key) === true;
@@ -940,18 +939,16 @@ export class DesktopWorkbenchLayout
 
 		const groups = editors.mainWindowGroups.filter(group => group.inputs.length && editors.isGroupVisible(group.id));
 		const group = chat && groups.includes(editors.activeGroup) ? editors.activeGroup : groups[0];
-		if (!group) {
-			if (code) editors.filesPart.hideDetails();
-			await openEmpty();
-		}
+		if (!group && code) editors.filesPart.hideDetails();
 		this.updateParts(() => {
 			if (group) editors.activateGroup(group.id);
 			if (group && code && this.reopenFilesDetails) editors.filesPart.showDetails();
 			this.showPart('editor');
 		});
 		if (this.isSidePaneVisible()) {
-			if (code && editors.filesDetailsVisible && !editors.filesPart.isEditorVisible) editors.filesPart.auxiliaryBar.focus();
-			else if (code || group) editors.focus();
+			if (!group) editors.area.focusCurrentTool();
+			else if (code && editors.filesDetailsVisible && !editors.filesPart.isEditorVisible) editors.filesPart.auxiliaryBar.focus();
+			else editors.focus();
 		} else if (code) {
 			this.focus();
 		}

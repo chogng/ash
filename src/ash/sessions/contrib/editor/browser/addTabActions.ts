@@ -11,12 +11,13 @@ import { Menus } from '../../../browser/menus.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { EmptyFileEditorInput } from '../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
+import { EditorReplacementTarget } from '../../../../workbench/services/editor/common/editorService.js';
 
 export const NEW_BROWSER_TAB_COMMAND_ID = 'ash.sessions.newBrowserTab';
 
 export function registerAddTabActions(
-	openFiles: () => Promise<void> | false,
-	openChanges: () => Promise<void> | false,
+	openFiles: (target?: EditorReplacementTarget) => Promise<void> | false,
+	openChanges: (target?: EditorReplacementTarget) => Promise<void> | false,
 	filesWhen: ContextKeyExpression,
 	codeWhen: ContextKeyExpression,
 ): IDisposable {
@@ -38,13 +39,14 @@ export function registerAddTabActions(
 		},
 		changes,
 	];
-	// Existing keybindings may invoke the former New Tab command directly.
-	registrations.add(CommandsRegistry.register('ash.sessions.openEditorStart', openFiles));
 	for (const [order, action] of actions.entries()) {
-		registrations.add(CommandsRegistry.register(action.id, action.run));
-		registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, {
-			command: { id: action.id, title: action.title, icon: action.icon }, when: action.when, group: 'navigation', order,
-		}));
+		registrations.add(CommandsRegistry.register(action.id, (_accessor, arg) =>
+			action.run(arg instanceof EditorReplacementTarget ? arg : undefined)));
+		for (const id of [Menus.SessionsEditorTabsBarAddTab, Menus.SessionsEmptyEditorGroupAddTab]) {
+			registrations.add(MenusRegistry.appendMenuItem(id, {
+				command: { id: action.id, title: action.title, icon: action.icon }, when: action.when, group: 'navigation', order,
+			}));
+		}
 		registrations.add(MenusRegistry.appendMenuItems(
 			[MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
@@ -57,9 +59,6 @@ export function registerAddTabActions(
 			})),
 		));
 	}
-	registrations.add(MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
-		command: { id: changes.id, title: changes.title, icon: changes.icon }, when: codeWhen, group: 'navigation', order: 1,
-	}));
 	const terminal = {
 		command: {
 			id: TerminalCommandId.CreateTerminalEditor,
@@ -70,7 +69,7 @@ export function registerAddTabActions(
 		order: actions.length,
 	};
 	registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTabsBarAddTab, terminal));
-	registrations.add(MenusRegistry.appendMenuItem(Menus.EmptyFileEditorActions, {
+	registrations.add(MenusRegistry.appendMenuItem(Menus.SessionsEmptyEditorGroupAddTab, {
 		...terminal, command: { ...terminal.command, icon: Lxicon.terminalSession },
 	}));
 	return registrations;

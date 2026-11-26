@@ -18,6 +18,8 @@ export interface IEditorGroupMenuIds {
 
 export interface IEditorGroupViewOptions {
 	readonly menuIds?: IEditorGroupMenuIds;
+	/** Primary command for Add Tab when the group supplies a launcher editor. */
+	readonly addTabCommand?: string;
 	readonly showHeader?: boolean;
 	/** Whether to keep the group header below tabs hosted in the window title bar. */
 	readonly showHeaderFor?: (editor: IResourceEditorInput | undefined) => boolean;

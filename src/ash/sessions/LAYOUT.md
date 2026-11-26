@@ -227,13 +227,15 @@ All non-phone Agents windows use the desktop detail layout. Phone viewports use 
 
 Files and Changes are editor inputs in the same group. Restoring a former Changes tool moves its tabs into that group and keeps the active selection. Each editor group owns its tabs, commands and breadcrumbs. When a tool spans the editor area's top edge and has one visible group, that group's tabs use the window title bar if there is enough space. Its toolbar and breadcrumbs stay in the pane. `DesktopWorkbenchLayout` reports the editor region to `TitlebarPart` so the conversation title and its actions stay alongside the conversation. Product pages can project their page-specific controls into the same region.
 
-The Add Tab menu provides Files, Changes, Terminal and Browser. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
+The Add Tab button opens a selectable New Tab in its editor group. Its context menu provides direct tool commands. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
 
-Opening an empty side pane selects the Files tab in the active Chat or Code group. The same `EmptyFileEditor` opens from Add Tab or the Command Palette. It searches the active workspace through Quick Access and sends URLs to the integrated browser. In Code, Open Files also reveals the docked Explorer. The Add Tab menu opens the independent Search editor when a workspace is available. When the window title bar hosts the Files tab, the empty editor has no additional header row.
+Opening an empty side pane creates a New Tab editor in the active working set. It owns the file or URL input and the tool shortcuts. An accepted choice replaces the launcher at its index in a populated group. A launcher on its own can give its pane to the selected tool. Chat uses its conversation's retained groups. Cancelling the file picker keeps the launcher open. The file picker uses Quick Access for the active workspace, and URL entry opens the integrated browser where available. In the Files group, Open Files also reveals the docked Explorer in Code. Search requires a workspace.
 
 The selected Changes tab exposes its scope and diff commands in the shared editor group.
 
-The Changes header toggles the Workbench changed-files list in both layouts. The editor owns the split and reveals selected files in the current comparison. The independent Changes view in the Auxiliary Bar uses the same Workbench list and list or tree preference. Session Rail follows the conversation pane's lifecycle and hosts branch actions, pull requests, and checks.
+The Changes header toggles the Workbench changed-files list in both layouts. The editor owns the split and reveals selected files in the current comparison. The independent Changes view in the Auxiliary Bar uses the same Workbench list and list or tree preference.
+
+SessionsPart owns Session Rail and exposes its toggle beside the active Code conversation title. The rail follows the conversation pane's lifecycle and hosts branch actions, pull requests, and checks.
 
 Alt-drag on a tool header and Alt+Shift+Arrow move the tool card in the outer Grid.
 

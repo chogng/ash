@@ -1,7 +1,7 @@
 import { getWindow } from '../../../../base/browser/dom.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { EditorReplacementTarget, IEditorService } from '../../../services/editor/common/editorService.js';
 import { TerminalEditor } from './terminalEditor.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -331,8 +331,10 @@ export function registerTerminalActions(): void {
 			});
 		}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const instance = await accessor.get(ITerminalService).createTerminal({ location: TerminalLocation.Editor });
+		override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+			const instance = await accessor.get(ITerminalService).createTerminal({
+				location: target instanceof EditorReplacementTarget ? { editorTarget: target } : TerminalLocation.Editor,
+			});
 			(await instance.xtermReadyPromise)?.focus();
 		}
 	});
