@@ -86,7 +86,9 @@
 	);
 }
 
-.ash-menu > .ash-action-view-item.focused > .ash-button {
+.ash-menu:where(:not(.pointer-navigation))
+	> .ash-action-view-item.focused
+	> .ash-button {
 	outline: var(--ash-strokeThickness) solid
 		var(
 			--ash-menu-style-selection-border-color,

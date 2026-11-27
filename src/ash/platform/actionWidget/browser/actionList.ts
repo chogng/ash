@@ -653,13 +653,10 @@ export class ActionList<T> extends Disposable {
 
 	private focusFromFilter(direction: 1 | -1): void {
 		const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !isDisabled(item));
-		const current = this.focusedEntry ? candidates.indexOf(this.focusedEntry) : -1;
-		const index = current < 0 ? (direction === 1 ? 0 : candidates.length - 1) : current + direction;
-		const next = candidates[index];
+		// Focus is outside the menu. Enter the results at the edge in the requested direction.
+		const next = direction === 1 ? candidates[0] : candidates.at(-1);
 		if (next) {
 			this.menu?.focus(this.visibleItems.indexOf(next));
-		} else if (direction === 1 && this.focusedEntry) {
-			this.focus();
 		}
 	}
 

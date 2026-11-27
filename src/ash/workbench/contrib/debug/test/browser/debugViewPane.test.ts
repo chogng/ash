@@ -1259,7 +1259,7 @@ suite('debug browser component', () => {
 			expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
 			await dropdown.click();
 			await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
-			expect(await page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height))).toEqual([22, 22, 22]);
+			await expect.poll(() => page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height))).toEqual([22, 22, 22]);
 			await expect(page.getByRole('menuitemradio', { name: 'All（复合配置）', exact: true })).toBeVisible();
 			await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
 			await expect(dropdown).toBeFocused();

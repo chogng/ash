@@ -12,6 +12,7 @@ import { getActionForAltMode, type IAction, type IActionRunner, Separator, Subme
 import { RunOnceScheduler } from '../../../common/async.js';
 import { onUnexpectedError } from '../../../common/errors.js';
 import { addDisposableListener, isNode, h, ModifierKeyEmitter, getActiveElement } from '../../dom.js';
+import { isModifierKey } from '../../keyboardEvent.js';
 import type { ResolvedKeybinding } from '../../../common/keybindings.js';
 import { MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { Scrollable } from '../../../common/scrollable.js';
@@ -733,7 +734,7 @@ export class Menu extends ActionBar {
 	protected override handleNavigation(event: KeyboardEvent): void {
 		const element = this.domNode;
 		const ownerDocument = element.ownerDocument;
-		if (event.isComposing || event.defaultPrevented) return;
+		if (event.isComposing || event.defaultPrevented || isModifierKey(event)) return;
 		element.classList.remove('pointer-navigation');
 		let handled = true;
 		switch (event.key) {
@@ -804,6 +805,8 @@ export class Menu extends ActionBar {
 		if (typeof target === 'number') {
 			const entry = this.entries[target];
 			if (entry?.action.enabled) {
+				// A host such as a searchable action list can return focus directly to a row.
+				this.domNode.classList.remove('pointer-navigation');
 				entry.item.focus();
 				return;
 			}
@@ -816,6 +819,7 @@ export class Menu extends ActionBar {
 	}
 
 	focusFirst(): void {
+		this.domNode.classList.remove('pointer-navigation');
 		const first = this.entries.find(entry => entry.action.enabled);
 		if (first) first.item.focus();
 		else this.domNode.focus();
