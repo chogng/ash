@@ -188,6 +188,69 @@ void (async () => {
 	});
 }
 
+for (const failure of ['rejection', 'synchronous throw'] as const) {
+	test(`Desktop drains storage before closing the logger after a shutdown ${failure}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		const resultPath = testInfo.outputPath('shutdown.json');
+		const entry = testInfo.outputPath('quit-with-service-failure.mjs');
+		await mkdir(userDataDirectory, { recursive: true });
+		await writeFile(entry, `
+import { app } from 'electron/main';
+import { writeFileSync } from 'node:fs';
+import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
+import { LoggerService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/log/electron-main/loggerService.js')).href)};
+import { StorageMainService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/storage/electron-main/storageMainService.js')).href)};
+import { UserKeyboardLayoutMainService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js')).href)};
+import { startElectronApplication } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)};
+bootstrapElectronMain();
+app.setAppPath(${JSON.stringify(desktop)});
+const events = [];
+const keyboardFailed = Promise.withResolvers();
+const failKeyboard = () => {
+	events.push('keyboard-failed');
+	keyboardFailed.resolve();
+	throw new Error('Deliberate keyboard layout shutdown failure');
+};
+const closeKeyboard = UserKeyboardLayoutMainService.prototype.close;
+UserKeyboardLayoutMainService.prototype.close = function() {
+	if (${JSON.stringify(failure)} === 'synchronous throw') {
+		this.dispose();
+		failKeyboard();
+	}
+	return closeKeyboard.call(this).then(failKeyboard);
+};
+const closeStorage = StorageMainService.prototype.close;
+StorageMainService.prototype.close = async function() {
+	// Start real disk work once the other participant has failed.
+	await keyboardFailed.promise;
+	await this.updateItems({ scope: 'application', id: 'application' }, 'test.shutdown', { value: 'saved', target: 'machine' });
+	await closeStorage.call(this);
+	events.push('storage-closed');
+};
+const closeLogger = LoggerService.prototype.close;
+LoggerService.prototype.close = async function() {
+	events.push('logger-closing');
+	await closeLogger.call(this);
+};
+app.once('quit', () => writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify(events)));
+app.once('browser-window-created', (_event, window) => {
+	window.webContents.once('did-finish-load', () => setImmediate(() => app.quit()));
+});
+await startElectronApplication();
+`);
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
+		expect(result.code, result.output).toBe(0);
+		expect(result.output).toContain('Deliberate keyboard layout shutdown failure');
+		expect(JSON.parse(await readFile(resultPath, 'utf8'))).toEqual(['keyboard-failed', 'storage-closed', 'logger-closing']);
+		const storage = JSON.parse(await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8'));
+		expect(storage.storages).toContainEqual(expect.objectContaining({
+			identity: { scope: 'application', id: 'application' },
+			entries: expect.objectContaining({ 'test.shutdown': { value: 'saved', target: 'machine' } }),
+		}));
+	});
+}
+
 test('Desktop starts when its application entry loads after Electron is ready', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });

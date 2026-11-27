@@ -10,7 +10,7 @@ import { Lazy } from '../../../base/common/lazy.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
-import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
+import { StorageScope, StorageTarget, WillSaveStateReason } from '../../storage/common/storage.js';
 import { ILogService } from '../../log/common/log.js';
 import { IBrowserDownloadService, type BrowserDownload, type BrowserDownloadState } from '../common/browserDownloads.js';
 
@@ -27,7 +27,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	private readonly reservedPaths = new Set<string>();
 	private readonly progressChanged = this._register(new RunOnceScheduler(() => this.changes.fire(), 100));
 	private readonly save = this._register(new RunOnceScheduler(() => this.persist(), 500));
-	private readonly ready: Promise<void>;
+	private initialization: Promise<void> | undefined;
 	private configuredDirectory: string | undefined;
 	private readonly defaultDirectory = new Lazy(() => {
 		try {
@@ -40,14 +40,23 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	});
 	private ask = true;
 	private loaded = false;
+	private isStorageClosing = false;
 	constructor(
 		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
 		@ILogService private readonly log: ILogService,
 	) {
 		super();
-		this.ready = this.restore().then(() => { this.loaded = true; });
-		void this.ready.catch(error => this.log.error('browserDownloads', error));
-		this._register(storage.onWillSaveState(() => this.persist()));
+		this._register(storage.onWillSaveState(({ reason }) => {
+			this.persist();
+			if (reason === WillSaveStateReason.SHUTDOWN) {
+				this.isStorageClosing = true;
+				this.save.cancel();
+			}
+		}));
+	}
+
+	initialize(): Promise<void> {
+		return this.initialization ??= this.restore().then(() => { this.loaded = true; });
 	}
 	private get directory(): string { return this.configuredDirectory ?? this.defaultDirectory.value; }
 	private async restore(): Promise<void> {
@@ -73,7 +82,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 		this.changes.fire();
 	}
 	async getState(): Promise<BrowserDownloadState> {
-		await this.ready;
+		await this.initialize();
 		return { directory: this.directory, items: [...this.items.values()].sort((a, b) => b.time - a.time) };
 	}
 	async chooseDirectory(): Promise<string | undefined> {
@@ -132,7 +141,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 		return true;
 	}
 	async perform(id: string, action: 'open' | 'show' | 'deleteFile' | 'remove'): Promise<void> {
-		await this.ready;
+		await this.initialize();
 		const entry = this.items.get(id);
 		if (!entry) throw new Error(localize({ bundle: 'ash', key: 'downloads.unavailable' }, 'This download record is unavailable.'));
 		if (this.active.has(id)) throw new Error(localize({ bundle: 'ash', key: 'downloads.active' }, 'Wait for the download to finish before changing its file or record.'));
@@ -147,7 +156,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 		this.changes.fire(); this.persist();
 	}
 	private persist(): void {
-		if (!this.loaded) { void this.ready.then(() => this.persist()).catch(error => this.log.error('browserDownloads', error)); return; }
+		if (!this.loaded || this.isStorageClosing) { return; }
 		const values = [...this.items.values()].sort((a, b) => b.time - a.time).slice(0, 1000)
 			.map(entry => entry.state === 'progressing' ? { ...entry, state: 'interrupted' } : entry);
 		// Enqueue synchronously so the application storage's shutdown barrier includes this write.
@@ -156,6 +165,7 @@ export class BrowserDownloadMainService extends Disposable implements IBrowserDo
 	}
 	protected override disposeCore(): void {
 		for (const { item, cleanup } of this.active.values()) { cleanup(); item.cancel(); }
-		this.active.clear(); this.persist(); super.disposeCore();
+		this.active.clear();
+		super.disposeCore();
 	}
 }

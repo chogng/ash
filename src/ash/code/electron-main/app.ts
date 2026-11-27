@@ -723,6 +723,8 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
 		const browserDownloads = this._register(this.windowServices.createInstance(BrowserDownloadMainService));
+		await browserDownloads.initialize().catch(error => this.logService.error('browserDownloads', error));
+		throwIfCancelled(token);
 		this.windowServices.registerInstance(IBrowserDownloadService, browserDownloads);
 		this.mainProcessIpcServer.registerChannel(BrowserDownloadsChannel, browserDownloadsChannel(browserDownloads));
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
@@ -2816,20 +2818,29 @@ export class AshApplication extends Disposable {
 	};
 
 	private closePersistentServices(): Promise<void> {
-		this.maintenance.clear();
 		const services = this.persistentServices;
-		this.closePersistentServicesPromise ??= Promise.all([
-			this.remoteTunnel.value?.stopTunnel(),
-			this.invitationPersistence.catch(() => { }).then(() => this.storageMainService?.close()),
-			this.stateService.close(),
+		// Start each step in the barrier so a synchronous throw cannot skip the remaining services.
+		this.closePersistentServicesPromise ??= Promise.allSettled([
+			() => this.maintenance.clear(),
+			() => this.remoteTunnel.value?.stopTunnel(),
+			async () => {
+				await this.invitationPersistence.catch(() => { });
+				await this.storageMainService?.close();
+			},
+			() => this.stateService.close(),
 			...(services ? [
-				services.configuration.dispose(),
-				services.userKeyboardLayout.close(),
+				() => services.configuration.dispose(),
+				() => services.userKeyboardLayout.close(),
 			] : []),
-		]).catch(error => {
-			this.logService.error('lifecycle', 'Failed to close persistent services', error);
-			throw error;
-		}).finally(() => this.loggerService.close()).then(() => undefined);
+		].map(close => Promise.resolve().then(close))).then(results => {
+			const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+			for (const error of failures) {
+				this.logService.error('lifecycle', 'Failed to close persistent services', error);
+			}
+			if (failures.length > 0) {
+				throw new AggregateError(failures, 'Failed to close persistent services');
+			}
+		}).finally(() => this.loggerService.close());
 		return this.closePersistentServicesPromise;
 	}
 
