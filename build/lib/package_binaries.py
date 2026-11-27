@@ -24,8 +24,8 @@ _BINARIES = {
     "ash-host-integrity": ("ash-host-integrity", "--host-integrity-bin"),
     "ash-host-logs": ("ash-host-logs", "--host-logs-bin"),
     "ash-image-opener": ("ash-image-opener", "--image-opener-bin"),
-    "ash-livekit-client": ("ash-livekit-client", "--livekit-client-bin"),
-    "ash-realtime-voice": ("ash-realtime-voice", "--recognizer-bin"),
+    "ash-livekit-client": ("ash-livekit-host", "--livekit-client-bin"),
+    "ash-realtime-voice": ("ash-recognizer-host", "--recognizer-bin"),
     "ash-debug-javascript": (
         "ash-debug-javascript",
         "--javascript-debug-extension-bin",
@@ -42,7 +42,7 @@ _BINARIES = {
     "ash-update-host": ("ash-product-update", "--update-host-bin"),
     "ash-package-store": ("ash-package-store", "--package-store-bin"),
     "bwrap": ("ash-bwrap", "--bwrap-bin"),
-    "ash-voice-host": ("ash-voice-host", "--voice-host-bin"),
+    "ash-voice-host": ("ash-audio-host", "--voice-host-bin"),
     "ash-collab-server": (
         "ash-collab-server",
         "--collab-server-bin",
@@ -117,9 +117,7 @@ def build_binaries(
     if not missing:
         return outputs
 
-    # Inspect the union only to prepare external inputs once. Compilation still
-    # separates local hosts: Cargo must not unify their device/inference features
-    # into the App Server or Remote executable graphs.
+    # Prepare external inputs once even when publication needs separate groups.
     command = _build_command(
         repository_root, spec, missing, cargo, cargo_profile, host_build
     )
@@ -141,19 +139,28 @@ def build_binaries(
     if cargo_profile == "release" and "apple-darwin" in spec.target:
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
 
-    local_hosts = {
-        "ash-computer-use",
+    media_hosts = {
         "ash-livekit-client",
         "ash-realtime-voice",
         "ash-voice-host",
     }
-    if plan and cargo_profile == "dev-small":
-        # The independently distributed Remote Server tracks its own Cargo inputs.
-        local_hosts.add("ash-remote-server")
-    core = [name for name in missing if name not in local_hosts]
-    groups = ([core] if core else []) + [
-        [name] for name in missing if name in local_hosts
-    ]
+    host_development = host_build and cargo_profile == "dev-small"
+    # Windows' incremental publisher preloads App Server while media builds.
+    # Preparation can schedule the independent process packages together.
+    joint_media = host_development and not (
+        spec.is_windows and on_rebuilt_binary is not None
+    )
+    local_hosts = {"ash-computer-use"}
+    if not joint_media:
+        local_hosts |= media_hosts
+    shared = [name for name in missing if name not in local_hosts]
+    groups = [shared] if shared else []
+    if host_development and not joint_media:
+        media = [name for name in missing if name in media_hosts]
+        if media:
+            groups.append(media)
+        local_hosts -= media_hosts
+    groups.extend([name] for name in missing if name in local_hosts)
     for group in groups:
         reused = plan.reuse(group) if plan else None
         if reused is not None:
@@ -216,11 +223,9 @@ def _build_command(
         command.extend(["--target", spec.target])
     for name in missing:
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
-    if "ash-voice-host" in missing:
-        command.extend(["--features", "ash-voice-host/host"])
-    for name in ("ash-livekit-client", "ash-realtime-voice"):
+    for name in ("ash-livekit-client", "ash-realtime-voice", "ash-voice-host"):
         if name in missing:
-            command.extend(["--features", f"{name}/host"])
+            command.extend(["--features", f"{_BINARIES[name][0]}/host"])
     return command
 
 

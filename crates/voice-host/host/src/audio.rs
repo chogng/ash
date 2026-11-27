@@ -1,8 +1,8 @@
-use crate::Processing;
-use crate::SampleRate;
 use rubato::Resampler;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use std::collections::VecDeque;
+use voice_host::Processing;
+use voice_host::SampleRate;
 
 pub(super) struct RateConverter {
     engine: rubato::Async<f32>,

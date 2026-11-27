@@ -51,11 +51,14 @@ members = [
     "crates/rust-analysis",
     "crates/rust-build-ir",
     "crates/livekit-client",
+    "crates/livekit-client/host",
     "crates/voice-agent",
     "crates/livekit-api",
     "crates/call",
     "crates/voice-host",
+    "crates/voice-host/host",
     "crates/realtime-voice",
+    "crates/realtime-voice/host",
     "crates/system-dictation",
     "crates/screen-capture",
     "crates/computer-use-protocol",
@@ -742,7 +745,9 @@ codegen-units = 256
 codegen-units = 256
 
 [profile.dev-small.package.ash-app-server-runtime]
-codegen-units = 256
+# Reduce LLVM build time while keeping macOS unwind metadata within its budget.
+opt-level = "z"
+codegen-units = 512
 
 [profile.dev-small.package.ash-app-server-diff]
 codegen-units = 256

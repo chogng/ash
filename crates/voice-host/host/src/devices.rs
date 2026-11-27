@@ -1,9 +1,6 @@
 use super::AudioDevice;
 use super::audio::CaptureProcessor;
 use super::audio::RateConverter;
-use crate::AudioConfig;
-use crate::CaptureState;
-use crate::Direction;
 use cpal::FromSample;
 use cpal::SizedSample;
 use cpal::traits::DeviceTrait;
@@ -16,11 +13,14 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
+use voice_host::AudioConfig;
+use voice_host::CaptureState;
+use voice_host::Direction;
 
 const BLOCK: usize = 256;
 const AGE: Duration = Duration::from_millis(200);
 
-pub(super) fn input_devices() -> Result<Vec<crate::InputDevice>, String> {
+pub(super) fn input_devices() -> Result<Vec<voice_host::InputDevice>, String> {
     let host = cpal::default_host();
     let default = host
         .default_input_device()
@@ -31,7 +31,7 @@ pub(super) fn input_devices() -> Result<Vec<crate::InputDevice>, String> {
         .map_err(|error| error.to_string())?
         .map(|device| {
             let id = device.id().map_err(|error| error.to_string())?;
-            Ok(crate::InputDevice {
+            Ok(voice_host::InputDevice {
                 is_default: default.as_ref() == Some(&id),
                 id: id.to_string(),
                 label: device.to_string(),

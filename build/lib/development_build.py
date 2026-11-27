@@ -68,7 +68,12 @@ def _sources(roots: list[str], tracked: list[str], checked: dict | None = None) 
 def _configuration(root: Path, command: list[str]) -> str:
     # Include the complete workspace manifest set, including new glob members and
     # path dependencies. This discovery never substitutes its own feature resolver.
-    files = {root / "Cargo.toml", root / "Cargo.lock", Path(__file__)}
+    files = {
+        root / "Cargo.toml",
+        root / "Cargo.lock",
+        Path(__file__),
+        Path(__file__).with_name("package_binaries.py"),
+    }
     pending = [root / "Cargo.toml"]
     visited = set()
     while pending:

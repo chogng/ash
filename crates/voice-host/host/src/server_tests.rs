@@ -1,10 +1,10 @@
 use super::*;
-use crate::Direction;
-use crate::Processing;
-use crate::SampleRate;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use voice_host::Direction;
+use voice_host::Processing;
+use voice_host::SampleRate;
 
 struct Device {
     dropped: Arc<AtomicUsize>,

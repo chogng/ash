@@ -1,0 +1,2 @@
+# The development and release package builders invoke Cargo for the media engine.
+exports_files(["Cargo.toml"])

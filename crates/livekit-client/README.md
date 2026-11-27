@@ -1,5 +1,7 @@
 # ash-livekit-client
 
+`ash-livekit-client` 提供管道客户端和协议，`ash-livekit-host` 构建 `ash-livekit-client` 媒体程序。
+
 - 使用官方 LiveKit 信令协议与 `webrtc-rs`，自行管理房间、轨道和媒体收发。
 - 发布、接收 48 kHz 单声道 PCM，保留参与者和轨道身份。
 - 输出有界控制事件、音频和共享视频队列，丢弃超过 200 ms 的积压帧。
@@ -15,24 +17,24 @@
 真实服务测试需要显式提供已核验的 LiveKit Server。当前验证版本为 1.13.7：
 
 ```sh
-ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-client --features host --test room -- --ignored
+ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-host --features host --test room -- --ignored
 ```
 
 测试启动临时回环服务，验证实际 Opus 音频双向传输，以及共享视频的解码、停止和重新发布。视频源为确定性测试画面；不打开麦克风，不代表真实设备或公网连通性验收。
 
 ### 频道通话联调
 
-`tests/channels.rs` 启动真实协作服务和 LiveKit，用两个独立媒体进程通过频道权限入房。
+`host/tests/channels.rs` 启动真实协作服务和 LiveKit，用两个独立媒体进程通过频道权限入房。
 验证双向可辨识音频、静音与恢复、编辑者降为只读后的收听与发布限制，以及撤权后旧连接退出、缓存票据无法收听或向新房间注入音频。服务进程和临时配置随测试退出清理。
 
 ```sh
 scripts/.venv/bin/python -B build/lib/livekit.py aarch64-apple-darwin
 scripts/.venv/bin/python -B scripts/cargo.py build --profile ci-test \
-  -p ash-collab-server -p ash-livekit-client --features ash-livekit-client/host
+  -p ash-collab-server -p ash-livekit-host --features ash-livekit-host/host
 ASH_TEST_LIVEKIT_SERVER="$PWD/third_party/.cache/livekit/1.13.7/aarch64-apple-darwin/livekit-server" \
 ASH_TEST_COLLABORATION_SERVER="$PWD/.build/cargo/ci-test/ash-collab-server" \
 ASH_LIVEKIT_CLIENT_PATH="$PWD/.build/cargo/ci-test/ash-livekit-client" \
-just test ash-livekit-client --features host --test channels -- --ignored --nocapture
+just test ash-livekit-host --features host --test channels -- --ignored --nocapture
 ```
 
 以上为 macOS ARM64 示例；其他平台使用对应目标与可执行文件后缀。

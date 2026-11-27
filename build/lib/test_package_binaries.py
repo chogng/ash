@@ -62,15 +62,44 @@ class BinaryIsolationTests(unittest.TestCase):
                         )
                     callback.assert_not_called()
 
-    def test_local_host_features_never_enter_core_build(self):
+    def test_core_and_media_build_together_for_development_preparation(self):
+        names = [
+            "ash-app-server",
+            "ash-code-mode-host",
+            "ash-livekit-client",
+            "ash-realtime-voice",
+            "ash-voice-host",
+        ]
+        core, media = names[:2], names[2:]
+        for target, profile, host_build, preload, groups in (
+            ("aarch64-apple-darwin", "dev-small", True, True, [names]),
+            ("x86_64-pc-windows-msvc", "dev-small", True, False, [names]),
+            ("x86_64-pc-windows-msvc", "dev-small", True, True, [core, media]),
+            (
+                "aarch64-apple-darwin",
+                "dev-small",
+                False,
+                True,
+                [core, *[[name] for name in media]],
+            ),
+            (
+                "aarch64-apple-darwin",
+                "release",
+                True,
+                True,
+                [core, *[[name] for name in media]],
+            ),
+        ):
+            with self.subTest(
+                target=target, profile=profile, host_build=host_build, preload=preload
+            ):
+                self.assert_build_groups(
+                    target, profile, host_build, preload, names, groups
+                )
+
+    def assert_build_groups(self, target, profile, host_build, preload, names, groups):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            names = [
-                "ash-app-server",
-                "ash-livekit-client",
-                "ash-realtime-voice",
-                "ash-voice-host",
-            ]
             for name in names:
                 (root / name).touch()
                 (root / name).chmod(0o755)
@@ -94,6 +123,11 @@ class BinaryIsolationTests(unittest.TestCase):
                         )
                 return subprocess.CompletedProcess(command, 0, "\n".join(output))
 
+            rebuilt = []
+
+            def completed(name, path):
+                rebuilt.append((name, path, len(commands)))
+
             with (
                 patch.object(
                     package_binaries,
@@ -114,39 +148,70 @@ class BinaryIsolationTests(unittest.TestCase):
                 patch.object(package_binaries, "leased_cache"),
                 patch.object(package_binaries.subprocess, "run", side_effect=run),
             ):
-                rebuilt = []
                 result = package_binaries.build_binaries(
                     root,
-                    TARGETS["aarch64-apple-darwin"],
+                    TARGETS[target],
                     dict.fromkeys(names),
                     cargo="cargo",
-                    cargo_profile="dev-small",
-                    on_rebuilt_binary=lambda name, path: rebuilt.append(
-                        (name, path, len(commands))
-                    ),
+                    cargo_profile=profile,
+                    host_build=host_build,
+                    on_rebuilt_binary=completed if preload else None,
                 )
             self.assertEqual(set(result), set(names))
             self.assertEqual(
-                [(name, root / name, index + 1) for index, name in enumerate(names)],
+                [
+                    (name, root / name, index + 1)
+                    for index, group in enumerate(groups)
+                    for name in group
+                ]
+                if preload
+                else [],
                 rebuilt,
             )
             packages.assert_called_once()
             environment.assert_called_once_with(
-                TARGETS["aarch64-apple-darwin"],
+                TARGETS[target],
                 {"ash-app-server-protocol", "sherpa-onnx-sys"},
                 environ=None,
             )
             protocol.assert_called_once_with(root=root, cargo="cargo")
-            selection = packages.call_args.args[1]
-            for name in names[1:]:
-                self.assertIn(name + "/host", selection)
-            self.assertEqual(len(commands), 4)
-            self.assertNotIn("--features", commands[0])
-            self.assertIn("ash-app-server", commands[0])
-            for name, command in zip(names[1:], commands[1:]):
-                self.assertEqual(command.count("--bin"), 1)
-                self.assertIn(name + "/host", command)
-                self.assertNotIn("ash-app-server", command)
+            binary_packages = {
+                "ash-app-server": "ash-app-server",
+                "ash-code-mode-host": "ash-code-mode-host",
+                "ash-livekit-client": "ash-livekit-host",
+                "ash-realtime-voice": "ash-recognizer-host",
+                "ash-voice-host": "ash-audio-host",
+            }
+            self.assertEqual(len(commands), len(groups))
+            for group, command in zip(groups, commands, strict=True):
+                self.assertEqual(
+                    {
+                        command[i + 1]
+                        for i, flag in enumerate(command)
+                        if flag == "--features"
+                    },
+                    {
+                        f"{binary_packages[name]}/host"
+                        for name in group
+                        if name in names[2:]
+                    },
+                )
+                self.assertEqual(
+                    [
+                        command[i + 1]
+                        for i, flag in enumerate(command)
+                        if flag == "--bin"
+                    ],
+                    group,
+                )
+                self.assertEqual(
+                    [
+                        command[i + 1]
+                        for i, flag in enumerate(command)
+                        if flag == "--package"
+                    ],
+                    [binary_packages[name] for name in group],
+                )
 
     @patch.dict("build.lib.package_binaries.os.environ", {}, clear=True)
     def test_size_optimization_is_limited_to_windows_x64_release_packages(self):

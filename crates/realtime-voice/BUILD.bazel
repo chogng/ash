@@ -5,5 +5,5 @@ ash_rust_crate(
     crate_name = "realtime_voice",
     data = ["models/dictation.json"],
     # App Server enables cloud transcription in the resolved Cargo product graph.
-    crate_features = ["cloud", "host"],
+    crate_features = ["cloud"],
 )

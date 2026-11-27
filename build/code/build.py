@@ -32,9 +32,9 @@ BINARY_PACKAGES = {
     "ash-app-server": "ash-app-server",
     "ash-app-server-daemon": "ash-app-server-daemon",
     "ash-code-mode-host": "ash-code-mode-host",
-    "ash-voice-host": "ash-voice-host",
-    "ash-livekit-client": "ash-livekit-client",
-    "ash-realtime-voice": "ash-realtime-voice",
+    "ash-voice-host": "ash-audio-host",
+    "ash-livekit-client": "ash-livekit-host",
+    "ash-realtime-voice": "ash-recognizer-host",
     "bwrap": "ash-bwrap",
 }
 
@@ -108,11 +108,9 @@ def build_binaries(
     ]
     for binary in binaries:
         command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
-    if "ash-voice-host" in binaries:
-        command.extend(["--features", "ash-voice-host/host"])
-    for name in ("ash-livekit-client", "ash-realtime-voice"):
+    for name in ("ash-livekit-client", "ash-realtime-voice", "ash-voice-host"):
         if name in binaries:
-            command.extend(["--features", f"{name}/host"])
+            command.extend(["--features", f"{BINARY_PACKAGES[name]}/host"])
     packages = cargo_command_packages("cargo", command[1:], REPOSITORY_ROOT)
     if "ash-app-server-protocol" in packages:
         generate_protocol(root=REPOSITORY_ROOT)

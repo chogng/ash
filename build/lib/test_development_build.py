@@ -133,7 +133,7 @@ class DevelopmentBuildTests(unittest.TestCase):
             self.assertEqual(expected, build())
             self.assertEqual(3, len(calls))
             self.assertIn("ash-app-server", calls[-1])
-            self.assertNotIn("ash-voice-host/host", calls[-1])
+            self.assertNotIn("ash-audio-host", calls[-1])
             (self.root / "crates/first/src/lib.rs").write_text("broken source")
             with patch.object(
                 package_binaries.subprocess,
@@ -144,11 +144,11 @@ class DevelopmentBuildTests(unittest.TestCase):
                     build()
             self.assertFalse((self.directory / "build-plan.json").exists())
 
-    def test_remote_server_is_a_separate_development_build_group(self):
+    def test_remote_server_shares_the_development_build_group(self):
         builds = []
         inputs = dict.fromkeys(["ash-app-server", "ash-remote-server"])
 
-        def build(_root, _target, group, *_args):
+        def build(_root, _target, group, *_args, **_kwargs):
             builds.append(group)
             return {name: self.root / name for name in group}
 
@@ -169,7 +169,7 @@ class DevelopmentBuildTests(unittest.TestCase):
                 protocol_prepared=True,
                 plan_directory=self.directory,
             )
-        self.assertEqual([["ash-app-server"], ["ash-remote-server"]], builds)
+        self.assertEqual([["ash-app-server", "ash-remote-server"]], builds)
 
     def test_content_edit_with_preserved_timestamp_rebuilds_only_owner_group(self):
         self.seed()
@@ -230,7 +230,23 @@ class DevelopmentBuildTests(unittest.TestCase):
         self.assertIsNone(plan.reuse(["first"]))
 
     def test_configuration_changes_discard_cached_dependency_selection(self):
-        for kind in ["lock", "config", "manifest", "target", "environment", "member"]:
+        build_policy = self.root / "package_binaries.py"
+        build_policy.write_text("# original grouping\n")
+        self.enterContext(
+            patch(
+                "build.lib.development_build.__file__",
+                str(self.root / "development_build.py"),
+            )
+        )
+        for kind in [
+            "lock",
+            "config",
+            "manifest",
+            "target",
+            "environment",
+            "member",
+            "build-policy",
+        ]:
             with self.subTest(kind=kind):
                 self.seed()
                 command = self.command.copy()
@@ -248,6 +264,8 @@ class DevelopmentBuildTests(unittest.TestCase):
                     self.enterContext(
                         patch.dict(os.environ, {"RUSTFLAGS": "-Copt-level=1"})
                     )
+                elif kind == "build-policy":
+                    build_policy.write_text("# changed grouping\n")
                 else:
                     member = self.root / "crates/new"
                     member.mkdir()

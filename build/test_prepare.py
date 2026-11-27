@@ -346,10 +346,20 @@ class PrepareTests(unittest.TestCase):
     def test_preparation_builds_one_backend_set_and_delegates_assembly(self) -> None:
         self.assert_preparation_contract("x86_64-pc-windows-msvc")
 
+    def test_web_preparation_provides_the_media_capability(self) -> None:
+        self.assert_preparation_contract(
+            "x86_64-pc-windows-msvc", runtime_name="packaged-node"
+        )
+
     def test_linux_preparation_preserves_both_bubblewrap_licenses(self) -> None:
         self.assert_preparation_contract("x86_64-unknown-linux-gnu")
 
-    def assert_preparation_contract(self, target: str) -> None:
+    def assert_preparation_contract(
+        self,
+        target: str,
+        *,
+        runtime_name: str = "host-provided-node",
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for name in (
@@ -390,7 +400,10 @@ class PrepareTests(unittest.TestCase):
                 path = root / name
                 path.write_text(name)
                 binaries[name] = path
-            if target == "x86_64-pc-windows-msvc":
+            if (
+                target == "x86_64-pc-windows-msvc"
+                and runtime_name == "host-provided-node"
+            ):
                 provider = root / "ash-computer-use"
                 provider.write_text("ash-computer-use")
                 binaries["ash-computer-use"] = provider
@@ -411,7 +424,7 @@ class PrepareTests(unittest.TestCase):
                 archive_sha256="b" * 64,
             )
             runtime.executable.write_text("rg")
-            args = prepare.parse_arguments([])
+            args = prepare.parse_arguments(["--javascript-runtime", runtime_name])
 
             def capability(output, *_):
                 output.mkdir(parents=True)
@@ -440,6 +453,13 @@ class PrepareTests(unittest.TestCase):
                 patch.object(prepare, "build_binaries", return_value=binaries) as build,
                 patch.object(
                     prepare, "resolve_livekit", return_value=binaries["ash-app-server"]
+                ) as livekit,
+                patch.object(
+                    prepare,
+                    "resolve_node",
+                    return_value=SimpleNamespace(
+                        executable=root / "node", license_file=root / "node-license"
+                    ),
                 ),
                 patch.object(prepare, "resolve_ripgrep", return_value=runtime),
                 patch.object(prepare, "resolve_tgrep", return_value=runtime),
@@ -457,21 +477,27 @@ class PrepareTests(unittest.TestCase):
             self.assertTrue(build.call_args.kwargs["protocol_prepared"])
             self.assertEqual(set(binaries), set(build.call_args.args[2]))
             self.assertEqual(binaries["ash-package-store"], publish.call_args.args[1])
-            # Desktop development keeps media available without a first-use installation.
+            livekit.assert_called_once_with(target, root=root)
             with (
                 patch.object(prepare, "build_package_directory") as assemble,
                 patch.object(prepare, "read_workspace_version", return_value="0.1.0"),
             ):
                 publish.call_args.args[2](root / "staging")
+            bundled = runtime_name == "host-provided-node"
+            for field, name in (
+                ("livekit_client_binary", "ash-livekit-client"),
+                ("voice_host_binary", "ash-voice-host"),
+                ("recognizer_binary", "ash-realtime-voice"),
+            ):
+                self.assertEqual(
+                    binaries[name] if bundled else None,
+                    assemble.call_args.kwargs[field],
+                )
+            self.assertIsNotNone(assemble.call_args.kwargs["livekit_package"])
             self.assertEqual(
-                binaries["ash-livekit-client"],
-                assemble.call_args.kwargs["livekit_client_binary"],
+                runtime_name == "packaged-node",
+                assemble.call_args.kwargs["media_package"] is not None,
             )
-            self.assertEqual(
-                binaries["ash-voice-host"],
-                assemble.call_args.kwargs["voice_host_binary"],
-            )
-            self.assertIsNone(assemble.call_args.kwargs["media_package"])
             self.assertEqual(
                 binaries.get("ash-computer-use"),
                 assemble.call_args.kwargs["computer_use_binary"],

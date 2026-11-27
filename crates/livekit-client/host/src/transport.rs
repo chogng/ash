@@ -9,6 +9,7 @@ use ash_websocket_client::WebSocketCloseFrame;
 use ash_websocket_client::WebSocketConnector;
 use ash_websocket_client::WebSocketMessage;
 use ash_websocket_client::WebSocketRequest;
+use livekit_client::MediaError;
 use livekit_net::TransportError;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -22,7 +23,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 static INSTALL: OnceLock<Result<(), ()>> = OnceLock::new();
 
-pub(crate) fn install() -> Result<(), crate::MediaError> {
+pub(crate) fn install() -> Result<(), MediaError> {
     match INSTALL.get_or_init(|| {
         let network = OutboundNetworkSnapshot::new(HttpClientConfig::default()).map_err(|_| ())?;
         let client = client(network).map_err(|_| ())?;
@@ -31,13 +32,12 @@ pub(crate) fn install() -> Result<(), crate::MediaError> {
         Ok(())
     }) {
         Ok(()) => Ok(()),
-        Err(()) => Err(crate::MediaError::Connection),
+        Err(()) => Err(MediaError::Connection),
     }
 }
 
-fn client(network: OutboundNetworkSnapshot) -> Result<Arc<Client>, crate::MediaError> {
-    let http =
-        UreqHttpClient::with_network(network.clone()).map_err(|_| crate::MediaError::Connection)?;
+fn client(network: OutboundNetworkSnapshot) -> Result<Arc<Client>, MediaError> {
+    let http = UreqHttpClient::with_network(network.clone()).map_err(|_| MediaError::Connection)?;
     Ok(Arc::new(Client {
         http: Arc::new(http),
         websocket: WebSocketConnector::new(network),

@@ -1,23 +1,12 @@
-//! LiveKit room client. The optional host implementation runs in the separately packaged program.
+//! LiveKit room client and wire contract for the separately launched media process.
 
-#[cfg(feature = "host")]
-pub mod backend;
-#[cfg(feature = "host")]
-mod codec;
 mod mixer;
 pub mod protocol;
 mod resample;
 #[cfg(test)]
 mod resample_tests;
 mod room;
-#[cfg(feature = "host")]
-mod rtc;
-#[cfg(feature = "host")]
-mod transport;
 mod types;
-#[cfg(all(test, feature = "host"))]
-#[path = "video_tests.rs"]
-mod video_tests;
 
 pub use mixer::AudioMixer;
 pub use protocol::ScreenSource;
@@ -28,7 +17,8 @@ pub use room::MediaRoom;
 pub use room::screen_sources;
 pub use types::*;
 
-pub(crate) fn validate_url(value: &str) -> Result<(), MediaError> {
+/// Checks room endpoints at both the caller and the media process boundaries.
+pub fn validate_url(value: &str) -> Result<(), MediaError> {
     let url = url::Url::parse(value).map_err(|_| MediaError::Address)?;
     let loopback = match url.host() {
         Some(url::Host::Domain("localhost")) => true,

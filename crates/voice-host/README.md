@@ -9,8 +9,8 @@
 
 ## 使用和构建
 
-- 默认 Cargo feature 只包含 `AudioHost` 客户端和 PCM 协议，不引入设备或 DSP 依赖。
-- `--features host` 构建设备进程。调用方通过明确的绝对文件路径启动 `AudioHost::spawn`，不依赖 PATH 或外置媒体插件。
+- `ash-voice-host` 提供 `AudioHost` 客户端和 PCM 协议。
+- `ash-audio-host` 构建 `ash-voice-host` 设备程序。调用方将程序的绝对路径传给 `AudioHost::spawn`。
 - 控制顺序为启动进程、`start`、采集/播放、`stop`、`close`；可以在同一进程中重新开始音频会话。
 - 客户端独占进程所有权，Drop 会终止 helper；父管道关闭时 helper 退出。
 - 在受管理的包或开发版本中，设备进程持有版本租约至退出；发布器不会回收它正在使用的程序。
@@ -18,9 +18,8 @@
 - 麦克风静音和播放中断分别推进采集、播放代次，各自清理旧缓冲，不停止另一方向的音频。
 
 ```sh
-just check ash-voice-host --features host
-just test ash-voice-host --features host
-just rust-warnings ash-voice-host --features host
+just verify ash-voice-host
+just verify ash-audio-host --features host
 ```
 
 ## 设计参考与验证范围

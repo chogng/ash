@@ -394,7 +394,7 @@ rustc -vV
 
 ```powershell
 just test ash-screen-capture --lib window_frames_resize_stop_and_close_release_capture -- --ignored
-just test ash-voice-host --features host
+just test ash-audio-host --features host
 pnpm run pretest:smoke:desktop
 pnpm exec playwright test --project=electron-app-server test/smoke/areas/call/call.spec.ts
 ```

@@ -947,6 +947,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-audio-host"
+version = "0.1.0"
+dependencies = [
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-voice-host",
+ "cpal",
+ "crossbeam-queue",
+ "rubato",
+ "serde_json",
+ "sonora",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "ash-automation"
 version = "0.1.0"
 dependencies = [
@@ -2407,11 +2423,26 @@ dependencies = [
 name = "ash-livekit-client"
 version = "0.1.0"
 dependencies = [
+ "ash-external-ext",
+ "base64 0.22.1",
+ "rubato",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ash-livekit-host"
+version = "0.1.0"
+dependencies = [
  "ash-call",
  "ash-external-ext",
  "ash-external-ext-sdk",
  "ash-http-client",
  "ash-livekit-api",
+ "ash-livekit-client",
  "ash-package-store",
  "ash-process-hardening",
  "ash-realtime-voice",
@@ -2420,7 +2451,6 @@ dependencies = [
  "ash-voice-host",
  "ash-websocket-client",
  "async-trait",
- "base64 0.22.1",
  "bytes",
  "futures",
  "image",
@@ -2431,12 +2461,9 @@ dependencies = [
  "oxideav-vp8",
  "rand 0.9.5",
  "rtc",
- "rubato",
  "rustls",
- "serde",
  "serde_json",
  "tempfile",
- "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite 0.28.0",
@@ -2956,12 +2983,10 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-external-ext",
- "ash-external-ext-sdk",
  "ash-http-client",
  "ash-model-provider",
  "ash-model-provider-info",
  "ash-package-store",
- "ash-process-hardening",
  "ash-protocol",
  "ash-voice-host",
  "ash-websocket-client",
@@ -2971,6 +2996,19 @@ dependencies = [
  "sherpa-onnx",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "ash-recognizer-host"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext",
+ "ash-external-ext-sdk",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-realtime-voice",
+ "serde_json",
+ "sherpa-onnx",
 ]
 
 [[package]]
@@ -3954,14 +3992,8 @@ dependencies = [
 name = "ash-voice-host"
 version = "0.1.0"
 dependencies = [
- "ash-package-store",
- "ash-process-hardening",
- "cpal",
- "crossbeam-queue",
- "rubato",
  "serde",
  "serde_json",
- "sonora",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

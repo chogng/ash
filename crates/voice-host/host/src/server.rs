@@ -5,16 +5,16 @@ mod audio;
 #[path = "devices.rs"]
 mod devices;
 
-use crate::wire;
-use crate::wire::AudioConfig;
-use crate::wire::Capture;
-use crate::wire::CaptureState;
-use crate::wire::Event;
-use crate::wire::Operation;
-use crate::wire::Request;
 use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
+use voice_host::wire;
+use voice_host::wire::AudioConfig;
+use voice_host::wire::Capture;
+use voice_host::wire::CaptureState;
+use voice_host::wire::Event;
+use voice_host::wire::Operation;
+use voice_host::wire::Request;
 
 /// The session boundary lets the same controller run against real devices and deterministic audio.
 trait AudioDevice {
@@ -156,7 +156,7 @@ impl<D: AudioDevice> Controller<D> {
     }
 }
 
-pub fn input_devices() -> Result<Vec<crate::InputDevice>, String> {
+pub fn input_devices() -> Result<Vec<voice_host::InputDevice>, String> {
     devices::input_devices()
 }
 

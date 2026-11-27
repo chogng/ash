@@ -24,7 +24,7 @@ use tokio::sync::oneshot;
 
 #[test]
 fn blocked_call_host_is_rejected_before_starting_local_devices() {
-    let mut calls = Calls::default();
+    let calls = Calls::default();
     calls.set_network_policy(OutboundNetworkPolicy::new(NetworkAccess::Hosts(
         BTreeSet::new(),
     )));

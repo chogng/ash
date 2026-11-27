@@ -1,0 +1,70 @@
+[package]
+name = "ash-livekit-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-livekit-client"
+path = "src/main.rs"
+required-features = ["host"]
+
+[features]
+host = ["dep:ash-http-client", "dep:ash-screen-capture", "dep:ash-websocket-client", "dep:async-trait", "dep:bytes", "dep:image", "dep:livekit-net", "dep:livekit-protocol", "dep:livekit-signaling", "dep:opus-rs", "dep:oxideav-vp8", "dep:rand", "dep:rtc", "dep:webrtc"]
+
+[lints]
+workspace = true
+
+[dependencies]
+ash-http-client = { workspace = true, optional = true }
+ash-package-store.workspace = true
+ash-screen-capture = { workspace = true, optional = true }
+ash-websocket-client = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../../sdk/rust" }
+image = { workspace = true, optional = true }
+livekit-client = { package = "ash-livekit-client", path = ".." }
+livekit-net = { workspace = true, optional = true }
+livekit-protocol = { workspace = true, optional = true }
+livekit-signaling = { workspace = true, optional = true }
+opus-rs = { workspace = true, optional = true }
+oxideav-vp8 = { workspace = true, optional = true }
+process-hardening.workspace = true
+rand = { workspace = true, optional = true }
+rtc = { workspace = true, optional = true }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+webrtc = { workspace = true, optional = true }
+
+[dev-dependencies]
+ash-http-client.workspace = true
+ash-external-ext.workspace = true
+ash-secrets.workspace = true
+call = { package = "ash-call", path = "../../call", features = ["runtime"] }
+futures.workspace = true
+livekit-api = { package = "ash-livekit-api", path = "../../livekit-api" }
+realtime-voice = { package = "ash-realtime-voice", path = "../../realtime-voice" }
+rustls.workspace = true
+tempfile.workspace = true
+tokio-rustls.workspace = true
+tokio-tungstenite.workspace = true
+url.workspace = true
+voice-host = { package = "ash-voice-host", path = "../../voice-host" }
+
+[[test]]
+name = "hosting"
+required-features = ["host"]
+
+[[test]]
+name = "process"
+required-features = ["host"]
+
+[[test]]
+name = "room"
+required-features = ["host"]
+
+[[test]]
+name = "rooms"
+required-features = ["host"]

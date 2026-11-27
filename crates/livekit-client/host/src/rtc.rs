@@ -1,4 +1,4 @@
-use crate::MediaError;
+use livekit_client::MediaError;
 use livekit_protocol as proto;
 use livekit_signaling::SignalClient;
 use livekit_signaling::SignalEvent;

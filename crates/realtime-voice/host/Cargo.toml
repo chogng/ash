@@ -1,0 +1,32 @@
+[package]
+name = "ash-recognizer-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-realtime-voice"
+path = "src/main.rs"
+required-features = ["host"]
+
+[features]
+host = ["dep:sherpa-onnx"]
+
+[lints]
+workspace = true
+
+[dependencies]
+ash-package-store.workspace = true
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../../sdk/rust" }
+process-hardening.workspace = true
+realtime-voice = { package = "ash-realtime-voice", path = ".." }
+sherpa-onnx = { workspace = true, optional = true }
+
+[dev-dependencies]
+ash-external-ext.workspace = true
+serde_json.workspace = true
+
+[[test]]
+name = "process"
+required-features = ["host"]

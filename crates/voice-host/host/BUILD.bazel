@@ -1,0 +1,20 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "host",
+    crate_name = "ash_audio_host",
+    crate_features = ["host"],
+    extra_deps = [
+        "@crates//:cpal",
+        "@crates//:crossbeam-queue",
+        "@crates//:rubato",
+        "@crates//:sonora",
+    ],
+)
+
+ash_rust_binary(
+    name = "ash-voice-host",
+    crate_name = "ash_voice_host",
+    crate_root = "src/main.rs",
+    deps = [":host"],
+)

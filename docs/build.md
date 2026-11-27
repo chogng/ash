@@ -578,6 +578,106 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-11-26 Desktop 后端协议依赖复用
+
+Desktop 开发构建将 App Server 和 Remote Server 放入同一个 Cargo 功能组，共用 daemon 和协议依赖。Cargo 继续按依赖判断各个程序是否需要重编译，音视频宿主仍分别构建。
+
+在 Apple M2 Max、macOS arm64、Rust 1.99.1、`dev-small` 和 12 个 jobs 下，使用相同的已预热缓存副本交替对照三轮。每轮只清理独立缓存中的 `ash-app-server-protocol` 产物，复用已生成的协议元数据。耗时覆盖开发后端的功能组选择、编译和产物校验。
+
+| 场景                     | 分组构建中位数 | 同组构建中位数 |
+| ------------------------ | -------------: | -------------: |
+| 协议及其受影响的后端重建 |       53.61 秒 |       30.08 秒 |
+| 无源码改动重跑           |        4.66 秒 |        3.10 秒 |
+
+协议重建的六次样本分别为 51.77／54.60／53.61 秒和 30.08／29.29／31.17 秒。Cargo timings 显示每轮协议库从两个约 20 秒的编译单元降至一个。最大 RSS 中位数为 2.14 GiB 和 2.14 GiB。App Server 程序均为 243.53 MiB，开发版 Remote Server 从 7.12 MiB 增至 7.86 MiB。只清理 App Server 宿主产物的对照中，两组的 Remote Server 程序均命中缓存。
+
+真实 Desktop 启动和 Remote Server 的受管 stdio 握手与会话列表查询通过。完整冷构建、实际 Rust 源码编辑和其他平台尚无三轮对照数据。原始样本与 Cargo timings 位于 `.build/build-health/desktop-cargo-groups-20261126/`。
+
+#### 2026-11-26 Desktop 开发后端冷构建基线
+
+在 Apple M2 Max、macOS arm64、Rust 1.99.1、`dev-small` 和 12 个 jobs 下，从空 Cargo 输出目录构建全部 22 个开发后端程序，覆盖本地开发包组装与代次发布。已下载的锁定依赖、原生资源和预生成协议继续复用。单次构建用时 316.94 秒，四组 Cargo 调用合计 306.11 秒，占 96.6%。最大单进程 RSS 为 4.55 GiB。测量范围为 Desktop 开发后端。
+
+| 构建阶段                       |      耗时 |
+| ------------------------------ | --------: |
+| 核心组                         | 217.16 秒 |
+| LiveKit 客户端                 |  55.29 秒 |
+| 实时语音识别                   |  24.64 秒 |
+| 本地语音宿主                   |   9.03 秒 |
+| 其余准备、产物检查、组包和发布 |  10.83 秒 |
+
+核心组的尾部由 `ash-app-server-runtime` 的 59.51 秒编译和 App Server 可执行目标的 3.37 秒构建组成。runtime 中的 Rust 前端处理为 36.11 秒，代码生成为 23.40 秒。同期的 `mxc-sdk` 与 `ash-core` 分别耗时 55.34 和 44.60 秒，两者在核心组结束前已完成。
+
+`aws-lc-sys` 原生构建分别在核心组和 LiveKit 组运行 96.06 和 32.96 秒。LiveKit 组的 Rustls 和 RTC 编译等待第二次原生构建。两组使用相同的 AWS-LC 版本与 features，构建脚本的 `cc` 和 `cmake` 指纹因传递依赖 `libc` 的 `extra_traits` feature 不同而分叉，两个静态库的 SHA-256 相同。
+
+用本次发布的程序通过了受管 stdio 握手和会话列表查询。原始日志、四份 Cargo timings、阶段耗时与原生构建指纹位于 `.build/build-health/desktop-cold-20261126/`。
+
+#### 2026-11-26 macOS 开发后端复用 AWS-LC
+
+Apple Silicon 的 `dev-small` 宿主构建将 Code Mode 加入 LiveKit 和实时语音的 Cargo 特性解析范围，使两组与核心组使用相同的 AWS-LC 构建依赖。各组仍通过 `--bin` 选择自己的可执行目标。Code Mode 和 V8 在核心组编译。开发构建计划将构建命令的生成代码纳入缓存键。
+
+沿用 M2 Max、Rust 1.99.1、12 个 jobs 和空 Cargo 输出目录测量 22 个程序。Cargo timings 确认 AWS-LC 原生构建从两次降至一次，静态库的 SHA-256 与基线一致。整轮为 316.94 → 383.50 秒。核心组的构建命令与 979 个编译单元一致，耗时为 217.16 → 279.78 秒，复测期间观察到并行前端测试。单轮整包时间差不足以归因于这项改动。最大单进程 RSS 为 4.55 → 3.96 GiB。
+
+从同一份已完成的核心组与本地语音宿主产物恢复缓存，交替执行两组 LiveKit 命令各两次。旧命令为 57.56／59.82 秒，各执行一次 AWS-LC 构建。采用复用后为 42.18／53.26 秒，均未执行 AWS-LC 构建。LiveKit 阶段中位数从 58.69 降至 47.72 秒，缩短 10.97 秒。这个对照覆盖单独的 LiveKit 阶段。
+
+冷构建产物通过受管 Remote stdio 会话列表、LiveKit 宿主握手以及 Code Mode 的 V8 执行验证。原始日志、Cargo timings 与对照记录位于 `.build/build-health/desktop-aws-lc-20261126/`。
+
+#### 2026-11-26 开发后端按需准备媒体
+
+该轮试验从 Desktop 与完整 Web 的开发后端准备中暂时移除了三组媒体可执行程序，组包前只等待核心 Cargo 组。
+
+在 M2 Max、Rust 1.99.1、`dev-small` 和 12 个 jobs 下，从空 Cargo 目录准备默认 Desktop 后端，19 个可执行目标的总耗时为 258.73 秒，核心 Cargo 组为 246.91 秒，最大单进程 RSS 为 3.83 GiB。已有协议和锁定外部输入继续复用。
+
+用同一 Cargo 缓存和开发包仓库启用媒体时，19 个核心目标全部命中缓存。首次编译三组媒体耗时合计 93.72 秒，本地语音宿主、LiveKit 客户端和实时语音识别分别为 10.70、53.38 和 29.65 秒。包含组包与发布的媒体准备总耗时为 104.39 秒。
+
+默认产物通过受管 Remote stdio 会话查询。启用媒体的开发包通过 LiveKit 握手，随后关闭媒体时重新选择了核心开发包。各阶段的日志与 Cargo timings 位于 `.build/build-health/desktop-optional-media-20261126/`。
+
+#### 2026-11-26 App Server runtime 代码生成
+
+Rust 编译器自分析显示，`ash-app-server-runtime` 的 LLVM 优化与目标文件生成共耗时 24.84 秒，泛型实例收集 9.45 秒，类型检查 8.18 秒，库归档 0.37 秒。开发构建仅将该包在 `dev-small` 下的优化级别从 `s` 调到 `z`，代码生成单元从 256 调到 512。
+
+在 M2 Max、macOS arm64、Rust 1.99.1 和 12 个 jobs 下，使用真实核心组的 19 个可执行目标。定向对照各三轮，每轮仅清理独立 Cargo 缓存中的 runtime 包，保留依赖产物。核心组耗时中位数从 53.43 降至 50.45 秒，runtime 从 49.46 降至 46.12 秒，其中代码生成从 25.66 降至 23.43 秒。核心组最大单进程 RSS 中位数从 4.56 降至 4.38 GiB。无改动调用为 0.84 → 0.68 秒，各一轮。只更新 runtime 源文件时间戳的三轮复测中位数为 7.42 → 7.84 秒，覆盖 Cargo 的重编译判断。
+
+App Server 产物从 243.53 降至 239.89 MiB，`__eh_frame` 从 14.16 降至 12.43 MiB。零级优化的探索样本用时 34.20 秒，产物增至 318.34 MiB，`__eh_frame` 为 19.42 MiB，超过 macOS 的 16 MiB 偏移预算。一级优化三轮的核心组中位数为 53.53 秒。
+
+在相同工具链和目标下，从空 Cargo 输出目录重新准备默认 Desktop 后端，继续复用下载的依赖、原生资源和预生成协议。与上一轮相比，含组包和发布的总耗时为 258.73 → 250.70 秒，核心 Cargo 组为 246.91 → 239.76 秒，runtime 为 71.59 → 57.72 秒。两轮均构建 979 个 Cargo 单元，最大单进程 RSS 为 3.83 → 4.50 GiB。冷构建前后各一轮，Rust 依赖调度会影响各阶段的耗时；定向对照用于判断该配置的收益。
+
+本轮冷构建产物通过 Remote 受管 stdio 初始化、协议哈希校验和会话列表查询。编译器诊断、原始样本、Cargo timings 与构建报告位于 `.build/build-health/server-runtime-20261126/`。
+
+#### 2026-11-26 默认开发媒体共用 Cargo 构建组
+
+Desktop 和完整 Web 的开发后端默认准备本地语音宿主、LiveKit 客户端和实时语音识别。宿主 `dev-small` 构建将这三个可执行目标交给同一次 Cargo 调用，核心组继续隔离媒体的 `host` features。Apple Silicon 上媒体组沿用 Code Mode 的特性解析根，复用核心组的 AWS-LC 原生产物。
+
+在 M2 Max、macOS arm64、Rust 1.99.1 和 12 个 jobs 下，串行基线显式启用全部媒体。两轮均从独立空 Cargo 目录开始，包含冷协议导出、全部 22 个可执行目标、Desktop 开发包组装和代次发布。预下载的依赖与原生资源继续复用。基线由正式入口触发协议导出，候选在同一阶段显式执行相同的冷导出命令并校验已发布协议。
+
+| Desktop 开发后端              | 媒体分三组 |  媒体同组 |
+| ----------------------------- | ---------: | --------: |
+| 完整冷构建                    |  420.32 秒 | 369.16 秒 |
+| 核心 Cargo 组                 |  259.96 秒 | 238.59 秒 |
+| 媒体 Cargo 阶段               |   77.05 秒 |  49.33 秒 |
+| 媒体阶段实际编译的 Cargo 单元 |        315 |       219 |
+
+媒体阶段缩短 27.72 秒。两轮核心组使用相同的构建命令并编译 898 个单元，核心组的单轮波动也影响总耗时。两轮均只执行一次 AWS-LC 原生编译，静态库 SHA-256 相同。全轮最大单进程 RSS 为 4.01 → 4.58 GiB，三个媒体程序合计增大 0.74 MiB。
+
+Desktop 冷构建产物与复用该 Cargo 目录准备的 Web 开发包均通过三个媒体进程的握手与退出检查。Desktop 产物通过受管 Remote stdio 会话查询，Web 产物通过本地浏览器会话认证。Web 两个 Cargo 组均命中缓存。报告、Cargo timings 和验证日志位于 `.build/build-health/desktop-full-media-20261126/`。
+
+#### 2026-11-26 核心与媒体联合构建
+
+设备、RTC 和推理实现分别由 `ash-audio-host`、`ash-livekit-host` 和 `ash-recognizer-host` 构建，App Server 继续使用原有三个客户端库。Desktop 和完整 Web 的默认开发准备将核心和三个独立程序交给同一次 `cargo build`。Windows 后端监听器可在媒体组编译时预加载 App Server，沿用分组构建。
+
+在同一台 M2 Max 上沿用上一轮的 Rust 1.99.1、`dev-small`、12 个 jobs 和冷协议导出。两轮分别从空 Cargo 目录构建 22 个目标，包含 Desktop 后端组包和代次发布，复用锁定下载资源。核心与媒体构建调用从两次合为一次。
+
+| Desktop 开发后端      |  两组串行 |  同组构建 |
+| --------------------- | --------: | --------: |
+| 完整冷构建            | 369.16 秒 | 316.32 秒 |
+| 后端 Cargo 构建       | 287.92 秒 | 238.64 秒 |
+| 实际编译的 Cargo 单元 |      1117 |       992 |
+
+联合 Cargo 调用开始后，三个媒体程序在第 193.34 至 200.90 秒之间完成，同期 App Server runtime 在第 168.33 至 235.05 秒编译。两轮均只构建一次 AWS-LC，静态库 SHA-256 一致。最大单进程 RSS 为 4.58 → 4.39 GiB。App Server 产物增大约 0.06 MiB，三个媒体程序合计增大约 0.18 MiB。以上各一轮。
+
+直接合并旧包时，App Server 的编译图从 899 个单元扩大到 1032 个，纳入 WebRTC、设备音频和 Sherpa ONNX。拆分进程包后，联合编译图中的 App Server 分支为 900 个单元，媒体实现留在各自分支。原始日志、Cargo timings 与产物验证位于 `.build/build-health/joint-core-media-20261126/`。
+
+macOS 冷构建产物及复用产物的 Web 开发包均通过三种媒体进程的握手和退出检查。Desktop 的受管 Remote stdio 查询、Web 的本地浏览器会话认证及真实回环 LiveKit 的四项房间测试通过。联合 Cargo 依赖图在 Windows 与 Linux 的 x64、arm64 目标上也通过媒体分支及 AWS-LC 单实例检查。音频输入枚举在本机的前后两份产物上均返回 CoreAudio 错误 560947818。
+
 #### 2026-11-13：macOS corgi 兼容性试验
 
 在 Apple M2 Max（12 核、32 GiB）、macOS arm64、Rust 1.99.1 上试用 corgi 0.1.106，目标为 `ash-app-server` 的默认功能集、`dev-small` 和 8 个 jobs。工具使用上游发布包并核验 SHA-256；Rust、Clang 和 SDK 使用本机工具链。试验未接入默认构建入口。

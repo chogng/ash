@@ -8,20 +8,12 @@ publish.workspace = true
 [lib]
 name = "realtime_voice"
 
-[[bin]]
-name = "ash-realtime-voice"
-required-features = ["host"]
-
 [features]
-host = ["dep:sherpa-onnx", "dep:process-hardening", "dep:external-ext-sdk"]
 default = []
 # Product hosts opt into remote transcription; local microphone clients do not need model invocation.
 cloud = ["dep:model-provider", "dep:model-provider-info", "dep:protocol", "dep:websocket-client"]
 
 [dependencies]
-external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust", optional = true }
-process-hardening = { workspace = true, optional = true }
-sherpa-onnx = { workspace = true, optional = true }
 model-provider = { package = "ash-model-provider", path = "../model-provider", optional = true }
 model-provider-info = { workspace = true, optional = true }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }
@@ -42,7 +34,3 @@ tempfile = { workspace = true }
 
 [lints]
 workspace = true
-
-[[test]]
-name = "process"
-required-features = ["host"]

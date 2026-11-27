@@ -2,7 +2,7 @@
 
 `ash-realtime-voice` 管理听写会话。App Server 校验发起连接的权限和麦克风占用，把转写通知送回该连接；`voice-host` 进程采集 16 kHz 或 24 kHz PCM 音频。本地、API 和 ChatGPT 订阅听写均可在录音期间提供临时文本，并在停止后返回最终文字。
 
-默认 feature 提供本地识别协调与识别客户端；Sherpa ONNX 的加载、流和推理由本 crate 的 `ash-realtime-voice` 程序（`host` feature）拥有，首次需要识别时启动，基础后端不链接推理库。可选包的安装与选择见 [Remote distribution](../../remote-server/README.md)。App Server 显式启用 `cloud`，引入云端转写所需的模型供应商和 WebSocket 依赖。
+本 crate 提供本地识别协调与客户端。`ash-recognizer-host` 构建独立的 `ash-realtime-voice` 程序，首次识别时启动并负责 Sherpa ONNX 模型加载和流式推理。可选包的安装与选择见 [Remote distribution](../../remote-server/README.md)。App Server 显式启用 `cloud`，引入云端转写所需的模型供应商和 WebSocket 依赖。
 
 Electron 的转写服务、对应型号、麦克风和语言在 Voice input 设置中管理；API 凭据仍由 Models 中的连接配置唯一持有。每个云端 API 服务目前只支持当前实现指定的单一型号，不提供任意模型 ID 输入。
 

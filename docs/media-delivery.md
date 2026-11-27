@@ -90,8 +90,7 @@ Desktop 安装后可直接使用随包媒体，无需下载或创建 profile 的
 
 各本机程序复用现有 SDK 数据通道与进程监管；首次启动不会自行打开设备或加入房间。
 通话和识别分别注册 `livekit.v1` 与 `recognition.v1`，不提供跨域调用入口。
-重依赖只由对应 crate 的 `host` feature 启用。构建器分别编译这些程序与基础 App Server，
-避免 Cargo feature 合并把 RTC、屏幕或 ONNX 实现链接回基础后端。
+独立的 `ash-audio-host`、`ash-livekit-host` 和 `ash-recognizer-host` 包拥有设备、RTC 和推理依赖。App Server 依赖各自的客户端协议库，Desktop 和完整 Web 的默认开发准备可将核心与三个媒体进程放入同一次 Cargo 构建。
 Desktop 的通话、听写和本地模型操作始终使用本机连接；SSH 工作区使用远端连接处理文件、终端和 Agent。
 LiveKit Server 的选择和安装入口由 [`crates/call`](../crates/call/src/deployment.rs) 的
 `LocalDeployment::livekit_server` 拥有；媒体客户端不依赖通话部署。两者复用
@@ -106,12 +105,14 @@ just test-python scripts
 just verify ash-package-store --features installation
 just verify ash-call --features runtime
 just verify ash-livekit-client
-just verify ash-livekit-client --features host
-just verify ash-realtime-voice --features host
+just verify ash-livekit-host --features host
+just verify ash-voice-host
+just verify ash-audio-host --features host
+just verify ash-recognizer-host --features host
 just verify ash-realtime-voice
 ```
 
-`crates/livekit-client/tests/hosting.rs` 另有显式忽略的真实用例：验证 Desktop 在出站网络被拒绝时直接使用随包媒体，
+`crates/livekit-client/host/tests/hosting.rs` 另有显式忽略的真实用例：验证 Desktop 在出站网络被拒绝时直接使用随包媒体，
 以及读取 Remote 主包绑定的 HTTPS 归档，在指定 profile 首次下载，
 复用缓存、枚举屏幕源并加入真实 LiveKit 房间。用例声明了所需环境变量；TLS 使用测试 CA，不修改系统信任库。
 `tests/rooms.rs` 和 `crates/voice-agent/tests/bridge.rs` 覆盖真实音频、权限、静音、重连清理及 Agent 取消。

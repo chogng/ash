@@ -12,7 +12,7 @@ fn main() {
         }
     };
     if std::env::args().nth(1).as_deref() == Some("--list-input-devices") {
-        match voice_host::server::input_devices() {
+        match ash_audio_host::server::input_devices() {
             Ok(devices) => {
                 if serde_json::to_writer(std::io::stdout().lock(), &devices).is_err() {
                     std::process::exit(1);
@@ -25,7 +25,7 @@ fn main() {
         }
         return;
     }
-    if voice_host::server::run().is_err() {
+    if ash_audio_host::server::run().is_err() {
         eprintln!("audio host stopped after a protocol or device failure");
         std::process::exit(1);
     }

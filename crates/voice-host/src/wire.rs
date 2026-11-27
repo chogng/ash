@@ -1,12 +1,12 @@
+//! Shared length-prefixed audio protocol for the pipe client and device host.
+
 use serde::Deserialize;
 use serde::Serialize;
 use std::io;
-#[cfg(any(test, feature = "host"))]
 use std::io::Read;
-#[cfg(feature = "host")]
 use std::io::Write;
 
-pub(crate) const VERSION: u32 = 2;
+pub const VERSION: u32 = 2;
 pub(crate) const MAX_BYTES: usize = 16 * 1024;
 
 /// Mono PCM16 rates accepted by local audio sessions; each packet spans 20 milliseconds.
@@ -83,7 +83,7 @@ pub struct Capture {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "operation", rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) enum Operation {
+pub enum Operation {
     Hello {
         version: u32,
     },
@@ -105,7 +105,7 @@ pub(crate) enum Operation {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Request {
+pub struct Request {
     pub id: u64,
     #[serde(rename = "command")]
     pub operation: Operation,
@@ -113,7 +113,7 @@ pub(crate) struct Request {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "event", rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) enum Event {
+pub enum Event {
     Reply {
         id: u64,
         epoch: u64,
@@ -125,7 +125,7 @@ pub(crate) enum Event {
     Failed,
 }
 
-pub(crate) fn encode(value: &impl Serialize) -> io::Result<Vec<u8>> {
+pub fn encode(value: &impl Serialize) -> io::Result<Vec<u8>> {
     let bytes = serde_json::to_vec(value).map_err(io::Error::other)?;
     if bytes.len() > MAX_BYTES {
         return Err(invalid());
@@ -136,10 +136,7 @@ pub(crate) fn encode(value: &impl Serialize) -> io::Result<Vec<u8>> {
     Ok(result)
 }
 
-#[cfg(any(test, feature = "host"))]
-pub(crate) fn read<T: serde::de::DeserializeOwned>(
-    reader: &mut impl Read,
-) -> io::Result<Option<T>> {
+pub fn read<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> io::Result<Option<T>> {
     let mut length = [0; 4];
     if reader.read(&mut length[..1])? == 0 {
         return Ok(None);
@@ -156,13 +153,12 @@ pub(crate) fn read<T: serde::de::DeserializeOwned>(
         .map_err(|_| invalid())
 }
 
-#[cfg(feature = "host")]
-pub(crate) fn write(writer: &mut impl Write, event: &Event) -> io::Result<()> {
+pub fn write(writer: &mut impl Write, event: &Event) -> io::Result<()> {
     writer.write_all(&encode(event)?)?;
     writer.flush()
 }
 
-pub(crate) fn invalid() -> io::Error {
+pub fn invalid() -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, "invalid audio frame")
 }
 

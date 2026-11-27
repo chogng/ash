@@ -1,8 +1,8 @@
-use crate::MediaError;
 use crate::codec;
 use crate::rtc::RtcEvent;
 use crate::rtc::RtcTransport;
 use bytes::Bytes;
+use livekit_client::MediaError;
 use livekit_protocol as proto;
 use opus_rs::Application;
 use opus_rs::OpusDecoder;
@@ -39,11 +39,11 @@ use webrtc::rtp_transceiver::RtpSender;
 const DEADLINE: Duration = Duration::from_secs(10);
 const MAX_AGE: Duration = Duration::from_millis(200);
 
-pub use crate::AudioFrame;
-pub use crate::AudioPublication;
-pub use crate::MediaEvent;
-pub use crate::MediaStats;
-pub use crate::ScreenFrame;
+use livekit_client::AudioFrame;
+use livekit_client::AudioPublication;
+use livekit_client::MediaEvent;
+use livekit_client::MediaStats;
+use livekit_client::ScreenFrame;
 
 type Publications = Arc<Mutex<HashMap<String, oneshot::Sender<proto::TrackInfo>>>>;
 
@@ -121,7 +121,7 @@ impl MediaRoom {
         token: &str,
         publish: AudioPublication,
     ) -> Result<Self, MediaError> {
-        crate::validate_url(server_url)?;
+        livekit_client::validate_url(server_url)?;
         crate::transport::install()?;
         let (rtc, join, receiver) = timeout(DEADLINE, RtcTransport::connect(server_url, token))
             .await

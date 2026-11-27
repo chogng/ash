@@ -1,8 +1,8 @@
 //! Local audio sessions. The default library contains only the pipe client and PCM contract.
-//! Build the `host` feature for the separate device-owning executable.
+//! `ash-audio-host` implements the device-owning side of the pipe.
 
 mod client;
-mod wire;
+pub mod wire;
 
 pub use client::AudioHost;
 pub use wire::AudioConfig;
@@ -31,8 +31,3 @@ pub enum AudioError {
     #[error("audio host rejected the operation: {0}")]
     Rejected(String),
 }
-
-// The executable uses the same codec as the client; this module is not a device abstraction.
-#[cfg(feature = "host")]
-#[doc(hidden)]
-pub mod server;

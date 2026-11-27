@@ -1,4 +1,4 @@
-use crate::MediaError;
+use livekit_client::MediaError;
 use oxideav_vp8::I420Frame;
 use oxideav_vp8::KeyframeParams;
 use oxideav_vp8::Vp8DecoderState;
