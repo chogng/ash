@@ -1,4 +1,5 @@
 import type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from '../../../../../../editor/common/languages.js';
+import { MarkdownString, MarkdownStringTextNewlineStyle } from '../../../../../../base/common/htmlContent.js';
 import { PromptValidator } from './promptValidator.js';
 import { PromptFileParser } from '../promptFileParser.js';
 import { getAttributeDefinition } from './promptFileAttributes.js';
@@ -22,7 +23,8 @@ export class PromptHoverProvider implements LanguageHoverProvider {
 		if (!definition && !diagnostic) return undefined;
 		return {
 			range: diagnostic?.range ?? keyRange!,
-			contents: [...(diagnostic ? [diagnostic.message] : []), ...(definition ? [definition.description] : [])],
+			contents: [...(diagnostic ? [diagnostic.message] : []), ...(definition ? [definition.description] : [])]
+				.map(text => new MarkdownString().appendText(text, MarkdownStringTextNewlineStyle.Break)),
 		};
 	}
 }

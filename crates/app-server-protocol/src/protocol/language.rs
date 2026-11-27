@@ -198,13 +198,25 @@ pub struct LanguageHoverParams {
     pub position: LanguagePositionDto,
 }
 
-/// Fresh hover content expressed in editor-native UTF-16 coordinates.
+/// Format of hover text supplied by a language server.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageHoverContentFormatDto {
+    PlainText,
+    Markdown,
+}
+
+/// Fresh hover content with an optional range in editor-native UTF-16 coordinates.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageHoverResult {
     #[ts(type = "number")]
     pub revision: u64,
     pub contents: Option<String>,
+    /// Absent when there is no content or when returned by an older app server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub content_format: Option<LanguageHoverContentFormatDto>,
     pub range: Option<LanguageRangeDto>,
 }
 

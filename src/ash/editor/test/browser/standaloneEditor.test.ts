@@ -439,10 +439,10 @@ test('standalone language events preserve listener context and dispose with the 
 
 test('standalone languages API replaces provider batches atomically', () => {
 	const first = {
-		provideHover: () => ({ contents: ['first'] }),
+		provideHover: () => ({ contents: [{ value: 'first' }] }),
 	};
 	const second = {
-		provideHover: () => ({ contents: ['second'] }),
+		provideHover: () => ({ contents: [{ value: 'second' }] }),
 	};
 	using model = new stanza.TextModel('', { languageId: 'stanza-batch' });
 	using batch = stanza.languages.registerProviderBatch({ hovers: [{ selector: 'stanza-batch', provider: first }] });
@@ -457,7 +457,7 @@ test('standalone languages API feeds the shared editor registries', async () => 
 	stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
 	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
 	using provider = stanza.languages.registerHoverProvider('stanza-public-test', {
-		provideHover: () => ({ contents: ['Public hover'] }),
+		provideHover: () => ({ contents: [{ value: 'Public hover' }] }),
 	});
 	const services = StandaloneServices.initialize();
 	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
@@ -466,7 +466,32 @@ test('standalone languages API feeds the shared editor registries', async () => 
 	assert.equal(model instanceof stanza.TextModel, true);
 	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
 	const signal = new AbortController().signal;
-	assert.deepEqual(await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new stanza.Position(1, 2) }, signal), { contents: ['Public hover'] });
+	assert.deepEqual(await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new stanza.Position(1, 2) }, signal), { contents: [{ value: 'Public hover' }] });
+});
+
+test('standalone hover renders Markdown signatures and preserves literal text', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const signature = 'var Error: ErrorConstructor';
+	const fenced = `\`\`\`typescript\n${signature}\n\`\`\``;
+	const literal = `${fenced}\n> <Error> &nbsp; https://example.com`;
+	using provider = stanza.languages.registerHoverProvider('plaintext', {
+		provideHover: () => ({ contents: [new stanza.MarkdownString(fenced), new stanza.MarkdownString().appendText(literal, stanza.MarkdownStringTextNewlineStyle.Break)] }),
+	});
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using editor = stanza.editor.create(container, { value: 'Error' });
+	editor.focus();
+	await editor.getAction('editor.action.showHover')!.run();
+	await new Promise<void>(resolve => setImmediate(resolve));
+
+	const hover = dom.window.document.querySelector('.stanza-editor-hover[role="tooltip"]')!;
+	const [markdown, plainText] = hover.firstElementChild!.children;
+	assert.equal(markdown?.querySelector('pre > code')?.textContent?.replace(/\u00a0/g, ' ').trim(), signature);
+	const paragraph = plainText?.querySelector('p');
+	assert.ok(paragraph);
+	const text = [...paragraph.childNodes].map(node => node.nodeName === 'BR' ? '\n' : node.textContent).join('').replace(/\u00a0/g, ' ');
+	assert.equal(text, literal);
+	assert.equal(plainText?.querySelector('pre, a, blockquote'), null);
 });
 
 test('standalone completion providers execute in a live editor', async () => {

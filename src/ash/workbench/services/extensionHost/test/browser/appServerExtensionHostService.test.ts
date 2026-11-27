@@ -701,7 +701,8 @@ test('projects supported language operations while diagnosing unsupported operat
 			activeSignatureHelp: { activeSignature: 0, signatures: [{ label: 'fn(value)', parameters: [{ label: 'value' }], activeParameter: 0 }] },
 		},
 	};
-	assert.deepEqual(await languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal), { contents: ['Host hover'] });
+	const hover = await languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal);
+	assert.deepEqual(hover?.contents.map(content => content.value), ['Host&nbsp;hover', '**Host documentation**', '\n```typescript\nconst count = 1\n```\n']);
 	assert.deepEqual(await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(request, signal), { signatures: [{ label: 'fn(value)', parameters: [{ label: 'value' }], activeParameter: 0 }], activeSignature: 0 });
 	assert.deepEqual((api.invocations.find(request => request.operation === 'hover')!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
 	assert.deepEqual((api.invocations.find(request => request.operation === 'parameterHints')!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
@@ -1096,7 +1097,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		if (request.operation === 'createDebugAdapterDescriptor') return { program: 'hosted-adapter', arguments: ['', ' literal '] };
 		if (request.operation === 'provideTasks') return Object.freeze({ tasks: Object.freeze([{ id: 'unit', label: 'Unit', command: 'pnpm test', group: 'test' }]) });
 		if (request.operation === 'provideTestProfiles') return Object.freeze({ profiles: Object.freeze([{ id: 'unit', label: 'Unit', taskProviderRegistrationId: 'tasks', taskId: 'unit' }]) });
-		if (request.operation === 'hover') return Object.freeze({ contents: Object.freeze(['Host hover']) });
+		if (request.operation === 'hover') return { contents: ['Host hover', { value: '**Host documentation**' }, { language: 'typescript', value: 'const count = 1' }] };
 		if (request.operation === 'parameterHints') return Object.freeze({ signatures: Object.freeze([{ label: 'fn(value)', parameters: Object.freeze([{ label: 'value' }]), activeParameter: 0 }]), activeSignature: 0 });
 		throw new Error(`Unexpected operation ${request.operation}`);
 	}

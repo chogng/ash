@@ -20,6 +20,41 @@ use super::*;
 use crate::workspace_diagnostics::project_workspace_diagnostics;
 
 #[test]
+fn hover_projection_preserves_explicit_markup_and_legacy_code() {
+    let signature = "```typescript\nvar Error: ErrorConstructor\n```".to_owned();
+    for (kind, expected) in [
+        (
+            MarkupKind::Markdown,
+            LanguageHoverContent::Markdown(signature.clone()),
+        ),
+        (
+            MarkupKind::PlainText,
+            LanguageHoverContent::PlainText(signature.clone()),
+        ),
+    ] {
+        let markup = HoverContents::Markup(MarkupContent {
+            kind,
+            value: signature.clone(),
+        });
+        assert_eq!(hover_contents(markup), expected);
+    }
+
+    let legacy = HoverContents::Array(vec![
+        MarkedString::LanguageString(LanguageString {
+            language: "typescript".into(),
+            value: "```\nvalue\n```".into(),
+        }),
+        MarkedString::String("**Description**".into()),
+    ]);
+    assert_eq!(
+        hover_contents(legacy),
+        LanguageHoverContent::Markdown(
+            "````typescript\n```\nvalue\n```\n````\n\n**Description**".into()
+        )
+    );
+}
+
+#[test]
 fn request_position_uses_the_negotiated_encoding_without_splitting_unicode() {
     let text = "zero\n🦀rust";
     let position = LanguageDocumentPosition::new(1, "🦀".len() as u32);
@@ -601,7 +636,10 @@ fn hover_completion_and_definition_projection_remove_protocol_types() {
         }),
     )
     .expect("hover");
-    assert_eq!(hover.contents, "main docs");
+    assert_eq!(
+        hover.contents,
+        LanguageHoverContent::Markdown("main docs".into())
+    );
     assert_eq!(hover.range.expect("range").byte_range(), 3..7);
 
     let completions = project_completions(

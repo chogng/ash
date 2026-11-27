@@ -39,11 +39,11 @@ test('Language features service atomically owns a replaceable cross-kind provide
 	using model = new TextModel('answer', { languageId: 'typescript' });
 	const signal = new AbortController().signal;
 	const request = { ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new Position(1, 2) };
-	const registration = languageFeatures.registerProviderBatch({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['first'] }) } }] });
+	const registration = languageFeatures.registerProviderBatch({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: [{ value: 'first' }] }) } }] });
 
-	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: ['first'] });
-	registration.replace({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['second'] }) } }] });
-	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: ['second'] });
+	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: [{ value: 'first' }] });
+	registration.replace({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: [{ value: 'second' }] }) } }] });
+	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: [{ value: 'second' }] });
 
 	registration.dispose();
 	assert.equal(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), undefined);

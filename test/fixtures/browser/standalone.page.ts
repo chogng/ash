@@ -1080,7 +1080,7 @@ window.ashStandaloneIntegration = {
 					if (request.position.column >= 6) {
 						return undefined;
 					}
-					return { contents: ['alpha documentation'] };
+					return { contents: [{ value: 'alpha documentation' }] };
 				},
 			}));
 		}
@@ -1223,7 +1223,7 @@ window.ashStandaloneIntegration = {
 		});
 		if (kind === 'hover') {
 			languageRequestProviders.add(stanza.languages.registerHoverProvider('*', {
-				provideHover: request => defer(request, { contents: [`hover: ${request.languageId}`] }),
+				provideHover: request => defer(request, { contents: [new stanza.MarkdownString().appendText(`hover: ${request.languageId}`)] }),
 			}));
 		} else if (kind === 'selection') {
 			languageRequestProviders.add(stanza.languages.registerSelectionRangeProvider('*', {
@@ -1312,7 +1312,7 @@ window.ashStandaloneIntegration = {
 	},
 	prepareColorPicker: (documentation = false) => {
 		languageRequestProviders.clear();
-		if (documentation) { languageRequestProviders.add(stanza.languages.registerHoverProvider('*', { provideHover: () => ({ contents: ['Color documentation'] }) })); }
+		if (documentation) { languageRequestProviders.add(stanza.languages.registerHoverProvider('*', { provideHover: () => ({ contents: [{ value: 'Color documentation' }] }) })); }
 		callerEditor.setValue('const color = #ff000080;');
 		callerModel.setLanguage('css');
 		callerEditor.setPosition(new stanza.Position(1, 16));

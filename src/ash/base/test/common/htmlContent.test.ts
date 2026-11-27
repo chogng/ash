@@ -11,7 +11,7 @@ test('portable destinations distinguish public links, document references and ma
 
 test('MarkdownString distinguishes escaped text from trusted markdown fragments', () => {
 	const markdown = new MarkdownString('', { supportThemeIcons: true });
-	markdown.appendText('a *literal* line\nnext').appendMarkdown('\n**strong**').appendCodeblock('ts', '```\ncode').appendLink('https://example.com/a_(b)', 'link]');
+	markdown.appendText('a *literal* line\nnext').appendMarkdown('\n**strong**').appendCodeblock('ts', '  ```\ncode').appendLink('https://example.com/a_(b)', 'link]');
 	assert.match(markdown.value, /\\\*literal\\\*/);
 	assert.match(markdown.value, /\*\*strong\*\*/);
 	assert.match(markdown.value, /````ts/);

@@ -7,6 +7,7 @@ import { LanguageCompletionItemKind, LanguageDiagnosticSeverity, type LanguageCo
 import type { TextModel } from '../../src/ash/editor/common/model/textModel.js';
 import type { URI } from '../../src/ash/base/common/uri.js';
 import { toDisposable } from '../../src/ash/base/common/lifecycle.js';
+import { MarkdownString } from '../../src/ash/base/common/htmlContent.js';
 
 const registry = Registry.as<IJSONContributionRegistry>(Extensions.JSONContribution);
 const range = (value: { start: { line: number; character: number }; end: { line: number; character: number } }): Range => new Range(value.start.line + 1, value.start.character + 1, value.end.line + 1, value.end.character + 1);
@@ -44,7 +45,7 @@ export function createJsonHoverProvider(contributions = registry): LanguageHover
 		const value = await features.hover({ uri: request.resource?.toString() ?? 'untitled:/test.json', languageId: request.languageId, version: request.snapshot.version, text: request.snapshot.getText() }, { line: request.position.lineNumber - 1, character: request.position.column - 1 });
 		signal.throwIfAborted();
 		if (!value) return undefined;
-		return { contents: (Array.isArray(value.contents) ? value.contents : [value.contents]).map(value => typeof value === 'string' ? value : value.value), ...(value.range ? { range: range(value.range) } : {}) };
+		return { contents: (Array.isArray(value.contents) ? value.contents : [value.contents]).map(value => typeof value === 'string' ? new MarkdownString().appendText(value) : new MarkdownString(value.value)), ...(value.range ? { range: range(value.range) } : {}) };
 	} };
 }
 

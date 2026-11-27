@@ -1,7 +1,4 @@
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHover } from '../../../common/languages.js';
-import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition, type IEditorMouseEvent } from '../../../browser/editorBrowser.js';
-import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import './hover.css';
 import { addDisposableListener, h, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
@@ -10,7 +7,7 @@ import { type Position } from '../../../common/core/position.js';
 import { type View } from '../../../browser/view.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
-import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IRenderedHoverParts } from './hoverTypes.js';
+import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IEditorHoverRenderContext, type IHoverPart, type IRenderedHoverParts } from './hoverTypes.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -28,13 +25,13 @@ export class ContentHoverController extends Disposable implements IContentWidget
 	private focusPending = false;
 	private readonly participants: readonly IEditorHoverParticipant[];
 	private readonly renderedParts = this._register(new MutableDisposable<IRenderedHoverParts>());
+	private readonly renderedAsyncParts = this._register(new MutableDisposable<IRenderedHoverParts>());
 	private readonly hideTimer = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		private readonly viewport: View,
 		private readonly editor: ICodeEditor,
 		private readonly onError: (error: unknown) => void,
-		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
@@ -80,7 +77,9 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this._register(viewport.textModel.onDidChangeContent(() => { if (!this.renderedParts.value?.isUpdatingEditor()) { this.hide(); } }));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.hide()));
 		this._register(viewport.textModel.onWillDispose(() => this.hide()));
-		this._register(languageFeatures.hoverProvider.onDidChange(() => this.hide()));
+		for (const participant of this.participants) {
+			if (participant.onDidChange) this._register(participant.onDidChange(() => this.hide()));
+		}
 		this._register(editor.onDidBlurEditorWidget(() => {
 			if (!this.element.contains(this.element.ownerDocument.activeElement)) { this.hide(); }
 		}));
@@ -163,41 +162,34 @@ export class ContentHoverController extends Disposable implements IContentWidget
 
 	private async show(anchor: HoverAnchor): Promise<void> {
 		const request = this.request = new AbortController();
-		const position = anchor.position;
+		const context: IEditorHoverRenderContext = {
+			container: this.element,
+			hide: () => this.hide(),
+			onContentsChanged: () => this.editor.layoutContentWidget(this),
+		};
 		for (const participant of this.participants) {
 			const parts = participant.computeSync(anchor);
 			if (parts.length === 0) { continue; }
 			this.element.classList.add('interactive');
 			this.element.setAttribute('role', 'region');
-			this.hoverPosition = parts[0]!.range.getStartPosition();
-			this.renderedParts.value = participant.renderHoverParts({
-				container: this.element,
-				hide: () => this.hide(),
-				onContentsChanged: () => this.editor.layoutContentWidget(this),
-			}, parts);
-			this.element.hidden = false;
-			this.editor.layoutContentWidget(this);
+			this.renderedParts.value = participant.renderHoverParts(context, parts);
+			this.showParts(parts[0]!);
 			break;
 		}
-		const model = this.viewport.textModel;
-		const context = {
-			...createLanguageFeatureRequest(model, model.getLanguageId(), request.signal),
-			resource: model.uri,
-			position,
-		};
-		for (const provider of this.languageFeatures.hoverProvider.ordered(model)) {
-			if (!isLanguageFeatureRequestCurrent(context)) {
-				return;
-			}
+		for (const participant of this.participants) {
+			if (request.signal.aborted) return;
+			if (!participant.computeAsync) continue;
 			try {
-				const result = await provider.provideHover(context, request.signal);
-				if (!isLanguageFeatureRequestCurrent(context)) {
-					return;
+				const parts: IHoverPart[] = [];
+				for await (const part of participant.computeAsync(anchor, request.signal, this.onError)) {
+					if (request.signal.aborted) return;
+					parts.push(part);
 				}
-				if (result) {
-					this.render(normalizeLanguageHover(result), position);
-					return;
-				}
+				if (request.signal.aborted) return;
+				if (!parts.length) continue;
+				this.renderedAsyncParts.value = participant.renderHoverParts(context, parts);
+				this.showParts(parts[0]!);
+				return;
 			} catch (error) {
 				if (!request.signal.aborted) {
 					this.onError(error);
@@ -206,14 +198,8 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		}
 	}
 
-	private render(hover: LanguageHover, position: Position): void {
-		this.element.append(...hover.contents.map(content => {
-			const node = h(this.element.ownerDocument, 'div');
-			node.className = 'stanza-editor-hover-content';
-			node.textContent = typeof content === 'string' ? content : content.value;
-			return node;
-		}));
-		this.hoverPosition ??= hover.range?.getStartPosition() ?? position;
+	private showParts(firstPart: IHoverPart): void {
+		this.hoverPosition ??= firstPart.range.getStartPosition();
 		this.element.hidden = false;
 		this.editor.layoutContentWidget(this);
 	}
@@ -227,6 +213,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this.hideTimer.clear();
 		this.element.hidden = true;
 		this.renderedParts.clear();
+		this.renderedAsyncParts.clear();
 		this.element.replaceChildren();
 		this.element.classList.remove('interactive');
 		this.element.setAttribute('role', 'tooltip');
@@ -244,14 +231,4 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this.request?.abort();
 		this.request = undefined;
 	}
-}
-
-function normalizeLanguageHover(value: LanguageHover): LanguageHover {
-	if (!value || typeof value !== 'object' || !isNonEmptyArray(value.contents)) throw new TypeError('Language hover must contain content');
-	const contents = value.contents.map(content => {
-		if (typeof content === 'string') return content;
-		if (!content || typeof content !== 'object' || typeof content.value !== 'string') throw new TypeError('Language hover content must contain a string value');
-		return Object.freeze({ value: content.value, ...(content.language !== undefined ? { language: content.language } : {}) });
-	});
-	return Object.freeze({ ...(value.range ? { range: value.range } : {}), contents: Object.freeze(contents) });
 }

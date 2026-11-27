@@ -14,6 +14,11 @@ export interface IMarkdownString {
 	readonly baseUri?: URI;
 }
 
+export const enum MarkdownStringTextNewlineStyle {
+	Paragraph = 0,
+	Break = 1,
+}
+
 export class MarkdownString implements IMarkdownString {
 	value: string;
 	isTrusted: boolean | MarkdownStringTrustedOptions | undefined;
@@ -38,9 +43,12 @@ export class MarkdownString implements IMarkdownString {
 		this.baseUri = typeof options === 'boolean' ? undefined : options.baseUri;
 	}
 
-	appendText(value: string): this {
+	appendText(value: string, newlineStyle = MarkdownStringTextNewlineStyle.Paragraph): this {
 		const escaped = escapeMarkdownSyntaxTokens(this.supportThemeIcons ? escapeIcons(value) : value);
-		this.value += escaped.replace(/([ \t]+)/g, spaces => '&nbsp;'.repeat(spaces.length)).replace(/\n/g, '\n\n');
+		// Prevent HTML, entities, tables and autolinks from reinterpreting literal content.
+		this.value += escaped.replace(/[<>&|.:@]/g, '\\$&')
+			.replace(/[ \t]+/g, spaces => '&nbsp;'.repeat(spaces.length))
+			.replace(/\r\n?|\n/g, newlineStyle === MarkdownStringTextNewlineStyle.Break ? '\\\n' : '\n\n');
 		return this;
 	}
 
@@ -112,7 +120,10 @@ export function parseHrefAndDimensions(href: string): { href: string; dimensions
 }
 
 function escapedCodeBlock(code: string, languageId: string): string {
-	const longest = Math.max(0, ...(code.match(/^`+/gm) ?? []).map(match => match.length));
-	const fence = '`'.repeat(Math.max(3, longest + 1));
+	let fenceLength = 3;
+	for (const [, run] of code.matchAll(/^ {0,3}(`+)/gm)) {
+		fenceLength = Math.max(fenceLength, run!.length + 1);
+	}
+	const fence = '`'.repeat(fenceLength);
 	return `${fence}${languageId}\n${code}\n${fence}`;
 }

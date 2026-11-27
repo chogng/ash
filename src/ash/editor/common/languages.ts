@@ -5,6 +5,7 @@ import { type TextSnapshot, normalizeTextLineEndings } from './core/textChange.j
 import { Position, type IPosition } from './core/position.js';
 import { type URI } from '../../base/common/uri.js';
 import { type Event } from '../../base/common/event.js';
+import type { IMarkdownString } from '../../base/common/htmlContent.js';
 import { type IDisposable, Disposable } from '../../base/common/lifecycle.js';
 import { type TextModel } from './model/textModel.js';
 import { type LanguageWorker, type LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
@@ -636,11 +637,9 @@ export interface LanguageReferenceProvider {
 	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export type LanguageHoverContent = string | { readonly value: string; readonly language?: string; };
-
 export interface LanguageHover {
-	readonly range?: Range;
-	readonly contents: readonly LanguageHoverContent[];
+	readonly range?: IRange;
+	readonly contents: readonly IMarkdownString[];
 }
 
 export interface LanguageHoverRequest extends LanguageFeatureRequest {

@@ -4,6 +4,7 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../../bas
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
+import { MarkdownString, MarkdownStringTextNewlineStyle } from '../../../../base/common/htmlContent.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TrackedRangeStickiness } from '../../../../editor/common/model.js';
@@ -101,7 +102,7 @@ export class DebugEditorContribution extends Disposable {
 								request.position.lineNumber,
 								word.endColumn,
 							),
-							contents: [`${expression} = ${variable.value}${variable.type ? `\n${variable.type}` : ''}`],
+							contents: [new MarkdownString().appendText(`${expression} = ${variable.value}${variable.type ? `\n${variable.type}` : ''}`, MarkdownStringTextNewlineStyle.Break)],
 						};
 					} catch (error) {
 						if (!isCancellationError(error) && current() && !signal.aborted) throw error;

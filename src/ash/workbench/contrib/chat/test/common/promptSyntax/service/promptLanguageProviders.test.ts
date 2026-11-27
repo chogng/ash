@@ -54,7 +54,7 @@ test('Skill hover describes only an existing header key at its exact range', () 
 	const provider = new PromptHoverProvider();
 	const hover = provider.provideHover(request, controller.signal);
 	assert.deepEqual(hover?.range, new Range(2, 1, 2, 5));
-	assert.match(String(hover?.contents[0]), /Required.*parent directory/u);
+	assert.match(hover?.contents[0]?.value ?? '', /Required.*parent&nbsp;directory/u);
 	assert.equal(provider.provideHover({ ...request, position: new Position(2, 9) }, controller.signal), undefined);
 	assert.equal(provider.provideHover({ ...request, position: new Position(4, 2) }, controller.signal), undefined);
 	controller.abort();
@@ -174,7 +174,7 @@ test('Skill diagnostic hover uses the actual quoted key range when the key inclu
 	const signal = new AbortController().signal;
 	const hover = new PromptHoverProvider().provideHover({ model, snapshot: model.createVersionedSnapshot(), resource: model.uri, languageId: 'markdown', modelLanguageId: 'markdown', signal, position: new Position(2, 8) }, signal);
 	assert.equal(hover?.contents.length, 1);
-	assert.match(String(hover?.contents[0]), /custom:key/u);
+	assert.match(hover?.contents[0]?.value ?? '', /custom\\:key/u);
 });
 
 const emptyPrompts = { findAgentSkills: async () => { throw new Error('Unexpected Skill catalog read'); } } as unknown as IPromptsService;

@@ -1,4 +1,5 @@
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { Event } from '../../../../base/common/event.js';
 import type { Position } from '../../../common/core/position.js';
 import type { Range } from '../../../common/core/range.js';
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -28,9 +29,12 @@ export interface IRenderedHoverParts extends IDisposable {
 }
 
 export interface IEditorHoverParticipant {
+	/** Invalidates both pending and visible results owned by the participant. */
+	readonly onDidChange?: Event<unknown>;
 	/** Supplies a model anchor for a participant-owned widget that has no text hit position. */
 	suggestHoverAnchor?(mouseEvent: IEditorMouseEvent): HoverAnchor | null;
 	computeSync(anchor: HoverAnchor): IHoverPart[];
+	computeAsync?(anchor: HoverAnchor, signal: AbortSignal, onError: (error: unknown) => void): AsyncIterable<IHoverPart>;
 	renderHoverParts(context: IEditorHoverRenderContext, parts: IHoverPart[]): IRenderedHoverParts;
 }
 

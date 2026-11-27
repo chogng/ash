@@ -8,9 +8,10 @@ use ash_lsp::lsp_types::{
     CompletionTextEdit, DocumentChangeOperation, DocumentChanges, DocumentDiagnosticReport,
     DocumentDiagnosticReportResult, Documentation, GotoDefinitionResponse, Hover, HoverContents,
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, InsertTextFormat, LanguageString,
-    LinkedEditingRanges, Location, MarkedString, MarkupContent, OneOf, ParameterLabel, Position,
-    PositionEncodingKind, PrepareRenameResponse, Range, ResourceOp, SignatureHelp, SymbolKind,
-    TextDocumentEdit, TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
+    LinkedEditingRanges, Location, MarkedString, MarkupContent, MarkupKind, OneOf, ParameterLabel,
+    Position, PositionEncodingKind, PrepareRenameResponse, Range, ResourceOp, SignatureHelp,
+    SymbolKind, TextDocumentEdit, TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit,
+    WorkspaceSymbolResponse,
 };
 use serde_json::Value;
 
@@ -98,8 +99,15 @@ pub struct LanguageHover {
     pub request_id: LanguageRequestId,
     pub path: PathBuf,
     pub revision: LanguageDocumentRevision,
-    pub contents: String,
+    pub contents: LanguageHoverContent,
     pub range: Option<LanguageTextRange>,
+}
+
+/// Presentation format supplied by the language server for a hover.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LanguageHoverContent {
+    PlainText(String),
+    Markdown(String),
 }
 
 /// One bounded, presentation-neutral completion candidate.
@@ -550,7 +558,9 @@ pub(crate) fn project_hover(
 ) -> Option<LanguageHover> {
     let hover = hover?;
     let contents = hover_contents(hover.contents);
-    if contents.trim().is_empty() {
+    let (LanguageHoverContent::PlainText(value) | LanguageHoverContent::Markdown(value)) =
+        &contents;
+    if value.trim().is_empty() {
         return None;
     }
     let range = hover.range.and_then(|range| {
@@ -1757,15 +1767,20 @@ fn completion_edit(
     })
 }
 
-fn hover_contents(contents: HoverContents) -> String {
+fn hover_contents(contents: HoverContents) -> LanguageHoverContent {
     match contents {
-        HoverContents::Scalar(value) => marked_string(value),
-        HoverContents::Array(values) => values
-            .into_iter()
-            .map(marked_string)
-            .collect::<Vec<_>>()
-            .join("\n\n"),
-        HoverContents::Markup(content) => content.value,
+        HoverContents::Scalar(value) => LanguageHoverContent::Markdown(marked_string(value)),
+        HoverContents::Array(values) => LanguageHoverContent::Markdown(
+            values
+                .into_iter()
+                .map(marked_string)
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+        ),
+        HoverContents::Markup(content) => match content.kind {
+            MarkupKind::PlainText => LanguageHoverContent::PlainText(content.value),
+            MarkupKind::Markdown => LanguageHoverContent::Markdown(content.value),
+        },
     }
 }
 
@@ -1773,7 +1788,15 @@ fn marked_string(value: MarkedString) -> String {
     match value {
         MarkedString::String(value) => value,
         MarkedString::LanguageString(LanguageString { language, value }) => {
-            format!("```{language}\n{value}\n```")
+            // A legacy language string contains literal code. Its own backticks must fit inside the fence.
+            let longest_run = value.split(|ch| ch != '`').map(str::len).max().unwrap_or(0);
+            let fence = "`".repeat(3.max(longest_run + 1));
+            let language = language
+                .split_whitespace()
+                .next()
+                .filter(|id| !id.contains('`'))
+                .unwrap_or_default();
+            format!("{fence}{language}\n{value}\n{fence}")
         }
     }
 }

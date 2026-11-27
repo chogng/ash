@@ -104,7 +104,7 @@ test('Instruction completion replaces load values and hover explains the actual 
 		model, snapshot: model.createVersionedSnapshot(), resource: instruction, languageId: 'markdown', modelLanguageId: 'markdown',
 		position: new Position(2, 2), signal,
 	}, signal);
-	assert.match(String(hover?.contents.at(-1)), /contextual Instructions/u);
+	assert.match(hover?.contents.at(-1)?.value ?? '', /contextual&nbsp;Instructions/u);
 });
 
 test('Agent tool sequences complete backend tool names and omit existing or hidden capabilities', async () => {

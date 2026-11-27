@@ -678,7 +678,7 @@ const harness = {
 	prepareMarkdownEditing(): void {
 		const diff = (titleEditor!.activePane as TextDiffEditor).getControl()!;
 		resources.add(editorServices.languageFeaturesService.hoverProvider.register('markdown', {
-			provideHover: () => ({ range: new Range(1, 3, 1, 9), contents: ['Markdown hover from language provider'] }),
+			provideHover: () => ({ range: new Range(1, 3, 1, 9), contents: [{ value: 'Markdown hover from language provider' }] }),
 		}));
 		resources.add(editorServices.languageFeaturesService.completionProvider.register({
 			id: 'markdown-diff-fixture', languageIds: ['markdown'],

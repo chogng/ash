@@ -7,6 +7,7 @@ import { parseJsonc } from '../../../src/ash/base/common/jsonc.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { type JsonSchema } from '../../../src/ash/base/common/jsonSchema.js';
 import { Position } from '../../../src/ash/editor/common/core/position.js';
+import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { LanguageCompletionItemKind, LanguageCompletionTriggerKind, createLanguageFeatureRequest, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../src/ash/editor/common/languages.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../src/ash/platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -62,7 +63,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		resource,
 		position: new Position((0) + 1, (13) + 1),
 	}, signal);
-	assert.match(hover?.contents.join('\n') ?? '', /Enabled[\s\S]*Controls the editor/u);
+	assert.match(hover?.contents.map(content => content.value).join('\n').replaceAll('&nbsp;', ' ') ?? '', /Enabled[\s\S]*Controls the editor/u);
 
 	validModel.setLanguage('jsonc');
 	const edits = await createJsonFormattingProvider().provideDocumentFormattingEdits(validModel, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
@@ -272,9 +273,8 @@ test('JSONC hover preserves UTF-16 ranges after comments containing emoji', asyn
 		...createLanguageFeatureRequest(model, 'jsonc', signal), resource,
 		position: model.getPositionAt(start + 3),
 	}, signal);
-	assert.match(hover?.contents.join('\n') ?? '', /Controls the editor/u);
-	assert.deepEqual(hover?.range?.getStartPosition(), model.getPositionAt(start));
-	assert.deepEqual(hover?.range?.getEndPosition(), model.getPositionAt(start + '"enabled"'.length));
+	assert.match(hover?.contents.map(content => content.value).join('\n').replaceAll('&nbsp;', ' ') ?? '', /Controls the editor/u);
+	assert.deepEqual(hover?.range, Range.fromPositions(model.getPositionAt(start), model.getPositionAt(start + '"enabled"'.length)));
 });
 
 test('JSON pattern associations refresh completion, hover and diagnostics while keeping each schema reference root', async () => {
@@ -311,7 +311,7 @@ test('JSON pattern associations refresh completion, hover and diagnostics while 
 	assert.equal(new Set(completion!.items.map(item => item.id)).size, completion!.items.length);
 	const signal = new AbortController().signal;
 	const hover = await createJsonHoverProvider().provideHover({ ...createLanguageFeatureRequest(model, 'jsonc', signal), resource: target, position: new Position(1, 3) }, signal);
-	assert.deepEqual(hover?.contents, ['First mode']);
+	assert.deepEqual(hover?.contents.map(content => content.value.replaceAll('&nbsp;', ' ')), ['First mode']);
 	first.definitions.mode.enum = ['other'];
 	jsonRegistry.notifySchemaChanged('test://schema/events-first');
 	await registration.settled();

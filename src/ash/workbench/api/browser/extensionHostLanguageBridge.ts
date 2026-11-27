@@ -2,6 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
 import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
 import { type CancellationToken } from '../../../base/common/cancellation.js';
+import { MarkdownString, MarkdownStringTextNewlineStyle } from '../../../base/common/htmlContent.js';
 import { Position } from '../../../editor/common/core/position.js';
 import { Range } from '../../../editor/common/core/range.js';
 import * as languages from '../../../editor/common/languages.js';
@@ -438,10 +439,15 @@ function normalizeHoverResult(value: JsonValue, snapshot: TextSnapshot): languag
 	if (value === null) return undefined;
 	const result = object(value, 'Extension hover result');
 	assertAllowedKeys(result, 'Extension hover result', ['contents', 'range'], ['contents']);
-	const contents = boundedArray(result.contents, 'Extension hover contents', 256).map((content, index): languages.LanguageHoverContent => {
-		if (typeof content === 'string') return boundedString(content, `Extension hover content ${index}`, 262_144, true);
+	const contents = boundedArray(result.contents, 'Extension hover contents', 256).map((content, index) => {
+		if (typeof content === 'string') {
+			return new MarkdownString().appendText(boundedString(content, `Extension hover content ${index}`, 262_144, true), MarkdownStringTextNewlineStyle.Break);
+		}
 		const marked = exactObject(content, `Extension hover content ${index}`, content && typeof content === 'object' && 'language' in content ? ['language', 'value'] : ['value']);
-		return Object.freeze({ value: boundedString(marked.value, `Extension hover content ${index} value`, 262_144, true), ...(marked.language === undefined ? {} : { language: boundedString(marked.language, `Extension hover content ${index} language`, 256, false) }) });
+		const text = boundedString(marked.value, `Extension hover content ${index} value`, 262_144, true);
+		if (marked.language === undefined) return new MarkdownString(text);
+		const language = boundedString(marked.language, `Extension hover content ${index} language`, 256, false).split(/[\s`]/u, 1)[0]!;
+		return new MarkdownString().appendCodeblock(language, text);
 	});
 	if (contents.length === 0) throw new TypeError('Extension hover contents must not be empty');
 	return Object.freeze({ ...(result.range === undefined ? {} : { range: normalizeRange(result.range, snapshot, 'Extension hover range') }), contents: Object.freeze(contents) });

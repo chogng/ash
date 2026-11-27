@@ -182,8 +182,7 @@ fn default_client_capabilities() -> ClientCapabilities {
             }),
             hover: Some(HoverClientCapabilities {
                 dynamic_registration: Some(true),
-                // The shared language projections expose text, without retaining markup kind.
-                content_format: Some(vec![MarkupKind::PlainText]),
+                content_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
             }),
             references: Some(ReferenceClientCapabilities {
                 dynamic_registration: Some(true),

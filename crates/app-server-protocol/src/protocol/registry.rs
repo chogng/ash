@@ -2032,6 +2032,8 @@ use crate::protocol::language::LanguageHierarchyParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageHierarchyResultDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageHoverContentFormatDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageHoverParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageHoverResult;
@@ -8149,6 +8151,7 @@ typescript_bindings! {
     LanguageCancelParams,
     LanguageCancelStatusDto,
     LanguageCancelResult,
+    LanguageHoverContentFormatDto,
     LanguageHoverParams,
     LanguageHoverResult,
     LanguageCompletionTriggerKindDto,

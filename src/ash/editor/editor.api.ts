@@ -9,6 +9,7 @@ export const languages = createStandaloneLanguagesApi();
 
 export const URI = baseApi.URI;
 export type { CancellationToken } from '../base/common/cancellation.js';
+export { MarkdownString, MarkdownStringTextNewlineStyle, type IMarkdownString } from '../base/common/htmlContent.js';
 export type { IDisposable } from '../base/common/lifecycle.js';
 export { EditorLineWrapping, WrappingIndent } from './common/config/editorOptions.js';
 export type { IEditorMinimapOptions } from './common/config/editorOptions.js';
@@ -61,7 +62,7 @@ export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRan
 export type { DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, FormattingOptions, LanguageFormattingOptions, OnTypeFormattingEditProvider } from './common/languages.js';
 export type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageLocationRequest, LanguageReferenceProvider, LanguageReferenceRequest, LanguageTypeDefinitionProvider } from './common/languages.js';
 export type { LanguageLocation } from './common/languages.js';
-export type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from './common/languages.js';
+export type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from './common/languages.js';
 export type { LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from './common/languages.js';
 export type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, LanguageInlineCompletionsRequest } from './common/languages.js';
 export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './common/languages.js';

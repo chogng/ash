@@ -50,13 +50,14 @@ pub use requests::{
     LanguageEdit, LanguageEditEntry, LanguageEditResult, LanguageExistingTargetBehavior,
     LanguageFormattingEdits, LanguageFormattingOptions, LanguageHierarchyEntry,
     LanguageHierarchyItem, LanguageHierarchyKind, LanguageHierarchyResult, LanguageHover,
-    LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHints, LanguageLinkedEditingRanges,
-    LanguageLocationKind, LanguageLocationPosition, LanguageLocationRange, LanguageLocationTarget,
-    LanguageLocations, LanguageMissingTargetBehavior, LanguageParameterInformation,
-    LanguagePositionEncoding, LanguagePulledDiagnosticReport, LanguagePulledDiagnostics,
-    LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind, LanguageSignatureHelp,
-    LanguageSignatureHelpTrigger, LanguageSignatureInformation, LanguageSymbol, LanguageSymbols,
-    LanguageTextEdit, LanguageWorkspaceDocumentEdit, LanguageWorkspaceTextEdit,
+    LanguageHoverContent, LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHints,
+    LanguageLinkedEditingRanges, LanguageLocationKind, LanguageLocationPosition,
+    LanguageLocationRange, LanguageLocationTarget, LanguageLocations,
+    LanguageMissingTargetBehavior, LanguageParameterInformation, LanguagePositionEncoding,
+    LanguagePulledDiagnosticReport, LanguagePulledDiagnostics, LanguageRenamePreparation,
+    LanguageRequestId, LanguageRequestKind, LanguageSignatureHelp, LanguageSignatureHelpTrigger,
+    LanguageSignatureInformation, LanguageSymbol, LanguageSymbols, LanguageTextEdit,
+    LanguageWorkspaceDocumentEdit, LanguageWorkspaceTextEdit,
 };
 pub use restart::LanguageServerRestartPolicy;
 pub use semantic_tokens::{LanguageSemanticToken, LanguageSemanticTokens};

@@ -1,6 +1,7 @@
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { MarkdownString, MarkdownStringTextNewlineStyle } from '../../../../base/common/htmlContent.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Position } from '../../../../editor/common/core/position.js';
@@ -255,7 +256,10 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		if (!document) return undefined;
 		const result = await this.requestFeature('hover', document, signal, signal => this.api.hover({ document, position: dtoPosition(request.position) }, { signal }));
 		if (!result || result.revision !== request.snapshot.version || !result.contents) return undefined;
-		return Object.freeze({ ...(result.range ? { range: range(result.range) } : {}), contents: Object.freeze([result.contents]) });
+		const content = result.contentFormat === 'markdown'
+			? new MarkdownString(result.contents)
+			: new MarkdownString().appendText(result.contents, MarkdownStringTextNewlineStyle.Break);
+		return Object.freeze({ ...(result.range ? { range: range(result.range) } : {}), contents: Object.freeze([content]) });
 	}
 
 	async provideCompletions(request: languages.LanguageCompletionProviderRequest, signal: AbortSignal) {

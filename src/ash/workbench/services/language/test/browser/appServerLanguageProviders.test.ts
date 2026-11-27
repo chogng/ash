@@ -472,7 +472,7 @@ test('App Server hover and completion providers keep revision, resource, and ins
 	const linkedEditing = languages.linkedEditingRangeProvider.ordered(model)[0]!;
 	const linked = await linkedEditing.provideLinkedEditingRanges(model, new Position((0) + 1, (1) + 1), CancellationToken.None);
 
-	assert.equal(hoverResult?.contents[0], 'hover docs');
+	assert.equal(hoverResult?.contents[0]?.value, 'hover&nbsp;docs');
 	assert.equal(api.hoverRequests[0]!.document.path, 'main.rs');
 	assert.equal(api.completionRequests[0]!.document.text, 'pri');
 	assert.equal(completions.results.result?.value.items[0]!.insertText, 'println!($0)');

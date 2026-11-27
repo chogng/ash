@@ -40,6 +40,7 @@ use ash_app_server_protocol::protocol::language::LanguageHierarchyItemDto;
 use ash_app_server_protocol::protocol::language::LanguageHierarchyKindDto;
 use ash_app_server_protocol::protocol::language::LanguageHierarchyParams;
 use ash_app_server_protocol::protocol::language::LanguageHierarchyResultDto;
+use ash_app_server_protocol::protocol::language::LanguageHoverContentFormatDto;
 use ash_app_server_protocol::protocol::language::LanguageHoverParams;
 use ash_app_server_protocol::protocol::language::LanguageHoverResult;
 use ash_app_server_protocol::protocol::language::LanguageInlayHintDto;
@@ -97,6 +98,7 @@ use ash_lsp_manager::LanguageExistingTargetBehavior;
 use ash_lsp_manager::LanguageFormattingOptions;
 use ash_lsp_manager::LanguageHierarchyEntry;
 use ash_lsp_manager::LanguageHierarchyItem;
+use ash_lsp_manager::LanguageHoverContent;
 use ash_lsp_manager::LanguageInlayHintKind;
 use ash_lsp_manager::LanguageLocationPosition;
 use ash_lsp_manager::LanguageLocationRange;
@@ -675,19 +677,28 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let (contents, range) = match event {
-            LspManagerRequestResult::Hover(hover) => (
-                Some(hover.contents),
-                hover.range.and_then(|range| {
+        let (contents, content_format, range) = match event {
+            LspManagerRequestResult::Hover(hover) => {
+                let (contents, format) = match hover.contents {
+                    LanguageHoverContent::PlainText(value) => {
+                        (value, LanguageHoverContentFormatDto::PlainText)
+                    }
+                    LanguageHoverContent::Markdown(value) => {
+                        (value, LanguageHoverContentFormatDto::Markdown)
+                    }
+                };
+                let range = hover.range.and_then(|range| {
                     byte_range_to_utf16(&params.document.text, range.byte_range())
-                }),
-            ),
-            LspManagerRequestResult::RequestFailed { .. } => (None, None),
+                });
+                (Some(contents), Some(format), range)
+            }
+            LspManagerRequestResult::RequestFailed { .. } => (None, None, None),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&LanguageHoverResult {
             revision: params.document.revision,
             contents,
+            content_format,
             range,
         })
     }
