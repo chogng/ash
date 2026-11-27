@@ -1647,6 +1647,7 @@ test('Sticky Scroll renders and reveals ancestors outside the virtual row range'
 		assert.equal(tree.element.querySelector(':scope > .ash-tree-row[data-tree-id="parent"]'), null);
 		const sticky = tree.element.querySelector<HTMLElement>('.ash-tree-sticky-row')!;
 		assert.equal(sticky?.textContent, 'parent');
+		assert.ok(sticky.classList.contains('ash-list-row'), 'sticky rows share list insets and scrollbar clearance');
 		tree.scrollTop = 572;
 		assert.equal(tree.element.querySelector('.ash-tree-sticky-row'), sticky);
 		tree.setFocus('parent');

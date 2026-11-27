@@ -687,8 +687,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		for (const [position, { node, index }] of sticky.entries()) {
 			let row = this.stickyRows.get(node);
 			if (!row) {
-				// Ancestors may be outside the list's rendered range. Use the same renderer independent of virtualization.
-				row = h(container.ownerDocument, 'div', { className: 'ash-tree-sticky-row' });
+				// Share row geometry and rendering even when the live ancestor is virtualized out.
+				row = h(container.ownerDocument, 'div', { className: 'ash-list-row ash-tree-sticky-row' });
 				row.append(this.renderRow(node, row, index));
 				this.stickyRows.set(node, row);
 			} else if (refreshRows) {

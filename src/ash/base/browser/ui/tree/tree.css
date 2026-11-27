@@ -90,8 +90,9 @@
 	z-index: 1;
 	top: 0;
 	bottom: 0;
-	/* The guide continues through the center of its ancestor's 16px twistie. */
+	/* Center the guide's border on the axis of its ancestor's 16px twistie. */
 	left: calc(var(--ash-list-row-padding-start) + var(--ash-spacing-size80));
+	translate: calc(var(--ash-strokeThickness) / -2);
 	pointer-events: none;
 }
 

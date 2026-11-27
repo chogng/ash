@@ -5,6 +5,22 @@
 
 .ash-sessions-files-view.ash-explorer-view-pane {
 	--ash-tree-sticky-background: var(--ash-auxiliaryBar-background);
+	--ash-sessions-files-icon-gap: calc(var(--ash-spacing-size60) / 2);
+}
+
+.ash-sessions-files-view .ash-tree {
+	--ash-list-row-padding-start: calc(
+		var(--ash-spacing-size120) + var(--ash-sessions-files-icon-gap)
+	);
+}
+
+/* Match the label column whether the leading slot holds an arrow or a file icon. */
+.ash-sessions-files-view .ash-tree-twistie.ash-tree-twistie-with-icon-gap {
+	margin-right: var(--ash-sessions-files-icon-gap);
+}
+
+.ash-sessions-files-view .ash-icon-label.ash-icon-label-wide-gap {
+	gap: var(--ash-sessions-files-icon-gap);
 }
 
 .ash-sessions-files-empty-content {
