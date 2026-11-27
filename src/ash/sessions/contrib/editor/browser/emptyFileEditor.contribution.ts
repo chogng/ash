@@ -13,8 +13,7 @@ import { EmptyFileEditorInput, EmptyFileEditorSerializer } from '../../../../wor
 import { EditorInputSerializers } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../../../browser/menus.js';
-import { EmptyFileEditor } from './emptyFileEditor.js';
-import { EditorFilePickerFocusedContext } from './editorFilePicker.js';
+import { EmptyFileEditor, EmptyFileEditorFocusedContext } from './emptyFileEditor.js';
 import './emptyFileEditorAccessibility.js';
 
 registerEditorPane({
@@ -31,12 +30,13 @@ registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.agentSessions.openFileInEmptyEditor',
-			title: localize2('sessions.emptyFileEditor.openFile', 'Open File…'),
+			title: localize2('sessions.emptyFileEditor.openFile', 'Open file'),
 			icon: Lxicon.folder,
+			menu: { id: Menus.EmptyFileEditorActions, group: 'navigation', order: 0 },
 			keybinding: {
 				weight: KeybindingWeight.SessionsContrib,
 				primary: Keybinding.single(logicalKey('p', { primaryKey: true })),
-				when: EditorFilePickerFocusedContext.isEqualTo(true),
+				when: EmptyFileEditorFocusedContext.isEqualTo(true),
 			},
 		});
 	}
@@ -48,7 +48,7 @@ registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 });
 
 const code = SessionsCodeEditorContext.isEqualTo(true);
-for (const menu of [Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTabsBarAddTab]) {
+for (const menu of [Menus.EmptyFileEditorActions, Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTabsBarAddTab]) {
 	MenusRegistry.appendMenuItem(menu, {
 		command: {
 			id: NEW_UNTITLED_FILE_COMMAND_ID,
@@ -64,6 +64,6 @@ for (const menu of [Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTa
 KeybindingsRegistry.registerKeybindingRule({
 	command: NEW_UNTITLED_FILE_COMMAND_ID,
 	keybinding: Keybinding.single(logicalKey('n', { primaryKey: true })),
-	when: ContextKeyExpr.and(code, EditorFilePickerFocusedContext.isEqualTo(true)),
+	when: ContextKeyExpr.and(code, EmptyFileEditorFocusedContext.isEqualTo(true)),
 	priority: KeybindingWeight.SessionsContrib,
 });

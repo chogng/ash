@@ -379,7 +379,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	}
 });
 
-test('An empty companion editor releases its split and restores the retained Browser at the previous width', async () => {
+test('An empty editor group takes over the side pane and Browser recovers its saved width', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
 	const { EditorPane, EditorPaneMatch } = await import('../../../workbench/browser/parts/editor/editorPane.js');
@@ -406,30 +406,45 @@ test('An empty companion editor releases its split and restores the retained Bro
 	try {
 		using layout = createLayout(document.body, parts, { initialDimension: wide });
 		layout.hidePart('auxiliarybar');
-		await editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
+		const resource = URI.parse('ash-browser:/fixture');
+		const browserPane = await editor.openEditor({ resource }, { pinned: true });
 		const browserGroup = editor.activeGroup;
-		const browserPane = browserGroup.activePane;
-		assert.ok(browserPane);
+		const emptyGroup = editor.createRetainedGroup('files');
 		layout.showPart('editor');
 		layout.resizePart('editor', new Dimension(520, wide.height));
 		const browserWidth = layout.getPartSize('editor').width;
-		const emptyFiles = editor.createRetainedGroup('files');
-		layout.updateParts(() => {
-			editor.setGroupVisible(browserGroup.id, false);
-			editor.setGroupVisible(emptyFiles.id, true);
-		});
-		assert.equal(area.hasTools, false);
+		const conversationWidth = layout.getPartSize('sessions').width;
+
+		layout.updateParts(() => editor.showEmptyGroup(emptyGroup.id));
+		assert.equal(area.isToolVisible('browser'), true);
 		assert.equal(area.isToolVisible('files'), false);
-		assert.equal(layout.isPartRequested('editor'), true);
+		assert.equal(layout.getPartSize('editor').width, browserWidth);
+
+		layout.updateParts(() => editor.hideTool(browserGroup.id));
+		assert.equal(area.isToolVisible('browser'), false);
+		assert.equal(area.isToolVisible('files'), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
+		const workspaceWidth = wide.width - layout.getPartSize('sidebar').width;
+		assert.equal(layout.getPartSize('sessions').width + layout.getPartSize('editor').width, workspaceWidth);
+		assert.equal(editor.isGroupVisible(emptyGroup.id), true);
+		assert.deepEqual(emptyGroup.inputs, []);
+		assert.equal(emptyGroup.activePane, undefined);
+		assert.equal(browserGroup.activePane, browserPane);
+
+		layout.hidePart('editor');
 		assert.equal(layout.isPartVisible('editor'), false);
-		assert.equal(layout.getPartSize('sessions').width, wide.width - layout.getPartSize('sidebar').width);
+		assert.equal(layout.getPartSize('sessions').width, workspaceWidth);
 
 		layout.updateParts(() => {
-			editor.setGroupVisible(emptyFiles.id, false);
 			editor.setGroupVisible(browserGroup.id, true);
+			layout.showPart('editor');
 		});
 		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(area.isToolVisible('browser'), true);
+		assert.equal(area.isToolVisible('files'), false);
 		assert.equal(layout.getPartSize('editor').width, browserWidth);
+		assert.equal(layout.getPartSize('sessions').width, conversationWidth);
 		assert.equal(browserGroup.activePane, browserPane);
 	} finally {
 		for (const part of parts.values()) if (part !== area) part.dispose();

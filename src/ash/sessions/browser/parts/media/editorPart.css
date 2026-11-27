@@ -63,6 +63,16 @@
 	inset: 0;
 }
 
+.ash-desktop-editor-area.has-hosted-tabs::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	z-index: 1;
+	block-size: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
+}
+
 .ash-desktop-editor-area .ash-tool-editor-workspace {
 	box-sizing: border-box;
 }

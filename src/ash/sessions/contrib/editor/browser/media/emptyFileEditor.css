@@ -8,18 +8,20 @@
 
 .ash-empty-file-editor-content {
 	display: grid;
-	gap: var(--ash-spacing-size240);
-	inline-size: min(100%, 400px);
+	gap: var(--ash-spacing-size160);
+	inline-size: min(100%, 320px);
 	margin: auto;
 }
 
-.ash-empty-file-editor-search {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size80);
+.ash-empty-file-editor-search > .has-inline-results {
+	visibility: hidden;
 }
 
-.ash-empty-file-editor-search > .ash-input-box {
-	flex: 1;
-	min-inline-size: 0;
+.ash-empty-file-editor-actions .ash-toolbar {
+	align-items: stretch;
+}
+
+.ash-empty-file-editor-actions .ash-button {
+	inline-size: 100%;
+	justify-content: flex-start;
 }

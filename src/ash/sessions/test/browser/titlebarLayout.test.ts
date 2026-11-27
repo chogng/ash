@@ -325,45 +325,52 @@ suite('Sessions native titlebar layout', () => {
 		await expect(empty).toHaveCount(0);
 	});
 
-	test('Session Rail follows the Code conversation while the tool area is maximized', async () => {
+	test('Maximized Code tools open Side Chat from Add Tab and restore the conversation controls', async () => {
 		const { page } = browser;
+		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 		const titlebar = page.locator('[data-part="titlebar"]');
 		const conversation = page.locator('[data-part="sessions"]');
-		const infoName = { name: 'Toggle session information', exact: true };
-		const info = titlebar.getByRole('toolbar', { name: 'Conversation actions', exact: true }).getByRole('button', infoName);
-		await expect(titlebar.locator('.ash-sessions-titlebar-right').getByRole('button', infoName)).toHaveCount(0);
+		const editor = page.locator('[data-part="editor"]');
+		const info = titlebar.getByRole('toolbar', { name: 'Conversation actions', exact: true })
+			.getByRole('button', { name: 'Toggle session information', exact: true });
+		await titlebar.getByRole('button', { name: 'Toggle Side Panel', exact: true }).press('Enter');
+		await expect(info).toBeVisible();
+		await titlebar.getByRole('button', { name: 'Maximize Side Panel', exact: true }).press('Enter');
+		await expect(conversation).toBeHidden();
+		await expect(info).toHaveCount(0);
+		await expect(editor.locator('.ash-empty-editor-group-add-tab:visible').getByRole('button', { name: 'Side Chat', exact: true })).toBeEnabled();
+
+		const addTab = page.locator('.ash-editor-tab-strip:visible').getByRole('button', { name: 'Add Tab', exact: true });
+		await addTab.press('Enter');
+		await page.getByRole('menuitem', { name: 'Side Chat', exact: true }).press('Enter');
+		const sideChat = editor.locator('.ash-session-side-chat-editor');
+		const input = sideChat.getByRole('textbox');
+		await expect(input).toBeFocused();
+		await expect(conversation).toBeHidden();
+
+		await titlebar.getByRole('button', { name: 'Restore Side Panel Size', exact: true }).press('Enter');
+		await expect(conversation).toBeVisible();
+		await expect(sideChat).toBeVisible();
+		const rightControls = titlebar.locator('.ash-sessions-titlebar-right');
+		await expect(rightControls.getByRole('button', { name: 'Toggle session information', exact: true })).toHaveCount(0);
 		await expectCenteredTitlebarIcon(info);
 		await info.press('Enter');
 		const rail = conversation.getByRole('complementary', { name: 'Session information', exact: true });
-		await expect(rail).toBeVisible();
 		const close = rail.getByRole('button', { name: 'Close session information', exact: true });
 		await expect(close).toBeFocused();
 		await close.press('Enter');
 		await expect(rail).toBeHidden();
 		await expect(info).toBeFocused();
-		await titlebar.getByRole('button', { name: 'Toggle Side Panel', exact: true }).press('Enter');
-		await expect(info).toBeVisible();
-		const maximize = titlebar.getByRole('button', { name: 'Maximize Side Panel', exact: true });
-		const restore = titlebar.getByRole('button', { name: 'Restore Side Panel Size', exact: true });
-		await maximize.press('Enter');
-		await expect(conversation).toBeHidden();
-		await expect(titlebar.getByRole('button', infoName)).toHaveCount(0);
-		await restore.press('Enter');
-		await expect(conversation).toBeVisible();
-		await expect(info).toBeVisible();
+
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
-		const account = page.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Accounts', exact: true });
-		await expectCenteredTitlebarIcon(account);
-		await account.hover();
-		await expectCenteredTitlebarIcon(account);
-		await maximize.press('Enter');
-		await page.locator('.ash-empty-file-editor:visible').getByRole('button', { name: 'Side Chat', exact: true }).press('Enter');
-		await expect(page.locator('.ash-session-side-chat-editor:visible').getByRole('textbox')).toBeFocused();
-		await expect(conversation).toBeHidden();
+		const accounts = rightControls.getByRole('button', { name: 'Accounts', exact: true });
+		await expectCenteredTitlebarIcon(accounts);
+		await accounts.hover();
+		await expectCenteredTitlebarIcon(accounts);
 	});
 
 	test('mouse side buttons traverse the Sessions navigation history', async () => {

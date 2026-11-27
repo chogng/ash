@@ -1502,6 +1502,23 @@ suite('sessions browser component', () => {
 		await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
 		await expect(files).toHaveAttribute('aria-selected', 'true');
 		await expect(editor.locator('.ash-sessions-files-view')).toBeVisible();
+		await expect(editor).toHaveClass(/\bhas-hosted-tabs\b/u);
+		expect(await editor.evaluate(element => {
+			const separator = getComputedStyle(element, '::before');
+			return { height: separator.height, top: separator.top, left: separator.left, right: separator.right };
+		})).toEqual({ height: '1px', top: '0px', left: '0px', right: '0px' });
+		const emptyFileEditor = editor.locator('.ash-empty-file-editor');
+		await expect(emptyFileEditor.getByRole('button', { name: 'Open file', exact: true })).toBeVisible();
+		await expect(emptyFileEditor.getByRole('button', { name: 'New File', exact: true })).toBeVisible();
+		const search = emptyFileEditor.getByRole('textbox', { name: 'Search files', exact: true });
+		await search.click();
+		await page.keyboard.type('fixture');
+		const pickerInput = page.locator('.ash-quick-pick.anchored input');
+		await expect(pickerInput).toBeFocused();
+		await expect(pickerInput).toHaveValue('fixture');
+		await page.keyboard.press('Escape');
+		await expect(search).toBeFocused();
+		await expect(search).toHaveValue('');
 		const group = editor.locator('.ash-editor-group:not(.ash-code-page-group):visible');
 		const owner = await group.elementHandle();
 		await strip.getByRole('button', { name: 'Add Tab', exact: true }).press('Enter');

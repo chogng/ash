@@ -582,6 +582,7 @@ export class DesktopWorkbenchLayout
 			if (hostedGroup && hostedGroup !== group && hostedGroup.domNode.isConnected) hostedGroup.setTabStripHost(undefined);
 			hostedGroup = group;
 			group?.setTabStripHost(host);
+			editor.domNode.classList.toggle('has-hosted-tabs', !!host);
 		};
 		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
 			const editorVisible = this.isPartVisible('editor');
