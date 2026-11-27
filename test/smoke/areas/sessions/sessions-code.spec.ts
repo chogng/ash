@@ -587,6 +587,7 @@ test('The empty Code editor area opens Files and Browser through their own actio
 	const editorTabs = page.locator('.ash-editor-tab-strip:visible').getByRole('tab');
 	const files = page.getByRole('tab', { name: 'Files', exact: true });
 	await expect(editorTabs).toHaveCount(0);
+	await expect(empty.getByRole('button', { name: 'New File', exact: true })).toHaveCount(0);
 	await expect(empty.getByRole('button', { name: 'Open Changes', exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('empty-editor-area.png') });
 
@@ -595,7 +596,6 @@ test('The empty Code editor area opens Files and Browser through their own actio
 	await expect(empty).toHaveCount(0);
 	const search = page.getByRole('textbox', { name: 'Search files', exact: true });
 	await search.fill(testWorkspace.file);
-	await search.press('Enter');
 	const picker = new QuickAccess(page);
 	const file = picker.element.locator('.ash-quick-pick-row-label', { hasText: /^main\.ts$/u });
 	await expect(file).toBeVisible();

@@ -8,6 +8,10 @@ import type { ISaveEditorsOptions } from '../../../services/editor/common/editor
 import type { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Menu locations supplied by the product hosting an editor group. */
 export interface IEditorGroupMenuIds {
@@ -15,11 +19,25 @@ export interface IEditorGroupMenuIds {
 	readonly headerLayout?: MenuId;
 	readonly editorActions?: MenuId;
 	readonly tabsBarAddTab?: MenuId;
-	readonly emptyGroupAddTab?: MenuId;
+}
+
+export interface IEditorGroupEmptyState extends IDisposable {
+	readonly element: HTMLElement;
+	/** Returns whether the content accepted focus. */
+	focus(): boolean;
+}
+
+export interface IEditorGroupEmptyStateContext {
+	readonly document: Document;
+	readonly groupId: EditorGroupId;
+	readonly contextKeyService: IContextKeyService | undefined;
+	readonly contextMenuProvider: IContextMenuProvider;
 }
 
 export interface IEditorGroupViewOptions {
 	readonly menuIds?: IEditorGroupMenuIds;
+	/** Supplies product-owned content for an empty group with title actions, in place of the watermark. */
+	readonly createEmptyState?: (context: IEditorGroupEmptyStateContext, instantiationService: IInstantiationService) => IEditorGroupEmptyState;
 	readonly showHeader?: boolean;
 	/** Whether to keep the group header below tabs hosted in the window title bar. */
 	readonly showHeaderFor?: (editor: IResourceEditorInput | undefined) => boolean;

@@ -8,7 +8,8 @@ import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IEditorPane, IResourceEditorInput } from '../../../workbench/common/editor.js';
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
-import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
+import type { IEditorGroupEmptyStateContext, IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
+import { EmptyEditorGroupAddTab } from '../../../workbench/browser/parts/sessions/emptyEditorGroupAddTab.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { addDisposableListener, Dimension, type IDimension } from '../../../base/browser/dom.js';
 import { MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -19,11 +20,17 @@ import { Part } from '../../../workbench/browser/part.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView, type WorkbenchPartFrameInsets } from '../../../workbench/browser/workbenchPartView.js';
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
 import type { DesktopEditorTool } from '../../common/contextkeys.js';
-import { EditorHasMultipleToolsContext } from '../menus.js';
+import { EditorHasMultipleToolsContext, Menus } from '../menus.js';
 
 /** An editor page can supply its own window title and actions. The pane retains ownership of the element. */
 export interface ISessionsEditorPage extends IEditorPane {
 	readonly titlebarContent: HTMLElement;
+}
+
+/** Composes the Add Tab empty state in the owning editor group's command scope. */
+export function createEmptyEditorGroupAddTab(context: IEditorGroupEmptyStateContext, instantiationService: IInstantiationService): EmptyEditorGroupAddTab {
+	return instantiationService.createInstance(EmptyEditorGroupAddTab,
+		context.document, context.groupId, Menus.SessionsEmptyEditorGroupAddTab, context.contextKeyService, context.contextMenuProvider);
 }
 
 /** Sessions keeps product pages alive independently of per-session document restoration. */

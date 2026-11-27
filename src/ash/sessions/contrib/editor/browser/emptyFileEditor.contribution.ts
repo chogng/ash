@@ -48,7 +48,7 @@ registerAction2(class OpenFileInEmptyEditorAction extends Action2 {
 });
 
 const code = SessionsCodeEditorContext.isEqualTo(true);
-for (const menu of [Menus.EmptyFileEditorActions, Menus.SessionsEmptyEditorGroupAddTab, Menus.SessionsEditorTabsBarAddTab]) {
+for (const menu of [Menus.EmptyFileEditorActions, Menus.SessionsEditorTabsBarAddTab]) {
 	MenusRegistry.appendMenuItem(menu, {
 		command: {
 			id: NEW_UNTITLED_FILE_COMMAND_ID,
