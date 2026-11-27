@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { execFile, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -77,6 +78,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 		}
 		await install(archive, installation, userData);
 		installed = true;
+		if (process.platform === 'win32') await assertCompressedBinaries(installation);
 		assert(!(await exists(join(installation, 'upgrade-retired.txt'))));
 		assert.equal(await readFile(file, 'utf8'), previousArchive ? 'const release = 2;' : 'const release = 1;\n');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
@@ -115,6 +117,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 			await assertNoNativeResidue(installation);
 			await install(archive, installation, userData);
 			installed = true;
+			await assertCompressedBinaries(installation);
 			await exercisePackagedWorkbench(
 				installation,
 				version,
@@ -182,6 +185,21 @@ async function assertPreparedBackend(installation: string, userData: string): Pr
 	assert(await exists(join(store, manifest.directory, metadata.entrypoint)));
 	assert(!(await exists(join(profile, 'state.sqlite3'))), 'Setup prepares the package without starting App Server');
 	assert(!(await exists(join(userData, 'state.json'))), 'Setup does not start Electron');
+}
+
+async function assertCompressedBinaries(installation: string): Promise<void> {
+	const compact = join(required('SystemRoot'), 'System32', 'compact.exe');
+	const { files } = JSON.parse(await readFile(join(installation, 'resources', 'installation-files.json'), 'utf8'));
+	for (const file of ['Ash.exe', 'resources/bin/ash-app-server.exe', 'resources/bin/ash-code-mode-host.exe', 'dxcompiler.dll']) {
+		const path = join(installation, file);
+		const { stdout } = await run(compact, [path], { windowsHide: true, timeout: 15_000 });
+		// Compact prints the logical and stored byte counts before its localized ratio text.
+		const sizes = /^\s*(\d+)\s*:\s*(\d+)\s*=/mu.exec(stdout);
+		assert(sizes && Number(sizes[2]) < Number(sizes[1]), `Expected ${file} to be compressed:\n${stdout}`);
+		const hash = createHash('sha256');
+		for await (const chunk of createReadStream(path)) hash.update(chunk);
+		assert.equal(hash.digest('hex'), files[file], `Compressed file must match the installer manifest: ${file}`);
+	}
 }
 
 async function install(archive: string, installation: string, userData: string): Promise<void> {

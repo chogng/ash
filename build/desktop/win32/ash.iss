@@ -53,7 +53,8 @@ Root: HKCU; Subkey: "Software\Classes\ash\shell\open\command"; ValueType: string
 
 [Run]
 Filename: "{app}\Ash.exe"; Flags: nowait postinstall skipifsilent; Description: "{code:LaunchDescription}"
-Filename: "{app}\Ash.exe"; Flags: nowait skipifnotsilent; Check: ShouldRestart
+; Defer the updater's restart until backend preparation and compression finish.
+Filename: "{app}\Ash.exe"; Flags: nowait postinstall skipifnotsilent runascurrentuser; Check: ShouldRestart
 
 [CustomMessages]
 StartAsh=Start Ash
@@ -110,6 +111,23 @@ begin
     Result := '';
 end;
 
+procedure CompressInstalledBinaries;
+var
+  ExitCode: Integer;
+begin
+  { Setup replaces files on upgrade. Apply NTFS compression to the final copies. }
+  try
+    if not ExecAndLogOutput(ExpandConstant('{sys}\compact.exe'),
+        '/C /I /Q /EXE:XPRESS8K Ash.exe resources\bin\ash-app-server.exe resources\bin\ash-code-mode-host.exe dxcompiler.dll',
+        ExpandConstant('{app}'), SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, nil) then
+      Log('Could not start Ash file compression: ' + SysErrorMessage(ExitCode))
+    else if ExitCode <> 0 then
+      Log('Ash file compression exited with code ' + IntToStr(ExitCode));
+  except
+    Log('Could not run Ash file compression: ' + GetExceptionMessage);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ProfilePath, UserDataPath, DaemonPath: String;
@@ -130,6 +148,7 @@ begin
           (ExitCode <> 0) then
         RaiseException(InstallationMessage('InstallCleanupFailed'));
     end;
+    CompressInstalledBinaries;
   end;
 end;
 
