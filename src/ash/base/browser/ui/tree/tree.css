@@ -36,12 +36,23 @@
 	right: 0;
 	left: 0;
 	flex-direction: column;
-	background: inherit;
-	box-shadow: 0 1px 0
-		var(
-			--ash-list-style-tree-indent-guides-stroke,
-			var(--ash-tree-indentGuidesStroke)
-		);
+	background: var(--ash-tree-sticky-background, inherit);
+}
+
+.ash-tree-sticky-container::after {
+	position: absolute;
+	inset: 100% 0 auto;
+	block-size: 3px;
+	box-shadow: 0 6px 6px -6px var(--ash-tree-stickyScrollShadow) inset;
+	content: "";
+	pointer-events: none;
+}
+
+:is(.hc-black, .hc-light) .ash-tree-sticky-container::after {
+	block-size: 0;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder);
+	box-shadow: none;
 }
 
 .ash-tree-sticky-container.empty {

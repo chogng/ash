@@ -308,6 +308,7 @@ export class List<T> extends Disposable {
 	getElementTop(index: number): number { return this.view.getElementTop(index); }
 	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
 	indexAt(position: number): number { return this.view.indexAt(position); }
+	get renderHeight(): number { return this.view.renderHeight; }
 	get scrollTop(): number { return this.view.scrollTop; }
 	set scrollTop(top: number) { this.view.scrollTop = top; }
 	reveal(index: number, relativeTop?: number): void {

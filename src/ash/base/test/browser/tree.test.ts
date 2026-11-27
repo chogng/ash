@@ -1629,6 +1629,39 @@ test('ObjectTree find filters with ancestors and supports dynamic heights and st
 	dom.window.close();
 });
 
+test('Sticky Scroll renders and reveals ancestors outside the virtual row range', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using tree = new ObjectTree<string>(dom.window.document.body, {
+			enableStickyScroll: true,
+			scrolling: 'managed',
+			getHeight: () => 22,
+			modelOptions: { identityProvider: { getId: item => item } },
+			renderElement: item => h(dom.window.document, 'span', undefined, item),
+		});
+		const viewport = tree.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		Object.defineProperties(viewport, { clientHeight: { value: 96 }, clientWidth: { value: 200 }, scrollHeight: { value: 902 } });
+		tree.setChildren([{ element: 'parent', collapsed: false, children: Array.from({ length: 40 }, (_, index) => ({ element: `child-${index}` })) }]);
+		tree.layout(96);
+		tree.scrollTop = 550;
+		assert.equal(tree.element.querySelector(':scope > .ash-tree-row[data-tree-id="parent"]'), null);
+		const sticky = tree.element.querySelector<HTMLElement>('.ash-tree-sticky-row')!;
+		assert.equal(sticky?.textContent, 'parent');
+		tree.scrollTop = 572;
+		assert.equal(tree.element.querySelector('.ash-tree-sticky-row'), sticky);
+		tree.setFocus('parent');
+		sticky.click();
+		assert.equal(tree.scrollTop, 0);
+		tree.scrollTop = 572;
+		tree.element.querySelector<HTMLElement>('.ash-tree-sticky-row .ash-tree-twistie')!.click();
+		assert.equal(tree.isCollapsed('parent'), true);
+		assert.equal(tree.element.querySelector('.ash-tree-sticky-row'), null);
+		assert.equal(dom.window.document.activeElement, tree.element);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('ObjectTree routes HTML drag and drop through hierarchy-aware policy', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const events: string[] = [];

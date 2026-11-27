@@ -3,6 +3,10 @@
 	background: var(--ash-auxiliaryBar-background);
 }
 
+.ash-sessions-files-view.ash-explorer-view-pane {
+	--ash-tree-sticky-background: var(--ash-auxiliaryBar-background);
+}
+
 .ash-sessions-files-empty-content {
 	display: grid;
 	flex: 1;

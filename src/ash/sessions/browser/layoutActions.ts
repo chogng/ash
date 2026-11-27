@@ -6,6 +6,8 @@ import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideC
 import { ISessionsManagementService, hasSelectedCodeWorkspace } from '../services/sessions/common/sessionsManagement.js';
 import type { EditorParts } from './parts/editorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
+import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { SessionsConfiguration, type SessionsDetailsPosition } from '../common/configuration.js';
 import { localize, localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
@@ -266,6 +268,7 @@ export function registerDesktopEditorLayoutActions(
 	contextKeys: IContextKeyService,
 	layout: IAgentWorkbenchLayoutService,
 	editor: EditorParts,
+	configuration: IConfigurationService,
 	openChatFiles: () => Promise<void>,
 ): IDisposable {
 	const disposables = new DisposableStore();
@@ -361,6 +364,27 @@ export function registerDesktopEditorLayoutActions(
 		toggled: detailsVisibleContext.isEqualTo(true),
 		precondition: supportedDetailsContext.isEqualTo(true),
 	};
+	const detailsPosition = contextKeys.createKey<SessionsDetailsPosition>(`config.${SessionsConfiguration.detailsPosition}`, configuration.getValue<SessionsDetailsPosition>(SessionsConfiguration.detailsPosition));
+	disposables.add(configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration(SessionsConfiguration.detailsPosition)) detailsPosition.set(configuration.getValue<SessionsDetailsPosition>(SessionsConfiguration.detailsPosition));
+	}));
+	disposables.add(toDisposable(() => detailsPosition.reset()));
+	const positions: readonly [SessionsDetailsPosition, string][] = [
+		['top', localize('sessions.layout.detailsAbove', 'Above Editor')],
+		['bottom', localize('sessions.layout.detailsBelow', 'Below Editor')],
+		['left', localize('workbench.sideBar.location.left', 'Left')],
+		['right', localize('workbench.sideBar.location.right', 'Right')],
+		['floating', localize('sessions.layout.detailsFloating', 'Floating')],
+	];
+	for (const [order, [position, title]] of positions.entries()) {
+		const id = `ash.sessions.detailsPosition.${position}`;
+		disposables.add(CommandsRegistry.register(id, () => run(() => configuration.updateValue(SessionsConfiguration.detailsPosition, position))));
+		disposables.add(MenusRegistry.appendMenuItem(Menus.DetailsToggle, {
+			command: { id, title, toggled: ContextKeyExpr.equals(`config.${SessionsConfiguration.detailsPosition}`, position) },
+			group: '2_organize',
+			order,
+		}));
+	}
 	const hideEditor = {
 		id: 'ash.sessions.hideEditor',
 		title: localize2({ bundle: 'ash', key: 'sessions.layout.hideEditor' }, 'Hide editor'),
@@ -372,9 +396,16 @@ export function registerDesktopEditorLayoutActions(
 	disposables.add(
 		MenusRegistry.appendMenuItems([
 			{
+				id: Menus.DetailsToggle,
+				item: { command: { ...toggleDetails, icon: Lxicon.listUnordered }, group: 'navigation' },
+			},
+			{
 				id: Menus.SessionsEditorHeaderLayout,
 				item: {
-					command: { ...toggleDetails, icon: Lxicon.listUnordered },
+					submenu: Menus.DetailsToggle,
+					title: localize('sessions.layout.detailsPosition', 'Details Position'),
+					icon: Lxicon.listUnordered,
+					isSplitButton: { excludePrimaryActionFromDropdown: true },
 					when: ContextKeyExpr.and(codeWhen, filesTool),
 					group: 'navigation',
 					order: 2,

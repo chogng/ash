@@ -86,6 +86,7 @@ export class MultiDiffEditorFileList<T extends IMultiDiffEditorFileListItem> ext
 			ariaLabel: options.ariaLabel,
 			openOnSingleClick: options.openOnSingleClick,
 			scrolling: options.scrolling,
+			enableStickyScroll: true,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			multipleSelectionSupport: true,
 			modelOptions: { identityProvider: { getId: element => element.id }, defaultCollapseState: 'expanded' },

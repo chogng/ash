@@ -31,7 +31,7 @@
 
 .ash-user-bot-form p {
 	margin: 0;
-	color: var(--ash-descriptionForeground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-user-bot-form .ash-input-box-scrollable textarea {
@@ -39,7 +39,7 @@
 }
 
 .ash-user-bot-form [role="alert"]:not(:empty) {
-	color: var(--ash-errorForeground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-user-bot-form [role="alert"]:empty {

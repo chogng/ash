@@ -192,7 +192,10 @@
 }
 
 .ash-editor-title-control > .ash-editor-breadcrumbs {
+	position: relative;
 	margin-right: var(--ash-editor-content-right-inset, 0px);
+	margin-left: var(--ash-editor-content-left-inset, 0px);
+	inset-block-start: var(--ash-editor-content-top-inset, 0px);
 }
 
 .ash-editor-header-layout {

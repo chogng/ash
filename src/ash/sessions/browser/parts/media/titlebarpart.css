@@ -118,6 +118,13 @@
 	-webkit-app-region: no-drag;
 }
 
+.ash-sessions-titlebar-editor-region > .ash-editor-header-layout {
+	align-self: center;
+	margin-inline-start: auto;
+	padding-inline-start: var(--ash-spacing-size40);
+	-webkit-app-region: no-drag;
+}
+
 .ash-sessions-titlebar:is(.has-editor-region, .has-editor-page-header)
 	.ash-sessions-titlebar-right {
 	padding-right: var(--ash-spacing-size40);

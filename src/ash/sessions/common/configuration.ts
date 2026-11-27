@@ -5,6 +5,8 @@ import { ActivityBarPosition, type SideBarLocation } from '../../workbench/commo
 
 export type SessionsLayoutStyle = 'modern' | 'flat';
 export type SessionsBackgroundColor = 'warm' | 'cool';
+const detailsPositions = ['top', 'bottom', 'left', 'right', 'floating'] as const;
+export type SessionsDetailsPosition = (typeof detailsPositions)[number];
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -24,6 +26,17 @@ export function getSessionsActivityBarLocationOptions(): readonly { value: Sessi
 
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
+	detailsPosition: configurationRegistry.registerConfiguration<SessionsDetailsPosition>({
+		key: 'sessions.detailsPosition',
+		defaultValue: 'right',
+		scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'string', enum: [...detailsPositions] },
+		parse(value: unknown): SessionsDetailsPosition {
+			const position = detailsPositions.find(position => position === value);
+			if (position) return position;
+			throw new TypeError(`Unknown Sessions details position: ${String(value)}`);
+		},
+	}),
 	chatInputLayout: configurationRegistry.registerConfiguration<'compact' | 'stacked'>({
 		key: 'sessions.chat.inputLayout',
 		defaultValue: 'compact',

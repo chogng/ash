@@ -6,15 +6,49 @@
 	position: absolute;
 	box-sizing: border-box;
 	border-left: 0;
+
+	&[data-details-position] {
+		border: 0 solid var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	}
+
+	&[data-details-position="right"] {
+		border-left-width: var(--ash-strokeThickness);
+	}
+
+	&[data-details-position="left"] {
+		border-right-width: var(--ash-strokeThickness);
+	}
+
+	&[data-details-position="bottom"] {
+		border-top-width: var(--ash-strokeThickness);
+	}
+
+	&[data-details-position="top"] {
+		border-bottom-width: var(--ash-strokeThickness);
+	}
+
+	&[data-details-position="floating"] {
+		z-index: 2;
+		border-width: var(--ash-strokeThickness);
+		border-radius: var(--ash-cornerRadius-medium);
+		box-shadow: 0 2px 8px var(--ash-widget-shadow);
+	}
 }
 
-.ash-code-editor-groups .ash-editor-docked-auxiliarybar-split {
-	border-left: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
+.ash-sessions-window .ash-editor-header-layout .ash-split-action.checked {
+	background: var(--ash-sessions-selectionBackground);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
 }
 
-.ash-editor-docked-auxiliarybar-sash {
-	/* The docked part paints the line inside its leading edge. */
+.ash-editor-docked-auxiliarybar-sash[data-details-position="right"],
+.ash-editor-docked-auxiliarybar-sash[data-details-position="bottom"] {
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / 2);
+}
+
+.ash-editor-docked-auxiliarybar-sash[data-details-position="left"],
+.ash-editor-docked-auxiliarybar-sash[data-details-position="top"] {
+	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
 }
 
 .ash-sessions-window
@@ -89,12 +123,34 @@
 }
 
 .ash-sessions-window[data-layout-style="flat"]
-	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	.ash-tool-editor-workspace:not(
+		.ash-product-page-host,
+		[data-editor-tool="files"]
+	)
 	.ash-editor-title-with-group-header::after {
 	content: "";
 	height: var(--ash-strokeThickness);
 	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
 	pointer-events: none;
+}
+
+.ash-tool-editor-workspace[data-editor-tool="files"]:not(.ash-product-page-host)
+	.ash-editor-title-control:not(.ash-editor-title-tabs-hosted)
+	> .ash-editor-group-header::after {
+	content: "";
+	position: absolute;
+	inset: auto 0 0;
+	block-size: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
+}
+
+.ash-tool-editor-workspace[data-editor-tool="files"]:not(.ash-product-page-host)
+	.ash-editor-title-tabs-hosted
+	> .ash-editor-group-header {
+	margin-left: var(--ash-editor-content-left-inset, 0px);
+	margin-right: var(--ash-editor-content-right-inset, 0px);
+	inset-block-start: var(--ash-editor-content-top-inset, 0px);
 }
 
 :is(

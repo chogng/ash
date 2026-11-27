@@ -42,6 +42,10 @@ import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
 import type { URI } from '../../../../../base/common/uri.js';
 
+interface ExplorerTreeViewState extends IAsyncDataTreeViewState {
+	readonly workspaceRoot?: string;
+}
+
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly fileService: IFileService;
@@ -123,6 +127,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				return items.map(item => item === focused && segment ? segment : item);
 			})),
 			scrolling: 'managed',
+			enableStickyScroll: true,
 			getHeight: () => 22,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
@@ -577,7 +582,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			// Workspace folders are validated at the host boundary; the first directory read reports an invalid root.
 			this.root = this.explorerService.getRoot();
 			this.setTitle(workspace.folders.length === 1 ? this.root!.name : workspace.name ?? 'Explorer');
-			await this.tree.setInput(this.root, this.readTreeState());
+			const root = this.visibleSingleFolderRoot;
+			const viewState = this.readTreeState();
+			const rootId = root?.resource.toString();
+			const input = root ? ExplorerItem.workspaceRoot(workspace, [root]) : this.root;
+			// State saved before the single root became visible already has its own expanded descendants.
+			const state = rootId && viewState?.workspaceRoot !== rootId
+				? { ...viewState, expanded: [rootId, ...(viewState?.expanded ?? [])] } : viewState;
+			await this.tree.setInput(input, state);
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.viewStateWorkspaceId = workspace.id;
 			this.render();
@@ -590,22 +602,33 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}
 	}
 
-	private saveTreeState(): void {
-		if (this.viewStateWorkspaceId !== this.workspaceContextService.getWorkspace().id) return;
-		this.storageService.store(ExplorerView.TREE_VIEW_STATE_STORAGE_KEY, JSON.stringify(this.tree.getViewState()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	protected get showSingleFolderRoot(): boolean { return false; }
+
+	private get visibleSingleFolderRoot(): ExplorerItem | undefined {
+		return this.showSingleFolderRoot && !this.root?.children ? this.root : undefined;
 	}
 
-	private readTreeState(): IAsyncDataTreeViewState | undefined {
+	private saveTreeState(): void {
+		if (this.viewStateWorkspaceId !== this.workspaceContextService.getWorkspace().id) return;
+		const state: ExplorerTreeViewState = {
+			...this.tree.getViewState(),
+			workspaceRoot: this.visibleSingleFolderRoot?.resource.toString(),
+		};
+		this.storageService.store(ExplorerView.TREE_VIEW_STATE_STORAGE_KEY, JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
+	private readTreeState(): ExplorerTreeViewState | undefined {
 		const stored = this.storageService.get(ExplorerView.TREE_VIEW_STATE_STORAGE_KEY, StorageScope.WORKSPACE);
 		if (!stored) return undefined;
 		try {
 			const value: unknown = JSON.parse(stored);
 			if (!isRecord(value)) return undefined;
+			if (value.workspaceRoot !== undefined && typeof value.workspaceRoot !== 'string') return undefined;
 			for (const key of ['focus', 'selection', 'expanded']) {
 				if (value[key] !== undefined && (!Array.isArray(value[key]) || !value[key].every(id => typeof id === 'string'))) return undefined;
 			}
 			if (value.scrollTop !== undefined && (typeof value.scrollTop !== 'number' || !Number.isFinite(value.scrollTop) || value.scrollTop < 0)) return undefined;
-			return value as IAsyncDataTreeViewState;
+			return value as ExplorerTreeViewState;
 		} catch { return undefined; }
 	}
 

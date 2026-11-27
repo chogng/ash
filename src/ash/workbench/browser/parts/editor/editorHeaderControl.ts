@@ -66,6 +66,8 @@ export class EditorHeaderControl extends Disposable {
 	private selectEditorType: ((id: string) => Promise<unknown>) | undefined;
 	private showEditorType: boolean;
 	private readonly headerRow: HTMLElement | undefined;
+	private readonly layoutActions: HTMLElement | undefined;
+	private readonly editorActions: HTMLElement;
 
 	constructor(
 		private readonly titleContainer: HTMLElement,
@@ -155,16 +157,21 @@ export class EditorHeaderControl extends Disposable {
 				},
 			));
 		this._register(toDisposable(() => actionsContainer.remove()));
+		this.editorActions = actionsContainer;
 		if (actions && viewOptions.menuIds?.headerLayout && this.headerRow) {
-			const layoutActions = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-layout' });
+			const layoutActions = this.layoutActions = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-layout' });
 			actionRow.append(layoutActions);
-			this._register(instantiationService.createInstance(MenuWorkbenchToolBar, layoutActions, viewOptions.menuIds.headerLayout, {
+			const toolbar = this._register(instantiationService.createInstance(MenuWorkbenchToolBar, layoutActions, viewOptions.menuIds.headerLayout, {
 				contextMenuProvider: actions.contextMenuProvider,
-				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
+				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorLayoutActions' }, 'Editor layout actions'),
 				contextKeyService: actions.contextKeyService,
 				highlightToggledItems: false,
 				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
 			}));
+			this._register(toDisposable(() => layoutActions.remove()));
+			if (viewOptions.hostLayoutActionsWithTabs) {
+				this._register(toolbar.onDidChangeMenuItems(() => this.heightEmitter.fire()));
+			}
 		}
 		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
 		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
@@ -210,6 +217,21 @@ export class EditorHeaderControl extends Disposable {
 
 	get toolbarRowHeight(): number {
 		return this.editorToolbarHost?.offsetHeight ? this.headerRow?.offsetHeight ?? 0 : 0;
+	}
+
+	get layoutActionsWidth(): number {
+		return this.layoutActions?.getBoundingClientRect().width ?? 0;
+	}
+
+	setLayoutActionsHost(host: HTMLElement | undefined): void {
+		const actions = this.layoutActions;
+		const target = host ?? this.headerRow;
+		if (!actions || !target || actions.parentElement === target) return;
+		const active = actions.ownerDocument.activeElement as HTMLElement | null;
+		const restoreFocus = actions.contains(active);
+		if (host) host.append(actions);
+		else this.editorActions.after(actions);
+		if (restoreFocus) active?.focus({ preventScroll: true });
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {

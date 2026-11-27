@@ -3,6 +3,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../platform/
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { ViewDescriptorService } from '../../../workbench/services/views/browser/viewDescriptorService.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
@@ -21,8 +22,11 @@ import { createEmptyEditorGroupAddTab, EditorPart, type ISessionsEditorPage } fr
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
+import { SessionsConfiguration, type SessionsDetailsPosition } from '../../common/configuration.js';
 
 const DEFAULT_FILES_TREE_WIDTH = 300;
+const DEFAULT_FILES_TREE_HEIGHT = 240;
+const MINIMUM_FILES_TREE_HEIGHT = 88;
 const MINIMUM_NARROW_EDITOR_WIDTH = 160;
 
 /** Owns the main editor groups and the geometry of their docked details. */
@@ -35,6 +39,7 @@ export class DesktopMainEditorPart extends EditorPart {
 	private showEditors = true;
 	private hostVisible = true;
 	private preferredDetailsWidth: number;
+	private preferredDetailsHeight: number;
 	private dockedAuxiliaryBar: DockedAuxiliaryBarController | undefined;
 	private readonly productDock = this._register(new MutableDisposable());
 	private productDetails: { readonly part: Part; readonly home: HTMLElement; readonly resize: (width: number) => void; } | undefined;
@@ -49,12 +54,16 @@ export class DesktopMainEditorPart extends EditorPart {
 		@IThemeService theme: IThemeService,
 		@IStorageService private readonly storage: IStorageService,
 		@IUriIdentityService identities: IUriIdentityService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super(container, { ...options, supportsGroupSplitting: false }, services, theme, storage, identities);
 		this.domNode.classList.add('ash-code-editor-groups');
 		this.groups.find(group => group.id === this.pageGroupId)!.domNode.classList.add('ash-code-page-group');
-		const width = storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, DEFAULT_FILES_TREE_WIDTH);
-		this.preferredDetailsWidth = Number.isFinite(width) && width >= 160 && width <= 800 ? width : DEFAULT_FILES_TREE_WIDTH;
+		this.preferredDetailsWidth = this.readDetailsSize(false);
+		this.preferredDetailsHeight = this.readDetailsSize(true);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.detailsPosition)) this.layoutDetails();
+		}));
 		storage.remove('sessions.code.filesGroup', StorageScope.WORKSPACE);
 		this._register(this.onDidLayout(dimension => {
 			this.detailsDimension = dimension;
@@ -112,22 +121,31 @@ export class DesktopMainEditorPart extends EditorPart {
 
 	private getDockedAuxiliaryBar(): DockedAuxiliaryBarController {
 		return this.dockedAuxiliaryBar ??= this._register(new DockedAuxiliaryBarController(this.domNode, {
-			getTabsHeight: () => this.getTabsHeight(),
-			setEditorContentRightInset: width => this.setContentRightInset(width),
+			getTabsHeight: () => !this.productDetails && this.activeGroup.tabsHosted ? 0 : this.getTabsHeight(),
+			setEditorContentInsets: insets => this.setContentInsets(insets),
 			setEditorContentVisible: visible => this.setEditorContentVisible(visible),
-			setWidth: width => this.resizeDetails(width),
-			commitWidth: width => {
-				if (!this.productDetails) this.storage.store('sessions.code.filesTreeWidth', width, StorageScope.PROFILE, StorageTarget.MACHINE);
+			setSize: (size, vertical) => this.resizeDetails(size, vertical),
+			commitSize: (size, vertical) => {
+				if (!this.productDetails) this.storage.store(vertical ? 'sessions.code.filesTreeHeight' : 'sessions.code.filesTreeWidth', size, StorageScope.PROFILE, StorageTarget.MACHINE);
 			},
-			resetWidth: () => this.resizeDetails(this.productDetails ? this.productDetails.part.preferredWidth ?? DockedAuxiliaryBarController.MIN_WIDTH : DEFAULT_FILES_TREE_WIDTH),
+			resetSize: vertical => this.resizeDetails(this.productDetails
+				? this.productDetails.part.preferredWidth ?? DockedAuxiliaryBarController.MIN_WIDTH
+				: vertical ? DEFAULT_FILES_TREE_HEIGHT : DEFAULT_FILES_TREE_WIDTH, vertical),
 		}));
 	}
 
-	private resizeDetails(width: number): void {
+	private readDetailsSize(vertical: boolean): number {
+		const fallback = vertical ? DEFAULT_FILES_TREE_HEIGHT : DEFAULT_FILES_TREE_WIDTH;
+		const size = this.storage.getNumber(vertical ? 'sessions.code.filesTreeHeight' : 'sessions.code.filesTreeWidth', StorageScope.PROFILE, fallback);
+		return Number.isFinite(size) && size >= (vertical ? MINIMUM_FILES_TREE_HEIGHT : MINIMUM_NARROW_EDITOR_WIDTH) && size <= 800 ? size : fallback;
+	}
+
+	private resizeDetails(size: number, vertical: boolean): void {
 		if (this.productDetails) {
-			this.productDetails.resize(Math.max(DockedAuxiliaryBarController.MIN_WIDTH, width));
+			this.productDetails.resize(Math.max(DockedAuxiliaryBarController.MIN_WIDTH, size));
 		} else {
-			this.preferredDetailsWidth = width;
+			if (vertical) this.preferredDetailsHeight = size;
+			else this.preferredDetailsWidth = size;
 			this.layoutDetails();
 		}
 	}
@@ -201,24 +219,30 @@ export class DesktopMainEditorPart extends EditorPart {
 			const minimumWidth = DockedAuxiliaryBarController.MIN_WIDTH;
 			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
 				part: product.part,
-				requestedWidth: this.hostVisible && this.isGroupVisible(this.pageGroupId) ? this.productDetailsWidth : undefined,
-				minimumWidth,
-				minimumEditorWidth: Math.min(EDITOR_PART_MINIMUM_WIDTH, Math.max(MINIMUM_NARROW_EDITOR_WIDTH, this.detailsDimension.width - minimumWidth)),
+				requestedSize: this.hostVisible && this.isGroupVisible(this.pageGroupId) ? this.productDetailsWidth : undefined,
+				minimumSize: minimumWidth,
+				minimumEditorSize: Math.min(EDITOR_PART_MINIMUM_WIDTH, Math.max(MINIMUM_NARROW_EDITOR_WIDTH, this.detailsDimension.width - minimumWidth)),
+				position: 'right',
 				editorVisible: true,
 				hideWhenConstrained: true,
 			});
 		} else if (files || this.dockedAuxiliaryBar) {
 			const minimumWidth = files?.minimumWidth ?? 0;
 			const minimumEditorWidth = Math.min(EDITOR_PART_MINIMUM_WIDTH, Math.max(MINIMUM_NARROW_EDITOR_WIDTH, this.detailsDimension.width - minimumWidth));
+			const position = this.configuration.getValue<SessionsDetailsPosition>(SessionsConfiguration.detailsPosition);
+			const vertical = position === 'top' || position === 'bottom';
+			const preferredSize = vertical ? this.preferredDetailsHeight : this.preferredDetailsWidth;
 			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
 				part: files,
-				requestedWidth: this.detailsVisible ? this.preferredDetailsWidth : undefined,
-				minimumWidth,
-				minimumEditorWidth,
+				requestedSize: this.detailsVisible ? preferredSize : undefined,
+				minimumSize: vertical ? MINIMUM_FILES_TREE_HEIGHT : minimumWidth,
+				minimumEditorSize: vertical ? 120 : minimumEditorWidth,
+				position,
 				editorVisible: this.isEditorVisible && this.fileGroups.some(group => !!group.activeInput),
 				collapse: () => {
 					// A collapse gesture leaves the last saved width available when Files is reopened.
-					this.preferredDetailsWidth = this.storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, DEFAULT_FILES_TREE_WIDTH);
+					if (vertical) this.preferredDetailsHeight = this.readDetailsSize(true);
+					else this.preferredDetailsWidth = this.readDetailsSize(false);
 					this.hideDetails();
 					this.activeGroup.focus();
 				},
@@ -238,6 +262,7 @@ export class DesktopMainEditorPart extends EditorPart {
 		return {
 			showHeader: true,
 			showHeaderFor: editor => !!editor && !(editor instanceof EmptyFileEditorInput),
+			hostLayoutActionsWithTabs: true,
 			showEditorToolbar: true,
 			createEmptyState: createEmptyEditorGroupAddTab,
 			menuIds: {

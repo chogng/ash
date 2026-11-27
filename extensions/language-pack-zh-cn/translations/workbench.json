@@ -1489,6 +1489,7 @@
     "editor": "编辑器",
     "addEditorTab": "添加标签页",
     "editorActions": "编辑器操作",
+    "editorLayoutActions": "编辑器布局操作",
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {

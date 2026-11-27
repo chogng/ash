@@ -6,6 +6,8 @@ import { localize } from '../../../../nls.js';
 export const SESSIONS_FILES_VIEW_ID = 'ash.explorer';
 
 export class SessionsExplorerView extends ExplorerView {
+	protected override get showSingleFolderRoot(): boolean { return true; }
+
 	public override setTitle(_title: string): void {
 		super.setTitle(localize('sessions.files.title', 'Files'));
 	}

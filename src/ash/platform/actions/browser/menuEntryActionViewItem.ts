@@ -197,8 +197,9 @@ export class SubmenuEntryActionViewItem
 		action: SubmenuItemAction,
 		contextMenuProvider: IContextMenuProvider,
 		options: IMenuEntryActionViewItemOptions = {},
+		getActions: () => readonly IAction[] = () => action.actions,
 	) {
-		super(action, () => action.actions, contextMenuProvider, {
+		super(action, getActions, contextMenuProvider, {
 			buttonStyles: defaultButtonStyles,
 			...options
 		});
@@ -251,13 +252,20 @@ export class DropdownWithDefaultActionViewItem extends ActionViewItem {
 		this.defaultItem = this._register(defaultAction instanceof MenuItemAction
 			? new MenuEntryActionViewItem(defaultAction, options)
 			: new ButtonActionViewItem(defaultAction, { buttonStyles: defaultButtonStyles, ...options }));
-		this.dropdownItem = this._register(new SubmenuEntryActionViewItem(action, contextMenuProvider, options));
+		const split = action.item.isSplitButton;
+		this.dropdownItem = this._register(new SubmenuEntryActionViewItem(action, contextMenuProvider, options,
+			typeof split === 'object' && split.excludePrimaryActionFromDropdown
+				? () => action.actions.slice(action.actions.indexOf(defaultAction) + 1).filter((item, index) => index > 0 || !(item instanceof Separator))
+				: undefined));
 		this.onDidChangeDropdownVisibility = this.dropdownItem.onDidChangeVisibility;
 	}
 
 	public override render(container: HTMLElement): void {
 		container.classList.add('ash-dropdown-with-default-action-view-item', 'ash-split-action');
 		container.classList.toggle('primary', this.options.buttonPresentation === 'primary');
+		const updateChecked = (): void => { container.classList.toggle('checked', this.defaultAction.checked === true); };
+		updateChecked();
+		if (this.defaultAction.onDidChange) this._register(this.defaultAction.onDidChange(updateChecked));
 		const primaryContainer = h(container.ownerDocument, 'div');
 		primaryContainer.className = 'ash-split-action-primary';
 		primaryContainer.classList.toggle('icon', this.defaultAction.icon !== undefined);

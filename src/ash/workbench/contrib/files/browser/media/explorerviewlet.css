@@ -1,4 +1,5 @@
 .ash-explorer-view-pane {
+	--ash-tree-sticky-background: var(--ash-sideBar-background);
 	display: flex;
 	min-height: 0;
 	flex: 1 1 auto;

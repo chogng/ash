@@ -20,6 +20,7 @@ import type { IWorkingCopyService } from '../../../services/workingCopy/common/w
 import type { IDiffService } from '../../../services/diff/common/diffService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { NoWorkbenchPartFrameInsets, type WorkbenchPartFrameInsets } from '../../workbenchPartView.js';
 import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import type { ICollabApi } from '../../../../platform/collab/common/collabApi.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
@@ -182,7 +183,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private ordinaryContent: Element | undefined;
 	private groupDimension: IDimension = Dimension.Zero;
 	private dimension: IDimension = Dimension.Zero;
-	private contentRightInset = 0;
+	private contentInsets = NoWorkbenchPartFrameInsets;
 	private contentVisible = true;
 	private openSequence = 0;
 	private pendingOpenSequence: number | undefined;
@@ -990,9 +991,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	layout(dimension: IDimension): void {
 		this.groupDimension = dimension;
+		const { top, right, bottom, left } = this.contentInsets;
 		this.dimension = new Dimension(
-			Math.max(0, dimension.width - this.contentRightInset),
-			Math.max(0, dimension.height - this.titleControl.height),
+			Math.max(0, dimension.width - left - right),
+			Math.max(0, dimension.height - this.titleControl.height - top - bottom),
 		);
 		this.panes.layout(this.dimension);
 		this.watermark?.layout(this.dimension.height);
@@ -1011,6 +1013,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	public get singleRowTabStripSize(): IDimension | undefined { return this.titleControl.singleRowTabStripSize; }
+	public get tabsHosted(): boolean { return this.titleControl.tabsHosted; }
 
 	public setTabStripHost(host: HTMLElement | undefined): void { this.titleControl.setTabStripHost(host); }
 
@@ -1018,13 +1021,18 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return this.domNode.contains(element) || !!this.titleControl.tabStrip?.contains(element);
 	}
 
-	public setContentRightInset(inset: number): void {
-		if (this.contentRightInset === inset) {
+	public setContentInsets(insets: WorkbenchPartFrameInsets): void {
+		const { top, right, bottom, left } = this.contentInsets;
+		if (top === insets.top && right === insets.right && bottom === insets.bottom && left === insets.left) {
 			return;
 		}
-		this.contentRightInset = inset;
-		this.contentDomNode.style.width = `calc(100% - ${inset}px)`;
-		this.titleControl.domNode.style.setProperty('--ash-editor-content-right-inset', `${inset}px`);
+		this.contentInsets = insets;
+		this.contentDomNode.style.width = `calc(100% - ${insets.left + insets.right}px)`;
+		this.contentDomNode.style.margin = `${insets.top}px ${insets.right}px ${insets.bottom}px ${insets.left}px`;
+		const titleStyle = this.titleControl.domNode.style;
+		titleStyle.setProperty('--ash-editor-content-right-inset', `${insets.right}px`);
+		titleStyle.setProperty('--ash-editor-content-left-inset', `${insets.left}px`);
+		titleStyle.setProperty('--ash-editor-content-top-inset', `${insets.top}px`);
 		// EditorPart applies insets before its Grid commits the final group dimensions.
 	}
 

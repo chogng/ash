@@ -1,4 +1,5 @@
 import { registerColor, transparent } from '../colorUtils.js';
+import { scrollbarShadow } from './miscColors.js';
 
 const owner = 'platform.theme.list';
 const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
@@ -15,3 +16,9 @@ export const treeInactiveIndentGuidesStroke = registerColor('tree.inactiveIndent
 	hcDark: '#ffffff',
 	hcLight: '#000000',
 }, { description: 'Inactive tree indentation guide stroke.', owner });
+registerColor('tree.stickyScrollShadow', {
+	dark: scrollbarShadow,
+	light: '#dddddd',
+	hcDark: null,
+	hcLight: null,
+}, { description: 'Shadow below pinned rows in a tree.', owner });

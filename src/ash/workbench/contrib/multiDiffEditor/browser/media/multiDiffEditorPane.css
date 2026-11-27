@@ -36,6 +36,7 @@
 }
 
 .ash-multi-diff-file-list {
+	--ash-tree-sticky-background: var(--ash-editor-background);
 	height: 100%;
 	min-width: 0;
 	overflow: hidden;

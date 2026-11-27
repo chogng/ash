@@ -48,7 +48,7 @@ export interface IMenuItem {
 
 export interface ISubmenuItem {
 	/** Render the first submenu action as the primary trigger beside its action menu. */
-	readonly isSplitButton?: boolean;
+	readonly isSplitButton?: boolean | { readonly excludePrimaryActionFromDropdown: boolean; };
 	readonly title: CommandActionTitle;
 	readonly submenu: MenuId;
 	readonly icon?: Icon;

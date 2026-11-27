@@ -16,11 +16,7 @@
 
 .ash-artifact-type[data-artifact-kind="whiteboard"] {
 	color: var(--ash-charts-yellow);
-	background-color: color-mix(
-		in srgb,
-		#fff0a6 28%,
-		var(--ash-editor-background)
-	);
+	background-color: var(--ash-sessions-artifact-whiteboardIconBackground);
 }
 
 .ash-artifact-type[data-artifact-kind="data"] {

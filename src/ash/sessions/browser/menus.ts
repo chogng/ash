@@ -41,6 +41,7 @@ export const Menus = {
 	SessionsEmptyEditorGroupAddTab: new MenuId('SessionsEmptyEditorGroupAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
+	DetailsToggle: new MenuId('SessionsDetailsToggle'),
 	SessionsChangesScope: new MenuId('SessionsChangesScope'),
 	SessionsTerminalSplit: new MenuId('SessionsTerminalSplit'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),

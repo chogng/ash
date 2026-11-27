@@ -8,7 +8,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { autorun, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { MenuId, MenusRegistry, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
+import { MenuId, MenuItemAction, MenusRegistry, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -181,7 +181,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	const registerEntryActions = () => {
 		const registrations = new DisposableStore();
 		registrations.add(registerDesktopEditorLayoutActions(
-			controller, context, contextKeys, layout, editor,
+			controller, context, contextKeys, layout, editor, configuration,
 			async () => { effects.push('chat files'); },
 		));
 		registrations.add(registerChangesEditorTitleActions(editor));
@@ -199,9 +199,15 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	const changesAction = () => activity.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.maximizeTool'), undefined);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails']);
+	assert.deepEqual(headerActions().map(action => action.id), ['submenu.SessionsDetailsToggle']);
+	const detailsActions = () => (headerActions()[0] as SubmenuItemAction).actions.filter(action => action instanceof MenuItemAction);
+	assert.deepEqual(detailsActions().map(action => action.id), ['ash.sessions.toggleDetails',
+		...['top', 'bottom', 'left', 'right', 'floating'].map(position => `ash.sessions.detailsPosition.${position}`)]);
+	assert.equal(detailsActions().find(action => action.id === 'ash.sessions.detailsPosition.right')?.checked, true);
+	await commands.executeCommand('ash.sessions.detailsPosition.left');
+	assert.equal(detailsActions().find(action => action.id === 'ash.sessions.detailsPosition.left')?.checked, true);
 	contextKeys.setContext('sessions.editorHasMultipleTools', true);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.hideTool']);
+	assert.deepEqual(headerActions().map(action => action.id), ['submenu.SessionsDetailsToggle', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1].map(action => action.id),
 		['ash.sessions.toggleDetails', 'ash.sessions.showEditor']);
@@ -361,7 +367,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		documentContent.set(true, undefined);
 		using translated = registerEntryActions();
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '隐藏工具区域']);
+		assert.deepEqual(headerActions().map(action => action.label), ['详情位置', '隐藏工具区域']);
+		assert.deepEqual(detailsActions().map(action => action.label), ['切换详情', '编辑器上方', '编辑器下方', '左侧', '右侧', '浮动']);
 		appServerAvailable.set(true);
 		assert.deepEqual(addTabLabels(), ['打开文件', '打开更改', '新建终端']);
 		appServerAvailable.reset();

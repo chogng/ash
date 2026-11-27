@@ -41,6 +41,8 @@ export interface IEditorGroupViewOptions {
 	readonly showHeader?: boolean;
 	/** Whether to keep the group header below tabs hosted in the window title bar. */
 	readonly showHeaderFor?: (editor: IResourceEditorInput | undefined) => boolean;
+	/** Move the layout actions alongside the tabs when both fit in the window title bar. */
+	readonly hostLayoutActionsWithTabs?: boolean;
 	/** Host the active editor's dedicated toolbar alongside the group actions. */
 	readonly showEditorToolbar?: boolean;
 	/** Label for a visible group header with no editor and no tabs. */
@@ -74,6 +76,7 @@ export interface IEditorGroupView extends IEditorGroup {
 	readonly onDidChange: Event<void>;
 	/** Space needed to present the active tab and adjoining controls in one row. */
 	readonly singleRowTabStripSize: IDimension | undefined;
+	readonly tabsHosted: boolean;
 	setTabStripHost(host: HTMLElement | undefined): void;
 	containsFocus(element: Element | null): boolean;
 	layout(dimension: IDimension): void;

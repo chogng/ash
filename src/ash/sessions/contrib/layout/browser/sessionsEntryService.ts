@@ -251,7 +251,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			if (!this.isDocumentContent) await this.openEntry(documentEntry);
 			await this.controller.whenSettled();
 		}));
-		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts, () => this.openChatFiles()));
+		this._register(registerDesktopEditorLayoutActions(this.controller, this, contextKeys, layout, editor as EditorParts, configuration, () => this.openChatFiles()));
 		this._register(registerChangesEditorTitleActions(editor));
 		this._register(registerSessionsTerminalTitleActions(editor, contextKeys, configuration));
 		this._register(registerSessionsModalEditorActions(editor as EditorParts, () => this.isDocumentContent));

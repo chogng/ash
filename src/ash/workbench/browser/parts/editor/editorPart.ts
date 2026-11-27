@@ -19,6 +19,7 @@ import { Emitter, PauseableEmitter, type Event } from '../../../../base/common/e
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { addDisposableListener, computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
+import { NoWorkbenchPartFrameInsets, type WorkbenchPartFrameInsets } from '../../workbenchPartView.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
 import { DisposableMap, Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
@@ -205,7 +206,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private _activeGroup: EditorGroupView;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
-	private contentRightInset = 0;
+	private contentInsets = NoWorkbenchPartFrameInsets;
 	private editorContentVisible = true;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly replaceEditorResource: ((source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput) => Promise<void>) | undefined;
@@ -942,10 +943,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public setContentRightInset(inset: number): void {
-		if (this.contentRightInset === inset) {
+		this.setContentInsets({ ...NoWorkbenchPartFrameInsets, right: inset });
+	}
+
+	protected setContentInsets(insets: WorkbenchPartFrameInsets): void {
+		const { top, right, bottom, left } = this.contentInsets;
+		if (top === insets.top && right === insets.right && bottom === insets.bottom && left === insets.left) {
 			return;
 		}
-		this.contentRightInset = inset;
+		this.contentInsets = insets;
 		this.layoutEditorContent();
 	}
 
@@ -959,12 +965,22 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// Details once at the grid boundary, rather than subtracting it from every pane.
 		const visibleGroups = this._groups.filter(host => this.editorGrid.isViewVisible(host.view));
 		this.domNode.classList.toggle('single-group', visibleGroups.length === 1);
-		const inset = Math.min(this.contentRightInset, this.dimension.width);
+		const { top, left, bottom, right } = this.contentInsets;
+		const insets = {
+			top: Math.min(top, this.dimension.height),
+			left: Math.min(left, this.dimension.width),
+			bottom: Math.min(bottom, Math.max(0, this.dimension.height - top)),
+			right: Math.min(right, Math.max(0, this.dimension.width - left)),
+		};
+		const singleGroup = visibleGroups.length === 1;
 		for (const host of this._groups) {
-			host.group.setContentRightInset(visibleGroups.length === 1 ? inset : 0);
+			host.group.setContentInsets(singleGroup ? insets : NoWorkbenchPartFrameInsets);
 			host.group.setEditorContentVisible(this.editorContentVisible && this.editorGrid.isViewVisible(host.view));
 		}
-		this.editorGrid.layout(this.dimension.width - (visibleGroups.length > 1 ? inset : 0), this.dimension.height);
+		const gridInsets = visibleGroups.length > 1 ? insets : NoWorkbenchPartFrameInsets;
+		this.editorGrid.element.style.left = gridInsets.left ? `${gridInsets.left}px` : '';
+		this.editorGrid.element.style.top = gridInsets.top ? `${gridInsets.top}px` : '';
+		this.editorGrid.layout(this.dimension.width - gridInsets.left - gridInsets.right, this.dimension.height - gridInsets.top - gridInsets.bottom);
 		this.layoutEmitter.fire(this.dimension);
 	}
 

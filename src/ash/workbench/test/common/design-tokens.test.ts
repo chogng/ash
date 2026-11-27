@@ -28,6 +28,7 @@ import '../../../sessions/contrib/artifact/browser/widget/artifactToolbar.js';
 import '../../../editor/browser/widget/multiDiffEditor/colors.js';
 import '../../common/theme.js';
 import '../../contrib/chat/common/widget/chatColors.js';
+import '../../contrib/markdown/browser/arkdown/arkdownColors.js';
 import '../../contrib/preferences/common/settingsEditorColorRegistry.js';
 import '../../contrib/preferences/browser/keybindingsEditor.js';
 import '../../contrib/scm/browser/scmHistory.js';
@@ -82,15 +83,20 @@ test('CSS isolates intentional color samples', async () => {
 
 test('color scanning excludes alpha mask stops while retaining painted colors on the same line', () => {
 	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(to right, rgb(0 0 0 / 16%), black); }'), []);
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(transparent, #000, #00000080); }'), []);
 	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(black, transparent); color: rgb(0 0 0); }'), [1]);
+	assert.deepEqual(rawColorLines('.mask { -webkit-mask-image: linear-gradient(#000, transparent); color: #000; }'), [1]);
+	assert.deepEqual(rawColorLines('.mask { --mask-image: #000; background: var(--mask-image); }'), [1]);
 	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(rgb(1 2 3), black); }'), [1]);
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(#001, transparent); }'), [1]);
 	assert.deepEqual(rawColorLines('.surface {\n background: #ffffff;\n}'), [2]);
 });
 
 function rawColorLines(source: string): number[] {
 	// Black alpha stops describe mask coverage without choosing a painted theme color.
 	// Other literal colors, including other mask colors, still require review.
-	const painted = source.replace(/\b(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration => declaration.replace(/\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/gu, color => ' '.repeat(color.length)));
+	const blackMaskStop = /#(?:000000(?:[\da-f]{2})?|000[\da-f]?)\b|\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/giu;
+	const painted = source.replace(/(?<![\w-])(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration => declaration.replace(blackMaskStop, color => ' '.repeat(color.length)));
 	return painted.split(/\r?\n/).flatMap((line, index) => /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []);
 }
 

@@ -1,3 +1,6 @@
+import { Color } from '../../../../../base/common/color.js';
+import { contrastBorder, foreground } from '../../../../../platform/theme/common/colors/baseColors.js';
+import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
 import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
 import { registerColor, transparent } from '../../../../../platform/theme/common/colorUtils.js';
 import { localize } from '../../../../../nls.js';
@@ -36,3 +39,38 @@ export const chatFindMatchHighlightBackground = registerColor('chat.findMatchHig
 	description: localize('chat.findMatchHighlightBackground', 'Background of other search matches in Chat.'),
 	owner: 'chat.presentation',
 });
+
+registerColor('chat.modelSlider.trackBackground', {
+	dark: transparent(Color.white, 0.12),
+	light: transparent(Color.black, 0.08),
+	hcDark: editorBackground,
+	hcLight: editorBackground,
+}, { description: 'Background of the Chat reasoning effort slider track.', owner: 'chat.modelSlider' });
+
+registerColor('chat.modelSlider.tickBackground', {
+	dark: transparent(Color.white, 0.4),
+	light: transparent(Color.black, 0.3),
+	hcDark: foreground,
+	hcLight: foreground,
+}, { description: 'Color of the Chat reasoning effort slider tick marks.', owner: 'chat.modelSlider' });
+
+registerColor('chat.modelSlider.thumbBackground', {
+	dark: Color.white,
+	light: Color.white,
+	hcDark: foreground,
+	hcLight: foreground,
+}, { description: 'Background of the Chat reasoning effort slider thumb.', owner: 'chat.modelSlider' });
+
+registerColor('chat.modelSlider.thumbBorder', {
+	dark: null,
+	light: transparent(Color.black, 0.1),
+	hcDark: contrastBorder,
+	hcLight: contrastBorder,
+}, { description: 'Border of the Chat reasoning effort slider thumb.', owner: 'chat.modelSlider' });
+
+registerColor('chat.modelSlider.thumbShadow', {
+	dark: transparent(Color.black, 0.35),
+	light: transparent(Color.black, 0.25),
+	hcDark: null,
+	hcLight: null,
+}, { description: 'Shadow of the Chat reasoning effort slider thumb.', owner: 'chat.modelSlider' });

@@ -15,6 +15,7 @@
 }
 
 .ash-sessions-changes-tree {
+	--ash-tree-sticky-background: var(--ash-auxiliaryBar-background);
 	display: flex;
 	flex-direction: column;
 	flex: 1;

@@ -85,6 +85,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private readonly _onDidChangeFind = this._register(new Emitter<TreeFindResult<TNode>>());
 	private readonly findController: TreeFindController<T, TNode> | undefined;
 	private readonly stickyContainer: HTMLDivElement | undefined;
+	private readonly stickyRows = new Map<TNode, HTMLDivElement>();
 	private readonly renderedElements = new WeakMap<HTMLDivElement, T>();
 	private readonly rowClassNames = new WeakMap<HTMLDivElement, string>();
 	private readonly activeIndentParentIds = new Set<string>();
@@ -163,11 +164,16 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (options.defaultIndent !== undefined) this.element.style.setProperty('--ash-list-row-padding-start', `${options.defaultIndent}px`);
 		if (options.enableStickyScroll) {
 			this.stickyContainer = h(this.element.ownerDocument, 'div');
-			this.stickyContainer.className = 'ash-tree-sticky-container';
+			this.stickyContainer.className = 'ash-tree-sticky-container empty';
 			this.stickyContainer.setAttribute('aria-hidden', 'true');
 			this.element.append(this.stickyContainer);
 			this._register(addDisposableListener(this.stickyContainer, 'click', (event: MouseEvent) => this.onStickyClick(event)));
-			this._register(this.list.onDidScroll(() => this.updateStickyScroll()));
+			this._register(this.list.onDidScroll(() => this.updateStickyScroll(false)));
+			this._register(toDisposable(() => {
+				for (const row of this.stickyRows.values()) this.options.onDidRemoveRow?.(row);
+				this.stickyRows.clear();
+				this.stickyContainer?.remove();
+			}));
 		}
 		this._register(this.list.onPointer((event) => this.onListPointer(event.item, event.browserEvent)));
 		this._register(this.list.onDidDoubleClick((event) => this.onListDoubleClick(event.item, event.browserEvent)));
@@ -649,44 +655,69 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (this.stickyContainer && this.stickyContainer.parentElement !== this.element) this.element.append(this.stickyContainer);
 	}
 
-	private updateStickyScroll(): void {
+	private updateStickyScroll(refreshRows = true): void {
 		const container = this.stickyContainer;
 		if (!container) return;
-		container.style.transform = `translateY(${this.list.scrollTop}px)`;
-		const firstIndex = this.list.indexAt(this.list.scrollTop);
+		const scrollTop = this.list.scrollTop;
+		container.style.transform = `translateY(${scrollTop}px)`;
+		const firstIndex = this.list.indexAt(scrollTop);
 		const first = this.items[firstIndex];
-		const ancestors: TNode[] = [];
-		let parent = first?.parent as TNode | undefined;
-		while (parent) {
-			if (this.items.includes(parent)) ancestors.unshift(parent);
-			parent = parent.parent as TNode | undefined;
+		const ancestors: { node: TNode; index: number; }[] = [];
+		for (let node: TNode | undefined = first; node; node = node.parent as TNode | undefined) {
+			if (!node.collapsible || !this.isExpanded(node) || !node.children.length) continue;
+			const index = node === first ? firstIndex : this.items.indexOf(node);
+			if (index >= 0 && this.list.getElementTop(index) < scrollTop) ancestors.unshift({ node, index });
 		}
 		const max = Math.max(1, this.options.stickyScrollMaxItemCount ?? 7);
-		const sticky = ancestors.slice(-max);
-		const rows = sticky.flatMap((node) => {
-			const index = this.items.indexOf(node);
-			const row = this.list.row(index);
-			if (!row) return [];
-			const clone = row.cloneNode(true) as HTMLElement;
-			clone.removeAttribute('id');
-			clone.removeAttribute('role');
-			clone.removeAttribute('aria-selected');
-			clone.classList.add('ash-tree-sticky-row');
-			clone.dataset.treeId = node.id;
-			clone.style.height = `${this.list.getElementHeight(index)}px`;
-			return [clone];
-		});
-		container.replaceChildren(...rows);
-		container.classList.toggle('empty', rows.length === 0);
+		const sticky: typeof ancestors = [];
+		const availableHeight = this.list.renderHeight / 2;
+		let height = 0;
+		for (const ancestor of ancestors) {
+			const nextHeight = height + this.list.getElementHeight(ancestor.index);
+			if (sticky.length === max || sticky.length && availableHeight > 0 && nextHeight > availableHeight) break;
+			sticky.push(ancestor);
+			height = nextHeight;
+		}
+		for (const [node, row] of this.stickyRows) {
+			if (sticky.some(entry => entry.node === node)) continue;
+			this.options.onDidRemoveRow?.(row);
+			row.remove();
+			this.stickyRows.delete(node);
+		}
+		for (const [position, { node, index }] of sticky.entries()) {
+			let row = this.stickyRows.get(node);
+			if (!row) {
+				// Ancestors may be outside the list's rendered range. Use the same renderer independent of virtualization.
+				row = h(container.ownerDocument, 'div', { className: 'ash-tree-sticky-row' });
+				row.append(this.renderRow(node, row, index));
+				this.stickyRows.set(node, row);
+			} else if (refreshRows) {
+				this.renderedElements.delete(row);
+				this.updateRow(node, row, true, index);
+			}
+			row.style.height = `${this.list.getElementHeight(index)}px`;
+			const next = container.children.item(position);
+			if (next !== row) container.insertBefore(row, next);
+		}
+		container.classList.toggle('empty', sticky.length === 0);
 	}
 
 	private onStickyClick(event: MouseEvent): void {
 		if (!isNode(event.target) || event.target.nodeType !== 1) return;
 		const row = (event.target as Element).closest<HTMLElement>('.ash-tree-sticky-row');
-		const id = row?.dataset.treeId;
-		if (!id) return;
-		this.setFocus(id, event);
-		this.setSelection([id], event);
+		if (!row) return;
+		const node = [...this.stickyRows].find(([, entry]) => entry === row)?.[0];
+		if (!node) return;
+		const index = this.items.indexOf(node);
+		if (index < 0) return;
+		const twistie = this.pointerTarget(event) === 'twistie';
+		const top = this.list.getElementTop(index) - row.offsetTop;
+		this.domFocus();
+		this.list.setActiveIndex(index, event, { reveal: false });
+		this.list.setSelection([index], event);
+		// A sticky ancestor may already have logical focus while its real row is offscreen.
+		this.list.scrollTop = Math.max(0, top);
+		if (twistie) this.requestCollapseChange(node, event);
 	}
 }
 

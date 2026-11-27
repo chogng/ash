@@ -187,7 +187,8 @@ export class EditorTitleControl extends Disposable {
 		if (!items.length) return undefined;
 
 		const gap = parseFloat(ownerWindow.getComputedStyle(strip).columnGap) || 0;
-		let width = gap * (items.length - 1);
+		const layoutActionsWidth = this.viewOptions.hostLayoutActionsWithTabs ? this.header.layoutActionsWidth : 0;
+		let width = gap * (items.length - 1) + (layoutActionsWidth ? layoutActionsWidth + gap : 0);
 		let height = this.tabs.domNode.getBoundingClientRect().height;
 		for (const item of items) {
 			const bounds = item.getBoundingClientRect();
@@ -202,6 +203,10 @@ export class EditorTitleControl extends Disposable {
 		return { width, height };
 	}
 
+	get tabsHosted(): boolean {
+		return !!this.tabStrip && this.tabStrip.parentElement !== this.headerElement;
+	}
+
 	setTabStripHost(host: HTMLElement | undefined): void {
 		const strip = this.tabStrip;
 		const target = host ?? this.headerElement;
@@ -210,10 +215,12 @@ export class EditorTitleControl extends Disposable {
 		const focused = strip.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = strip.contains(focused);
 		strip.classList.toggle('ash-editor-tab-strip-hosted', !!host);
+		this.domNode.classList.toggle('ash-editor-title-tabs-hosted', !!host);
 		target.prepend(strip);
+		if (this.viewOptions.hostLayoutActionsWithTabs) this.header.setLayoutActionsHost(host);
 		this.updateVisibility();
 		if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
-		if (this.height !== previousHeight) this.sizeEmitter.fire();
+		if (this.viewOptions.hostLayoutActionsWithTabs || this.height !== previousHeight) this.sizeEmitter.fire();
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
@@ -247,8 +254,7 @@ export class EditorTitleControl extends Disposable {
 
 	private updateVisibility(): void {
 		const visible = this.titleVisible && this.hasTitle;
-		const tabsHosted = this.tabStrip && this.tabStrip.parentElement !== this.headerElement;
-		const showHeader = !tabsHosted || this.viewOptions.showHeaderFor?.(this.activeInput) !== false;
+		const showHeader = !this.tabsHosted || this.viewOptions.showHeaderFor?.(this.activeInput) !== false;
 		this.domNode.hidden = this.headerElement.hidden = !visible || !showHeader;
 		if (this.tabStrip) this.tabStrip.hidden = !visible;
 		this.updateRows();

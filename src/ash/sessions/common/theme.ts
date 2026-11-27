@@ -1,6 +1,6 @@
 import { Color } from '../../base/common/color.js';
 import type { ColorValue } from '../../platform/theme/common/colorRegistry.js';
-import { registerColor, transparent } from '../../platform/theme/common/colorUtils.js';
+import { mix, registerColor, transparent } from '../../platform/theme/common/colorUtils.js';
 import { primaryButtonBackground } from '../../platform/theme/common/colors/inputColors.js';
 import { actionBarToggledBackground, hoverBorder, tabListActiveBackground } from '../../platform/theme/common/colors/componentColors.js';
 import { accentForeground, foreground } from '../../platform/theme/common/colors/baseColors.js';
@@ -134,3 +134,10 @@ registerColor('sessions.modelPicker.maximumBackground', {
 registerColor('sessions.modelPicker.maximumBackgroundAccent', {
 	dark: '#7777ff', light: '#6670f7', hcDark: primaryButtonBackground, hcLight: primaryButtonBackground,
 }, { description: localize('sessions.modelPicker.maximumBackgroundAccent', 'Gradient accent color of an emphasized model preset.'), owner: 'sessions.chat' });
+
+registerColor('sessions.artifact.whiteboardIconBackground', {
+	dark: mix(editorBackground, '#fff0a6', 0.28),
+	light: mix(editorBackground, '#fff0a6', 0.28),
+	hcDark: editorBackground,
+	hcLight: editorBackground,
+}, { description: 'Background of the whiteboard icon in the Agent Window.', owner: 'sessions.artifact' });
