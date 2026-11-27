@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
+import { parseConfigFileTextToJson } from 'typescript';
 import { format as formatSource } from './format.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -376,7 +377,9 @@ test('Bun leaves generated JSON to its owning serializers and checks neighboring
 });
 
 test('the workspace buffer commands and CI formatters produce identical bytes for every supported frontend language', t => {
-	const settings = JSON.parse(readFileSync(join(repositoryRoot, '.vscode/settings.json'), 'utf8'));
+	const settingsPath = join(repositoryRoot, '.vscode/settings.json');
+	const { config: settings, error } = parseConfigFileTextToJson(settingsPath, readFileSync(settingsPath, 'utf8'));
+	assert.equal(error, undefined);
 	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const workspaceJsonc = join(repositoryRoot, '.vscode', `${basename(directory)}.jsonc`);
