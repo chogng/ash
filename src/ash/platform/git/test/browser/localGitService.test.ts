@@ -73,6 +73,32 @@ test('App local Git sends typed clone and cancellation requests with the same op
 	]);
 });
 
+test('worktree handoff keeps status lightweight and decodes byte-exact snapshot contents', async () => {
+	const identity = { repositoryId: 'f'.repeat(64), head: 'e'.repeat(40) };
+	const requests: unknown[] = [];
+	const sourcePath = '/worktree';
+	const signal = new AbortController().signal;
+	const service = new AppServerLocalGitService({
+		generation: 1, state: 'ready',
+		request: async (definition: { method: 'git/worktree/changes'; }, params: { query: string; }, options: { signal: AbortSignal; }) => {
+			decodeAppServerRequestParams(definition.method, params);
+			requests.push(params);
+			assert.equal(options.signal, signal);
+			if (params.query === 'status') return { kind: 'status', identity, changedPaths: ['data.bin'] };
+			return {
+				kind: 'snapshot', identity, unsupportedPaths: [],
+				files: [{ path: 'data.bin', originalPath: null, original: { kind: 'missing' }, modified: { kind: 'binary', data: 'AP8J' } }],
+			};
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.readWorktreeEditStatus(sourcePath, signal), { ...identity, changedPaths: ['data.bin'] });
+	assert.deepEqual(await service.readWorktreeEditSnapshot(sourcePath, signal), {
+		...identity, unsupportedPaths: [],
+		files: [{ path: 'data.bin', originalPath: null, original: null, modified: Uint8Array.of(0, 255, 9), omitted: false }],
+	});
+	assert.deepEqual(requests, [{ sourcePath, query: 'status' }, { sourcePath, query: 'snapshot' }]);
+});
+
 test('The generated local Git decoder rejects unbounded identities and arbitrary command arguments', () => {
 	const params = { operationId: 'operation', url: 'url', targetPath: '/workspace/new', reference: null };
 	assert.throws(() => decodeAppServerRequestParams('git/cloneTo', { ...params, operationId: 'x'.repeat(129) }));

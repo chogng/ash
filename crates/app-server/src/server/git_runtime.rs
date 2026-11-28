@@ -45,6 +45,7 @@ use ash_app_server_protocol::protocol::git::GitTextDiffResult;
 use ash_app_server_protocol::protocol::git::GitUpstreamDto;
 use ash_app_server_protocol::protocol::git::GitWorktreeChangesQuery;
 use ash_app_server_protocol::protocol::git::GitWorktreeChangesResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeIdentityDto;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
@@ -396,7 +397,14 @@ pub(super) fn session_comparison(
         } => Some((base_object_id, head_object_id)),
         GitSessionComparisonDto::Uncommitted => None,
     };
-    let files = repository_diff(&service, &repository, &snapshot, prefix, branch)?;
+    let files = repository_diff(
+        &service,
+        &repository,
+        &snapshot,
+        prefix,
+        branch,
+        ComparisonContents::Display,
+    )?;
     Ok(GitSessionComparisonResult::Changes { files })
 }
 
@@ -405,6 +413,7 @@ pub(super) fn worktree_changes(
     authorization: &Authorization,
     query: GitWorktreeChangesQuery,
     cancellation: &CancellationToken,
+    read: Option<&Authorization>,
 ) -> Result<GitWorktreeChangesResult, GitRuntimeError> {
     let root = authorization.dir().canonical_path();
     let service = GitService::new(authorization.clone(), root.to_path_buf())
@@ -417,6 +426,15 @@ pub(super) fn worktree_changes(
                 GitWorktreeChangesQuery::Diff => {
                     GitWorktreeChangesResult::Diff { files: Vec::new() }
                 }
+                GitWorktreeChangesQuery::Status => GitWorktreeChangesResult::Status {
+                    identity: None,
+                    changed_paths: Vec::new(),
+                },
+                GitWorktreeChangesQuery::Snapshot => GitWorktreeChangesResult::Snapshot {
+                    identity: None,
+                    files: Vec::new(),
+                    unsupported_paths: Vec::new(),
+                },
             });
         }
         Err(error) => return Err(GitRuntimeError::Service(error)),
@@ -435,9 +453,116 @@ pub(super) fn worktree_changes(
                 .count(),
         }),
         GitWorktreeChangesQuery::Diff => Ok(GitWorktreeChangesResult::Diff {
-            files: repository_diff(&service, &repository, &snapshot, prefix, None)?,
+            files: repository_diff(
+                &service,
+                &repository,
+                &snapshot,
+                prefix,
+                None,
+                ComparisonContents::Display,
+            )?,
         }),
+        GitWorktreeChangesQuery::Status | GitWorktreeChangesQuery::Snapshot => {
+            // A handoff shares paths between linked checkouts. Only the checkout root
+            // has the same path coordinate system and covers the complete change set.
+            let identity = match snapshot.head() {
+                GitHead::Branch { object_id, .. } | GitHead::Detached { object_id }
+                    if prefix.as_os_str().is_empty() =>
+                {
+                    Some(GitWorktreeIdentityDto {
+                        repository_id: format!(
+                            "{:x}",
+                            Sha256::digest(repository.common_dir().as_os_str().as_encoded_bytes())
+                        ),
+                        head: object_id.clone(),
+                    })
+                }
+                _ => None,
+            };
+            if query == GitWorktreeChangesQuery::Status {
+                let mut changed_paths = Vec::new();
+                if identity.is_some() {
+                    for change in snapshot.changes() {
+                        changed_paths.push(wire_path(change.path())?);
+                        if let Some(original_path) = change.original_path() {
+                            changed_paths.push(wire_path(original_path)?);
+                        }
+                    }
+                }
+                return Ok(GitWorktreeChangesResult::Status {
+                    identity,
+                    changed_paths,
+                });
+            }
+            let mut files = Vec::new();
+            let mut unsupported_paths = Vec::new();
+            if identity.is_some() {
+                let read = read.ok_or(GitRuntimeError::Service(GitServiceError::Permission))?;
+                let mut unsupported = std::collections::HashSet::new();
+                for change in snapshot
+                    .changes()
+                    .iter()
+                    .filter(|change| !is_snapshot_file(change, read))
+                {
+                    unsupported.insert(change.path());
+                    unsupported_paths.push(wire_path(change.path())?);
+                    if let Some(original_path) = change.original_path() {
+                        unsupported_paths.push(wire_path(original_path)?);
+                    }
+                }
+                files = repository_diff(
+                    &service,
+                    &repository,
+                    &snapshot,
+                    prefix,
+                    None,
+                    ComparisonContents::Snapshot(&unsupported),
+                )?;
+            }
+            cancellation
+                .check()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
+            Ok(GitWorktreeChangesResult::Snapshot {
+                identity,
+                files,
+                unsupported_paths,
+            })
+        }
     }
+}
+
+#[derive(Clone, Copy)]
+enum ComparisonContents<'a> {
+    Display,
+    Snapshot(&'a std::collections::HashSet<&'a Path>),
+}
+
+fn is_snapshot_file(change: &GitRepositoryChange, read: &Authorization) -> bool {
+    let supported_path = |path: &Path| {
+        let dir = read.dir();
+        path.to_str()
+            .is_some_and(|path| cfg!(windows) || !path.contains('\\'))
+            && read
+                .path_policy()
+                .allows(path, ash_file_access::PathOperation::Read)
+            && dir.resolve_for_write(path).is_ok_and(|resolved| {
+                resolved
+                    .strip_prefix(dir.canonical_path())
+                    .is_ok_and(|relative| relative == path)
+            })
+    };
+    !change.is_conflicted()
+        && !change.submodule().is_submodule()
+        && ![change.index_status(), change.worktree_status()]
+            .iter()
+            .any(|status| {
+                matches!(
+                    status,
+                    GitChangeStatus::TypeChanged | GitChangeStatus::Copied
+                )
+            })
+        && supported_path(change.path())
+        && change.original_path().is_none_or(supported_path)
 }
 
 fn repository_diff(
@@ -446,6 +571,7 @@ fn repository_diff(
     snapshot: &GitRepositorySnapshot,
     prefix: &Path,
     branch: Option<(String, String)>,
+    contents: ComparisonContents<'_>,
 ) -> Result<Vec<GitSessionComparisonFileDto>, GitRuntimeError> {
     let mut files = Vec::new();
     let mut remaining = 8 * 1024 * 1024;
@@ -476,6 +602,7 @@ fn repository_diff(
                 &mut remaining,
                 change.path,
                 change.original_path,
+                contents,
                 |path, original| {
                     service.commit_file_at_paths(
                         repository,
@@ -492,6 +619,10 @@ fn repository_diff(
         for change in snapshot
             .changes()
             .iter()
+            .filter(|change| match contents {
+                ComparisonContents::Display => true,
+                ComparisonContents::Snapshot(unsupported) => !unsupported.contains(change.path()),
+            })
             .filter_map(|change| dir_change(change, prefix))
         {
             let change = change?;
@@ -500,6 +631,7 @@ fn repository_diff(
                     &mut remaining,
                     change.path,
                     change.original_path,
+                    contents,
                     |path, _| service.conflict_file(Path::new(path)),
                     |contents| (contents.current(), contents.result()),
                 )
@@ -508,6 +640,7 @@ fn repository_diff(
                     &mut remaining,
                     change.path,
                     change.original_path,
+                    contents,
                     |path, original| {
                         let path = Path::new(path);
                         let original = original.map_or(path, Path::new);
@@ -556,6 +689,7 @@ fn repository_diff_file<T>(
     remaining: &mut usize,
     path: String,
     original_path: Option<String>,
+    format: ComparisonContents<'_>,
     read: impl FnOnce(&str, Option<&str>) -> Result<T, GitServiceError>,
     sides: impl FnOnce(&T) -> (Option<&[u8]>, Option<&[u8]>),
 ) -> Result<GitSessionComparisonFileDto, GitRuntimeError> {
@@ -586,7 +720,9 @@ fn repository_diff_file<T>(
     if let Some(remaining_bytes) = remaining.checked_sub(size) {
         *remaining = remaining_bytes;
         let content = |bytes| match commit_file_content(bytes) {
-            GitCommitFileContentDto::Binary { .. } => {
+            GitCommitFileContentDto::Binary { .. }
+                if matches!(format, ComparisonContents::Display) =>
+            {
                 GitCommitFileContentDto::Binary { data: None }
             }
             content => content,

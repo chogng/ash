@@ -693,6 +693,11 @@ Main 已替换工作区而 Renderer 尚未收到事件时，旧配置读取返�
 `contrib/workspace/common/workspace.ts`、`platform/workspaces/common/workspaceIdentifier.ts` 与
 `platform/workspaces/electron-main/workspacesMainService.ts` 仍没有对应实现。
 它们涉及其他领域能力或尚未闭合的统一管理端口；当前本地命令链不以空壳实现这些文件。
+
+桌面 Workbench 的 Edit Sessions 在同一 Ash 配置下交接未提交的工作树文件。「编辑会话：在本机保存工作改动」保存当前仓库的最新一份改动，替换现有记录前需要确认。「编辑会话：查看已保存的工作改动」打开只读差异；预览按保存修订读取文件，编辑器状态只记录资源引用。目标工作树通过「编辑会话：恢复工作改动」确认新增、修改和删除后写入。App Server 使用 Git 公共目录和 HEAD 验证同一仓库、同一基线。目标路径有磁盘或未保存改动时停在冲突列表。恢复使用文件服务的修订校验，写入失败时仅回滚本次已写入且仍匹配写入修订的文件。恢复成功或确认「编辑会话：丢弃已保存的工作改动」后，仅清理当前操作确认过的保存修订。
+
+首批支持打开工作树根目录的本地单文件夹 Desktop 窗口，保存普通文件内容。跨机器恢复需要接入 Ash 的认证与存储。
+
 连接 App Server 的 Web 多根由原 WorkspaceEditingService/BrowserHost 链提交到 listener 独立运行域，准确配置文件 proof 与目录授权分别释放。原生逐根确认仅授予该 Web 会话的文件读写与检查能力，不持久化目录权限，也不授予命令执行或目录配置加载；已有显式权限继续作为上限，权限收紧后旧句柄失效，删除限制不自动恢复本会话权限。撤销工作区配置文件的观察权限会退休其独立文件能力（包括读取），需用户再次明确绑定该工作区后恢复。Apply/Finish 事务只在窗口接受后发布会话元数据；窗口提交前失败恢复原授权，已提交后的网络错误按记录的操作身份恢复。回滚期间权限版本变化且记录已消失时按检查权限恢复，避免复活已撤回的写入权限。完整上游编辑 API、复制工作区到新窗口和直接保存到远端机器的工作区配置文件仍未实现。
 
 2026-10-19 在 Linux ARM64 Dev Container 的正常 Web／Desktop 产物（协议 major10）完成认证 Web 八步验收：真实 No／Yes 授权、多根读写、脏文件拒绝移除、移除配置根后保存、重载、只读草稿、显式撤权和关闭；取消保存恢复后不再重复报错。GTK 原生选择器另完成取消、打开双根工作区和中文／空格路径另存为四步，通过真实原生返回、窗口身份和独立磁盘读取共同验证。Web 证据及源码／媒体 SHA256 见 `.build/todo-finish/linux-web-workspace-save-cancel-final/results.json`，GTK 报告见 `.build/ash-playwright-mcp/evidence/linux-native-picker-2026-10-19T10-55-49-898Z/report.html`。该结果不覆盖 Windows 原生选择器、跨机器 SSH 多根或 macOS 完整 Web 流程；macOS 仅另行实测了原生目录批准与脏文件拒绝。

@@ -32,6 +32,27 @@ export type GitSessionComparisonSnapshot =
 export type GitWorktreeChangesSnapshot = { readonly kind: 'summary'; readonly files: number; }
 	| { readonly kind: 'diff'; readonly files: readonly GitComparisonFile[]; };
 
+interface GitWorktreeIdentity {
+	readonly repositoryId: string;
+	readonly head: string;
+}
+
+export interface GitWorktreeEditStatus extends GitWorktreeIdentity {
+	readonly changedPaths: readonly string[];
+}
+
+export interface GitWorktreeEditSnapshot extends GitWorktreeIdentity {
+	readonly unsupportedPaths: readonly string[];
+	readonly files: readonly {
+		readonly path: string;
+		readonly originalPath: string | null;
+		/** Null denotes an absent file. An omitted comparison has no usable sides. */
+		readonly original: Uint8Array | null;
+		readonly modified: Uint8Array | null;
+		readonly omitted: boolean;
+	}[];
+}
+
 /** Host Git operations for App workflows, independent of the optional SCM extension. */
 export interface ILocalGitService {
 	readonly _serviceBrand: undefined;
@@ -42,6 +63,10 @@ export interface ILocalGitService {
 	readSessionComparison(directory: { readonly sessionId: string; readonly path: string; }, repositoryId: string, comparison: GitSessionComparison, signal: AbortSignal): Promise<GitSessionComparisonSnapshot>;
 	/** Reads uncommitted changes within the selected checkout's existing directory grant. */
 	readWorktreeChanges(sourcePath: string, query: 'summary' | 'diff', signal: AbortSignal): Promise<GitWorktreeChangesSnapshot>;
+	/** Captures exact file contents and the local Git identity of a committed checkout root. */
+	readWorktreeEditSnapshot(sourcePath: string, signal: AbortSignal): Promise<GitWorktreeEditSnapshot | undefined>;
+	/** Checks the identity and changed paths of a checkout without reading file contents. */
+	readWorktreeEditStatus(sourcePath: string, signal: AbortSignal): Promise<GitWorktreeEditStatus | undefined>;
 	/** Clones into a new absolute host path. Ref selects a branch, tag or full commit ID. */
 	clone(operationId: string, cloneUrl: string, targetPath: string, ref?: string): Promise<void>;
 	/** Cancels only an operation issued by this connection, including before execution starts. */

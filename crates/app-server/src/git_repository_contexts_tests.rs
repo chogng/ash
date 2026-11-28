@@ -213,6 +213,35 @@ fn draft_worktrees_use_the_explicit_source_grant_without_activating_a_workspace(
     assert_eq!(files[0]["path"], "draft.txt");
     assert_eq!(files[0]["original"]["kind"], "missing");
     assert_eq!(files[0]["modified"]["text"], "An uncommitted change\n");
+    let denied = call(&server, &mut connection, changes(11, "snapshot"));
+    assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
+    let status = call(&server, &mut connection, changes(12, "status"));
+    assert_eq!(status["result"]["changedPaths"], json!(["draft.txt"]));
+    let grant = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":13,"method":"config/directoryGrants/set","params":{
+            "commandId":"grant-draft-read","expectedRevision":config.read_snapshot().unwrap().revision,
+            "path":repo,"permissions":["inspectRepository","readFiles"]
+        }}),
+    );
+    assert!(grant.get("error").is_none(), "{grant}");
+    std::fs::write(repo.join("image.bin"), [0, 255, 9]).unwrap();
+    let captured = call(&server, &mut connection, changes(14, "snapshot"));
+    assert_eq!(
+        captured["result"]["identity"], status["result"]["identity"],
+        "{captured}"
+    );
+    assert_eq!(
+        captured["result"]["unsupportedPaths"],
+        json!([]),
+        "{captured}"
+    );
+    assert_eq!(
+        captured["result"]["files"][1]["modified"],
+        json!({"kind":"binary","data":"AP8J"}),
+        "{captured}"
+    );
     let catalog = call(
         &server,
         &mut connection,

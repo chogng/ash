@@ -108,6 +108,7 @@ pub(super) trait GitRequestProcessorContext: Send + Sync {
     fn authorize_worktree_source(
         &self,
         path: PathBuf,
+        permission: ash_file_access::Permission,
     ) -> Result<ash_file_access::Authorization, RpcError>;
 
     fn delete_worktree_session(
@@ -804,6 +805,8 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::git::GitWorktreeChangesParams;
+        use ash_app_server_protocol::protocol::git::GitWorktreeChangesQuery;
+        use ash_file_access::Permission;
         let params: GitWorktreeChangesParams = decode(value)?;
         connection.require_directory_grants_host()?;
         validate_path(
@@ -813,15 +816,30 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         if params.source_path.len() > 32_768 || params.source_path.contains('\0') {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        let path = PathBuf::from(params.source_path);
         let authorization = self
             .context
-            .authorize_worktree_source(PathBuf::from(params.source_path))?;
-        let changes =
-            super::git_runtime::worktree_changes(&authorization, params.query, cancellation)
-                .map_err(git_error)?;
+            .authorize_worktree_source(path.clone(), Permission::InspectRepository)?;
+        let read = (params.query == GitWorktreeChangesQuery::Snapshot)
+            .then(|| {
+                self.context
+                    .authorize_worktree_source(path, Permission::ReadFiles)
+            })
+            .transpose()?;
+        let changes = super::git_runtime::worktree_changes(
+            &authorization,
+            params.query,
+            cancellation,
+            read.as_ref(),
+        )
+        .map_err(git_error)?;
         authorization
             .ensure_active()
             .map_err(|_| RpcError::new(-32073, AppServerErrorName::PermissionRequired))?;
+        if let Some(read) = read {
+            read.ensure_active()
+                .map_err(|_| RpcError::new(-32073, AppServerErrorName::PermissionRequired))?;
+        }
         result(&changes)
     }
 
@@ -1377,7 +1395,10 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             }
             let authorization = self
                 .context
-                .authorize_worktree_source(PathBuf::from(path))
+                .authorize_worktree_source(
+                    PathBuf::from(path),
+                    ash_file_access::Permission::InspectRepository,
+                )
                 .inspect_err(|error| {
                     log::debug!(
                         "git/worktree/list stage=directory_authorization kind={:?}",

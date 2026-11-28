@@ -3447,7 +3447,8 @@ fn repository_comparisons_preserve_files_when_preview_limits_are_exceeded() {
     };
 
     let GitWorktreeChangesResult::Diff { files } =
-        super::worktree_changes(&authorization, GitWorktreeChangesQuery::Diff, &token).unwrap()
+        super::worktree_changes(&authorization, GitWorktreeChangesQuery::Diff, &token, None)
+            .unwrap()
     else {
         panic!("expected a worktree diff");
     };

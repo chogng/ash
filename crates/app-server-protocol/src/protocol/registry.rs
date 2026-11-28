@@ -8325,6 +8325,7 @@ typescript_bindings! {
     crate::protocol::git::GitWorktreeChangesParams,
     crate::protocol::git::GitWorktreeChangesQuery,
     crate::protocol::git::GitWorktreeChangesResult,
+    crate::protocol::git::GitWorktreeIdentityDto,
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,

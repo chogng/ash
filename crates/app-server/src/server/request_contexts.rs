@@ -335,6 +335,7 @@ impl super::git_operations::GitRequestProcessorContext for AppServer {
     fn authorize_worktree_source(
         &self,
         path: std::path::PathBuf,
+        permission: ash_file_access::Permission,
     ) -> Result<ash_file_access::Authorization, super::RpcError> {
         let denied = || super::RpcError::new(-32073, super::AppServerErrorName::PermissionRequired);
         let grant = self
@@ -343,9 +344,7 @@ impl super::git_operations::GitRequestProcessorContext for AppServer {
         if grant.source() != ash_file_access::GrantSource::ExplicitUser {
             return Err(denied());
         }
-        grant
-            .authorize(ash_file_access::Permission::InspectRepository)
-            .map_err(|_| denied())
+        grant.authorize(permission).map_err(|_| denied())
     }
 
     fn session_dir_authorization(

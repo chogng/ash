@@ -322,6 +322,16 @@ pub struct GitWorktreeChangesParams {
 pub enum GitWorktreeChangesQuery {
     Summary,
     Diff,
+    Status,
+    Snapshot,
+}
+
+/// Local Git identity for an authorized checkout root with a committed HEAD.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeIdentityDto {
+    pub repository_id: String,
+    pub head: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -333,6 +343,19 @@ pub enum GitWorktreeChangesResult {
     },
     Diff {
         files: Vec<GitSessionComparisonFileDto>,
+    },
+    Status {
+        identity: Option<GitWorktreeIdentityDto>,
+        #[serde(rename = "changedPaths")]
+        #[ts(rename = "changedPaths")]
+        changed_paths: Vec<String>,
+    },
+    Snapshot {
+        identity: Option<GitWorktreeIdentityDto>,
+        files: Vec<GitSessionComparisonFileDto>,
+        #[serde(rename = "unsupportedPaths")]
+        #[ts(rename = "unsupportedPaths")]
+        unsupported_paths: Vec<String>,
     },
 }
 

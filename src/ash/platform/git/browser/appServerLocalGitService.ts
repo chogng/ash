@@ -3,7 +3,8 @@ import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import type { GitRepositoryContext, GitSessionComparison, GitSessionComparisonSnapshot, GitWorktreeChangesSnapshot, ILocalGitService } from '../common/localGitService.js';
+import { decodeBase64 } from '../../../base/common/buffer.js';
+import type { GitRepositoryContext, GitSessionComparison, GitSessionComparisonSnapshot, GitWorktreeChangesSnapshot, GitWorktreeEditSnapshot, GitWorktreeEditStatus, ILocalGitService } from '../common/localGitService.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -90,12 +91,52 @@ export class AppServerLocalGitService implements ILocalGitService {
 	}
 
 	async readWorktreeChanges(sourcePath: string, query: 'summary' | 'diff', signal: AbortSignal): Promise<GitWorktreeChangesSnapshot> {
+		const result = await this.queryWorktreeChanges(sourcePath, query, signal);
+		switch (result.kind) {
+			case 'summary': return { kind: 'summary', files: result.files };
+			case 'diff': return { kind: 'diff', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
+			case 'snapshot':
+			case 'status': throw new Error('Unexpected Git worktree changes response');
+		}
+	}
+
+	async readWorktreeEditStatus(sourcePath: string, signal: AbortSignal): Promise<GitWorktreeEditStatus | undefined> {
+		const result = await this.queryWorktreeChanges(sourcePath, 'status', signal);
+		if (result.kind !== 'status') throw new Error('Expected Git worktree status');
+		return result.identity ? { ...result.identity, changedPaths: result.changedPaths } : undefined;
+	}
+
+	async readWorktreeEditSnapshot(sourcePath: string, signal: AbortSignal): Promise<GitWorktreeEditSnapshot | undefined> {
+		const result = await this.queryWorktreeChanges(sourcePath, 'snapshot', signal);
+		if (result.kind !== 'snapshot') throw new Error('Expected a Git worktree snapshot');
+		if (!result.identity) return undefined;
+
+		const encoder = new TextEncoder();
+		const bytes = (content: (typeof result.files)[number]['original']): Uint8Array | null => {
+			switch (content.kind) {
+				case 'text': return encoder.encode(content.text);
+				case 'missing': return null;
+				case 'binary': {
+					if (content.data === undefined || content.data === null) throw new Error('Git worktree snapshot is missing binary contents');
+					return decodeBase64(content.data).buffer;
+				}
+			}
+		};
+		const files = result.files.map(({ path, originalPath, original, modified, omission }) => ({
+			path,
+			originalPath,
+			original: omission ? null : bytes(original),
+			modified: omission ? null : bytes(modified),
+			omitted: omission !== undefined,
+		}));
+		return { ...result.identity, unsupportedPaths: result.unsupportedPaths, files };
+	}
+
+	private async queryWorktreeChanges(sourcePath: string, query: 'summary' | 'diff' | 'status' | 'snapshot', signal: AbortSignal) {
 		const generation = this.connection.generation;
 		const result = await this.connection.request(APP_SERVER_METHODS['git/worktree/changes'], { sourcePath, query }, { signal });
 		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
-		return result.kind === 'summary'
-			? { kind: 'summary', files: result.files }
-			: { kind: 'diff', files: result.files.map(({ path, originalPath, original, modified, omission }) => ({ path, originalPath, original, modified, omission })) };
+		return result;
 	}
 
 	async cancel(operationId: string): Promise<void> {
@@ -110,6 +151,8 @@ export function createDisconnectedLocalGitService(unavailable: UnavailableOperat
 		readRepositoryContexts: () => unavailable('git/repositoryContexts'),
 		readSessionComparison: () => unavailable('git/sessionComparison'),
 		readWorktreeChanges: () => unavailable('git/worktree/changes'),
+		readWorktreeEditSnapshot: () => unavailable('git/worktree/changes'),
+		readWorktreeEditStatus: () => unavailable('git/worktree/changes'),
 		clone: () => unavailable('git/cloneTo'),
 		cancel: () => unavailable('git/cloneTo/cancel'),
 	};
