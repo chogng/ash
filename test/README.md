@@ -2,6 +2,15 @@
 
 测试跟随被验证职责存放。Desktop 模块单测放在 `src/ash/<owner>/test/<runtime>`，扩展包单测放在 `extensions/<owner>/test/<runtime>`；本目录保存共享运行器、跨模块集成、应用场景及独立分发验收。
 
+## 代码覆盖率
+
+GitHub Actions 的 [Scoped coverage baseline](../.github/workflows/coverage.yml) 独立运行覆盖率采集。可以在 GitHub Actions 手动执行；`coverage/**` 分支上的推送也会运行。结果在 Job Summary 中以百分比呈现，并上传原始 LCOV 文件供逐行查看。
+
+- **TypeScript**：执行 Desktop 与扩展包的 Mocha 单元测试，通过 V8 采集并以源码映射还原到 TypeScript。未执行但属于编译后单测范围内的源码计为未覆盖；不包括未纳入 `tsconfig.test.json` 的生产模块。
+- **Rust**：使用 LLVM 源码覆盖率执行 `ash-protocol` 和 `ash-keybinding` 的库测试，仅统计这两个包的源码。
+
+此工作流提供**已测范围的基线**，不是整个 Ash 的总覆盖率；浏览器集成、Electron、App Server、TUI 和其他 Rust 包尚未计入，不能将当前百分比当作项目整体覆盖率。此阶段不设置最低覆盖率门槛。
+
 ## 运行冒烟测试
 
 在仓库根目录运行：
