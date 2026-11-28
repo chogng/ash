@@ -25,7 +25,8 @@ For repeated runs against unchanged sources and generated inputs, use `pnpm test
 
 | Option                     | Meaning                                                                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/`, `extensions/` or `test/`. Repeat for multiple files. |
+| `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root, starting with `src/`, `extensions/` or `test/`. Repeat for multiple files, or pass those paths directly. |
+| `--help`, `-h`             | Print the runner's options without preparing, compiling, or executing tests. |
 | `--runGlob <pattern>`      | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`.                                   |
 | `--affected <base-ref>`    | Local affected-file selection since the merge base, including tracked and untracked worktree changes. Cannot be combined with `--run` or `--runGlob`. |
 | `--plan`                  | List selected source files and the impact reason without preparation, compilation, output snapshots or test execution; works without compiled outputs. `--grep` is shown but test titles are not collected. |
@@ -43,7 +44,9 @@ pnpm test:unit --affected HEAD~1
 pnpm test:unit --affected HEAD~1 --plan
 ```
 
-A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, empty grep patterns and unmatched file filters fail before preparation. Use `--run` for file paths; bare positional paths are unsupported. Execution fails if no tests execute, except when `--affected` proves there are no changed inputs or affected files: that exits successfully with an explicit skipped message before preparation. Neither a skip nor `--plan` counts as a test pass. Check the selected suite's final test count and exit code. Runner regression tests have a separate summary.
+A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, empty grep patterns and unmatched file filters fail before preparation. File paths accept both slash styles. On Windows, use `pnpm.cmd` if PowerShell blocks the `pnpm` shim. Run through the repository script so source tests are compiled before Mocha loads them.
+
+Execution fails if no tests execute, except when `--affected` proves there are no changed inputs or affected files. That exits successfully with an explicit skipped message before preparation. Check the selected suite's final test count and exit code. Runner regression tests have a separate summary.
 
 `--affected` runs analysis in the repository-pinned Bun and follows imports, including type imports, in both the base and current source graphs. For declaration edits with unchanged imports and module initialization, it narrows direct named consumers using local declaration references. Types remain dependencies; namespace imports, side-effect imports, dynamic loads, changed module structure and initialization effects retain file-level propagation. It retains architecture checks and tests with rendered pages, filesystem readers or computed module loads. Markdown documentation outside test/fixture directories does not force a full suite; filesystem readers and architecture checks still cover it. Unknown inputs, package or toolchain changes, affected shared preloads and analyzer failures run the complete suite, with a reported reason. Known selections run only their selected files even when larger than half the suite. Use `--plan` to inspect scope before execution. This is a local feedback aid: CI still runs its full suites, and a selected pass does not replace type, integration or smoke validation.
 

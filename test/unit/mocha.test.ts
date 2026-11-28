@@ -159,6 +159,17 @@ test('affected selection rejects conflicting filters and incomplete revisions be
 	}
 });
 
+test('help bypasses preparation and compiler outputs in every package mode', () => {
+	for (const mode of [[], ['--compile'], ['--prepared']]) {
+		const result = run([...mode, '--', '--help'], { compiledOutput: join(directory, 'missing-compiler-output') });
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.output, /Usage: pnpm test:unit/);
+		assert.match(result.output, /--run <file>.*repository-relative/);
+		assert.match(result.output, /--plan.*without building or running tests/);
+		assert.doesNotMatch(result.output, /Mocha:|tsconfig.test.json/);
+	}
+});
+
 test('plans source tests without compiler output or preparation in every package mode', () => {
 	const path = 'src/ash/base/test/common/event.test.ts';
 	for (const mode of [[], ['--compile'], ['--prepared']]) {
@@ -170,8 +181,19 @@ test('plans source tests without compiler output or preparation in every package
 	}
 });
 
+test('plans positional files and Windows paths with the same repository-relative selection', () => {
+	const path = 'src/ash/base/test/common/event.test.ts';
+	const windowsPath = path.replaceAll('/', '\\');
+	for (const args of [[path], [windowsPath], ['--run', windowsPath]]) {
+		const result = run(['--compile', '--plan', ...args], { compiledOutput: join(directory, 'missing-compiler-output') });
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.output, /Unit test plan: 1 files/);
+		assert.match(result.output, /src\/ash\/base\/test\/common\/event.test.js/);
+	}
+});
+
 test('compiling entries reject invalid and empty selections before preparation', () => {
-	for (const args of [['--grepp', 'selected'], ['--runGlob', '**/missing-unit-selection.test.js'], ['--run', 'src/../../outside.test.ts'], ['--run', 'src/missing-unit-selection.test.ts']]) {
+	for (const args of [['--grepp', 'selected'], ['--runGlob', '**/missing-unit-selection.test.js'], ['--run', 'src/../../outside.test.ts'], ['src\\..\\..\\outside.test.ts'], ['event.test.ts'], ['--run', 'src/missing-unit-selection.test.ts']]) {
 		const result = run(['--compile', ...args]);
 		assert.equal(result.status, 1, result.output);
 		assert.match(result.output, /Unsupported unit test option|No unit tests matched|--run expects|Source unit test does not exist/u);

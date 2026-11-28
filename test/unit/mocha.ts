@@ -28,6 +28,26 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 	// Package scripts choose preparation; the same runner owns selection in every mode.
 	const preparation = args[0] === '--compile' || args[0] === '--prepared' ? args.shift() : undefined;
 	if (args[0] === '--') args.shift();
+	if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
+		process.stdout.write(`Usage: pnpm test:unit [options] [files...]
+
+  --run <file>               Select a repository-relative .ts or .js file. Repeat for more files.
+                              A file path can also be passed without --run.
+  --runGlob <pattern>        Match .js paths relative to the test output directory.
+  --affected <base-ref>      Select tests affected by changes since the merge base.
+  --grep <pattern>           Match full Mocha test titles.
+  --plan                     Show the selected files without building or running tests.
+  --timeout <ms>             Set the per-test timeout (default: 60000).
+  --workers <count>          Set the number of workers.
+  --coverage                 Collect JavaScript coverage.
+  --coveragePath <directory> Write coverage to a new directory.
+  --coverageFormats <list>   Select comma-separated coverage report formats.
+  --help, -h                 Show this help.
+
+File paths start with src/, extensions/, or test/ and accept / or \\ separators.
+`);
+		return;
+	}
 	const selection = parseSelection(args);
 	const preloads = ['test/unit/ignore-css-imports.ts', 'test/unit/theme-resources.ts', ...(editorEnvironment ? ['test/unit/editor-environment.ts'] : [])];
 	// Plans and compiling runs discover source tests, so they work on a cold checkout
@@ -205,10 +225,11 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 }
 
 function sourceFile(value: string): string {
-	if ((!value.startsWith('src/') && !value.startsWith('test/') && !value.startsWith('extensions/')) || value.includes('\\') || value.split('/').includes('..')) {
+	const path = value.replaceAll('\\', '/');
+	if ((!path.startsWith('src/') && !path.startsWith('test/') && !path.startsWith('extensions/')) || path.split('/').includes('..')) {
 		throw new Error(`--run expects a path relative to the repository root: ${value}`);
 	}
-	return value.endsWith('.ts') ? `${value.slice(0, -3)}.js` : value;
+	return path.endsWith('.ts') ? `${path.slice(0, -3)}.js` : path;
 }
 
 function parseSelection(args: readonly string[]): Selection {
@@ -226,6 +247,10 @@ function parseSelection(args: readonly string[]): Selection {
 		const option = args[index];
 		if (option === '--plan') { plan = true; continue; }
 		if (option === '--coverage') { coverage = true; continue; }
+		if (!option.startsWith('-') && /\.(?:ts|js)$/u.test(option)) {
+			runs.push(option);
+			continue;
+		}
 		const value = args[index + 1];
 		if (!value) throw new Error(`Missing value for ${option}`);
 		switch (option) {
