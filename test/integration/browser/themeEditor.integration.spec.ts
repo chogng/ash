@@ -1838,8 +1838,8 @@ test('switches to the production Agent Window, edits its colors and reuses isola
 	await expect(
 		frame.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
 	).toHaveAttribute('aria-pressed', 'true');
-	await navigation.getByRole('button', { name: 'New', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'New', exact: true })).not.toHaveAttribute('aria-current');
+	await navigation.getByRole('button', { name: /^New (Chat|Session)$/u }).click();
+	await expect(navigation.getByRole('button', { name: /^New (Chat|Session)$/u })).not.toHaveAttribute('aria-current');
 	await popup.screenshot({ path: testInfo.outputPath('agent-window-theme-preview.png') });
 	await tabs.getByRole('tab', { name: 'IDE', exact: true }).click();
 	await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');

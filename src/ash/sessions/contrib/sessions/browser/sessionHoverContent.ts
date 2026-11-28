@@ -1,11 +1,15 @@
+import './media/sessionHoverContent.css';
 import { h } from '../../../../base/browser/dom.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { formatTimeAgo } from '../../../../base/common/date.js';
+import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
+import type { IHoverService, IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
 import type { ThreadChangesSummary } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostChatWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
@@ -49,6 +53,42 @@ const previewDetailIcons = {
 	count: Lxicon.chatSession,
 };
 
+export class SessionListPreview extends Disposable {
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
+	private key: string | undefined;
+
+	constructor(private readonly button: HTMLButtonElement, private readonly anchor: HTMLElement) {
+		super();
+	}
+
+	get registered(): boolean { return this.hover.value !== undefined; }
+
+	update(hoverService: IHoverService | undefined, preview: SessionListPreviewContent): void {
+		if (!hoverService) return;
+		const key = JSON.stringify(preview);
+		if (this.key === key) return;
+		this.key = key;
+		const content = createSessionPreviewHover(this.button.ownerDocument, preview);
+		if (this.hover.value) {
+			this.hover.value.update(content);
+			return;
+		}
+		this.button.removeAttribute('title');
+		this.hover.value = hoverService.setupHover({
+			target: this.button,
+			anchor: this.anchor,
+			content,
+			delay: 300,
+			groupId: 'sessions-list-preview',
+			anchorAlignment: AnchorAlignment.Left,
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			anchorPosition: AnchorPosition.Below,
+		});
+	}
+
+	hide(): void { this.hover.value?.hide(); }
+}
+
 /** Builds the preview anew on each display and cancels its metadata reads when the hover closes. */
 export function createSessionPreviewHover(document: Document, preview: SessionListPreviewContent): (token: CancellationToken) => HTMLElement {
 	return token => {
@@ -84,7 +124,7 @@ export function createSessionPreviewHover(document: Document, preview: SessionLi
 			case 'project': {
 				const { details, paths } = preview;
 				if (!details) break;
-				const time = createPreviewTime(document, details.updatedAt);
+				const time = createPreviewTime(document, details.updatedAt ?? details.createdAt);
 				if (time) heading.append(' ', time);
 				if (details.description?.trim()) insertDetail(h(document, 'div', details.description));
 				if (paths) {

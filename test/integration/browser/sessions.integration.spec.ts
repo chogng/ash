@@ -430,18 +430,18 @@ for (const locale of ['en', 'zh-CN'])
 			.or(modes.getByRole('button', { name: '聊天 / Agents', exact: true }));
 		const navigation = page.locator('.ash-sessions-navigation');
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(
-			chinese ? ['新建', '搜索', '项目', 'Artifacts', '自定义'] : ['New', 'Search', 'Projects', 'Artifacts', 'Customize'],
+			chinese ? ['新建聊天', '搜索', '项目', 'Artifacts', '自定义'] : ['New Chat', 'Search', 'Projects', 'Artifacts', 'Customize'],
 		);
 		await expect(navigation.locator('[data-action-id="sessions.open.code"]')).toHaveCount(0);
 		await code.click();
 		await expect(page.locator('.ash-sessions-activity-content')).toHaveAttribute('data-workspace-mode', 'code');
 		const expected = chinese
-			? ['新建', '自动化', '自定义', '更多']
-			: ['New', 'Automations', 'Customize', 'More'];
+			? ['新建会话', '自动化', '自定义', '更多']
+			: ['New Session', 'Automations', 'Customize', 'More'];
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
 		await expect(page.locator('.ash-sessions-list[data-mode=code]')).toBeVisible();
 		await expect(page.locator('.ash-sessions-list:visible')).toHaveCount(1);
-		await navigation.getByRole('button', { name: chinese ? '新建' : 'New', exact: true }).click();
+		await navigation.getByRole('button', { name: chinese ? '新建会话' : 'New Session', exact: true }).click();
 		await expect(code).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-input')).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`code-navigation-${locale}.png`) });
@@ -470,7 +470,7 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(page.locator('[data-part="customview"]')).toBeHidden();
 		await expect(page.locator('.ash-sessions-list')).toBeVisible();
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(
-			chinese ? ['新建', '搜索', '项目', 'Artifacts', '自定义'] : ['New', 'Search', 'Projects', 'Artifacts', 'Customize'],
+			chinese ? ['新建聊天', '搜索', '项目', 'Artifacts', '自定义'] : ['New Chat', 'Search', 'Projects', 'Artifacts', 'Customize'],
 		);
 		await code.click();
 		await more.click();
@@ -622,14 +622,14 @@ test('New navigation creates distinct sessions in Code and preserves the previou
 	await pane.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 	await page.keyboard.type(draft);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'New', exact: true }).click();
+	await navigation.getByRole('button', { name: 'New Session', exact: true }).click();
 	await expect(page.locator('.ash-sessions-list-add')).toHaveCount(0);
 	await expect(draftWidget).not.toHaveAttribute('data-untitled-session-id', original!);
 	const first = await draftWidget.getAttribute('data-untitled-session-id');
 	await expect(pane.locator('.chat-composer')).toBeVisible();
 	await expect(pane.locator('.ash-chat-input-editor').getByRole('textbox')).toBeFocused();
 	await expect(pane.locator('.ash-chat-input-editor')).not.toContainText(draft);
-	await navigation.getByRole('button', { name: 'New', exact: true }).click();
+	await navigation.getByRole('button', { name: 'New Session', exact: true }).click();
 	await expect(draftWidget).not.toHaveAttribute('data-untitled-session-id', first!);
 	await page.getByRole('button', { name: 'Back', exact: true }).click();
 	await expect(draftWidget).toHaveAttribute('data-untitled-session-id', first!);
@@ -697,7 +697,7 @@ for (const locale of ['en', 'zh-CN'])
 			await expect(manage).toHaveAttribute('aria-current', 'page');
 			await expect(code).toHaveAttribute('aria-pressed', 'true');
 			await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-			await activity.getByRole('button', { name: chinese ? '新建' : 'New', exact: true }).click();
+			await activity.getByRole('button', { name: chinese ? '新建会话' : 'New Session', exact: true }).click();
 			await expect(custom).toBeHidden();
 			await expect(code).toHaveAttribute('aria-pressed', 'true');
 			await expect(manage.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'clockface');
@@ -709,7 +709,7 @@ for (const locale of ['en', 'zh-CN'])
 			).toBeVisible();
 			await manage.click();
 		}
-		await activity.getByRole('button', { name: chinese ? '新建' : 'New', exact: true }).click();
+		await activity.getByRole('button', { name: chinese ? '新建会话' : 'New Session', exact: true }).click();
 		await expect(custom).toBeHidden();
 		await expect(manage).not.toHaveAttribute('aria-current', 'page');
 		await page
@@ -929,7 +929,7 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await page.keyboard.press('0');
 	await page.keyboard.press('ArrowLeft');
 	await expect.poll(worldTransform).toBe('translate(60px, 0px) scale(1)');
-	await page.getByRole('button', { name: 'New', exact: true }).click();
+	await page.getByRole('button', { name: 'New Chat', exact: true }).click();
 	await expect(canvas).toBeHidden();
 });
 
@@ -1716,7 +1716,7 @@ test.describe('Sessions settings components', () => {
 		await page.getByRole('menuitem', { name: 'Shortcuts', exact: true }).click();
 		const shortcuts = page.getByRole('dialog', { name: 'Agent Window Keyboard Shortcuts', exact: true });
 		await expect(shortcuts).toBeVisible();
-		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
+		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New Chat', exact: true });
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 		await expect(shortcuts.getByRole('searchbox')).toBeFocused();
 		await shortcuts.getByRole('searchbox').fill('Search sessions in the sidebar');
@@ -1787,7 +1787,7 @@ test.describe('Sessions settings components', () => {
 			sharedSettings.locator('[data-settings-item-id="sessions.chat.defaultModel"]').getByRole('textbox'),
 		).toBeVisible();
 		await sharedSettings.getByRole('searchbox').fill('');
-		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
+		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New Chat', exact: true });
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 		await testInfo.attach('shared-settings-preserves-chat', {
 			body: await page.screenshot(),

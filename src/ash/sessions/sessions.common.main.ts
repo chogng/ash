@@ -136,12 +136,15 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 registerSingleton(IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService, InstantiationType.Delayed);
 
-MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: {
-		id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: NewSessionDraftVisibleContext.isEqualTo(true),
-	},
-	group: 'navigation', order: 10,
-});
+for (const [title, when] of [
+	[localize2({ bundle: 'ash', key: 'sessions.activity.newChat' }, 'New Chat'), ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code')],
+	[localize2({ bundle: 'ash', key: 'sessions.activity.newSession' }, 'New Session'), SessionsWorkspaceModeContext.isEqualTo('code')],
+] as const) {
+	MenusRegistry.appendMenuItem(Menus.ActivityBar, {
+		command: { id: 'sessions.newSession', title, icon: Lxicon.add, toggled: NewSessionDraftVisibleContext.isEqualTo(true) },
+		group: 'navigation', order: 10, when,
+	});
+}
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') },

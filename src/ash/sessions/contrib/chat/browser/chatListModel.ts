@@ -443,6 +443,44 @@ export interface ChatListGroup {
 	readonly project?: ChatListProject;
 }
 
+type ChatProjectPreview = NonNullable<SessionsCatalogProject['preview']>;
+
+export function getLocalProjectPreview(project: ProjectSummary, readDescription: () => Promise<string>, description?: string): ChatProjectPreview {
+	return {
+		conversationCount: project.sessionCount,
+		updatedAt: project.updatedAtMs,
+		createdAt: project.createdAtMs,
+		description,
+		descriptionSource: description === undefined ? {
+			key: JSON.stringify([project.id, project.revision]),
+			load: token => raceCancellationError(readDescription(), token),
+		} : undefined,
+	};
+}
+
+export function getCatalogProjectPreview(group: ChatListGroup, reader?: IReader): ChatProjectPreview {
+	const details = group.project?.details;
+	const description = reader && details?.data.read(reader)?.description;
+	return {
+		conversationCount: new Set(group.rows.map(row => row.id)).size,
+		updatedAt: group.project?.updatedAt,
+		createdAt: group.project?.createdAt,
+		description,
+		descriptionSource: description === undefined && details ? {
+			key: details.key,
+			load: async token => {
+				// Read outside the Projects page's render so resolving hover content does not replace its anchor.
+				const cached = details.data.get()?.description;
+				if (cached !== undefined || !details.load || token.isCancellationRequested) return cached;
+				const controller = new AbortController();
+				using cancellation = token.onCancellationRequested(() => controller.abort());
+				await details.load(controller.signal);
+				return details.data.get()?.description;
+			},
+		} : undefined,
+	};
+}
+
 export function getCatalogProjectRename(editDetails: ChatListProject['editDetails']): ((name: string, signal: AbortSignal) => Promise<void>) | undefined {
 	if (!editDetails) return undefined;
 	return async (name, signal) => {
@@ -622,25 +660,10 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
-		const details = project.project?.details;
-		const description = localProject
-			? current?.revision === localProject.revision && !current.failed ? current.project?.description : undefined
-			: details?.data.read(reader)?.description;
-		const loadDetails = details?.load;
-		const descriptionSource: NonNullable<SessionsCatalogProject['preview']>['descriptionSource'] = description !== undefined ? undefined
-			: localProject ? {
-				key: JSON.stringify([localProject.id, localProject.revision]),
-				load: async token => (await raceCancellationError(this.readProject(localProject).read, token)).description,
-			} : details && loadDetails ? {
-				key: details.key,
-				load: async token => {
-					const controller = new AbortController();
-					using cancellation = token.onCancellationRequested(() => controller.abort());
-					if (token.isCancellationRequested) return undefined;
-					await loadDetails(controller.signal);
-					return details.data.get()?.description;
-				},
-			} : undefined;
+		const preview = localProject ? getLocalProjectPreview(localProject,
+			async () => (await this.readProject(localProject).read).description,
+			current?.revision === localProject.revision && !current.failed ? current.project?.description : undefined,
+		) : getCatalogProjectPreview(project, reader);
 		const loading = history?.state === 'loading' || (!!localProject?.sessionCount && current !== undefined && current.failed === undefined);
 		const retry = localProject?.sessionCount && current?.failed ? () => {
 			this.membership.delete(project.key);
@@ -651,11 +674,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			title: project.title,
 			rows,
 			loading,
-			preview: {
-				description, descriptionSource,
-				conversationCount: localProject?.sessionCount ?? new Set(rows.map(row => row.id)).size,
-				updatedAt: localProject ? localProject.updatedAtMs : project.project?.updatedAt,
-			},
+			preview,
 			localProject,
 			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,
 			operations: {

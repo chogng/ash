@@ -53,6 +53,7 @@ export interface SessionsCatalogProject {
 		readonly descriptionSource?: { readonly key: string; load(token: CancellationToken): Promise<string | undefined>; };
 		readonly conversationCount: number;
 		readonly updatedAt?: number;
+		readonly createdAt?: number;
 	};
 	readonly localProject?: ProjectSummary;
 	readonly appearance?: CatalogProjectAppearance;

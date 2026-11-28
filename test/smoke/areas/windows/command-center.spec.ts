@@ -1521,7 +1521,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(showSidebar).toHaveAttribute('aria-pressed', 'false');
 		await showSidebar.click();
 		await expect(page.locator("[data-part='sidebar']")).toBeVisible();
-		const sessionsNavigation = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
+		const sessionsNavigation = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New Chat', exact: true });
 		await sessionsNavigation.focus();
 		await page.keyboard.press('Alt+F1');
 		await expect(page.getByRole('dialog', { name: 'Accessibility Help' })).toBeVisible();

@@ -1,0 +1,107 @@
+.ash-sessions-window
+	.ash-context-view-hover:has(> .ash-hover > .ash-sessions-list-preview) {
+	--ash-hover-background: var(--ash-editor-background);
+	--ash-hover-foreground: var(--ash-foreground);
+	--ash-hover-border: var(--ash-contrastBorder, var(--ash-widget-border));
+	box-shadow: 0 6px 20px
+		color-mix(in srgb, var(--ash-widget-shadow) 70%, transparent);
+}
+
+.ash-high-contrast
+	.ash-sessions-window
+	.ash-context-view-hover:has(> .ash-hover > .ash-sessions-list-preview) {
+	box-shadow: none;
+}
+
+.ash-hover:has(> .ash-sessions-list-preview) {
+	inline-size: 320px;
+	padding: var(--ash-spacing-size100) var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.4;
+}
+
+.ash-sessions-list-preview {
+	display: grid;
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-sessions-list-preview-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-list-preview-heading > strong {
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-list-preview > time {
+	justify-self: end;
+}
+
+.ash-sessions-list-preview > time,
+.ash-sessions-list-preview-heading > time {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+	white-space: nowrap;
+}
+
+:is(
+	.ash-sessions-list-preview-project,
+	.ash-sessions-list-preview-path,
+	.ash-sessions-list-preview-branch,
+	.ash-sessions-list-preview-count
+) {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-sessions-list-preview-branch {
+	color: var(--ash-description-foreground);
+}
+
+:is(
+		.ash-sessions-list-preview-project,
+		.ash-sessions-list-preview-path,
+		.ash-sessions-list-preview-branch,
+		.ash-sessions-list-preview-count
+	)
+	> .ash-icon {
+	flex: none;
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-list-preview-path {
+	min-inline-size: 0;
+}
+
+.ash-sessions-list-preview-path-text,
+.ash-sessions-list-preview-path-components {
+	display: flex;
+	flex: 1;
+	min-inline-size: 0;
+}
+
+.ash-sessions-list-preview-path-text {
+	white-space: nowrap;
+	white-space-collapse: preserve-spaces;
+}
+
+.ash-sessions-list-preview-path-home {
+	flex: none;
+}
+
+.ash-sessions-list-preview-path-prefix,
+.ash-sessions-list-preview-path-suffix {
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ash-sessions-list-preview-path-suffix {
+	flex: none;
+	max-inline-size: 100%;
+}

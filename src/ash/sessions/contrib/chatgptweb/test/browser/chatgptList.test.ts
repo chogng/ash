@@ -562,7 +562,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(detailReads).toBe(3);
 	});
 
-	test('Projects shows localized ChatGPT project times from the project list', async () => {
+	test('Projects uses the shared ChatGPT preview for updated, created and undated projects', async () => {
 		const { page } = browserTests;
 		const now = new Date('2026-11-08T12:00:00Z');
 		const updatedAt = '2026-11-05T12:00:00Z';
@@ -579,18 +579,42 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				cursor: null,
 			},
 		}));
-		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN');
-		const catalog = page.locator('.ash-projects');
+		let detailsReads = 0;
+		let historyReads = 0;
+		await page.route('**/service/backend-api/gizmos/g-p-updated?*', route => {
+			detailsReads++;
+			return route.fulfill({ json: { gizmo: { id: 'g-p-updated', display: { name: 'Updated project' }, instructions: 'Project notes' }, files: [] } });
+		});
+		await page.route('**/service/backend-api/gizmos/g-p-updated/conversations?*', route => {
+			historyReads++;
+			return route.fulfill({ json: { items: [], cursor: null } });
+		});
+		await page.goto('/chatgptNavigation.html?projectsPreview&locale=zh-CN');
+		const catalog = page.locator('.ash-projects-view');
 		const updated = catalog.getByRole('button', { name: 'Updated project', exact: true });
 		const created = catalog.getByRole('button', { name: 'Created project', exact: true });
 		const undated = catalog.getByRole('button', { name: 'Undated project', exact: true });
-		await expect(updated.locator('time')).toHaveText('3天前');
-		await expect(updated.locator('time')).toHaveAttribute('datetime', new Date(updatedAt).toISOString());
-		await expect(updated).toHaveAccessibleDescription(/^更新于 /u);
-		await expect(created.locator('time')).toHaveText('6天前');
-		await expect(created).toHaveAccessibleDescription(/^创建于 /u);
 		await expect(undated).toBeVisible();
-		await expect(undated.locator('time')).toHaveCount(0);
+		await expect(catalog.locator('time')).toHaveCount(0);
+		expect(detailsReads).toBe(0);
+		const preview = page.getByRole('tooltip').locator('.ash-sessions-list-preview');
+		const title = preview.locator('strong');
+		const time = preview.locator('.ash-sessions-list-preview-heading time');
+		await updated.hover();
+		await expect(title).toHaveText('Updated project');
+		await expect(time).toHaveText('3天前');
+		await expect(time).toHaveAttribute('datetime', new Date(updatedAt).toISOString());
+		await expect(preview.getByText('Project notes', { exact: true })).toBeVisible();
+		await expect(preview.locator('.ash-sessions-list-preview-count')).toHaveText('0 个对话');
+		expect(detailsReads).toBe(1);
+		expect(historyReads).toBe(0);
+		await created.hover();
+		await expect(title).toHaveText('Created project');
+		await expect(time).toHaveText('6天前');
+		await expect(time).toHaveAttribute('datetime', new Date(createdAt).toISOString());
+		await undated.hover();
+		await expect(title).toHaveText('Undated project');
+		await expect(time).toHaveCount(0);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -914,7 +938,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				cursor: null,
 			},
 		}));
-		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN&theme=light');
+		await page.goto('/chatgptNavigation.html?projectPreview&locale=zh-CN&theme=light');
 		const sidebar = page.locator('.ash-chat-navigation-list');
 		const row = sidebar.locator('[data-project-id="g-p-title-0"]');
 		const project = row.getByRole('button', { name: longTitle, exact: true });
@@ -922,7 +946,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const text = label.locator('> span');
 		const actions = row.locator('.ash-sessions-list-actions');
 		const short = sidebar.getByRole('button', { name: shortTitle, exact: true });
-		await expect(project).toHaveAttribute('title', longTitle);
+		await expect(project).toHaveAccessibleName(longTitle);
 		await expect(actions).toHaveCSS('opacity', '0');
 		await expect(actions).toHaveCSS('pointer-events', 'none');
 		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
@@ -933,6 +957,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 		await project.hover();
 		await expect(actions).toHaveCSS('opacity', '1');
+		await expect(page.getByRole('tooltip').locator('.ash-sessions-list-preview-heading strong')).toHaveText(longTitle);
 		const hovered = (await label.boundingBox())!;
 		expect(hovered.x).toBe(resting.x);
 		expect(hovered.width).toBeLessThan(resting.width);

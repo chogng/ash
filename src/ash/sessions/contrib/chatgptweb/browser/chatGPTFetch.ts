@@ -54,7 +54,7 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 		} catch (error) {
 			release();
 			if (error instanceof Error && error.name === 'ChatGPTAuthenticationError') {
-				throw new ChatGPTAuthenticationError(localize('sessions.chatgpt.loginUnavailable', 'ChatGPT sign-in is unavailable. Use the New button context menu to sign in to Ash or select the Codex login.'));
+				throw new ChatGPTAuthenticationError(localize('sessions.chatgpt.loginUnavailable', 'ChatGPT sign-in is unavailable. Use the New Chat button context menu to sign in to Ash or select the Codex login.'));
 			}
 			throw error;
 		}

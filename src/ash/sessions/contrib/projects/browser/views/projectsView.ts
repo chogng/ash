@@ -76,13 +76,13 @@ export class ProjectsView extends ViewPane {
 		}));
 		this.headerActionsElement.classList.add('ash-projects-title-actions');
 		this.toolbar = this._register(instantiation.createInstance(ProjectsToolbar, this.headerActionsElement, actions));
-		this.list = this._register(instantiation.createInstance(ProjectsList, this.body, actions, () => this.isBodyVisible()));
+		this.list = this._register(instantiation.createInstance(ProjectsList, this.body, actions));
 		this._register(this.onDidChangeBodyVisibility(visible => {
 			this.bodyVisible.set(visible, undefined);
 			if (!visible) {
 				actions.cancelPendingEdit();
 				this.toolbar.closeSortMenu();
-				this.list.reset();
+				this.content.clear();
 			}
 		}));
 
@@ -98,7 +98,6 @@ export class ProjectsView extends ViewPane {
 			const archived = this.showArchived.read(reader);
 			this.archivedHeading.hidden = !archived;
 			const focused = this.focusedRow();
-			this.list.reset();
 			this.content.clear();
 			this.body.replaceChildren();
 			this.body.setAttribute('aria-busy', String(state.loading));
@@ -148,7 +147,7 @@ export class ProjectsView extends ViewPane {
 					return new AccessibleContentProvider(AccessibleViewProviderId.Projects, { type }, () =>
 						type === AccessibleViewType.View
 							? [this.showArchived.get() ? archivedTitle : title, this.body.innerText].filter(Boolean).join('\n')
-							: localize('projects.sidebarHelp', 'Use Tab to reach the project actions toolbar. Use Left and Right Arrow to move between Search projects, Sort projects and Create project. The selected sort order is saved for this profile. An empty search collapses when focus leaves it. Press Escape to clear search and return to its button. In the project list, use Up and Down Arrow, Home or End. Press Enter to open the selected project in the main area. Press Tab on a project to reach Pin and More Actions. Run Toggle Archived Projects in the Command Palette to switch between active and archived projects.'),
+							: localize('projects.sidebarHelp', 'Use Tab to reach the project actions toolbar. Use Left and Right Arrow to move between Search projects, Sort projects and Create project. The selected sort order is saved for this profile. An empty search collapses when focus leaves it. Press Escape to clear search and return to its button. In the project list, use Up and Down Arrow, Home or End. Press Enter to open the selected project in the main area. Press Tab on a project to reach More project actions, or press Shift+F10 to open the menu. Use the menu to pin or unpin a project. Run Toggle Archived Projects in the Command Palette to switch between active and archived projects.'),
 						() => {
 							const searchField = focused.closest<HTMLElement>('.ash-toolbar-search-field');
 							if (searchField?.inert) searchField.parentElement?.querySelector<HTMLButtonElement>(':scope > button')?.focus();

@@ -135,7 +135,7 @@ export class CompositeActionViewItem extends ActionViewItem {
 			};
 			update();
 			if (this.options.onDidChange) { this._register(this.options.onDidChange(update)); }
-			this.setupDelayedHover(this.button.domNode, this.action.tooltip);
+			this.setupDelayedHover(this.button.domNode, () => this.action.tooltip);
 			return;
 		}
 		container.classList.add('ash-composite-bar-item');

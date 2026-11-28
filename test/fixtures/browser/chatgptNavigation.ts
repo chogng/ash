@@ -11,7 +11,7 @@ import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
 import { IProjectDialogService, ProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';
-import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
+import { IProjectsService, projectsViewContainerId } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
@@ -160,6 +160,7 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+const showProjectsPreview = parameters.has('projectsPreview');
 let chatGPTCacheScope = 'a'.repeat(64);
 registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
@@ -395,7 +396,7 @@ services.registerInstance(IContextMenuService, resources.add(new BrowserContextM
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
 	services.get(IContextViewService), notifications,
 )));
-if (parameters.has('projectPreview')) {
+if (parameters.has('projectPreview') || showProjectsPreview) {
 	services.registerInstance(IHoverService, resources.add(new HoverService(
 		services.get(IConfigurationService), services.get(IContextViewService), services.get(IContextMenuService),
 	)));
@@ -584,7 +585,7 @@ services.registerSingleton(IWorkingCopyService, () => services.createInstance(Br
 services.registerSingleton(IPdfWorkingCopyService, () => services.createInstance(PdfWorkingCopyService));
 services.registerInstance(IHistoryService, { getHistory: () => [], remove() { }, goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } });
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
-const descriptor = descriptors.getViewContainerById(CHAT_WORKSPACE_NAVIGATION_ID)!;
+const descriptor = descriptors.getViewContainerById(showProjectsPreview ? projectsViewContainerId : CHAT_WORKSPACE_NAVIGATION_ID)!;
 const view = resources.add(services.createInstance(PaneComposite, host, {
 	viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id)!,
 	paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true,

@@ -495,7 +495,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	);
 	await page.keyboard.press('Escape');
 	await expect(canvas).toBeFocused();
-	await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
+	await navigation.getByRole('button', { name: /^New (Chat|Session)$/u }).click();
 	await expect(canvas).toBeHidden();
 	await openDesign();
 	await expect(canvas).toBeVisible();
@@ -2093,7 +2093,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.bringToFront();
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const chat = navigation.getByRole('button', { name: 'New', exact: true });
+	const chat = navigation.getByRole('button', { name: /^New (Chat|Session)$/u });
 	const search = navigation.getByRole('button', { name: 'Search', exact: true });
 	const selectionToken = '--ash-sessions-sidebar-selection-background';
 	const hoverToken = '--ash-sessions-sidebar-hover-background';
@@ -2162,7 +2162,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 		await page.mouse.move(600, 400);
 		await chat.hover();
 		const tooltip = page.getByRole('tooltip');
-		await expect(tooltip).toHaveText('New');
+		await expect(tooltip).toHaveText('New Chat');
 		const anchorBounds = (await chat.boundingBox())!;
 		const hoverBounds = (await page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox())!;
 		if (position === 'Top') expect(hoverBounds.y).toBeGreaterThanOrEqual(anchorBounds.y + anchorBounds.height);
@@ -2212,7 +2212,7 @@ test(
 		await activityBar.getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await new QuickAccess(page).runCommand('sessions.artifacts.open.design');
 		await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
-		await activityBar.getByRole('button', { name: 'New', exact: true }).click();
+		await activityBar.getByRole('button', { name: /^New (Chat|Session)$/u }).click();
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await workbench.reloadWindow(page);
 		await expect(activityBar).toBeVisible();
@@ -2393,7 +2393,7 @@ test(
 			await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 			await expect(activityNavigation).toBeHidden();
 			await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-			const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
+			const newSession = activityNavigation.getByRole('button', { name: /^New (Chat|Session)$/u });
 			await newSession.click();
 			await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 			const placementItems = await new Menus(page).inspect(application, () => newSession.click({ button: 'right' }));
@@ -3180,7 +3180,7 @@ test(
 			'true',
 		);
 		const activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
-		await expect(activityNavigation.getByRole('button', { name: 'New', exact: true })).toHaveAttribute(
+		await expect(activityNavigation.getByRole('button', { name: /^New (Chat|Session)$/u })).toHaveAttribute(
 			'aria-current',
 			'page',
 		);
@@ -3193,7 +3193,7 @@ test(
 		).toHaveAttribute('aria-pressed', 'true');
 		await expect(sessionsPage.locator('[data-part="sessions"]')).toBeVisible();
 		await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
-		await activityNavigation.getByRole('button', { name: 'New', exact: true }).click();
+		await activityNavigation.getByRole('button', { name: /^New (Chat|Session)$/u }).click();
 		await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		expect(
 			await buttons.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label'))),
@@ -3280,7 +3280,7 @@ test(
 			await page.mouse.move(400, 180);
 			await page
 				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'New', exact: true })
+				.getByRole('button', { name: /^New (Chat|Session)$/u })
 				.hover();
 			const tooltip = page.getByRole('tooltip');
 			const hover = page.locator('.ash-context-view-hover');
@@ -3345,7 +3345,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const chat = navigation.getByRole('button', { name: 'New', exact: true });
+	const chat = navigation.getByRole('button', { name: /^New (Chat|Session)$/u });
 	const projects = navigation.getByRole('button', { name: 'Projects' });
 	const menu = page.getByRole('menuitem', { name: 'Application menu', exact: true });
 	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
@@ -3461,7 +3461,7 @@ test(
 				theme.endsWith('Dark') ? 'hcDark' : 'hcLight',
 			);
 			const navigation = page.locator('.ash-sessions-activity-content');
-			const chat = navigation.getByRole('button', { name: 'New', exact: true });
+			const chat = navigation.getByRole('button', { name: /^New (Chat|Session)$/u });
 			const projects = navigation.getByRole('button', { name: 'Projects' });
 			const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 			await page.mouse.move(400, 180);
@@ -3573,7 +3573,7 @@ focusTest('Sessions Activity Bar tooltips follow active placement and stay ancho
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const newSession = navigation.getByRole('button', { name: /^New(?:\.|$)/u });
+	const newSession = navigation.getByRole('button', { name: /^New (Chat|Session)$/u });
 	const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 	const checkTooltip = async (
 		trigger: Locator,
@@ -3614,30 +3614,30 @@ focusTest('Sessions Activity Bar tooltips follow active placement and stay ancho
 	const menus = new Menus(page);
 	const setPosition = (position: string): Promise<void> =>
 		menus.select(application, () => accounts.click({ button: 'right' }), ['Activity Bar Position', position]);
-	await checkTooltip(newSession, 'New', 'right');
+	await checkTooltip(newSession, 'New Chat', 'right');
 	for (const label of ['Search', 'Projects', 'Customize']) {
 		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
 	}
 	await checkTooltip(accounts, 'Accounts', 'right', true);
 	await setPosition('Right');
 	await expect(page.locator('[data-part="sidebar"]')).toHaveAttribute('data-activity-bar-side', 'right');
-	await checkTooltip(newSession, 'New', 'left');
+	await checkTooltip(newSession, 'New Chat', 'left');
 	await checkTooltip(accounts, 'Accounts', 'left', true);
 	await setPosition('Top');
 	await expect(page.locator('.ash-sessions-activity-host.top .ash-sessions-activity-content.horizontal')).toBeVisible();
-	await checkTooltip(newSession, 'New', 'below', true);
+	await checkTooltip(newSession, 'New Chat', 'below', true);
 	await checkTooltip(accounts, 'Accounts', 'below');
 	await workbench.setAppearance(application, 'dark', page);
 	await setPosition('Bottom');
 	await expect(page.locator('.ash-sessions-activity-host.bottom .ash-sessions-activity-content.horizontal')).toBeVisible();
-	await checkTooltip(newSession, 'New', 'above');
+	await checkTooltip(newSession, 'New Chat', 'above');
 	await checkTooltip(accounts, 'Accounts', 'above', true);
 	await setPosition('Default');
 	await expect(navigation).toHaveClass(/\blabeled\b/u);
 	const originalNewSession = await newSession.elementHandle();
 	const originalAccounts = await accounts.elementHandle();
 	await page.setViewportSize({ width: 900, height: 600 });
-	await checkTooltip(newSession, 'New', 'right');
+	await checkTooltip(newSession, 'New Chat', 'right');
 	await checkTooltip(accounts, 'Accounts', 'right', true);
 	expect(await newSession.evaluate((element, original) => element === original, originalNewSession)).toBe(true);
 	expect(await accounts.evaluate((element, original) => element === original, originalAccounts)).toBe(true);

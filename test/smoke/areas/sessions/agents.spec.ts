@@ -12,7 +12,7 @@ test('Agent settings show model controls, role definitions and Teams together', 
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Agents', exact: true })).toHaveCount(0);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New Chat', exact: true }).click();
 	const draft = 'Keep the draft while managing roles and teams';
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorFocus();
 	await page.keyboard.insertText(draft);

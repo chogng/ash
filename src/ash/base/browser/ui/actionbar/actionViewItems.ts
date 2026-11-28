@@ -104,9 +104,9 @@ export abstract class ActionViewItem extends Disposable {
 	}
 
 	/** Installs an action tooltip for view items that render a custom target. */
-	protected setupDelayedHover(target: HTMLElement, content: string): IDisposable {
+	protected setupDelayedHover(target: HTMLElement, content: string | (() => string)): IDisposable {
 		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
-			content,
+			content: typeof content === 'function' ? content() : content,
 			...this.getHoverOptions(),
 		}), { groupId: this.hoverGroupId }));
 	}

@@ -249,7 +249,7 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'New', exact: true }).click();
+	await navigation.getByRole('button', { name: 'New Chat', exact: true }).click();
 	const recent = page.getByRole('group', { name: 'Recent projects', exact: true });
 	const projectName = basename(testWorkspace.directory);
 	await recent.getByRole('button', { name: projectName, exact: true }).click();
@@ -1238,7 +1238,7 @@ test('Sessions Slides autosaves a saved artifact and exports an independent copy
 		}, otherFolder);
 		const otherWindow = await openingOther;
 		await otherWindow.getByRole('button', { name: 'Trust and Open', exact: true }).click();
-		await otherWindow.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
+		await otherWindow.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New Chat', exact: true }).click();
 		await otherWindow.locator('[data-part="sessions"] .stanza-editor-input:visible').focus();
 		await otherWindow.keyboard.insertText(link);
 		const switching = application.waitForEvent('window');

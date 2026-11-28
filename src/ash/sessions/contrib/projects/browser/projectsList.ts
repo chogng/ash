@@ -1,54 +1,35 @@
-import type { IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
-import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import type { ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import type { ChatListGroup } from '../../chat/browser/chatListModel.js';
-import type { ProjectsActions } from './projectsActions.js';
+import { getCatalogProjectPreview, getLocalProjectPreview, type ChatListGroup } from '../../chat/browser/chatListModel.js';
+import { SessionListSection } from '../../sessions/browser/sessionListSection.js';
+import { showSidebarProjectMenu, type ProjectsActions } from './projectsActions.js';
 import { resolveProjectAppearance } from './projectAppearance.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
-import { ProjectListTimes } from './projectListTimes.js';
-
-/** A pinned project shows its removal action in the same slot on hover or focus. */
-class ProjectsPinActionViewItem extends ButtonActionViewItem {
-	override render(container: HTMLElement): void {
-		super.render(container);
-		if (!this.action.checked) {
-			return;
-		}
-		container.classList.add('pinned');
-		const button = this.button.domNode;
-		const updateIcon = () => {
-			this.button.icon = button.matches(':hover, :focus') ? Lxicon.unpin : this.action.icon;
-		};
-		for (const event of ['mouseenter', 'mouseleave', 'focus', 'blur'] as const) {
-			this._register(addDisposableListener(button, event, updateIcon));
-		}
-		updateIcon();
-	}
-}
 
 export class ProjectsList extends Disposable {
-	private readonly times: ProjectListTimes;
+	private readonly menuContext: IContextKeyService;
 
 	constructor(
 		private readonly body: HTMLElement,
 		private readonly actions: ProjectsActions,
-		isVisible: () => boolean,
 		@IProjectsService private readonly projects: IProjectsService,
+		@IProjectService private readonly projectService: IProjectService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IHoverService private readonly hover: IHoverService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		this.times = this._register(new ProjectListTimes(hover, isVisible));
+		this.menuContext = this._register(contextKeys.createScoped(body));
 		this._register(addDisposableListener(body, 'keydown', event => this.navigateCards(event)));
 	}
 
@@ -57,10 +38,6 @@ export class ProjectsList extends Disposable {
 		const card = id === undefined ? cards[0] : Array.from(cards).find(candidate => candidate.dataset.projectControl === id);
 		card?.focus();
 		return !!card;
-	}
-
-	reset(): void {
-		this.times.reset();
 	}
 
 	renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
@@ -76,50 +53,38 @@ export class ProjectsList extends Disposable {
 				createdAtMs: project.project?.createdAt, source: 'catalog' as const, project,
 			})),
 		].sort((left, right) => this.projects.compareProjectOrder(left, right));
-		for (const { id, name, updatedAtMs, createdAtMs, source, project } of rows) {
-			const row = h(document, 'li', { className: 'ash-projects-row' });
-			const card = h(document, 'button', {
-				className: 'ash-button ash-button-quiet ash-projects-card',
-				properties: { type: 'button' },
-			});
-			card.dataset.projectControl = id;
-			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
+		for (const { id, name, source, project } of rows) {
+			const row = disposables.add(this.instantiation.createInstance(SessionListSection, document, id, 'project', 'chat', undefined, undefined));
+			row.domNode.classList.add('ash-projects-row');
+			row.button.classList.add('ash-projects-card');
+			row.button.dataset.projectControl = id;
 			const preferenceKey = source === 'catalog' ? project.project?.preferenceKey : undefined;
 			const appearance = resolveProjectAppearance(document, source === 'local' ? project
 				: preferenceKey ? this.projects.getCatalogProjectAppearance(preferenceKey) : undefined);
-			appendIcon(appearance.icon ?? Lxicon.projects, mark);
-			if (appearance.color) mark.style.color = appearance.color;
-			card.append(mark, this.renderCardContent(card, name, updatedAtMs, disposables, createdAtMs));
-			disposables.add(this.hover.setupDelayedHover(card, { content: name }));
-			disposables.add(addDisposableListener(card, 'click', () => {
-				const state = this.projects.state.get();
-				if (source === 'local') {
-					if (state.selectedId !== id || state.message) void this.projects.openProject(id);
-				} else if (state.conversationProjectId !== id) {
-					this.projects.openConversationProject(id);
-				}
+			row.update(name, {
+				...appearance,
+				open: () => {
+					const state = this.projects.state.get();
+					if (source === 'local') {
+						if (state.selectedId !== id || state.message) void this.projects.openProject(id);
+					} else if (state.conversationProjectId !== id) {
+						this.projects.openConversationProject(id);
+					}
+				},
+			});
+			const details = source === 'local'
+				? getLocalProjectPreview(project, async () => (await this.projectService.read(project.id, 'chat')).description)
+				: getCatalogProjectPreview(project);
+			row.preview?.update(this.hover, { kind: 'project', title: name, details });
+			row.setContextMenu(anchor => showSidebarProjectMenu(this.contextMenus, this.menuContext, 'chat', this.actions.getProjectMenuTarget(project), {
+				getAnchor: () => anchor,
+				menuTarget: { element: row.domNode, getExpandedTrigger: anchor === row.moreButton ? () => row.moreButton : undefined },
 			}));
-			const actions = source === 'local' ? this.actions.getProjectActions(project) : this.actions.getConversationProjectActions(project);
-			row.append(card, this.renderCardActions(row, id, name, actions, disposables));
-			list.append(row);
+			const more = row.moreButton;
+			if (more) more.dataset.projectControl = `more:${id}`;
+			list.append(h(document, 'li', {}, row.domNode));
 		}
 		this.body.append(list);
-		this.times.update(list);
-	}
-
-	private renderCardContent(card: HTMLButtonElement, title: string, updatedAt: number | undefined, disposables: DisposableStore, createdAt?: number): HTMLElement {
-		const document = card.ownerDocument;
-		card.setAttribute('aria-label', title);
-		const content = h(document, 'span', { className: 'ash-projects-card-content' },
-			h(document, 'span', { className: 'ash-projects-card-name' }, title),
-		);
-		const timestamp = updatedAt ?? createdAt;
-		if (timestamp !== undefined) {
-			content.append(this.times.render(card, timestamp, 'ash-projects-card-caption', absoluteTime => updatedAt === undefined
-				? localize('projects.createdAt', 'Created {0}', absoluteTime)
-				: localize('projects.updatedAt', 'Updated {0}', absoluteTime), disposables));
-		}
-		return content;
 	}
 
 	renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
@@ -160,41 +125,6 @@ export class ProjectsList extends Disposable {
 		this.body.append(list);
 	}
 
-	private renderCardActions(row: HTMLElement, id: string, title: string, actions: readonly IAction[], content: DisposableStore): HTMLElement {
-		const actionsHost = h(row.ownerDocument, 'div', { className: 'ash-projects-card-actions' });
-		const toolbar = content.add(
-			new WorkbenchToolBar(
-				actionsHost,
-				{
-					showContextMenu: delegate => {
-						row.classList.add('menu-visible');
-						this.contextMenus.showContextMenu({
-							...delegate,
-							getMenuClassName: () => 'ash-projects-menu',
-							onHide: didCancel => {
-								row.classList.remove('menu-visible');
-								delegate.onHide?.(didCancel);
-							},
-						});
-					},
-				},
-				{
-					ariaLabel: localize('projects.actions', 'Actions for {0}', title),
-					presentation: 'inherit-foreground',
-					highlightToggledItems: false,
-					actionViewItemProvider: (action, options) =>
-						action.id === 'projects.pin' ? new ProjectsPinActionViewItem(action, options) : undefined,
-				},
-			),
-		);
-		toolbar.setActions([], actions, [this.actions.getPinAction(id)]);
-		const pinButton = actionsHost.querySelector<HTMLElement>('[data-action-id="projects.pin"] button')!;
-		pinButton.dataset.projectControl = `pin:${id}`;
-		const moreButton = actionsHost.querySelector<HTMLElement>('.ash-toolbar-more-actions button')!;
-		if (moreButton) moreButton.dataset.projectControl = `more:${id}`;
-		return actionsHost;
-	}
-
 	renderLoading(): void {
 		const document = this.body.ownerDocument;
 		const placeholder = (className: string) =>
@@ -207,17 +137,13 @@ export class ProjectsList extends Disposable {
 			const card = h(
 				document,
 				'div',
-				{ className: 'ash-projects-card ash-projects-skeleton-card' },
-				placeholder('ash-projects-card-mark'),
-				h(
-					document,
-					'div',
-					{ className: 'ash-projects-card-content' },
-					placeholder('ash-projects-skeleton-name'),
-					placeholder('ash-projects-skeleton-short'),
-				),
+				{ className: 'ash-sessions-list-section-toggle ash-projects-skeleton-card' },
+				placeholder('ash-sessions-list-section-icon'),
+				placeholder('ash-projects-skeleton-name'),
 			);
-			skeleton.append(h(document, 'div', { className: 'ash-projects-row' }, card));
+			skeleton.append(h(document, 'div', { className: 'ash-sessions-list-project-row ash-sessions-list-project-navigation ash-sessions-list-subgroup' },
+				h(document, 'div', { className: 'ash-sessions-list-section-heading' }, card),
+			));
 		}
 		this.body.append(skeleton);
 	}
@@ -225,7 +151,7 @@ export class ProjectsList extends Disposable {
 	updateSelection(id: string | undefined): void {
 		for (const button of this.body.querySelectorAll<HTMLButtonElement>('button.ash-projects-card')) {
 			const selected = button.dataset.projectControl === id;
-			button.parentElement?.classList.toggle('selected', selected);
+			button.closest('.ash-projects-row')?.classList.toggle('selected', selected);
 			if (selected) button.setAttribute('aria-current', 'true');
 			else button.removeAttribute('aria-current');
 		}

@@ -9,7 +9,7 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { groupChatList, IChatListCatalog, type ChatListGroup } from '../../chat/browser/chatListModel.js';
-import type { ConversationProjectEditor, SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { readCatalogProjectEdit, type ChatProjectEdit } from './projectDialogService.js';
 import { IProjectsService, type ProjectSortOrder } from './projectsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -32,7 +32,7 @@ const sidebarProjectActions = [
 
 type SidebarProjectAction = typeof sidebarProjectActions[number]['key'];
 
-interface SidebarProjectMenuTarget {
+export interface SidebarProjectMenuTarget {
 	readonly projectId: string;
 	readonly actions: Partial<Record<SidebarProjectAction, () => void | Promise<void>>>;
 }
@@ -187,38 +187,45 @@ export class ProjectsActions extends Disposable {
 		this.options.showDialog();
 	}
 
-	getPinAction(id: string): IAction {
-		const pinned = this.projects.isPinned(id);
-		const pinLabel = pinned ? localize('projects.unpin', 'Unpin') : localize('projects.pin', 'Pin');
+	getProjectMenuTarget(project: ProjectSummary | ChatListGroup): SidebarProjectMenuTarget {
+		const local = 'sessionCount' in project;
+		const projectId = local ? project.id : project.key;
+		const title = local ? project.name : project.title;
+		const busy = this.projects.state.get().busy;
+		const pinned = this.projects.isPinned(projectId);
+		const togglePin = () => {
+			if (this.projects.isPinned(projectId) === pinned) this.projects.togglePinned(projectId);
+		};
+		const archive = !busy && (local || project.project?.archive);
+		const remove = busy ? undefined : local
+			? { removesContents: false, run: async () => { await this.projects.remove(project); } }
+			: project.project?.remove;
+		const edit = local ? (!busy ? async () => {
+			const current = await this.projects.readProject(projectId);
+			if (current && !this.isDisposed && this.options.isVisible()) this.options.showDialog({ project: current });
+		} : undefined) : this.getCatalogProjectEdit(project);
 		return {
-			id: 'projects.pin',
-			label: pinLabel,
-			tooltip: pinLabel,
-			icon: pinned ? Lxicon.pinFilled : Lxicon.pinned,
-			enabled: !this.projects.state.get().busy,
-			checked: pinned,
-			run: () => this.projects.togglePinned(id),
+			projectId,
+			actions: {
+				pin: !busy && !pinned ? togglePin : undefined,
+				unpin: !busy && pinned ? togglePin : undefined,
+				edit,
+				archive: archive ? () => this.runRemoval(() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, projectId, local ? 'chat' : 'catalog')) : undefined,
+				remove: remove && (async () => {
+					if (await confirmProjectDelete(this.dialogs, title, remove.removesContents)) await this.runRemoval(remove.run);
+				}),
+			},
 		};
 	}
 
-	getConversationProjectActions(project: ChatListGroup): readonly IAction[] {
+	private getCatalogProjectEdit(project: ChatListGroup): (() => Promise<void>) | undefined {
 		const editor = project.project?.editDetails;
 		const key = project.project?.preferenceKey;
-		const editLabel = localize('projects.edit', 'Edit details');
-		const editActions: IAction[] = editor || key ? [{
-			id: 'projects.edit',
-			label: editLabel,
-			tooltip: editLabel,
-			icon: Lxicon.edit,
-			enabled: true,
-			run: () => {
-				const appearance = key ? this.projects.getCatalogProjectAppearance(key) : undefined;
-				return this.loadProjectEdit(signal => readCatalogProjectEdit(project.title, appearance, editor, signal));
-			},
-		}] : [];
-		const archive = project.project?.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog'));
-		const remove = project.project?.remove;
-		return [...editActions, ...getProjectRemovalActions(this.dialogs, project.title, { archive, remove }, operation => this.runRemoval(operation), !this.projects.state.get().busy)];
+		if (!editor && !key) return undefined;
+		return () => {
+			const appearance = key ? this.projects.getCatalogProjectAppearance(key) : undefined;
+			return this.loadProjectEdit(signal => readCatalogProjectEdit(project.title, appearance, editor, signal));
+		};
 	}
 
 	restoreProject(restore: () => void | Promise<void | boolean>): void {
@@ -244,29 +251,6 @@ export class ProjectsActions extends Disposable {
 		}));
 	}
 
-	getProjectActions(project: ProjectSummary): readonly IAction[] {
-		const action = (id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction => ({
-			id,
-			label,
-			tooltip: label,
-			icon,
-			enabled: !this.projects.state.get().busy,
-			run,
-		});
-		return [
-			action('projects.edit', localize('projects.edit', 'Edit details'), Lxicon.edit, async () => {
-				const current = await this.projects.readProject(project.id);
-				if (current && !this.isDisposed && this.options.isVisible()) {
-					this.options.showDialog({ project: current });
-				}
-			}),
-			...getProjectRemovalActions(this.dialogs, project.name, {
-				archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, 'chat'),
-				remove: { removesContents: false, run: async () => { await this.projects.remove(project); } },
-			}, operation => this.runRemoval(operation), !this.projects.state.get().busy),
-		];
-	}
-
 	private async runRemoval(operation: () => Promise<boolean | void>): Promise<void> {
 		try {
 			const completed = await operation();
@@ -290,33 +274,6 @@ export class ProjectsActions extends Disposable {
 			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 		}
 	}
-}
-
-export function getProjectRemovalActions(
-	dialogs: IDialogService,
-	title: string,
-	{ archive, remove }: Pick<SessionsCatalogProjectOperations, 'archive' | 'remove'>,
-	run: (operation: () => Promise<boolean | void>) => Promise<void>,
-	enabled = true,
-): IAction[] {
-	const actions: IAction[] = [];
-	if (archive) {
-		const label = localize('projects.archive', 'Archive');
-		actions.push({
-			id: ARCHIVE_PROJECT_COMMAND, label, tooltip: label, icon: Lxicon.archive,
-			enabled, run: () => run(archive)
-		});
-	}
-	if (remove) {
-		const label = localize('projects.delete', 'Delete');
-		actions.push({
-			id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash, destructive: true,
-			enabled, run: async () => {
-				if (await confirmProjectDelete(dialogs, title, remove.removesContents)) await run(remove.run);
-			}
-		});
-	}
-	return actions;
 }
 
 export async function confirmProjectDelete(dialogs: IDialogService, title: string, removesContents: boolean): Promise<boolean> {

@@ -194,7 +194,7 @@ test('Sessions discards an unavailable saved entry and completes restoration wit
 test('Sessions New opens ChatGPT in the retained Sessions Part', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const chatgpt = navigation.getByRole('button', { name: 'New', exact: true });
+	const chatgpt = navigation.getByRole('button', { name: 'New Chat', exact: true });
 	await expect(navigation.getByRole('button', { name: 'ChatGPT', exact: true })).toHaveCount(0);
 	await chatgpt.click();
 	const chat = page.locator('[data-part="sessions"] .ash-sessions-chat-grid .ash-sessions-chat-slot .ash-chatgpt-widget');
@@ -680,7 +680,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 		.filter(id => id !== 'sessions.activity.more' && id !== 'sessions.open.collaboration'));
 	const trace = navigation.getByRole('button', { name: 'Trace', exact: true });
 	await expect(trace).toHaveCount(0);
-	const chat = navigation.getByRole('button', { name: 'New', exact: true });
+	const chat = navigation.getByRole('button', { name: 'New Chat', exact: true });
 	const creator = navigation.getByRole('button', { name: 'Artifacts', exact: true });
 	const editor = new Editor(page.locator('.ash-chatgpt-widget:visible'));
 	await editor.waitForEditorFocus();
@@ -727,7 +727,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.keyboard.press('Home');
 	await expect(chat).toBeFocused();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'New', exact: true }).focus();
+	await navigation.getByRole('button', { name: 'New Chat', exact: true }).focus();
 	const codeAuxiliary = page.locator('[data-part="auxiliarybar"]');
 	const codeAuxiliaryWasVisible = await codeAuxiliary.isVisible();
 	await page.keyboard.press('End');

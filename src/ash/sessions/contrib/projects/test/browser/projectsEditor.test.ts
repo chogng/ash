@@ -217,7 +217,7 @@ suite('Projects toolbar', () => {
 
 			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
 			const card = sidebar.getByRole('button', { name: 'Renamed research', exact: true });
-			await expect(card.locator('.ash-projects-card-mark [data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
+			await expect(card.locator('.ash-sessions-list-project-icon [data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 			await card.click();
 			const note = context.getByRole('button', { name: 'Reading notes', exact: true });
 			await expect(note).toBeVisible();
@@ -522,107 +522,80 @@ suite('Projects toolbar', () => {
 			await expect(rename).toBeFocused();
 		});
 
-		test(`shows localized update times and refreshes them without replacing focused cards (${locale})`, async () => {
+		test(`shows project metadata only in the localized hover preview (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
 			const updatedAt = new Date('2026-10-25T18:00:00Z');
 			const createdAt = updatedAt.getTime() - 5 * 86_400_000;
-			await page.clock.install({ time: updatedAt });
+			await page.clock.setFixedTime(new Date('2026-10-28T18:00:00Z'));
 			await page.goto(
 				`/sessions.html?search&locale=${locale}&projectUpdatedAt=${updatedAt.getTime()}&projectCreatedAt=${createdAt}`,
 			);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const card = page.locator('.ash-projects-card');
-			const caption = card.locator('time.ash-projects-card-caption');
-			await expect(caption).toHaveText(chinese ? '刚刚' : 'Just now');
-			await expect(caption).toHaveAttribute('datetime', updatedAt.toISOString());
 			await expect(card).toHaveAccessibleName('Search project fixture');
-			const absoluteTime = await caption.getAttribute('aria-label');
-			await expect(card).toHaveAccessibleDescription(absoluteTime!);
-			const originalCard = await card.elementHandle();
+			await expect(card).toHaveText('Search project fixture');
+			await expect(card.locator('time')).toHaveCount(0);
+			const preview = page.getByRole('tooltip').locator('.ash-sessions-list-preview');
+			const time = preview.locator('.ash-sessions-list-preview-heading time');
+			await card.hover();
+			await expect(time).toHaveText(chinese ? '3天前' : '3 days ago');
+			await expect(time).toHaveAttribute('datetime', updatedAt.toISOString());
+			await expect(preview.getByText('Synthetic project for Search navigation', { exact: true })).toBeVisible();
+			await expect(preview.locator('.ash-sessions-list-preview-count')).toHaveText(chinese ? '0 个对话' : '0 chats');
+			await page.screenshot({ path: info.outputPath(`projects-hover-preview-${locale}.png`) });
+			await page.mouse.move(700, 100);
+			await expect(preview).toHaveCount(0);
+			await page.clock.setFixedTime(new Date('2026-10-29T18:00:00Z'));
+			await page.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true }).focus();
 			await card.focus();
-			for (const [advance, expected] of [
-				[60_000, chinese ? '1分钟前' : '1 minute ago'],
-				[4 * 60_000, chinese ? '5分钟前' : '5 minutes ago'],
-				[2 * 3_600_000, chinese ? '2小时前' : '2 hours ago'],
-				[3 * 86_400_000, chinese ? '3天前' : '3 days ago'],
-			] as const) {
-				await page.clock.fastForward(advance);
-				await expect(caption).toHaveText(expected);
-				await expect(card).toBeFocused();
-				expect(await originalCard!.evaluate(element => element.isConnected)).toBe(true);
-			}
-			await caption.hover();
-			await expect(page.getByRole('tooltip')).toHaveText(absoluteTime!);
-			await page.screenshot({ path: info.outputPath(`projects-relative-time-${locale}.png`) });
+			await expect(time).toHaveText(chinese ? '4天前' : '4 days ago');
+			await expect(card).toHaveAccessibleDescription(/Search project fixture/);
+			await page.keyboard.press('Escape');
+			await expect(preview).toHaveCount(0);
+			await expect(card).toBeFocused();
 		});
 
-		test(`reveals Pin with More Actions and keeps the pinned glyph visible at rest (${locale})`, async () => {
-			const { page, info } = browser;
+		test(`opens shared project actions by keyboard and preserves pinning (${locale})`, async () => {
+			const { page } = browser;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const row = page.locator('.ash-projects-row');
-			const card = row.locator('.ash-projects-card');
+			const card = row.getByRole('button', { name: 'Search project fixture', exact: true });
 			const heading = page.locator('.ash-projects-empty h2');
-			const pin = row.getByRole('button', { name: chinese ? '置顶' : 'Pin', exact: true });
-			const unpin = row.getByRole('button', { name: chinese ? '取消置顶' : 'Unpin', exact: true });
-			const pinAction = row.locator('[data-action-id="projects.pin"]');
-			const moreAction = row.locator('.ash-toolbar-more-actions');
-			await expect(row.getByRole('toolbar')).toHaveAccessibleName(
-				chinese ? 'Search project fixture 的项目操作' : 'Actions for Search project fixture',
-			);
+			const toolbar = row.getByRole('toolbar');
+			const more = toolbar.getByRole('button', { name: chinese ? '更多项目操作' : 'More project actions', exact: true });
+			const menu = page.getByRole('menu');
+			const pin = menu.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true });
+			const unpin = menu.getByRole('menuitem', { name: chinese ? '取消置顶' : 'Unpin', exact: true });
 			await heading.click();
-			for (const action of [pinAction, moreAction]) {
-				await expect(action).toHaveCSS('opacity', '0');
-				await expect(action).toHaveCSS('pointer-events', 'none');
-			}
+			await expect(toolbar).toHaveCSS('opacity', '0');
+			await expect(toolbar).toHaveCSS('pointer-events', 'none');
 			await card.hover();
-			for (const action of [pinAction, moreAction]) {
-				await expect(action).toHaveCSS('opacity', '1');
-				await expect(action).toHaveCSS('pointer-events', 'auto');
-			}
+			await expect(toolbar).toHaveCSS('opacity', '1');
+			await expect(toolbar).toHaveCSS('pointer-events', 'auto');
 			await page.mouse.move(0, 0);
-			await expect(pinAction).toHaveCSS('opacity', '0');
-			await card.focus();
-			await expect(pinAction).toHaveCSS('opacity', '1');
-			await expect(moreAction).toHaveCSS('opacity', '1');
-			await page.keyboard.press('Tab');
-			await expect(moreAction.getByRole('button')).toBeFocused();
-			await page.keyboard.press('ArrowRight');
+			await expect(toolbar).toHaveCSS('opacity', '0');
+			await card.press('Shift+F10');
 			await expect(pin).toBeFocused();
+			await expect(more).toHaveAttribute('aria-expanded', 'false');
+			await page.keyboard.press('Escape');
+			await expect(card).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(more).toBeFocused();
 			await page.keyboard.press('Enter');
-			await expect(unpin).toHaveAttribute('aria-pressed', 'true');
-			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
-				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
-				await heading.click();
-				await expect(pinAction).toHaveCSS('opacity', '1');
-				await expect(pinAction).toHaveCSS('pointer-events', 'auto');
-				await expect(moreAction).toHaveCSS('opacity', '0');
-				const bounds = (await unpin.boundingBox())!;
-				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
-				await expect(unpin.locator('.ash-icon')).toHaveCSS('width', '18px');
-				await unpin.hover();
-				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'unpin');
-				await expect(page.getByRole('tooltip')).toHaveText(chinese ? '取消置顶' : 'Unpin');
-				expect(await unpin.boundingBox()).toEqual(bounds);
-				await page.screenshot({ path: info.outputPath(`projects-unpin-${locale}-${theme}.png`) });
-				await page.mouse.move(0, 0);
-				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
-				await card.focus();
-				await page.keyboard.press('Tab');
-				await expect(unpin).toBeFocused();
-				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'unpin');
-				expect(await unpin.boundingBox()).toEqual(bounds);
-			}
+			await expect(more).toHaveAttribute('aria-expanded', 'true');
+			await pin.press('Enter');
+			await expect(menu).toHaveCount(0);
+			await expect(more).toBeFocused();
+			await more.press('Enter');
+			await expect(unpin).toBeFocused();
 			await unpin.press('Enter');
-			await expect(pin).toHaveAttribute('aria-pressed', 'false');
-			await expect(pin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pinned');
-			await heading.click();
-			await expect(pinAction).toHaveCSS('opacity', '0');
-			await expect(row.locator('.ash-projects-card-name')).toHaveText('Search project fixture');
+			await more.press('Enter');
+			await expect(pin).toBeVisible();
 		});
 
 		test(`uses the Sessions menu geometry without changing shared menu defaults (${locale})`, async () => {
@@ -733,7 +706,7 @@ suite('Projects toolbar', () => {
 			await heading.focus();
 			await expect(input).toBeVisible();
 			await expect(input).toHaveValue('Search project');
-			await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
+			await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText(['Search project fixture']);
 			await close.click();
 			await expect(input).toBeHidden();
 			await expect(input).toHaveValue('');
@@ -818,7 +791,7 @@ suite('Projects toolbar', () => {
 			await expect(input).toBeFocused();
 			await input.fill('Search project');
 			await expect(input).toBeFocused();
-			await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
+			await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText(['Search project fixture']);
 			await create.focus();
 			await page.keyboard.press('Home');
 			await expect(input).toBeFocused();
@@ -834,7 +807,7 @@ suite('Projects toolbar', () => {
 			await expect(input).toBeHidden();
 			await expect(search).toBeFocused();
 			await expect(input).toHaveValue('');
-			await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
+			await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText(['Search project fixture']);
 			await sort.focus();
 			await page.keyboard.press('ArrowUp');
 			await expect(menu).toBeVisible();
@@ -926,19 +899,19 @@ suite('Projects toolbar', () => {
 					await expect(close).toBeInViewport();
 					expect((await input.boundingBox())!.width, `${theme} at ${width}px, search field ${field.width}px`).toBeGreaterThan(0);
 					await input.fill('Search project');
-					await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
+					await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText(['Search project fixture']);
 					if (theme === 'ash-light') {
 						await page.screenshot({
 							path: browser.info.outputPath(`projects-inline-search-${locale}-${width}.png`),
 						});
 					}
 					await input.fill('No matching project');
-					await expect(page.locator('.ash-projects-card-name')).toHaveCount(0);
+					await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveCount(0);
 					await close.click();
 					await expect(input).toBeHidden();
 					await expect(search).toBeFocused();
 					await expect(input).toHaveValue('');
-					await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
+					await expect(page.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText(['Search project fixture']);
 				}
 			}
 		});
@@ -1119,7 +1092,7 @@ suite('Projects loading states', () => {
 					.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true })
 					.click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
-				await expect(sidebar.locator('.ash-projects-card-name')).toHaveText('Search project fixture');
+				await expect(sidebar.locator('.ash-projects-card .ash-sessions-list-section-label')).toHaveText('Search project fixture');
 				await expect(skeleton).toHaveCount(0);
 				await refresh.evaluate(gate => gate.release());
 				await expect(body).toHaveAttribute('aria-busy', 'false');

@@ -302,7 +302,7 @@ suite('sessions browser component', () => {
 		const conversation = row.getByRole('button', { name: 'Task from Host A', exact: true });
 		const sessionTitle = page.locator('.ash-sessions-titlebar-widget');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
-		await expect(newSession).toHaveText('新建');
+		await expect(newSession).toHaveText('新建会话');
 		await newSession.click();
 		await expect(newSession).toHaveAttribute('aria-current', 'page');
 		await expect(sessionTitle).toBeHidden();
@@ -327,6 +327,31 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker')).toContainText('inherited-project');
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`updates the New activity button and tooltip when switching modes (${locale})`, async () => {
+			const { page } = browserTests;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?catalog&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			const button = page.locator('[data-action-id="sessions.newSession"] > button');
+			const modes = page.locator('.ash-window-mode-control');
+			const checkLabel = async (label: string) => {
+				await expect(button).toHaveAccessibleName(label);
+				await expect(button).toHaveText(label);
+				await button.hover();
+				await expect(page.getByRole('tooltip')).toHaveText(label);
+			};
+			await checkLabel(chinese ? '新建聊天' : 'New Chat');
+			const original = await button.elementHandle();
+			await modes.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+			await checkLabel(chinese ? '新建会话' : 'New Session');
+			expect(await button.evaluate((element, initial) => element === initial, original)).toBe(true);
+			await modes.getByRole('button', { name: chinese ? '聊天 / Agents' : 'Chat / Agents', exact: true }).click();
+			await checkLabel(chinese ? '新建聊天' : 'New Chat');
+			await original?.dispose();
+		});
+	}
+
 	test('renders Sessions navigation with window-owned icons', async () => {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');
@@ -334,7 +359,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 18);
-		const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
+		const newSession = activityNavigation.getByRole('button', { name: 'New Chat', exact: true });
 		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 		await expect(newSession.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
 		await expect(activityNavigation.getByRole('button', { name: 'Customize', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
@@ -353,11 +378,11 @@ suite('sessions browser component', () => {
 		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true });
 		const buttons = activityNavigation.locator('.ash-sessions-navigation .ash-sessions-activity-item');
-		const chatNavigation = ['New', 'Search', 'Projects', 'Artifacts', 'Customize', 'More'];
+		const chatNavigation = ['New Chat', 'Search', 'Projects', 'Artifacts', 'Customize', 'More'];
 		await expect(buttons).toHaveText(chatNavigation);
 		await codeMode.click();
 		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
-		await expect(buttons).toHaveText(['New', 'Search', 'Bots', 'Customize', 'More']);
+		await expect(buttons).toHaveText(['New Session', 'Search', 'Bots', 'Customize', 'More']);
 		await more.press('Enter');
 		await expect(page.getByRole('menuitemradio', { name: 'Symphony', exact: true })).toBeVisible();
 		await expect(collaboration).toHaveCount(0);
@@ -413,7 +438,7 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		const projects = activityNavigation.getByRole('button', { name: 'Projects', exact: true });
 		const search = activityNavigation.getByRole('button', { name: 'Search', exact: true });
-		const chat = activityNavigation.getByRole('button', { name: 'New', exact: true });
+		const chat = activityNavigation.getByRole('button', { name: 'New Chat', exact: true });
 		await expect(page.locator('.ash-sessions-list[data-mode="chat"]')).toBeVisible();
 		await expect(page.locator('.ash-sessions-list [data-item^="untitled:"]')).toHaveCount(0);
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
@@ -1291,7 +1316,7 @@ suite('sessions browser component', () => {
 		const rail = sidebar.locator('.ash-sessions-activity-host.side');
 		const navigation = sidebar.locator('.ash-sessions-navigation');
 		const buttons = navigation.getByRole('button');
-		const newButton = navigation.getByRole('button', { name: '新建', exact: true });
+		const newButton = navigation.getByRole('button', { name: '新建聊天', exact: true });
 		const account = sidebar.getByRole('button', { name: '账户', exact: true });
 		const sidebarToggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 		const position = page.getByRole('menuitem', { name: '活动栏位置' });
@@ -1387,7 +1412,7 @@ suite('sessions browser component', () => {
 		}
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expect(titlebar.getByRole('navigation', { name: 'Chat and Code' })).toHaveCount(0);
-		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
+		await expect(activityNavigation.getByRole('button', { name: 'New Chat', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'code');
 		await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 		const titlebarActionNames = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
@@ -1400,7 +1425,7 @@ suite('sessions browser component', () => {
 		expect(buttonBounds.every((button, index) => button.right < titlebarBounds!.x + titlebarBounds!.width / 2 && (index === 0 || button.left > buttonBounds[index - 1].left))).toBe(true);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const mode = titlebar.locator('.ash-window-mode-control');
-		const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
+		const newSession = activityNavigation.getByRole('button', { name: 'New Chat', exact: true });
 		let sidebarWidth = (await sidebar.boundingBox())!.width;
 		expect(sidebarWidth).toBeGreaterThan(270);
 		for (const delta of [0, -110, -50, 120]) {
@@ -1862,7 +1887,7 @@ suite('sessions browser component', () => {
 		await expect(accounts).toBeHidden();
 		await expect(modes).toBeHidden();
 		await expect(page.getByRole('toolbar', { name: chinese ? '界面模式' : 'Workspace mode', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('button', { name: chinese ? '新建' : 'New', exact: true })).toHaveCount(0);
+		await expect(page.locator('[data-action-id="sessions.newSession"]')).toHaveCount(0);
 		await expect(page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true })).toHaveCount(0);
 		await expect.poll(async () => Math.round((await sessions.boundingBox())!.width - expanded.width)).toBe(Math.round(sidebarWidth));
 		await expect.poll(async () => Math.round((await sessions.boundingBox())!.x)).toBe(0);

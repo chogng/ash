@@ -825,7 +825,7 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		const commands = new QuickAccess(page);
 		const web = page.getByRole('region', { name: 'ChatGPT', exact: true });
 		const native = page.getByRole('region', { name: 'ChatGPT（实验性）', exact: true });
-		const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建', exact: true });
+		const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建聊天', exact: true });
 		await expect(native).toBeVisible();
 		await expect(web).toBeHidden();
 		const savedChat = page.locator('[data-item="chatgpt-native:history-one"] .ash-sessions-list-item');
@@ -2207,7 +2207,7 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(editor.getByRole('button', { name: '停止', exact: true })).toBeHidden();
 		};
 
-		await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建', exact: true }).click();
+		await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建聊天', exact: true }).click();
 		await sendChatGPT('First ChatGPT message');
 		const chatGPTRow = sidebar.locator('[data-item="chatgpt:fixture-live"] .ash-sessions-list-item');
 		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
@@ -3093,7 +3093,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await using catalog = createAshModelServer(ashRequests);
 			await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
-			const newLabel = locale === 'en' ? 'New' : '新建';
+			const newLabel = locale === 'en' ? 'New Chat' : '新建聊天';
 			const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: newLabel, exact: true });
 			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
 			await expect(newChat).toBeVisible();
@@ -3164,7 +3164,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const answer = editor.locator('.ash-chat-item-agentMessage').last();
 			await expect(answer).toContainText('First chunk');
 			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeVisible();
-			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
+			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New Chat' : '新建聊天', exact: true }).click();
 			await expect(answer).toContainText('First chunk');
 			await expect(editor).toBeVisible();
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(1);
@@ -3226,7 +3226,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');
-			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
+			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New Chat' : '新建聊天', exact: true }).click();
 			await expect(editor.locator('.ash-chat-item')).toHaveCount(0);
 			await composer.waitForEditorContents(text => text === 'Independent new chat draft');
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();

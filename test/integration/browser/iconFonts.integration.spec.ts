@@ -181,7 +181,7 @@ test('Sessions loads its full WOFF2 profile without changing the IDE window', as
 		await agents.goto('/sessions.html?automations');
 		await expect(agents.locator('body')).toHaveAttribute('data-ready', 'true');
 		const navigation = agents.locator('.ash-sessions-activity-content');
-		const icon = navigation.getByRole('button', { name: 'New', exact: true }).locator('span.ash-icon');
+		const icon = navigation.getByRole('button', { name: /^New (Chat|Session)$/u }).locator('span.ash-icon');
 		await expectIconFontLoaded(icon);
 		const glyph = icon;
 		await expect(glyph).toHaveCSS('font-family', '"Ash UI Variable"');
