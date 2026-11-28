@@ -423,6 +423,7 @@
 		"--ash-editor-content-left-inset",
 		"--ash-editor-content-right-inset",
 		"--ash-editor-content-top-inset",
+		"--ash-editor-group-header-separator",
 		"--ash-editor-group-header-surface",
 		"--ash-editor-tab-rows",
 		"--ash-editor-tabs-edge-fade-width",

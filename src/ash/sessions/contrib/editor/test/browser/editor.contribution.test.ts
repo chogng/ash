@@ -20,6 +20,7 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import { CODE_EDITOR_ID } from '../../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import { ActiveEditorContext, AppServerAvailableContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../../workbench/common/contextkeys.js';
 import { IChatAttachmentResolveService } from '../../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { EmptyFileEditorInput } from '../../../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
 import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../../workbench/contrib/terminal/common/terminal.js';
 import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
@@ -198,16 +199,24 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	using activity = menus.createMenu(Menus.SessionActivityBar);
 	const changesAction = () => activity.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
+	const detailsSplitButtonId = `submenu.${Menus.DetailsToggle.id}`;
+	const detailsButton = () => desktopTitle.getActions()
+		.find(([group]) => group === 'navigation')?.[1]
+		.find(action => action.id === detailsSplitButtonId);
+	const detailsActions = () => {
+		const button = detailsButton();
+		assert.ok(button instanceof SubmenuItemAction);
+		return button.actions.filter(action => action instanceof MenuItemAction);
+	};
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.maximizeTool'), undefined);
-	assert.deepEqual(headerActions().map(action => action.id), ['submenu.SessionsDetailsToggle']);
-	const detailsActions = () => (headerActions()[0] as SubmenuItemAction).actions.filter(action => action instanceof MenuItemAction);
+	assert.deepEqual(headerActions().map(action => action.id), []);
 	assert.deepEqual(detailsActions().map(action => action.id), ['ash.sessions.toggleDetails',
 		...['top', 'bottom', 'left', 'right', 'floating'].map(position => `ash.sessions.detailsPosition.${position}`)]);
 	assert.equal(detailsActions().find(action => action.id === 'ash.sessions.detailsPosition.right')?.checked, true);
 	await commands.executeCommand('ash.sessions.detailsPosition.left');
 	assert.equal(detailsActions().find(action => action.id === 'ash.sessions.detailsPosition.left')?.checked, true);
 	contextKeys.setContext('sessions.editorHasMultipleTools', true);
-	assert.deepEqual(headerActions().map(action => action.id), ['submenu.SessionsDetailsToggle', 'ash.sessions.hideTool']);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopTitle.getActions().find(([group]) => group === '9_layout')?.[1].map(action => action.id),
 		['ash.sessions.toggleDetails', 'ash.sessions.showEditor']);
@@ -262,8 +271,20 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
+	const resourceScheme = ResourceSchemeContext.bindTo(contextKeys);
+	for (const scheme of [EmptyFileEditorInput.SCHEME, 'file', 'ash-remote']) {
+		resourceScheme.set(scheme);
+		assert.ok(detailsButton());
+		assert.ok(!headerActions().some(action => action.id === detailsSplitButtonId));
+	}
+	await commands.executeCommand('ash.sessions.hideEditor');
+	assert.ok(detailsButton());
+	assert.ok(!headerActions().some(action => action.id === detailsSplitButtonId));
+	await commands.executeCommand('ash.sessions.showEditor');
 	ActiveEditorContext.bindTo(contextKeys).set('ash.sessions.changesEditor');
 	ResourceSchemeContext.bindTo(contextKeys).set('ash-session-changes');
+	assert.ok(!desktopIds().includes(detailsSplitButtonId));
+	assert.ok(!headerActions().some(action => action.id === detailsSplitButtonId));
 	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
 	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
 	flatLayout.set(false);
@@ -329,6 +350,7 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 	layoutChanged.fire();
 	documentContent.set(false, undefined);
 	assert.deepEqual(headerActions(), []);
+	assert.ok(!desktopIds().includes(detailsSplitButtonId));
 	contextKeys.setContext('sessions.chatConversationPage', true);
 	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.hideTool']);
 	contextKeys.setContext('sessions.editorHasMultipleTools', false);
@@ -367,7 +389,8 @@ test('editor contributions follow layout state, serialize Add Tab commands and r
 		documentContent.set(true, undefined);
 		using translated = registerEntryActions();
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['详情位置', '隐藏工具区域']);
+		assert.equal(detailsButton()?.label, '详情位置');
+		assert.deepEqual(headerActions().map(action => action.label), ['隐藏工具区域']);
 		assert.deepEqual(detailsActions().map(action => action.label), ['切换详情', '编辑器上方', '编辑器下方', '左侧', '右侧', '浮动']);
 		appServerAvailable.set(true);
 		assert.deepEqual(addTabLabels(), ['打开文件', '打开更改', '新建终端']);

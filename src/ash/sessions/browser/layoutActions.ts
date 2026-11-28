@@ -393,6 +393,7 @@ export function registerDesktopEditorLayoutActions(
 		id: 'ash.sessions.showEditor',
 		title: localize2({ bundle: 'ash', key: 'sessions.layout.showEditor' }, 'Show editor'),
 	};
+	const detailsWhen = ContextKeyExpr.and(codeWhen, filesTool);
 	disposables.add(
 		MenusRegistry.appendMenuItems([
 			{
@@ -400,15 +401,15 @@ export function registerDesktopEditorLayoutActions(
 				item: { command: { ...toggleDetails, icon: Lxicon.listUnordered }, group: 'navigation' },
 			},
 			{
-				id: Menus.SessionsEditorHeaderLayout,
+				id: Menus.SessionsEditorTitle,
 				item: {
 					submenu: Menus.DetailsToggle,
 					title: localize('sessions.layout.detailsPosition', 'Details Position'),
 					icon: Lxicon.listUnordered,
 					isSplitButton: { excludePrimaryActionFromDropdown: true },
-					when: ContextKeyExpr.and(codeWhen, filesTool),
+					when: detailsWhen,
 					group: 'navigation',
-					order: 2,
+					order: 101,
 				},
 			},
 			{
@@ -468,7 +469,7 @@ export function registerDesktopEditorLayoutActions(
 				id: Menus.SessionsEditorTitle,
 				item: {
 					command: { ...toggleDetails, icon: Lxicon.listUnordered },
-					when: ContextKeyExpr.and(codeWhen, filesTool),
+					when: detailsWhen,
 					group: '9_layout',
 					order: 90,
 				},

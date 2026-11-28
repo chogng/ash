@@ -11,6 +11,7 @@ import { computeScreenAwareSize, type IDimension } from '../../../base/browser/d
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
+import { SessionsCodeEditorContext } from '../../../workbench/common/contextkeys.js';
 import type { IEditorGroupView, IEditorGroupViewOptions } from '../../../workbench/browser/parts/editor/editor.js';
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
@@ -121,7 +122,8 @@ export class DesktopMainEditorPart extends EditorPart {
 
 	private getDockedAuxiliaryBar(): DockedAuxiliaryBarController {
 		return this.dockedAuxiliaryBar ??= this._register(new DockedAuxiliaryBarController(this.domNode, {
-			getTabsHeight: () => !this.productDetails && this.activeGroup.tabsHosted ? 0 : this.getTabsHeight(),
+			// The local action row spans the dock even when the tabs move to the window title bar.
+			getTopInset: () => this.getTabsHeight(),
 			setEditorContentInsets: insets => this.setContentInsets(insets),
 			setEditorContentVisible: visible => this.setEditorContentVisible(visible),
 			setSize: (size, vertical) => this.resizeDetails(size, vertical),
@@ -261,7 +263,8 @@ export class DesktopMainEditorPart extends EditorPart {
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
 			showHeader: true,
-			showHeaderFor: editor => !!editor && !(editor instanceof EmptyFileEditorInput),
+			showHeaderFor: editor => !!editor && !(editor instanceof EmptyFileEditorInput)
+				|| this.services.get(IContextKeyService).getValue(SessionsCodeEditorContext.key) === true,
 			hostLayoutActionsWithTabs: true,
 			showEditorToolbar: true,
 			createEmptyState: createEmptyEditorGroupAddTab,

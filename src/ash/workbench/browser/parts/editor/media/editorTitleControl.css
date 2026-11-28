@@ -126,6 +126,14 @@
 	gap: var(--ash-spacing-size40);
 }
 
+.ash-editor-group-header::after {
+	position: absolute;
+	inset: auto 0 0;
+	border-block-end: var(--ash-editor-group-header-separator, none);
+	content: "";
+	pointer-events: none;
+}
+
 .ash-editor-group-header > .ash-editor-tabs-control {
 	align-self: center;
 }

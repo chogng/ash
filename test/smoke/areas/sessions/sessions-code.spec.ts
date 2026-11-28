@@ -313,7 +313,8 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	await expect(content).toBeVisible();
 	await commands.runCommand('workbench.agentSessions.action.viewChanges');
 	await expect(editor.locator('.ash-sessions-changes-editor')).toBeVisible();
-	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(2);
+	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(1);
+	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await expect(page.locator('[data-code-card], .ash-code-editor-card')).toHaveCount(0);
 	if (target.appServerMode === 'required') {
 		await commands.runCommand('ash.sessions.togglePanel');
@@ -329,24 +330,42 @@ test('Code keeps Files open until its tab closes', async ({ application, target,
 	const editor = () => page.locator('[data-part="editor"]');
 	const files = () => editor().locator('.ash-desktop-auxiliarybar');
 	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
-	const header = () => editor().locator('[data-editor-tool=files] .ash-editor-group-header:visible').first();
-	await expect(files()).toBeVisible();
-	await expect(header()).toHaveCount(0);
+	const group = () => editor().locator('[data-editor-tool="files"] .ash-editor-group:visible');
+	const header = () => group().locator('.ash-editor-group-header');
+	const expectFilesBelowToolbar = async (): Promise<void> => {
+		await expect(header().getByRole('button', { name: 'Details Position', exact: true })).toBeVisible();
+		await expect(files()).toBeVisible();
+		await expect.poll(async () => {
+			const [bounds, toolbar, tree, separator] = await Promise.all([
+				group().boundingBox(), header().boundingBox(), files().boundingBox(),
+				header().evaluate(element => {
+					const style = getComputedStyle(element, '::after');
+					return { width: parseFloat(style.width), bottom: style.bottom, borderWidth: style.borderBottomWidth, borderStyle: style.borderBottomStyle };
+				}),
+			]);
+			if (!bounds || !toolbar || !tree) return;
+			return {
+				fullWidth: Math.abs(toolbar.x - bounds.x) <= 1 && Math.abs(toolbar.width - bounds.width) <= 1,
+				treeBelowToolbar: Math.abs(toolbar.y + toolbar.height - tree.y) <= 1,
+				separatorAcrossToolbar: separator.bottom === '0px' && separator.borderWidth === '1px'
+					&& separator.borderStyle === 'solid' && Math.abs(separator.width - toolbar.width) <= 1,
+			};
+		}).toEqual({ fullWidth: true, treeBelowToolbar: true, separatorAcrossToolbar: true });
+	};
+	await expectFilesBelowToolbar();
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
 	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
-	await expect(header()).toBeVisible();
+	await expectFilesBelowToolbar();
 	await new QuickAccess(page).runCommand('workbench.action.closeActiveEditor');
 	await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
-	await expect(files()).toBeVisible();
-	await expect(header()).toHaveCount(0);
+	await expectFilesBelowToolbar();
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	page = await workbench.reopenAgentsWindow(application, page);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(files()).toBeVisible();
+	await expectFilesBelowToolbar();
 	await expect(editor()).toBeVisible();
-	await expect(header()).toHaveCount(0);
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
 	await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await testInfo.attach('code-group-file-navigation', { body: await page.screenshot(), contentType: 'image/png' });

@@ -6,7 +6,7 @@ import { NoWorkbenchPartFrameInsets, type WorkbenchPartFrameInsets } from '../..
 import type { SessionsDetailsPosition } from '../common/configuration.js';
 
 interface IDockedAuxiliaryBarHost {
-	getTabsHeight(): number;
+	getTopInset(): number;
 	setEditorContentInsets(insets: WorkbenchPartFrameInsets): void;
 	setEditorContentVisible(visible: boolean): void;
 	setSize(size: number, vertical: boolean): void;
@@ -25,7 +25,7 @@ interface DockedAuxiliaryBarLayout {
 	readonly collapse?: () => void;
 }
 
-/** Positions a retained AuxiliaryBarPart below the editor tabs and owns its resize sash. */
+/** Positions a retained AuxiliaryBarPart below the editor group's header and owns its resize sashes. */
 export class DockedAuxiliaryBarController extends Disposable {
 	static readonly MIN_WIDTH = 220;
 	private static readonly COLLAPSE_WIDTH = 4;
@@ -38,7 +38,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 	private top = 0;
 	private left = 0;
 	private height = 0;
-	private tabsHeight = 0;
+	private topInset = 0;
 	private position: SessionsDetailsPosition = 'right';
 	private layingOut = false;
 	private collapse: (() => void) | undefined;
@@ -47,7 +47,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		super();
 		this.sideSash = this.createSash(Orientation.VERTICAL, {
 			getVerticalSashLeft: () => this.position === 'left' ? this.width : this.left,
-			getVerticalSashTop: () => this.tabsHeight,
+			getVerticalSashTop: () => this.topInset,
 			getVerticalSashHeight: () => this.height,
 		});
 		this.horizontalSash = this.createSash(Orientation.HORIZONTAL, {
@@ -110,11 +110,11 @@ export class DockedAuxiliaryBarController extends Disposable {
 			const { part, requestedSize, editorVisible, minimumSize, minimumEditorSize, hideWhenConstrained, position } = options;
 			this.collapse = options.collapse;
 			this.position = position;
-			this.tabsHeight = Math.min(this.host.getTabsHeight(), dimension.height);
-			const bodyHeight = dimension.height - this.tabsHeight;
+			const floating = editorVisible && position === 'floating';
+			this.topInset = Math.min(this.host.getTopInset(), dimension.height);
+			const bodyHeight = dimension.height - this.topInset;
 			const vertical = position === 'top' || position === 'bottom';
 			const bodySize = vertical ? bodyHeight : dimension.width;
-			const floating = editorVisible && position === 'floating';
 			const gap = floating ? DockedAuxiliaryBarController.FLOATING_INSET : 0;
 			const available = Math.max(0, bodySize - (floating ? 2 * gap : minimumEditorSize));
 			let size = 0;
@@ -126,7 +126,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 			this.height = vertical ? size : bodyHeight;
 			if (floating) this.height = Math.max(0, Math.min(DockedAuxiliaryBarController.FLOATING_HEIGHT, this.height - 2 * gap));
 			this.left = position === 'right' || position === 'floating' ? dimension.width - this.width - gap : 0;
-			this.top = position === 'bottom' ? dimension.height - this.height : this.tabsHeight + gap;
+			this.top = position === 'bottom' ? dimension.height - this.height : this.topInset + gap;
 			const visible = this.width > 0 && this.height > 0;
 			const split = visible && editorVisible && position !== 'floating';
 			if (part) {
