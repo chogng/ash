@@ -775,7 +775,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ISessionsWorkspaceContextService, {
 			getHostWorkspace: options.workspace,
 			bindLocalWorkspaceFolder: options.bindLocalWorkspaceFolder,
-			updateWorkspace: next => configurationService.updateWorkspace(next),
+			updateWorkspace: (next, resolvedWorkspace) => configurationService.updateWorkspace(next, resolvedWorkspace),
 		});
 		services.registerInstance(IWorkspaceContextService, configurationService);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));

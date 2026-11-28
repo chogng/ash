@@ -1,9 +1,10 @@
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../workbench/services/sessions/common/session.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import { autorun, constObservable, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import type { IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -67,6 +68,7 @@ export abstract class BaseLayoutController extends Disposable {
 	private editorSession: string | undefined;
 	private requestedSession: string | undefined;
 	private requestedThread: string | undefined;
+	private requestedDraftRoot: string | undefined;
 	private requestedLayout: IChatLayoutSnapshot | undefined;
 	private revision = 0;
 	private scheduledRevision = -1;
@@ -149,6 +151,7 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 		});
 		const workspaceChanged = observableSignalFromEvent(this, this.workspace.onDidChangeWorkspace);
+		const workspaceFolders = observableFromEvent(this, this.workspace.onDidChangeWorkspaceFolders, () => this.workspace.getWorkspace().folders);
 		const partVisibilityChanged = observableSignalFromEvent(this, this.layout.onDidChangePartVisibility);
 		this._register(autorun(reader => {
 			for (const [draft, created] of this.management.materializedSessions.read(reader)) {
@@ -179,8 +182,11 @@ export abstract class BaseLayoutController extends Disposable {
 			const selection = selected.activeSelection;
 			const key = selection ? this.sessionKey(selection) : undefined;
 			const threadId = selection?.kind === 'session' ? selection.active.threadId : undefined;
-			// A pending directory restore follows the Thread; working sets remain Session-owned.
-			if (key !== this.requestedSession || threadId !== this.requestedThread || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
+			const draftRoot = selection?.kind === 'untitled' && selection.session.workspace.type === 'local' ? selection.session.workspace.root : undefined;
+			// Directory readiness follows the selected Thread or draft folder, even when the working set owner stays the same.
+			const draftFolderChanged = key !== this.editorSession && draftRoot !== this.requestedDraftRoot;
+			this.requestedDraftRoot = draftRoot;
+			if (key !== this.requestedSession || threadId !== this.requestedThread || draftFolderChanged || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
 				if (key !== this.requestedSession || layoutSnapshot.presentation !== this.requestedLayout?.presentation) this.captureEditors();
 				if (key && this.editorSession && this.requestedLayout && layoutSnapshot.presentation.mode !== this.requestedLayout.presentation.mode
 					&& chatLayoutOwnersEqual(layoutSnapshot.owner, this.requestedLayout.owner) && !this.workingSets.has(key)) {
@@ -197,7 +203,11 @@ export abstract class BaseLayoutController extends Disposable {
 				this.revision += 1;
 				this.editorWorkingSets.setRestoreState({ ...this.editorWorkingSets.restoreState.get(), restoring: !!selection, applying: false });
 			}
-			workspaceChanged.read(reader);
+			if (selection?.kind === 'session') {
+				workspaceChanged.read(reader);
+			} else {
+				workspaceFolders.read(reader);
+			}
 			partVisibilityChanged.read(reader);
 
 			if (!this.canRestoreSessionEditors(reader) || !selection || selected.visibleSelections.length !== 1) {
@@ -228,6 +238,16 @@ export abstract class BaseLayoutController extends Disposable {
 					if (directory === undefined) { throw canceled(); }
 					const uri = directory ? sessionWorkspaceUri(directory) : undefined;
 					if (uri ? folders.length !== 1 || !extUriBiasedIgnorePathCase.isEqual(folders[0]!.uri, uri) : folders.length !== 0) { throw canceled(); }
+				} else if (draftRoot && key && this.editorSession !== key && this.workingSets.has(key)) {
+					const target = URI.file(draftRoot);
+					if (!workspaceFolders.get().some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, target))) {
+						// A completed projection can be empty when its directory cannot be mounted.
+						const completedWorkspace = this.workspace.getCompleteWorkspace?.();
+						if (completedWorkspace) {
+							await raceCancellationError(completedWorkspace, signal);
+							if (this.isDisposed || revision !== this.revision) { return; }
+						}
+					}
 				}
 				await this.restoreEditors(selection);
 				if (revision !== this.revision || this.isDisposed) {

@@ -603,8 +603,19 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			if (!this.isDisposed) { this.onDidFinishOpenEditor?.(); }
 		});
 		using identityLifetime = this.uriIdentity.retainUri(input.resource);
-		const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
-		if (!(identity instanceof URI)) await identity;
+		try {
+			const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
+			if (!(identity instanceof URI)) await identity;
+		} catch (error) {
+			if (!options.restoring) {
+				// Explicit file opens can report access failures through their caller.
+				throw error;
+			}
+			if (this.isDisposed || sequence !== this.openSequence) {
+				throw new EditorOpenSupersededError(input);
+			}
+			return handleOpenError(error, this.entry(input));
+		}
 		this.assertNotDisposed();
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		let existing = this.entry(input);
@@ -804,7 +815,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const pane = this.instantiationService.createInstance(ErrorPlaceholderEditor,
 			displayError,
-			() => this.openEditor(input, { ...options, source: EditorOpenSource.USER }),
+			() => this.openEditor(input, { ...options, inactive: false, source: EditorOpenSource.USER }),
 			() => this.closeEditor(input),
 		);
 		const paneInstance = this.panes.create(pane);

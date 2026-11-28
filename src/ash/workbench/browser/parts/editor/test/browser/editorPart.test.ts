@@ -107,6 +107,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
 import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
+import { AppServerRemoteError } from '../../../../../../platform/agentHost/common/appServerError.js';
 import type { FsReadPathCaseSensitivityResult } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import {
@@ -5319,6 +5320,58 @@ test('EditorPart rejects an open superseded by ordinary content', async () => {
 
 	editor.dispose();
 	dom.window.close();
+});
+
+test('working set restores other tabs when a saved file cannot resolve its path identity', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domCleanup = toDisposable(() => dom.window.close());
+	const host = createDisconnectedRendererApi();
+	using connectionChanged = new Emitter<void>();
+	let denyFile = false;
+	using provider = new AgentHostFileSystemProvider({
+		directories: () => [{ uri: URI.file('/project'), target: { type: 'environment', dirId: 'project' } }],
+		resourceApi: host.resource,
+		api: {
+			...host.fs,
+			onDidChangeConnection: connectionChanged.event,
+			async readPathCaseSensitivity({ path }) {
+				if (denyFile && path === 'locked.ts') {
+					throw new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' });
+				}
+				return { scopes: [{ path: '.', sensitivity: 'unknown' }] };
+			},
+		},
+	});
+	using files = new FileService();
+	using registration = files.registerProvider('file', provider);
+	using parent = new TestUriIdentityServices(files);
+	const registry = new EditorPaneRegistry();
+	using paneRegistration = registry.registerEditorPane(
+		descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')),
+	);
+	using editor = createEditorPart(dom.window.document.body, { registry }, parent);
+	const locked = input('/project/locked.ts');
+	const readable = input('/project/readable.ts');
+	await editor.openEditor(locked, { pinned: true });
+	await editor.openEditor(readable, { pinned: true });
+	editor.activeGroup.activateEditor(locked);
+	const saved = editor.saveWorkingSet('before-permission-change');
+
+	denyFile = true;
+	connectionChanged.fire();
+	await editor.applyWorkingSet(saved);
+	const group = editor.activeGroup;
+	assert.deepEqual(group.inputs.map(input => input.resource.path), ['/project/locked.ts', '/project/readable.ts']);
+	assert.equal(group.activePane?.id, 'workbench.editor.openError');
+	assert.equal(group.getEditorPane(readable)?.id, 'stanza.editor.code');
+
+	denyFile = false;
+	const retry = editor.domNode.querySelector<HTMLButtonElement>('.ash-editor-open-error-actions button');
+	assert.ok(retry);
+	retry.click();
+	await nextTask();
+	assert.equal(group.activeInput?.resource.path, '/project/locked.ts');
+	assert.equal(group.activePane?.id, 'stanza.editor.code');
 });
 
 test('slow directory identity cannot replace a newer editor or ordinary content', async () => {

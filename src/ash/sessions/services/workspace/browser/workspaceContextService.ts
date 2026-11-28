@@ -7,5 +7,5 @@ export const ISessionsWorkspaceContextService = createServiceIdentifier<ISession
 export interface ISessionsWorkspaceContextService {
 	getHostWorkspace(): IWorkspace;
 	bindLocalWorkspaceFolder?(folder: IWorkspaceFolder): Promise<boolean>;
-	updateWorkspace(workspace: IWorkspace): void;
+	updateWorkspace(workspace: IWorkspace, resolvedWorkspace?: Promise<IWorkspace>): void;
 }

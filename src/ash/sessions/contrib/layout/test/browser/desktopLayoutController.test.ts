@@ -23,16 +23,20 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IWorkspaceContextService, type IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import { TestWorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
+import { TestConfigurationFiles } from '../../../../../workbench/services/configuration/test/common/testServices.js';
+import { UserDataProfileService } from '../../../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { IUserDataProfileService } from '../../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycleService.js';
 import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../../workbench/services/editor/common/editorWorkingSet.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../../workbench/services/sessions/common/session.js';
+import { ConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
+import type { IActiveSessionThread, ISession, IUntitledChatSession, SessionWorkspaceSelection } from '../../../../../workbench/services/sessions/common/session.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
@@ -286,6 +290,38 @@ suite('DesktopLayoutController', () => {
 		assert.deepEqual(fixture.editor.current, workingSet('saved', 'saved.ts'));
 	});
 
+	for (const outcome of ['bound', 'unavailable', 'switched'] as const) {
+		test(`saved draft waits for its workspace projection (${outcome})`, async () => {
+			const projection = new DeferredPromise<IWorkspace>();
+			const saved = workingSet('saved', 'saved.ts');
+			using fixture = new LayoutFixture([{ sessionResource: 'untitled:draft-0', editorWorkingSet: saved }]);
+			const root = '/draft';
+			fixture.sessions.openNewSession('Saved draft', { workspace: { type: 'local', root } });
+			const empty: IWorkspace = { id: 'host', folders: [] };
+			const mounted: IWorkspace = { ...empty, folders: [{ id: 'draft', uri: URI.file(root), name: 'draft', index: 0 }] };
+			const addedFolders: string[] = [];
+			using workspaceChanged = fixture.workspace.onDidChangeWorkspaceFolders(event => {
+				addedFolders.push(...event.added.map(folder => folder.uri.path));
+			});
+			fixture.workspace.updateWorkspace(empty, projection.p);
+			fixture.lifecycle.phase = LifecyclePhase.Ready;
+			fixture.controller.start();
+			await Promise.resolve();
+			assert.deepEqual(fixture.editor.applied, []);
+
+			if (outcome === 'switched') {
+				await fixture.open('b');
+			}
+			await projection.complete(outcome === 'unavailable' ? empty : mounted);
+			await fixture.controller.whenSettled();
+			assert.equal(fixture.workspace.getWorkspace().id, outcome === 'switched' ? 'b' : 'host');
+			assert.deepEqual(fixture.workspace.getWorkspace().folders.map(folder => folder.uri.path), outcome === 'bound' ? [root] : []);
+			assert.deepEqual(addedFolders, outcome === 'bound' ? [root] : []);
+			assert.deepEqual(fixture.editor.applied, outcome === 'switched' ? [] : [saved]);
+			assert.deepEqual(fixture.errors, []);
+		});
+	}
+
 	test('materializing a Code draft carries live editors into the created session', async () => {
 		using fixture = await createFixture();
 		const draft = fixture.sessions.openNewSession('Code draft');
@@ -454,8 +490,8 @@ class TestCatalog extends Disposable {
 		this.activeUntitledSession = undefined;
 		this.changed.fire();
 	}
-	public createUntitledSession(title: string): IUntitledChatSession {
-		const draft: IUntitledChatSession = { untitledSessionId: `draft-${this.untitledSessions.length}`, title, workspace: { type: 'current' }, model: undefined, agent: undefined };
+	public createUntitledSession(title: string, workspace: SessionWorkspaceSelection = { type: 'current' }): IUntitledChatSession {
+		const draft: IUntitledChatSession = { untitledSessionId: `draft-${this.untitledSessions.length}`, title, workspace, model: undefined, agent: undefined };
 		this.untitledSessions = [...this.untitledSessions, draft];
 		return draft;
 	}
@@ -484,7 +520,7 @@ class LayoutFixture extends Disposable {
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly catalog = this._register(new TestCatalog());
 	public readonly editor = this._register(new TestEditors());
-	public readonly workspace = this._register(new TestWorkspaceService({ id: 'a', folders: [] }));
+	public readonly workspace: ConfigurationService;
 	public readonly errors: string[] = [];
 	public readonly loggedErrors: unknown[] = [];
 	public readonly partsChanged = this._register(new Emitter<void>());
@@ -506,6 +542,10 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this.configuration);
+		this.services.registerInstance(IFileService, this._register(new TestConfigurationFiles()));
+		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.loggedErrors.push(entry.error) }] })));
+		this.services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		this.workspace = this._register(this.services.createInstance(ConfigurationService, { workspace: { id: 'a', folders: [] } }));
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(ISessionsManagementService, this.catalog as unknown as ISessionsManagementService);
 		this.services.registerInstance(ICustomViewService, this._register(new CustomViewService(new NullLoggerService(), this.storage)));
@@ -524,7 +564,6 @@ class LayoutFixture extends Disposable {
 			hidePart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = false; } else { this.editorVisible = false; } },
 		} as unknown as ILayoutService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => this.errors.push(message) } as unknown as INotificationService);
-		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.loggedErrors.push(entry.error) }] })));
 		this._register(this.sessions.onDidChange(() => {
 			const selected = this.sessions.activeSelection;
 			if (this.followWorkspace && selected?.kind === 'session') {

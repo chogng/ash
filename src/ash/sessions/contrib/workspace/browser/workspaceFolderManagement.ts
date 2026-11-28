@@ -1,7 +1,7 @@
 import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri, type IActiveSessionThread } from '../../../../workbench/services/sessions/common/session.js';
 import { buildAgentHostSessionWorkspace } from '../../../../workbench/contrib/sessions/common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceFolderId, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
+import { sessionWorkspaceFolderId, type IWorkspace, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
@@ -13,7 +13,7 @@ import { IWorkspaceFolderLabelService } from '../../../services/workspaceFolderL
 export class WorkspaceFolderManagementContribution extends Disposable {
 	static readonly ID = 'workbench.contrib.workspaceFolderManagement';
 
-	private draftFolder: { readonly folder: IWorkspaceFolder; bound: boolean; } | undefined;
+	private draftFolder: { readonly hostId: string; readonly folder: IWorkspaceFolder; readonly workspace: Promise<IWorkspace>; } | undefined;
 
 	constructor(
 		@ISessionsWorkspaceContextService private readonly workspaceContext: ISessionsWorkspaceContextService,
@@ -44,27 +44,26 @@ export class WorkspaceFolderManagementContribution extends Disposable {
 			}
 			const known = host.folders.filter(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri));
 			if (target.type === 'local' && !known.length && this.workspaceContext.bindLocalWorkspaceFolder) {
-				if (!this.draftFolder || !extUriBiasedIgnorePathCase.isEqual(this.draftFolder.folder.uri, uri)) {
+				const empty = { id: host.id, folders: [] };
+				if (!this.draftFolder || this.draftFolder.hostId !== host.id || !extUriBiasedIgnorePathCase.isEqual(this.draftFolder.folder.uri, uri)) {
 					const hash = new StringSHA1();
 					hash.update(uri.toString());
 					const folder = { id: `draft:${hash.digest()}`, uri, name: basename(uri), index: 0 };
-					const request = { folder, bound: false };
-					this.draftFolder = request;
-					void this.workspaceContext.bindLocalWorkspaceFolder(folder).then(bound => {
-						if (this.isDisposed || this.draftFolder !== request) return;
-						if (!bound) {
+					const workspace: Promise<IWorkspace> = this.workspaceContext.bindLocalWorkspaceFolder(folder).then(bound => {
+						if (!bound && this.draftFolder?.workspace === workspace) {
 							this.draftFolder = undefined;
-							return;
 						}
-						request.bound = true;
-						this.updateSelection();
+						return bound ? { id: host.id, folders: [folder] } : empty;
 					}, error => {
-						if (this.isDisposed || this.draftFolder !== request) return;
-						this.draftFolder = undefined;
-						onUnexpectedError(error);
+						if (!this.isDisposed && this.draftFolder?.workspace === workspace) {
+							this.draftFolder = undefined;
+							onUnexpectedError(error);
+						}
+						return empty;
 					});
+					this.draftFolder = { hostId: host.id, folder, workspace };
 				}
-				this.workspaceContext.updateWorkspace({ id: host.id, folders: this.draftFolder.bound ? [this.draftFolder.folder] : [] });
+				this.workspaceContext.updateWorkspace(empty, this.draftFolder.workspace);
 				return;
 			}
 			this.draftFolder = undefined;
