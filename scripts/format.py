@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+from io import BytesIO
 from fnmatch import fnmatchcase
 import json
 import os
@@ -407,15 +408,89 @@ def scoped(
     paths: list[str],
     changed: str | None,
     language: str | None,
+    staged: bool = False,
+    full: bool = False,
 ) -> int:
-    selected = select_files(paths, changed)
+    tree = git("write-tree").decode().strip() if staged else None
+    if tree:
+        tracked = {
+            os.fsdecode(path)
+            for entry in git("ls-tree", "-r", "-z", tree).split(b"\0")
+            if entry
+            for metadata, path in [entry.split(b"\t", 1)]
+            if metadata.startswith((b"100644 ", b"100755 "))
+        }
+        changes = names(
+            git("diff", "--no-renames", "--name-only", "-z", "HEAD", tree, "--")
+        )
+        selected = tracked & changes
+        if full or changes & (
+            set(CONFIGURATION) | FRONTEND_TOOLCHAIN_INPUTS | {"build/format.ts"}
+        ):
+            selected = tracked
+        selected = {
+            name
+            for name in selected
+            if name == "justfile"
+            or Path(name).suffix
+            in {
+                ".rs",
+                ".py",
+                ".ts",
+                ".tsx",
+                ".js",
+                ".jsx",
+                ".mts",
+                ".cts",
+                ".mjs",
+                ".cjs",
+                ".json",
+                ".jsonc",
+                ".yml",
+                ".yaml",
+                ".md",
+                ".css",
+                ".html",
+            }
+        }
+    else:
+        selected = select_files(paths, changed)
     if not selected:
         print("No selected files need formatting checks.")
         return 0
     with tempfile.TemporaryDirectory(prefix="ash-format-") as directory:
         root = Path(directory)
-        snapshot_files(root, selected)
-        originals = {name: (root / name).read_bytes() for name in selected}
+        if tree:
+            paths = sorted(
+                selected
+                | (tracked & set(CONFIGURATION))
+                | (tracked & {"build/format.ts"})
+            )
+            contents = BytesIO(
+                subprocess.check_output(
+                    ["git", "cat-file", "--batch", "-Z"],
+                    cwd=REPOSITORY_ROOT,
+                    input=b"".join(
+                        os.fsencode(f"{tree}:{name}") + b"\0" for name in paths
+                    ),
+                )
+            )
+            for name in paths:
+                header = bytearray()
+                while (byte := contents.read(1)) != b"\0":
+                    if not byte:
+                        raise ValueError(f"Missing staged blob: {name}")
+                    header.extend(byte)
+                size = int(header.rsplit(b" ", 1)[-1])
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(contents.read(size))
+                contents.read(1)
+        else:
+            snapshot_files(root, selected)
+        originals = (
+            {} if check else {name: (root / name).read_bytes() for name in selected}
+        )
         full_frontend_checks = frozenset(
             formatter
             for formatter, inputs in FRONTEND_FORMATTER_INPUTS.items()
@@ -425,6 +500,21 @@ def scoped(
             and language in (None, formatter)
             and selected & (inputs | FRONTEND_TOOLCHAIN_INPUTS)
         )
+        if (
+            tree
+            and language in (None, "typescript")
+            and any(
+                name.endswith(
+                    (".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs")
+                )
+                for name in selected
+            )
+        ):
+            script = Path("build/format.ts")
+            if (root / script).read_bytes() != (REPOSITORY_ROOT / script).read_bytes():
+                raise ValueError(
+                    "Stage the current build/format.ts before checking TypeScript."
+                )
         checks = scoped_commands(
             check, root, selected, language, full_frontend_checks=full_frontend_checks
         )
@@ -490,8 +580,20 @@ def main(arguments: list[str] | None = None) -> int:
         help="select branch and working-tree changes since the merge base with REF",
     )
     parser.add_argument("paths", nargs="*", help="repository files or directories")
+    parser.add_argument("--staged", action="store_true", help="check the Git index")
+    parser.add_argument(
+        "--full", action="store_true", help="check all staged-tree files"
+    )
     args = parser.parse_args(arguments)
     try:
+        if args.staged:
+            if not args.check or args.paths or args.changed is not None:
+                parser.error(
+                    "--staged requires --check and excludes paths and --changed"
+                )
+            return scoped(True, [], None, args.language, staged=True, full=args.full)
+        if args.full:
+            parser.error("--full requires --staged")
         if args.paths or args.changed is not None:
             return scoped(args.check, args.paths, args.changed, args.language)
         return int(not execute(commands(args.check, args.language)))

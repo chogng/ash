@@ -24,7 +24,7 @@ fmt *args:
 fmt-check *args:
     {{ python }} -B scripts/format.py --check {{ recipe_args }}
 
-# Check branch formatting and unstaged/staged whitespace before commit or publish.
+# Check staged sources before committing, or a clean branch before publishing.
 commit-check *args:
     {{ python }} -B scripts/commit_check.py {{ recipe_args }}
 

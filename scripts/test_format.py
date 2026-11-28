@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import os
 import sys
 import tempfile
 import unittest
@@ -238,6 +239,42 @@ class ScopedFormattingTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def test_staged_check_reads_index_bytes_when_worktree_differs(self) -> None:
+        source = self.write("example.md", "# Example\n")
+        with tempfile.TemporaryDirectory() as index_dir:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(index_dir) / "index")}
+
+            def git(*args: str) -> None:
+                subprocess.run(["git", *args], cwd=self.root, env=env, check=True)
+
+            def check() -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        "-B",
+                        "scripts/format.py",
+                        "--check",
+                        "--staged",
+                        "--language",
+                        "config",
+                    ],
+                    cwd=self.root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+
+            git("read-tree", "HEAD")
+            git("add", "--", str(source))
+            self.write("example.md", "# Example\n\n\nText.\n")
+            passed = check()
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            git("add", "--", str(source))
+            self.write("example.md", "# Example\n")
+            failed = check()
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("example.md", failed.stderr)
 
     def test_changed_markdown_uses_full_check_only_when_formatter_inputs_change(
         self,

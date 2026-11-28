@@ -28,7 +28,7 @@ class CommitCheckTests(unittest.TestCase):
             "import json, pathlib, sys\n"
             "with open('format-calls.jsonl', 'a') as calls:\n"
             "    calls.write(json.dumps(sys.argv[1:]) + '\\n')\n"
-            "mode = 'scoped' if '--changed' in sys.argv else 'full'\n"
+            "mode = 'scoped' if '--changed' in sys.argv or '--staged' in sys.argv else 'full'\n"
             "failure = pathlib.Path(mode + '-failure')\n"
             "sys.exit(int(failure.read_text()) if failure.exists() else 0)\n",
             encoding="utf-8",
@@ -46,7 +46,7 @@ class CommitCheckTests(unittest.TestCase):
         self.git("config", "core.whitespace", "blank-at-eol")
         self.git("config", "core.hooksPath", str(self.root / "no-hooks"))
         (self.root / "source.txt").write_bytes(b"original\n")
-        self.git("add", "source.txt")
+        self.git("add", "source.txt", "justfile", "scripts")
         self.git("commit", "--quiet", "-m", "baseline")
         self.base = "refs/heads/review's-base"
         self.git("update-ref", self.base, "HEAD")
@@ -56,7 +56,12 @@ class CommitCheckTests(unittest.TestCase):
 
     def run_gate(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["just", "commit-check", self.base, *arguments],
+            [
+                "just",
+                "commit-check",
+                *arguments,
+                *([self.base] if "--publish" in arguments else []),
+            ],
             cwd=self.root,
             env=self.environment,
             capture_output=True,
@@ -88,35 +93,35 @@ class CommitCheckTests(unittest.TestCase):
             ),
         )
 
-    def test_default_gate_checks_scoped_formatting_with_literal_base(self) -> None:
+    def test_default_gate_checks_staged_formatting(self) -> None:
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls(), [["--check", "--changed", self.base]])
+        self.assertEqual(self.calls(), [["--check", "--staged"]])
 
     def test_full_gate_also_runs_repository_formatting(self) -> None:
         result = self.run_gate("--full")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.calls(), [["--check", "--changed", self.base], ["--check"]]
-        )
+        self.assertEqual(self.calls(), [["--check", "--staged", "--full"]])
 
-    def test_scoped_failure_stops_before_full_check(self) -> None:
+    def test_formatting_failure_stops_before_whitespace_check(self) -> None:
         (self.root / "scoped-failure").write_text("23")
         result = self.run_gate("--full")
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(self.calls(), [["--check", "--changed", self.base]])
+        self.assertEqual(self.calls(), [["--check", "--staged", "--full"]])
         self.assertNotIn("$ git diff", result.stdout)
 
-    def test_full_failure_rejects_the_gate(self) -> None:
-        (self.root / "full-failure").write_text("24")
-        result = self.run_gate("--full")
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(len(self.calls()), 2)
-        self.assertNotIn("$ git diff", result.stdout)
+    def test_publish_gate_checks_clean_branch_against_literal_base(self) -> None:
+        result = self.run_gate("--publish", "--full")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.calls(), [["--check", "--changed", self.base], ["--check"]]
+        )
+        self.assertIn("HEAD --", result.stdout)
 
-    def test_unstaged_whitespace_is_rejected_without_modifying_other_work(self) -> None:
+    def test_unstaged_whitespace_does_not_block_local_commit(self) -> None:
         (self.root / "source.txt").write_bytes(b"unrelated change \n")
-        self.assert_rejected_without_mutation()
+        self.assertEqual(self.run_gate().returncode, 0)
+        self.assertNotEqual(self.run_gate("--publish").returncode, 0)
 
     def test_staged_whitespace_is_rejected_when_working_file_is_clean(self) -> None:
         (self.root / "source.txt").write_bytes(b"staged change \n")
