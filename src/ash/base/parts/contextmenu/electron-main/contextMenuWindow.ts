@@ -10,6 +10,7 @@ export class ContextMenuWindow extends Disposable {
 		private readonly parent: BrowserWindow,
 		/** Enqueues native activation after the focus callback and returns its cancellation handle. */
 		private readonly scheduleParentActivation: (parent: BrowserWindow) => IDisposable,
+		private readonly getFocusedWindow: () => BrowserWindow | null,
 	) {
 		super();
 		const close = (): void => this.windows.clearAndDisposeAll();
@@ -88,8 +89,15 @@ export class ContextMenuWindow extends Disposable {
 		};
 		const window = find(this.parent);
 		if (!window) return false;
+		const visible = window.isVisible();
+		// Native focus can already have moved while the owner's blur event is queued.
+		const focused = this.getFocusedWindow();
+		if (!visible && focused && focused !== window.getParentWindow()) {
+			window.close();
+			return false;
+		}
 		window.setBounds(request.bounds);
-		if (!window.isVisible()) window.show();
+		if (!visible) window.show();
 		return true;
 	}
 

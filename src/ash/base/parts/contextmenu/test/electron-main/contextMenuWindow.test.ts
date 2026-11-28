@@ -21,7 +21,8 @@ class TestWindow extends EventEmitter {
 	visible = false;
 	bounds = { x: 0, y: 33, width: 480, height: 720 };
 	readonly children: TestWindow[] = [];
-	constructor(parent?: TestWindow) { super(); parent?.children.push(this); }
+	constructor(private readonly parent?: TestWindow) { super(); parent?.children.push(this); }
+	getParentWindow() { return this.parent?.native ?? null; }
 	getChildWindows() { return this.children.filter(window => !window.isDestroyed()).map(window => window.native); }
 	setBounds(bounds: typeof this.bounds) { this.bounds = bounds; }
 	isVisible() { return this.visible; }
@@ -36,7 +37,7 @@ class TestWindow extends EventEmitter {
 
 test('menu windows admit only their empty document and enforce a non-modal sandbox', () => {
 	const parent = new TestWindow();
-	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => null);
 	const request = { url: 'about:blank', frameName: 'ash-context-menu-11111111-1111-4111-8111-111111111111', features: 'x=120,y=180,width=9999,height=9999,nodeIntegration=yes' } as HandlerDetails;
 	const options = windows.getWindowOpenOptions(request)!;
 	assert.equal(options.parent, parent.native);
@@ -51,7 +52,7 @@ test('menu windows admit only their empty document and enforce a non-modal sandb
 test('navigation is blocked and parent changes release every menu window', () => {
 	const parent = new TestWindow();
 	const child = new TestWindow();
-	const windows = new ContextMenuWindow(parent.native, () => Disposable.None);
+	const windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => null);
 	windows.registerWindow(child.native);
 	assert.equal(child.menu, null);
 	assert.deepEqual(child.openHandler?.(), { action: 'deny' });
@@ -77,7 +78,7 @@ test('menu activation is scheduled and cancelled when focus or ownership changes
 	using windows = new ContextMenuWindow(parent.native, target => {
 		scheduled.push(target);
 		return toDisposable(() => { cancelled++; });
-	});
+	}, () => null);
 	windows.registerWindow(child.native);
 	child.show();
 	assert.deepEqual(scheduled, [parent.native]);
@@ -99,7 +100,7 @@ test('a hidden menu first appears at its final bounds and a cancelled request ne
 	child.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
 	const shown: typeof child.bounds[] = [];
 	child.on('show', () => shown.push({ ...child.bounds }));
-	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => parent.native);
 	windows.registerWindow(child.native);
 	assert.deepEqual(shown, []);
 	const request = { windowName: child.webContents.mainFrame.name, bounds: { x: 1200, y: 100, width: 200, height: 400 } };
@@ -114,7 +115,7 @@ test('a hidden menu first appears at its final bounds and a cancelled request ne
 
 test('owner blur cancels pending presentation but preserves a menu taking key focus', () => {
 	const parent = new TestWindow();
-	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => parent.native);
 	const pending = new TestWindow(parent);
 	pending.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
 	windows.registerWindow(pending.native);
@@ -140,10 +141,23 @@ test('presentation is scoped to the owning window tree, including auxiliary work
 	const auxiliary = new TestWindow(parent);
 	const menu = new TestWindow(auxiliary);
 	menu.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
-	using windows = new ContextMenuWindow(parent.native, () => Disposable.None);
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => auxiliary.native);
 	const request = { windowName: menu.webContents.mainFrame.name, bounds: menu.bounds };
 	assert.equal(windows.present(request), true);
 	const other = new TestWindow();
-	using foreign = new ContextMenuWindow(other.native, () => Disposable.None);
+	using foreign = new ContextMenuWindow(other.native, () => Disposable.None, () => auxiliary.native);
 	assert.equal(foreign.present(request), false);
+});
+
+test('a menu cannot show after another window takes focus before the owner blur event', () => {
+	const parent = new TestWindow();
+	const child = new TestWindow(parent);
+	const other = new TestWindow();
+	child.webContents.mainFrame.name = 'ash-context-menu-11111111-1111-4111-8111-111111111111';
+	using windows = new ContextMenuWindow(parent.native, () => Disposable.None, () => other.native);
+	windows.registerWindow(child.native);
+
+	assert.equal(windows.present({ windowName: child.webContents.mainFrame.name, bounds: child.bounds }), false);
+	assert.equal(child.isVisible(), false);
+	assert.equal(child.closes, 1);
 });

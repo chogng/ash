@@ -2134,7 +2134,7 @@ export class AshApplication extends Disposable {
 
 	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration, openerWindow: BrowserWindow = window): ContextMenuWindow {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
-		const menuWindows = windowDisposables.add(new ContextMenuWindow(window, scheduleMacMainWindowRestore));
+		const menuWindows = windowDisposables.add(new ContextMenuWindow(window, scheduleMacMainWindowRestore, () => BrowserWindow.getFocusedWindow()));
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
 			const menuOptions = menuWindows.getWindowOpenOptions(details);

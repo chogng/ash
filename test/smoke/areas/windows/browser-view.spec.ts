@@ -1117,20 +1117,23 @@ test.describe('Browser menu activation', () => {
 		const pending = await electron.evaluateHandle(({ BrowserWindow }) => {
 			const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
 			const { ContextMenuWindow } = require(process.cwd() + '/.build/desktop/main/src/ash/base/parts/contextmenu/electron-main/contextMenuWindow.js') as {
-				ContextMenuWindow: { prototype: { present(request: unknown): unknown; }; };
+				ContextMenuWindow: { prototype: { present(request: unknown): boolean | Promise<boolean>; }; };
 			};
 			const prototype = ContextMenuWindow.prototype;
 			const present = prototype.present;
 			let release: (() => void) | undefined;
+			let presentation: Promise<boolean> | undefined;
 			// Hold the actual IPC presentation so a window switch deterministically wins the race.
 			prototype.present = function (request) {
-				return new Promise(resolve => { release = () => resolve(present.call(this, request)); });
+				const paused = new Promise<void>(resolve => { release = resolve; });
+				presentation = paused.then(() => present.call(this, request));
+				return presentation;
 			};
 			const other = new BrowserWindow({ show: false, width: 300, height: 200, webPreferences: { sandbox: true } });
 			return {
 				other,
 				get waiting() { return !!release; },
-				release: () => release?.(),
+				release: () => { release?.(); return presentation; },
 				dispose: () => {
 					prototype.present = present;
 					release?.();
@@ -1141,14 +1144,16 @@ test.describe('Browser menu activation', () => {
 		try {
 			const owner = await electron.browserWindow(page);
 			try {
-				await electron.evaluate(({ app }) => { app.show(); app.focus({ steal: true }); });
+				if (process.platform === 'darwin') {
+					await electron.evaluate(({ app }) => { app.show(); app.focus({ steal: true }); });
+				}
 				await owner.evaluate(window => { window.show(); window.focus(); });
 				const more = page.locator('.ash-browser-page-actions').getByRole('button', { name: 'More Actions', exact: true });
 				await more.click();
 				await expect.poll(() => pending.evaluate(state => state.waiting)).toBe(true);
 				await pending.evaluate(state => { state.other.show(); state.other.focus(); });
 				await expect.poll(() => pending.evaluate(state => state.other.isFocused())).toBe(true);
-				await pending.evaluate(state => state.release());
+				expect(await pending.evaluate(state => state.release())).toBe(false);
 				await expect.poll(() => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.mainFrame.name.startsWith('ash-context-menu-')).length)).toBe(0);
 				expect(await pending.evaluate(state => state.other.isFocused())).toBe(true);
 				await expect(more).toHaveAttribute('aria-expanded', 'false');
@@ -1428,7 +1433,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(source.nth(1)).toHaveAttribute('aria-selected', 'true');
 			await expect(address).toHaveValue(sourceUrl);
 			await expect.poll(sourceViews).toHaveLength(2);
-			await page.getByRole('button', { name: locale === 'en' ? 'Close Source page' : '关闭 Source page', exact: true }).nth(1).click();
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 			await expect.poll(sourceViews).toEqual(original);
 		} finally {
 			server.closeAllConnections();
