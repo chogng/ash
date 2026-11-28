@@ -47,7 +47,10 @@ fn malformed_elevated_role_fails_before_connecting_to_a_socket() {
 }
 
 #[test]
-fn retired_mxc_pty_role_is_not_dispatched() {
-    assert!(dispatch(["--ash-mxc-pty".into()]).is_none());
-    assert!(dispatch(["--ash-mxc-pty".into(), "unexpected".into()]).is_none());
+fn mxc_pty_role_is_windows_only_and_requires_sdk_launch_arguments() {
+    let result = dispatch(["--mxc-psec-pty".into()]);
+    #[cfg(windows)]
+    assert!(matches!(result, Some(Err(_))));
+    #[cfg(not(windows))]
+    assert!(result.is_none());
 }

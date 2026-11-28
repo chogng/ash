@@ -17,5 +17,8 @@ ash-file-system = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 ash-file-watcher = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+mxc-sdk = { workspace = true }
+
 [lints]
 workspace = true

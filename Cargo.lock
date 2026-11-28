@@ -875,6 +875,7 @@ dependencies = [
  "ash-file-watcher",
  "ash-pdf",
  "ash-utils-process",
+ "mxc-sdk",
 ]
 
 [[package]]
@@ -8608,7 +8609,7 @@ dependencies = [
 [[package]]
 name = "mxc-sdk"
 version = "1.1.0"
-source = "git+https://github.com/chogng/mxc?rev=37130e3d3a5116cb48ec333c9595fb969f603af2#37130e3d3a5116cb48ec333c9595fb969f603af2"
+source = "git+https://github.com/chogng/mxc?rev=b156913d776b326bf3b57ff5475929cb0a67a4c9#b156913d776b326bf3b57ff5475929cb0a67a4c9"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

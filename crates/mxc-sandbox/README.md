@@ -43,7 +43,7 @@ App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命�
 适配器不配置账户或持久网络规则。
 Windows 账户候选的 ACL 日志和恢复归 [账户后端](../windows-sandbox/README.md)。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
-启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
+启动失败保留 SDK 错误类别、说明与扩展系统错误。所有启动失败均关闭本次执行，不重新选择后端。
 Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。Bubblewrap 在命令启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，防止 WSL 可执行文件互操作绕过 Linux 文件与网络限制；这一约束由工作负载后代继承，适用于禁止和受管网络。
 
 Unix 受限进程的 Docker、SSH agent 和 GPG agent IPC 拒绝路径同时取自宿主环境与执行 owner 在 spawn 时提供的最终环境，后者不能移除前者的保护。GPG 覆盖 `GNUPGHOME`、默认 `HOME/.gnupg` 中的 agent socket，以及当前有效 UID 的标准 runtime `gnupg` IPC 目录；相对 home 按工作负载 cwd 解析，空值不代表 cwd，`XDG_RUNTIME_DIR` 只接受绝对路径，拒绝范围不扩展到整个用户 runtime 目录。新增路径追加身份检查，保留原有授权目录的准备时身份。[GnuPG 2.1 起已忽略 `GPG_AGENT_INFO`](https://gnupg.org/faq/whats-new-in-2.1.html)，不能仅靠该旧变量识别 agent。
@@ -70,17 +70,14 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 
 ## PTY 启动
 
-所有平台直接调用 SDK 的 `RestrictedLaunch::spawn_with_pty`。SDK 创建 Bubblewrap、Seatbelt 或 Windows PSEC 的终端，
-并拥有平台句柄、尺寸、前台中断和清理。Ash 适配输入、合并输出与执行生命周期，不再启动自身 helper 或传输环境分块。
-显式环境直接进入 SDK；文件身份快照仍在准备和启动边界验证。
+受限终端使用 SDK 的 `RestrictedLaunch::spawn_with_pty`。Windows 的 ConPTY、启动请求传输和 PSEC 工作负载回收归 SDK。Ash 执行程序将 SDK 的执行器角色转交给 SDK，并将其进程句柄适配为终端输入、合并输出、尺寸调整和取消。
 
 Windows 的 `windows.rs` 仅投影宿主卷授权，通过实际挂载卷枚举避免探测缺失盘符，并保留显式 UNC 工作目录根。
 PSEC 终端与 RPC 回归已接入 `scripts/test-psec.ps1`，必须在支持完整策略的宿主运行；能力缺失不计为运行通过。
 
 ## SDK 依赖
 
-声明版本为 `mxc-sdk = "=1.1.0"`，兼容基线为官方 `c6620183`。当前开发验证使用桌面 `mxc/src/mxc-sdk`，
-发布前必须将兼容修改发布到固定 Git revision，并更新根清单、lockfile 与 Bazel 来源。
+根清单声明 `mxc-sdk = "=1.1.0"` 并固定兼容 fork 的 Git 修订。Cargo 与 Bazel 从 lockfile 解析同一份 SDK 源码。
 
 适配器通过 `v1::prepare_restricted` 固定平台后端、禁止宿主 ACL 改动，并提供受信 Bubblewrap 路径。
 持续路径限制使用 typed `FilesystemRestriction`，规则编译、祖先移动保护和匹配对象的链接检查由 SDK 负责。

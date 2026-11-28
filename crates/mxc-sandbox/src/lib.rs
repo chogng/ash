@@ -24,12 +24,25 @@ use std::path::PathBuf;
 /// MXC-backed execution. Ash selects the backend; MXC creates processes and cleans up OS resources.
 pub struct MxcSandbox {
     runtime: InstallContext,
+    #[cfg(windows)]
+    psec_pty_executor: Option<PathBuf>,
 }
 
 impl MxcSandbox {
     /// Captures runtime locations; the SDK checks the capabilities of each execution request.
     pub fn new(context: InstallContext) -> Self {
-        Self { runtime: context }
+        Self {
+            runtime: context,
+            #[cfg(windows)]
+            psec_pty_executor: None,
+        }
+    }
+
+    /// Supplies a trusted executable that dispatches the MXC SDK's PTY role.
+    #[cfg(windows)]
+    pub fn with_psec_pty_executor(mut self, executable: PathBuf) -> Self {
+        self.psec_pty_executor = Some(executable);
+        self
     }
 }
 
@@ -94,6 +107,8 @@ impl SandboxBackend for MxcSandbox {
                 scope: scope.clone(),
                 cwd: command.working_directory().to_owned(),
                 io: command.io(),
+                #[cfg(windows)]
+                psec_pty_executor: self.psec_pty_executor.clone(),
             },
         ))
     }

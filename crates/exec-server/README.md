@@ -99,8 +99,7 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 - Windows 自动发现 PowerShell 时跳过 Store 包和 WindowsApps 别名，并检查解析后的目标；其他 WindowsApps 框架中的可用程序保留。PATH 没有兼容版本时检查 `PROGRAMFILES/PowerShell/7/pwsh.exe`，Windows PowerShell 仍从系统目录发现。目录、环境及发现结果由执行器冻结，显式进程请求不在启动失败后替换程序或重跑。
 - 安全进程环境先按变量名筛选白名单，再转换变量值；无法表示为 Unicode 的名称或值直接忽略，合法 Unicode 值保留。无关变量和凭据不传入终端，终端身份变量仍由执行器设置。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
-  Windows PSEC 终端直接通过 MXC SDK 创建，宿主无需配置 PTY helper。
-- Unix 的受限 PTY 直接由 MXC SDK 分配；Windows MXC 的内部启动器继承宿主分配的终端。目录、网络及文件身份约束保持有效。
+- 受限 PTY 由 MXC SDK 分配。Windows 的 SDK 执行器在 ConPTY 中以继承控制台的方式启动 PSEC 工作负载。目录、网络及文件身份约束保持有效。
 - PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。
 

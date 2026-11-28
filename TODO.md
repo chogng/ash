@@ -1,9 +1,5 @@
 # 待办
 
-## MXC 收敛 · 平台验收与依赖检查
-
-- [ ] **直接 PSEC 路径验收** · 当前 Windows 缺少 `api-win-appmodel-processmodel~securityenvironment`，3 项直接 PSEC PTY 验收均在准备阶段失败，没有执行工作负载。ConPTY 本身的创建、控制、关闭及 JS 锁定启动实机测试通过，但不能替代 PSEC 组合验收。支持 PSEC 的主机须运行 `scripts/test-psec.ps1 -Capability required`，覆盖直接 PTY 和执行服务 RPC；SDK 的 `processcontainer_pty_preserves_input_resize_and_exit_output` 已接入自身后端验收和测试包发现检查。macOS 验收沿用下文条目；完成后删除本条。
-
 ## CI · 远端矩阵验收
 
 - [ ] CI 修复已发布至 `4b932cd2db`；截图专项和 Linux Bazel TUI 场景已通过，本机 TUI、daemon、后端工具及警告检查通过。完整产品矩阵仍按[固定提交 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收，当前后端、stdio／SSH、前端和 TUI 仍有失败。V8、LiveKit 生产工具已完全迁入独立仓库，Ash 仅消费固定产物；独立生产不再依赖 Ash checkout。证据和本机环境限制见 [CI 记录](ci-project-todo.md#2026-11-17-固定基线复验)。通过后删除本条。
@@ -15,7 +11,7 @@
 ## 沙箱 · macOS 与真实 Docker 验收
 
 - [ ] **macOS 实机验收** · 当前环境没有可连接的 macOS 主机。使用本次 checkout 运行 `just verify ash-mxc-sandbox`、`just verify ash-exec-server`，并按 [适配器验证入口](crates/mxc-sandbox/README.md#验证) 执行 macOS 文件、PTY、私有 IPC、敏感 socket 及网络矩阵；网络矩阵须有普通进程可达的 TCP／UDP DNS 对照。核对实际用例数量、退出码和后代回收，缺环境或跳过不计通过；完成后删除本条。
-- [ ] **真实 Docker 隔离验收** · 当前 WSL 没有 Docker daemon。到具备真实 `/var/run/docker.sock` 的 Linux 设备，先确认普通进程能读取 daemon 的 `/_ping`，再运行 `ASH_BWRAP_PATH=/usr/bin/bwrap just test ash-mxc-sandbox --test sensitive_sockets docker_daemon_is_reachable_only_outside_the_sandbox --locked -- --ignored --exact --nocapture`，确认沙箱不能连接该 socket。完整 Linux 网络矩阵按 [Linux 验证脚本](scripts/test-linux-sandbox.sh) 执行，提供可达的 `ASH_DNS_SERVER`；完成后删除本条。旧 helper 路径的 Windows PSEC／ConPTY／RPC，以及 WSL 两种文件系统、GPG 和 Linux 受管代理曾通过验收；本轮直接 SDK 路径的缺口见上文 MXC 条目。
+- [ ] **真实 Docker 隔离验收** · 当前 WSL 没有 Docker daemon。到具备真实 `/var/run/docker.sock` 的 Linux 设备，先确认普通进程能读取 daemon 的 `/_ping`，再运行 `ASH_BWRAP_PATH=/usr/bin/bwrap just test ash-mxc-sandbox --test sensitive_sockets docker_daemon_is_reachable_only_outside_the_sandbox --locked -- --ignored --exact --nocapture`，确认沙箱不能连接该 socket。完整 Linux 网络矩阵按 [Linux 验证脚本](scripts/test-linux-sandbox.sh) 执行，提供可达的 `ASH_DNS_SERVER`；完成后删除本条。旧 helper 路径的 Windows PSEC／ConPTY／RPC，以及 WSL 两种文件系统、GPG 和 Linux 受管代理曾通过验收。
 
 ## 浏览器菜单 · 自动化时遮罩闪烁
 

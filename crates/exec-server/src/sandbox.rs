@@ -11,8 +11,14 @@ pub struct LocalSandbox {
 
 impl LocalSandbox {
     pub fn new(context: InstallContext) -> Self {
+        let mxc = mxc_sandbox::MxcSandbox::new(context.clone());
+        #[cfg(windows)]
+        let mxc = match std::env::current_exe() {
+            Ok(executable) => mxc.with_psec_pty_executor(executable),
+            Err(_) => mxc,
+        };
         Self {
-            mxc: mxc_sandbox::MxcSandbox::new(context.clone()),
+            mxc,
             #[cfg(windows)]
             context,
         }

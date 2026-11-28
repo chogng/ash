@@ -1,10 +1,10 @@
 # Microsoft MXC SDK
 
-Ash 声明官方 `mxc-sdk = "=1.1.0"`，通过根清单的 `[patch.crates-io]` 固定兼容 fork 的提交 `37130e3d3a5116cb48ec333c9595fb969f603af2`。Cargo 与 Bazel 使用同一外部源码，来源由 lockfile 记录。本目录只保存许可证和补丁审查依据。
+Ash 声明官方 `mxc-sdk = "=1.1.0"`，通过根清单的 `[patch.crates-io]` 固定兼容 fork 的提交 `b156913d776b326bf3b57ff5475929cb0a67a4c9`。Cargo 与 Bazel 使用同一外部源码，来源由 lockfile 记录。本目录只保存许可证和补丁审查依据。
 
 本轮 SDK 版本为 `1.1.0`，上游基线为具体提交 `c6620183`；版本号不限制后续更新。升级时选择经过平台回归的官方提交，合入兼容分支并删除已被上游吸收的补丁，再更新 Ash 固定的 Git revision。Cargo 与 Bazel 使用同一源码，不跟随浮动分支，也不分别维护功能补丁的应用流程。
 
-源码基线为官方 `c6620183`，SDK 版本为 `1.1.0`，V1 typed API 的稳定 schema 仍为 `1.0.0`。兼容分支为 `codex/ash-sdk-compat-1.1.0-simplify`，见 [完整兼容差异](https://github.com/chogng/mxc/compare/c66201839d63cae2239db5e92f1f1d6076cf5181...37130e3d3a5116cb48ec333c9595fb969f603af2)。该提交延续原兼容补丁，并新增 PSEC 直接 PTY、typed Seatbelt 路径限制和版本化账户 ACL 接口。
+源码基线为官方 `c6620183`，SDK 版本为 `1.1.0`，V1 typed API 的稳定 schema 仍为 `1.0.0`。兼容分支为 `codex/ash-sdk-compat-1.1.0-simplify`，见 [完整兼容差异](https://github.com/chogng/mxc/compare/c66201839d63cae2239db5e92f1f1d6076cf5181...b156913d776b326bf3b57ff5475929cb0a67a4c9)。该提交延续原兼容补丁，并新增 PSEC 的 ConPTY 与控制台继承、typed Seatbelt 路径限制和版本化账户 ACL 接口。
 
 1.1.0 升级采用官方 Bubblewrap 挂载规划、地址族过滤、受限路径探测、Seatbelt profile 准备及进程标记清理。官方仍缺少严格准备、宿主执行路径、追加限制和前台中断接口，并移除了账户后端使用的 ACL helper；兼容分支保留这些能力，不恢复已删除的降级运行器。Windows Managed 网络仍拒绝缺少完整入站隔离的 PSEC 组合。Ash 按新版 `FilesystemPolicyError::message` 读取委派检查错误。
 

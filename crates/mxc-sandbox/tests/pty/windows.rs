@@ -32,7 +32,6 @@ pub(super) fn trials() -> Vec<Trial> {
                      if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {{ exit 80 }}; \
                      if ($env:VALUE_A.Length -ne {length} -or $env:VALUE_B -ne $env:VALUE_A) {{ exit 81 }}; \
                      if (-not $env:VALUE_A.EndsWith('🧊中文=')) {{ exit 82 }}; \
-                     if (@([Environment]::GetEnvironmentVariables().Keys | Where-Object {{ $_ -like 'ASH_MXC_PTY_LAUNCH_*' }}).Count -ne 0) {{ exit 83 }}; \
                      [Console]::WriteLine('terminal-ready'); $answer=[Console]::ReadLine(); \
                      [Console]::WriteLine(('size={{0}}x{{1}}' -f [Console]::WindowWidth,[Console]::WindowHeight)); \
                      [Console]::WriteLine(('answer='+$answer)); exit 125",
@@ -103,7 +102,7 @@ fn powershell() -> PathBuf {
 }
 
 struct Terminal {
-    // The process owns the helper and workload jobs until teardown, including on assertion failure.
+    // Dropping the SDK-backed process must reap the workload even if an assertion fails.
     process: ProcessHandle,
     input: Box<dyn Write + Send>,
     output: mpsc::Receiver<Vec<u8>>,
@@ -135,6 +134,7 @@ impl Terminal {
             }
         }
         let mut process = MxcSandbox::new(InstallContext::current())
+            .with_psec_pty_executor(std::env::current_exe().unwrap())
             .prepare(
                 &command,
                 SandboxPolicy::new(files, NetworkAccess::Denied),

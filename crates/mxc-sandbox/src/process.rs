@@ -14,6 +14,8 @@ pub(super) struct Launch {
     pub scope: SandboxScope,
     pub cwd: PathBuf,
     pub io: ash_sandboxing::ProcessIo,
+    #[cfg(windows)]
+    pub psec_pty_executor: Option<PathBuf>,
 }
 
 impl SandboxLaunch for Launch {
@@ -31,6 +33,11 @@ impl SandboxLaunch for Launch {
                 (SdkProcess::Pipes(child), streams.0, streams.1, streams.2)
             }
             ash_sandboxing::ProcessIo::Pty(size) => {
+                #[cfg(windows)]
+                let prepared = match self.psec_pty_executor.take() {
+                    Some(executor) => prepared.with_psec_pty_executor(executor),
+                    None => prepared,
+                };
                 let child = prepared
                     .spawn_with_pty(pty_size(size))
                     .map_err(crate::request::spawn_error)?;
@@ -92,9 +99,9 @@ impl SdkProcess {
             )),
         }
     }
-    fn resize(&self, size: mxc_sdk::v1::MxcPtySize) -> io::Result<()> {
+    fn resize(&self, size: ash_utils_pty::TerminalSize) -> io::Result<()> {
         match self {
-            Self::Pty(child) => child.resize(size),
+            Self::Pty(child) => child.resize(pty_size(size)),
             Self::Pipes(_) => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "process has no terminal",
@@ -125,23 +132,20 @@ impl SandboxProcess for Process {
         if let Some(exit) = self.exit {
             return Ok(Some(exit));
         }
-        let status = self.inner.try_wait()?;
-        if status.is_some() {
-            self.close()?;
+        match self.inner.try_wait() {
+            Ok(None) => return Ok(None),
+            Ok(Some(_)) => {}
+            Err(error) if error.kind() == io::ErrorKind::TimedOut => {}
+            Err(error) => return Err(error),
         }
-        Ok(status.map(|code| {
-            if code < 0 {
-                SandboxProcessExitStatus::Terminated
-            } else {
-                SandboxProcessExitStatus::Code(code)
-            }
-        }))
+        self.close()?;
+        Ok(self.exit)
     }
     fn interrupt(&mut self) -> io::Result<()> {
         self.inner.interrupt()
     }
     fn resize(&mut self, size: ash_utils_pty::TerminalSize) -> io::Result<()> {
-        self.inner.resize(pty_size(size))
+        self.inner.resize(size)
     }
     fn close(&mut self) -> io::Result<()> {
         if self.closed {

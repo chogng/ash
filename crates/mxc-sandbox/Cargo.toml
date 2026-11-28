@@ -25,7 +25,6 @@ rustix = { workspace = true, features = ["process"] }
 ash-file-identity = { workspace = true }
 
 [dev-dependencies]
-test-binary-support = { workspace = true }
 libtest-mimic = { workspace = true }
 ash-protocol = { workspace = true }
 ash-tool-executor = { workspace = true }
@@ -35,6 +34,7 @@ tempfile = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 libc = { workspace = true }
+test-binary-support = { workspace = true }
 
 # The library forbids unsafe code. Only the macOS test binary's syscall module
 # may override this deny to exercise the platform ABI directly.

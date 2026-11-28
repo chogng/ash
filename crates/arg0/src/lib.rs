@@ -8,6 +8,17 @@ use std::ffi::OsString;
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
     let mut arguments = arguments.into_iter();
     let role = arguments.next();
+    #[cfg(windows)]
+    if role.as_deref()
+        == Some(std::ffi::OsStr::new(
+            mxc_sdk::v1::PSEC_PTY_EXECUTOR_ARGUMENT,
+        ))
+    {
+        return Some(
+            mxc_sdk::v1::run_psec_pty_executor(role.into_iter().chain(arguments))
+                .map_err(|error| error.to_string()),
+        );
+    }
     if role.as_deref() == Some(std::ffi::OsStr::new(ash_pdf::WORKER_ARGUMENT)) {
         if arguments.next().is_some() {
             return Some(Err("PDF worker accepts no arguments".into()));
