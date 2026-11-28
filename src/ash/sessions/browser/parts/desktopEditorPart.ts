@@ -19,7 +19,7 @@ import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/ser
 import type { Part } from '../../../workbench/browser/part.js';
 import { DockedAuxiliaryBarController } from '../dockedAuxiliaryBarController.js';
 import { Menus } from '../menus.js';
-import { createEmptyEditorGroupAddTab, EditorPart, type ISessionsEditorPage } from './editorPart.js';
+import { EditorPart, type ISessionsEditorPage } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import { EmptyFileEditorInput } from '../../../workbench/contrib/sessions/browser/emptyFileEditorInput.js';
@@ -263,11 +263,10 @@ export class DesktopMainEditorPart extends EditorPart {
 	protected override getGroupViewOptions(): IEditorGroupViewOptions {
 		return {
 			showHeader: true,
-			showHeaderFor: editor => !!editor && !(editor instanceof EmptyFileEditorInput)
-				|| this.services.get(IContextKeyService).getValue(SessionsCodeEditorContext.key) === true,
+			showHeaderFor: editor => !!editor && (!(editor instanceof EmptyFileEditorInput)
+				|| this.services.get(IContextKeyService).getValue(SessionsCodeEditorContext.key) === true),
 			hostLayoutActionsWithTabs: true,
 			showEditorToolbar: true,
-			createEmptyState: createEmptyEditorGroupAddTab,
 			menuIds: {
 				headerPrimary: Menus.SessionsEditorHeaderPrimary,
 				headerLayout: Menus.SessionsEditorHeaderLayout,

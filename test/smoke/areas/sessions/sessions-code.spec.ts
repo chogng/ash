@@ -606,12 +606,16 @@ test('The empty Code editor area opens Files and Browser through their own actio
 	const editorTabs = page.locator('.ash-editor-tab-strip:visible').getByRole('tab');
 	const files = page.getByRole('tab', { name: 'Files', exact: true });
 	await expect(editorTabs).toHaveCount(0);
+	const header = page.locator('[data-part="editor"] [data-editor-tool="files"] .ash-editor-group:visible .ash-editor-group-header');
+	await expect(header).toBeHidden();
 	await expect(empty.getByRole('button', { name: 'New File', exact: true })).toHaveCount(0);
 	await expect(empty.getByRole('button', { name: 'Open Changes', exact: true })).toBeVisible();
+	await expect(empty.getByRole('button', { name: 'Browser', exact: true })).toHaveText('Browser');
 	await page.screenshot({ path: testInfo.outputPath('empty-editor-area.png') });
 
 	await empty.getByRole('button', { name: 'Open Files', exact: true }).click();
 	await expect(files).toHaveAttribute('aria-selected', 'true');
+	await expect(header.getByRole('button', { name: 'Details Position', exact: true })).toBeVisible();
 	await expect(empty).toHaveCount(0);
 	const search = page.getByRole('textbox', { name: 'Search files', exact: true });
 	await search.fill(testWorkspace.file);

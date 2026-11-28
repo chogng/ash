@@ -10,7 +10,7 @@ import { CollabService } from '../../workbench/services/collab/browser/collabSer
 import { AppServerCollabService } from '../../workbench/services/collab/browser/appServerCollabService.js';
 import { IDiffEditorCommandsService } from '../../workbench/browser/parts/editor/diffEditorCommandsService.js';
 import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/diffEditor.sessions.contribution.js';
-import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
+import { createSessionsEditorEmptyState, registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
@@ -1403,6 +1403,7 @@ export abstract class Workbench extends Disposable {
 		const fileDialogService = services.get(IFileDialogService);
 		const artifactAutoSave = services.get(IArtifactAutoSaveService);
 		const editorOptions: IEditorPartOptions = {
+			createEmptyState: createSessionsEditorEmptyState,
 			beforeCloseEditor: async resource => {
 				try { await artifactAutoSave.flush(resource); return true; }
 				catch { return false; }
@@ -1603,7 +1604,8 @@ export abstract class Workbench extends Disposable {
 			{
 				id: Menus.SessionsEmptyEditorGroupAddTab,
 				item: {
-					...browserTool, command: newBrowser,
+					...browserTool,
+					command: { ...newBrowser, title: localize2({ bundle: 'ash.workbench', key: 'browser.title' }, 'Browser') },
 					when: ContextKeyExpr.or(browserTool.when, ContextKeyExpr.and(ChatConversationPageContext.isEqualTo(true), SessionBrowserTabsAvailableContext.isEqualTo(true))),
 				},
 			},

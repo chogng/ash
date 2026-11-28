@@ -9,6 +9,7 @@ import { Action2, MenusRegistry, MenuId, isMenuItem, registerAction2 } from '../
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IEditorGroupViewOptions } from '../../../../workbench/browser/parts/editor/editor.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
 import { CODE_EDITOR_ID } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import { ActiveEditorContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext, SessionsCodeEditorContext } from '../../../../workbench/common/contextkeys.js';
@@ -21,6 +22,10 @@ import type { SessionsPart } from '../../../browser/parts/sessionsPart.js';
 import { SessionsCategories } from '../../../../workbench/contrib/sessions/common/categories.js';
 import { SessionsEditorToolContext } from '../../../common/contextkeys.js';
 import { SESSIONS_EDITOR_WORD_WRAP } from '../../../services/configuration/common/editorConfiguration.js';
+import { EmptyEditor } from './emptyEditor.js';
+
+export const createSessionsEditorEmptyState: NonNullable<IEditorGroupViewOptions['createEmptyState']> =
+	(context, instantiation) => instantiation.createInstance(EmptyEditor, context);
 
 registerAction2(class ToggleSessionsEditorWordWrapAction extends Action2 {
 	constructor() {

@@ -1,0 +1,55 @@
+.ash-empty-editor-group-add-tab {
+	box-sizing: border-box;
+	display: grid;
+	block-size: 100%;
+	justify-items: center;
+	align-items: safe center;
+	overflow: auto;
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-empty-editor-group-add-tab .ash-toolbar:not([hidden]) {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, min(100%, 128px));
+	justify-content: center;
+	align-items: stretch;
+	gap: var(--ash-spacing-size120);
+	inline-size: min(100%, calc(3 * 128px + 2 * var(--ash-spacing-size120)));
+}
+
+.ash-empty-editor-group-add-tab
+	.ash-toolbar
+	> .ash-action-view-item
+	> .ash-button {
+	box-sizing: border-box;
+	inline-size: 100%;
+	min-inline-size: 0;
+	block-size: auto;
+	min-block-size: 96px;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size80);
+	border-color: var(--ash-contrastBorder, var(--ash-border));
+	font-size: var(--ash-fontSize-label1);
+}
+
+:is(.hc-black, .hc-light)
+	.ash-empty-editor-group-add-tab
+	.ash-button:focus-visible {
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-empty-editor-group-add-tab .ash-button > .ash-button-content {
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	max-inline-size: 100%;
+	--ash-icon-label-white-space: normal;
+}
+
+.ash-empty-editor-group-add-tab .ash-icon-label-icon {
+	color: var(--ash-description-foreground);
+}
+
+.ash-empty-editor-group-add-tab .ash-icon-label-container {
+	max-inline-size: 100%;
+	overflow-wrap: anywhere;
+	text-wrap: balance;
+}

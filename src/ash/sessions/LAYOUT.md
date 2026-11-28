@@ -231,7 +231,7 @@ Files and Changes are editor inputs in the same group. Restoring a former Change
 
 The Add Tab button opens the menu of tools. When the Session Activity Bar is enabled and the conversation Part is visible, it also provides Files, Changes and Browser alongside the conversation grid.
 
-Opening the side pane without visible tools reveals an empty editor group. The group's `EmptyEditorGroupAddTab` shows the available tool commands until an editor opens. Files, Search and Browser open through their own commands and working sets. Chat uses its conversation's retained groups. In Code, Open Files also reveals the docked Explorer, and Search requires a workspace.
+Opening the side pane without visible tools reveals an empty editor group. The Sessions editor contribution's `EmptyEditor` shows the available tool commands until an editor opens. Files, Search and Browser open through their own commands and working sets. Chat uses its conversation's retained groups. In Code, Open Files also reveals the docked Explorer, and Search requires a workspace.
 
 The selected Changes tab exposes its scope and diff commands in the shared editor group.
 

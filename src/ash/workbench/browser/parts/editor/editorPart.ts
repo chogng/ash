@@ -135,6 +135,7 @@ export const IEditorPart =
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
 	readonly headerRowHeight?: IEditorGroupViewOptions['headerRowHeight'];
+	readonly createEmptyState?: IEditorGroupViewOptions['createEmptyState'];
 	/** Minimum height in CSS pixels of an EditorPane's content toolbar row. */
 	readonly paneToolbarHeight?: IObservable<number>;
 	/** Restricts which tabs can be transferred into an independently routed editor part. */
@@ -245,6 +246,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
 		this.groupOptions = {
 			headerRowHeight: options.headerRowHeight,
+			createEmptyState: options.createEmptyState,
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
 			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),

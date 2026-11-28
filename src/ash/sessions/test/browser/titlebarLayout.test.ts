@@ -209,6 +209,7 @@ suite('Sessions native titlebar layout', () => {
 
 	test('The empty Code editor area offers tools and commits only the chosen editor', async () => {
 		const { page } = browser;
+		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/sessions.html?multiHost&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
@@ -221,11 +222,14 @@ suite('Sessions native titlebar layout', () => {
 		await sidePanel.press('Enter');
 		const open = editor.locator('.ash-empty-editor-group-add-tab:visible');
 		const group = editor.locator('.ash-editor-group').filter({ has: page.locator('.ash-empty-editor-group-add-tab:visible') });
+		await expect(titlebar.getByRole('button', { name: '添加标签页', exact: true })).toBeVisible();
+		await expect(group.locator('.ash-editor-group-header')).toBeHidden();
 		const files = open.getByRole('button', { name: '打开文件', exact: true });
+		const changes = open.getByRole('button', { name: '打开更改', exact: true });
 		await expect(files.and(page.locator(':focus-visible'))).toBeFocused();
 		await expect(group).toHaveCSS('outline-style', 'none');
-		await files.press('ArrowDown');
-		await expect(open.getByRole('button', { name: '打开更改', exact: true })).toBeFocused();
+		await files.press('ArrowRight');
+		await expect(changes).toBeFocused();
 		const searchButton = open.getByRole('button', { name: '搜索', exact: true });
 		await expect(open.getByRole('button', { name: '侧边聊天', exact: true })).toBeEnabled();
 		await expect(open.getByRole('button', { name: 'iOS 模拟器', exact: true })).toBeDisabled();
@@ -233,11 +237,32 @@ suite('Sessions native titlebar layout', () => {
 		await expect(page.locator('.ash-editor-tab-strip:visible').getByRole('tab')).toHaveCount(0);
 		await page.evaluate(() => window.ashSessionsIntegration.setWorkspaceFolderCount(1));
 		await expect(more).toHaveCount(0);
+		await expect(searchButton).toBeVisible();
+		const nextRowStart = open.getByRole('button').nth(3);
+		const firstCard = (await files.boundingBox())!;
+		const nextCard = (await changes.boundingBox())!;
+		const lowerCard = (await nextRowStart.boundingBox())!;
+		expect(nextCard.y).toBe(firstCard.y);
+		expect(nextCard.x).toBeGreaterThan(firstCard.x + firstCard.width);
+		expect(lowerCard.x).toBe(firstCard.x);
+		expect(lowerCard.y).toBeGreaterThan(firstCard.y + firstCard.height);
+		await files.press('ArrowDown');
+		await expect(nextRowStart).toBeFocused();
+		await nextRowStart.press('ArrowUp');
+		await expect(files.and(page.locator(':focus-visible'))).toBeFocused();
 		await searchButton.press('Enter');
 		await expect(page.locator('[data-editor-tool="search"] .ash-search-editor:visible')).toBeVisible();
 		await expect(open).toBeHidden();
 		await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: '搜索编辑器', exact: true })).toHaveAttribute('aria-selected', 'true');
+		const searchTab = page.getByRole('tab', { name: '搜索编辑器', exact: true });
+		await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+		await searchTab.press('Delete');
+		await expect(searchTab).toHaveCount(0);
+		await expect(editor).toBeHidden();
+		await expect(sidePanel).toHaveAttribute('aria-pressed', 'false');
+		await sidePanel.press('Enter');
+		await expect(editor).toBeVisible();
+		await expect(open.getByRole('button').and(page.locator(':focus'))).toHaveCount(1);
 	});
 
 	test('Chat rechecks titlebar capacity when the configured tab width changes', async () => {
