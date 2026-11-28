@@ -48,9 +48,9 @@ Design 的标题和窗口操作使用共用的 Artifact 标题栏，编辑工具
 
 2026-11-14，Windows x64 当前源码构建（`a1e661125e`）通过 Desktop／App Server 自托管三步验收：Design 工具栏水平中心误差小于 2 CSS px，Motion 时间线与工具栏间隔 16 CSS px，切换 Code、Draw、Design 后只保留一条工具栏并隐藏时间线。语言包上限已修复，完整 Desktop 构建通过。复跑脚本为 `.build/ash-playwright-mcp/artifact-toolbar.cjs`，证据为 `.build/ash-playwright-mcp/evidence/artifact-toolbar-2026-11-14T13-22-03-039Z/report.html`；原始双窗口录像与 trace 保留在同目录。缺少 ffmpeg／ffprobe，未生成字幕视频。本轮未重跑完整单测编译。
 
-## 开发范例
+## 开发与测试
 
-通过 `pnpm dev` 或 `pnpm dev:web` 启动时，隔离的开发配置中初始化七份 [测试作品](../../test/browser/fixtures/artifactExamples.contribution.ts)。夹具写入普通文档、画布文件包和表格文件，由正式服务恢复并在同一作品网格显示。「全部」和「我的」共用这些作品的打开、编辑与保存流程。初始化标记防止重载覆盖修改或恢复已删除的作品；发布构建不加载夹具。
+手动测试在开发环境中打开或新建真实文件。自动化测试显式加载[作品夹具](../../test/browser/fixtures/artifactExamples.contribution.ts)，覆盖普通文档、画布和表格的打开、编辑、保存、恢复和删除。
 
 ## 目录与命名
 

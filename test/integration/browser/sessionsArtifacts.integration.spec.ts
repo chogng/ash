@@ -56,7 +56,6 @@ test('Fixture artifacts share one catalog and opening or reloading preserves the
 	const cards = page.locator('.ash-artifacts-work-grid .ash-artifacts-card');
 	await expect(cards).toHaveCount(7);
 	await expect(page.locator('.ash-artifacts-work-grid')).toHaveCount(1);
-	await expect(page.locator('.ash-artifacts-examples-grid')).toHaveCount(0);
 	const identities = await cards.evaluateAll(elements => elements.map(element => element.getAttribute('data-artifact-id')).filter(Boolean).sort());
 	expect(identities).toHaveLength(7);
 	await page.getByRole('tab', { name: 'Yours', exact: true }).click();

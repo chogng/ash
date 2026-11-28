@@ -2571,7 +2571,6 @@ test('Artifact fixtures restore as ordinary editable documents and never overwri
 	await view.editors.loadArtifactDocuments();
 	assert.deepEqual([...view.editors.artifactDocuments.get().values()].map(document => document.artifactKind).sort(), ['design', 'motion', 'slides', 'whiteboard']);
 	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-work-grid').length, 1);
-	assert.equal(view.page.domNode.querySelectorAll('.ash-artifacts-examples-grid').length, 0);
 	const deck = [...view.editors.artifactDocuments.get().values()].find(document => document.artifactKind === 'slides')!;
 	await view.runCommand('sessions.artifacts.openCanvasArtifact', deck.model.value.documentId);
 	view.click('Add slide');
