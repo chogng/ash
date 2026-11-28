@@ -38,8 +38,12 @@ test('PDF sidebar widths survive closing the tab and restarting Ash', { tag: ['@
 		await expect(preview()).toHaveCount(0);
 	};
 	const expectWidths = async (navigation: number, annotations: number) => {
-		await expect(left()).toHaveCSS('width', `${navigation}px`);
-		await expect(right()).toHaveCSS('width', `${annotations}px`);
+		// Desktop display scaling can round the rendered width to a fractional CSS pixel.
+		for (const [sidebar, width] of [[left(), navigation], [right(), annotations]] as const) {
+			await expect.poll(() => sidebar.evaluate((element, expected) =>
+				Math.abs(Number.parseFloat(getComputedStyle(element).width) - expected), width,
+			)).toBeLessThanOrEqual(1);
+		}
 	};
 
 	await test.step('Restore both adjusted widths after closing the PDF tab', async () => {

@@ -4,10 +4,6 @@
 
 - [ ] CI 修复已发布至 `4b932cd2db`；截图专项和 Linux Bazel TUI 场景已通过，本机 TUI、daemon、后端工具及警告检查通过。完整产品矩阵仍按[固定提交 CI](https://github.com/chogng/ash/actions/runs/43903186720)验收，当前后端、stdio／SSH、前端和 TUI 仍有失败。V8、LiveKit 生产工具已完全迁入独立仓库，Ash 仅消费固定产物；独立生产不再依赖 Ash checkout。证据和本机环境限制见 [CI 记录](ci-project-todo.md#2026-11-17-固定基线复验)。通过后删除本条。
 
-## aspdf · App Server 与整窗验收
-
-- [ ] aspdf 已完成 1,000 份独立 PDF、1,000 页连续浏览、42 MiB 批注保存重开及有界 helper 压测，数据见 `.build/aspdf-perf/report.md`。合并上游后已通过 `just verify ash-pdf`、`just verify ash-arg0`、依赖检查和 App Server 编译，日志为 `.build/aspdf-perf/rebase-app-server.log`；旧 SDK 编译阻塞已解除。仍需运行 `just verify ash-app-server-runtime`，再用本次构建的 Agent Window 验证 Files、Chat 附件、二进制文件服务的 64 MiB 边界及 `pdf_read`／`pdf_annotate` 的生产调用、授权和取消；不能用旧 backend 或 fixture 替代。完成后删除本条。
-
 ## 沙箱 · macOS 与真实 Docker 验收
 
 - [ ] **macOS 实机验收** · 当前环境没有可连接的 macOS 主机。使用本次 checkout 运行 `just verify ash-mxc-sandbox`、`just verify ash-exec-server`，并按 [适配器验证入口](crates/mxc-sandbox/README.md#验证) 执行 macOS 文件、PTY、私有 IPC、敏感 socket 及网络矩阵；网络矩阵须有普通进程可达的 TCP／UDP DNS 对照。核对实际用例数量、退出码和后代回收，缺环境或跳过不计通过；完成后删除本条。

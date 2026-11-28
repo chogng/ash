@@ -241,7 +241,9 @@ fn artifact_catalog_browser_only_sees_native_and_desktop_filters_imports_by_acco
 fn artifact_catalog_recover_one_document_at_a_time_and_route_only_published_files() {
     let profile = tempfile::tempdir().unwrap();
     let database = profile.path().join("state.sqlite");
-    let directory = profile.path().canonicalize().unwrap().join("documents");
+    let directory = dunce::canonicalize(profile.path())
+        .unwrap()
+        .join("documents");
     let store = Arc::new(SqliteArtifactCatalog::open(&database).unwrap());
     stage_turns(&database, Some("ash.creation.docs"));
     let history = Arc::new(SqliteThreadStore::open(&database).unwrap());
